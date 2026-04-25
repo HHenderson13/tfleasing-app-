@@ -1,6 +1,87 @@
 @import "tailwindcss";
 
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   Single source of truth for colours, type and spacing.
+   Use these CSS variables anywhere custom values are needed outside Tailwind.
+   ─────────────────────────────────────────────────────────────────────── */
+
 :root {
+  /* Page & surface */
+  --bg-page:         #f8fafc; /* slate-50  */
+  --bg-card:         #ffffff;
+  --bg-panel:        #f8fafc;
+  --bg-input:        #ffffff;
+
+  /* Borders */
+  --border-default:  #e2e8f0; /* slate-200 */
+  --border-subtle:   #f1f5f9; /* slate-100 */
+  --border-strong:   #0f172a; /* slate-900 */
+
+  /* Foreground */
+  --fg-strong:       #0f172a; /* slate-900 */
+  --fg-default:      #1e293b; /* slate-800 */
+  --fg-muted:        #64748b; /* slate-500 */
+  --fg-subtle:       #94a3b8; /* slate-400 */
+  --fg-on-dark:      #ffffff;
+
+  /* Interactive */
+  --interactive-bg:        #0f172a;
+  --interactive-bg-hover:  #1e293b;
+  --interactive-fg:        #ffffff;
+
+  /* Semantic status colours */
+  --status-received-bg:   #f0f9ff; /* sky-50   */
+  --status-received-text: #0369a1; /* sky-700  */
+  --status-received-ring: #bae6fd; /* sky-200  */
+
+  --status-accepted-bg:   #ecfdf5; /* emerald-50  */
+  --status-accepted-text: #047857; /* emerald-700 */
+  --status-accepted-ring: #a7f3d0; /* emerald-200 */
+
+  --status-declined-bg:   #fef2f2; /* red-50  */
+  --status-declined-text: #b91c1c; /* red-700 */
+  --status-declined-ring: #fecaca; /* red-200 */
+
+  --status-dealer-bg:     #fffbeb; /* amber-50  */
+  --status-dealer-text:   #92400e; /* amber-800 */
+  --status-dealer-ring:   #fde68a; /* amber-200 */
+
+  --status-uw-bg:         #eef2ff; /* indigo-50  */
+  --status-uw-text:       #4338ca; /* indigo-700 */
+  --status-uw-ring:       #c7d2fe; /* indigo-200 */
+
+  --status-ineligible-bg:   #fff7ed; /* orange-50  */
+  --status-ineligible-text: #9a3412; /* orange-800 */
+  --status-ineligible-ring: #fed7aa; /* orange-200 */
+
+  --status-lost-bg:   #f1f5f9; /* slate-100 */
+  --status-lost-text: #475569; /* slate-600 */
+  --status-lost-ring: #e2e8f0; /* slate-200 */
+
+  --status-inorder-bg:   #eff6ff; /* blue-50  */
+  --status-inorder-text: #1d4ed8; /* blue-700 */
+  --status-inorder-ring: #bfdbfe; /* blue-200 */
+
+  --status-delivery-bg:   #f5f3ff; /* violet-50  */
+  --status-delivery-text: #6d28d9; /* violet-700 */
+  --status-delivery-ring: #ddd6fe; /* violet-200 */
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Shadows */
+  --shadow-card:  0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-hover: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+
+  /* Radii */
+  --radius-sm:   0.375rem;  /* 6px  — buttons, nav items        */
+  --radius-md:   0.75rem;   /* 12px — inputs, segmented controls */
+  --radius-lg:   1rem;      /* 16px — cards, modals             */
+  --radius-full: 9999px;    /* badges, pills                    */
+
+  /* Light mode base */
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -19,8 +100,27 @@
   }
 }
 
+/* ── Base styles ─────────────────────────────────────────────────────────── */
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Consistent focus ring across all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--fg-strong);
+  outline-offset: 2px;
+}
+
+/* Tabular numerics on all monetary / count displays */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Monospace code spans (FP numbers, VINs, order numbers) */
+.font-mono {
+  font-family: var(--font-mono);
 }
