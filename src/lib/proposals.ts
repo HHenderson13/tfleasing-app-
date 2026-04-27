@@ -4,6 +4,7 @@ import { customers, groupSites, proposalEvents, proposalStageChecks, proposals, 
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { ORDER_STATUSES, PROPOSAL_SECTION_STATUSES, type ProposalStatus } from "./proposal-constants";
+import { sendStatusChangeEmail } from "./email";
 
 export interface CreateProposalInput {
   customerName: string;
@@ -156,6 +157,18 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     toStatus,
     note: note?.trim() || null,
     createdAt: now,
+  });
+  await sendStatusChangeEmail({
+    id: p.id,
+    customerId: p.customerId,
+    salesExecId: p.salesExecId,
+    model: p.model,
+    derivative: p.derivative,
+    funderName: p.funderName,
+    monthlyRental: p.monthlyRental,
+    fromStatus: p.status as ProposalStatus,
+    toStatus,
+    note: note?.trim() || null,
   });
 }
 

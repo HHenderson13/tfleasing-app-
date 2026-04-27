@@ -224,6 +224,24 @@ export const stockVehicles = sqliteTable("stock_vehicles", {
   uploadId: text("upload_id").notNull(),
 });
 
+// Per-proposal ETA snapshots — one row per proposal per stock upload, used by
+// the daily summary email to detect ETA movements vs. the previous upload.
+export const proposalEtaSnapshots = sqliteTable(
+  "proposal_eta_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    proposalId: text("proposal_id").notNull(),
+    uploadId: text("upload_id").notNull(),
+    etaAt: integer("eta_at", { mode: "timestamp" }),
+    locationStatus: text("location_status"),
+    capturedAt: integer("captured_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byProposal: index("idx_eta_snap_proposal").on(t.proposalId),
+    byCaptured: index("idx_eta_snap_captured").on(t.capturedAt),
+  })
+);
+
 // Admin-maintained mappings: raw string from feed -> display name.
 // kind: 'dealer' | 'model' | 'colour'
 export const stockMappings = sqliteTable(

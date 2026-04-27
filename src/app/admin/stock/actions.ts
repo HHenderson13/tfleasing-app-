@@ -1,8 +1,8 @@
 "use server";
 import { db } from "@/db";
-import { stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { proposalEtaSnapshots, proposals, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
 import { parseStockWorkbook } from "@/lib/stock-parser";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 
@@ -91,7 +91,60 @@ export async function uploadStockAction(form: FormData) {
     }
   });
 
+  // Capture an ETA snapshot per active order proposal so the daily summary can
+  // detect ETA movements vs. the previous upload.
+  await captureEtaSnapshots(uploadId, now);
+
   revalidatePath("/admin/stock");
   revalidatePath("/stock");
   return { ok: true as const, count: parsed.length };
+}
+
+const TF_BRANCH_CODES = ["62133", "62134"];
+
+async function captureEtaSnapshots(uploadId: string, capturedAt: Date) {
+  const orderProps = await db
+    .select({
+      id: proposals.id,
+      vin: proposals.vin,
+      orderNumber: proposals.orderNumber,
+    })
+    .from(proposals)
+    .where(inArray(proposals.status, ["in_order", "awaiting_delivery"]));
+  if (orderProps.length === 0) return;
+
+  const stock = await db
+    .select({
+      vin: stockVehicles.vin,
+      orderNo: stockVehicles.orderNo,
+      dealerRaw: stockVehicles.dealerRaw,
+      locationStatus: stockVehicles.locationStatus,
+      etaAt: stockVehicles.etaAt,
+    })
+    .from(stockVehicles);
+
+  const rows: { proposalId: string; uploadId: string; etaAt: Date | null; locationStatus: string | null; capturedAt: Date }[] = [];
+  for (const p of orderProps) {
+    let hit: (typeof stock)[number] | undefined;
+    if (p.vin) hit = stock.find((s) => s.vin === p.vin);
+    if (!hit && p.orderNumber) {
+      hit = stock.find(
+        (s) =>
+          s.orderNo === p.orderNumber &&
+          s.dealerRaw &&
+          TF_BRANCH_CODES.some((c) => s.dealerRaw!.includes(c)),
+      );
+    }
+    rows.push({
+      proposalId: p.id,
+      uploadId,
+      etaAt: hit?.etaAt ?? null,
+      locationStatus: hit?.locationStatus ?? null,
+      capturedAt,
+    });
+  }
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    await db.insert(proposalEtaSnapshots).values(rows.slice(i, i + BATCH));
+  }
 }
