@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { changeStatusAction, listFundersForConfigAction, reproposeAction } from "../../proposals/actions";
 import { PROPOSAL_STATUSES, STATUS_LABELS, TERMINAL_STATUSES, statusColor, statusLabel, type ProposalStatus } from "@/lib/proposal-constants";
 import { SalesExecPicker } from "@/components/sales-exec-picker";
@@ -67,6 +68,7 @@ export function CustomerTimeline({ items, customerId: _customerId, declinedCount
 
 function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCount: number; execs: { id: string; name: string }[] }) {
   const { proposal: p, exec, groupSite, events } = item;
+  const router = useRouter();
   const [, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showReferDealer, setShowReferDealer] = useState(false);
@@ -87,7 +89,10 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
     start(async () => {
       const res = await changeStatusAction(p.id, to, note);
       if (!res.ok) setError(res.error);
-      else { setShowReferDealer(false); setUnderwritingNote(""); }
+      else {
+        setShowReferDealer(false); setUnderwritingNote("");
+        if (res.nextPage) router.push(res.nextPage);
+      }
     });
   }
   function submitReferDealer() {

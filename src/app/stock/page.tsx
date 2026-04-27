@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { stockMappings, stockVehicles } from "@/db/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { stockMappings, stockUploads, stockVehicles } from "@/db/schema";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { TopNav } from "@/components/top-nav";
 import { StockBrowser, type StockRow } from "./browser";
 import { requireStockAccess } from "@/lib/auth-guard";
@@ -12,10 +12,12 @@ type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "optio
 
 export default async function PublicStockPage() {
   await requireStockAccess();
-  const [rows, mappings] = await Promise.all([
+  const [rows, mappings, latestUploadRows] = await Promise.all([
     db.select().from(stockVehicles).where(and(eq(stockVehicles.customerAssigned, false), isNotNull(stockVehicles.vin))),
     db.select().from(stockMappings),
+    db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
   ]);
+  const latestUpload = latestUploadRows[0] ?? null;
 
   const byKind: Record<KindKey, Map<string, MapEntry>> = {
     dealer: new Map(), model: new Map(), colour: new Map(), engine: new Map(),
@@ -113,7 +115,12 @@ export default async function PublicStockPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">Available stock</h1>
-            <p className="mt-1 text-sm text-slate-500">{out.length.toLocaleString()} vehicles in stock. Use the filters to narrow down.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {out.length.toLocaleString()} vehicles in stock. Use the filters to narrow down.
+              {latestUpload && (
+                <> · <span className="text-slate-400">Updated {new Date(latestUpload.uploadedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></>
+              )}
+            </p>
           </div>
         </div>
         <div className="mt-6">

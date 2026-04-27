@@ -10,7 +10,19 @@ import { getQuote } from "@/lib/quote";
 function revalidateForProposal(customerId: string) {
   revalidatePath("/proposals");
   revalidatePath("/orders");
+  revalidatePath("/orders/awaiting");
   revalidatePath(`/customers/${customerId}`);
+}
+
+// Where to send the user after a status change so they're on the page that
+// matches the deal's new stage. Returning null means "stay where you are".
+function nextPageForStatus(toStatus: ProposalStatus, proposalId: string): string | null {
+  switch (toStatus) {
+    case "accepted":           return `/orders/${proposalId}`;
+    case "in_order":           return `/orders/${proposalId}`;
+    case "awaiting_delivery":  return "/orders/awaiting";
+    default:                   return null;
+  }
 }
 
 export async function changeStatusAction(proposalId: string, toStatus: ProposalStatus, note?: string) {
@@ -18,7 +30,7 @@ export async function changeStatusAction(proposalId: string, toStatus: ProposalS
     await changeStatus(proposalId, toStatus, note);
     const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
     if (p) revalidateForProposal(p.customerId);
-    return { ok: true as const };
+    return { ok: true as const, nextPage: nextPageForStatus(toStatus, proposalId) };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
   }

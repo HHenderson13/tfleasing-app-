@@ -6,7 +6,6 @@ import { db } from "@/db";
 import { salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { ExecFilter } from "./exec-filter";
-import { OrdersTabs } from "./orders-tabs";
 import { OrderRow, Section, CountdownBadge, type OutstandingAction } from "./order-row";
 import { requireOrdersAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
@@ -86,7 +85,6 @@ export default async function OrdersActionsPage({
 
   const filtered = execFilter ? rows.filter((r) => r.salesExecId === execFilter) : rows;
   const inOrderAll = filtered.filter((r) => r.status === "in_order");
-  const awaitingAll = filtered.filter((r) => r.status === "awaiting_delivery");
 
   const stats: Record<Focus, number> = {
     agreements: inOrderAll.filter((p) => matchesFocus(p, "agreements")).length,
@@ -112,8 +110,6 @@ export default async function OrdersActionsPage({
             value={execFilter ?? "all"}
           />
         </div>
-
-        <OrdersTabs actionsCount={inOrderAll.length} deliveryCount={awaitingAll.length} />
 
         <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile label={FOCUS_LABELS.agreements} value={stats.agreements} tone="violet" href={buildQuery(execFilter, "agreements")} active={focus === "agreements"} />

@@ -6,7 +6,6 @@ import { db } from "@/db";
 import { proposals, salesExecs, stockVehicles } from "@/db/schema";
 import { asc, inArray, isNull, and } from "drizzle-orm";
 import { ExecFilter } from "../exec-filter";
-import { OrdersTabs } from "../orders-tabs";
 import { OrderRow, Section } from "../order-row";
 import { ManualEtaEditor } from "./manual-row";
 
@@ -128,7 +127,6 @@ export default async function OrdersAwaitingPage({
   const stock: StockRow[] = stockRaw;
 
   const filtered = execFilter ? rows.filter((r) => r.salesExecId === execFilter) : rows;
-  const inOrderAll = filtered.filter((r) => r.status === "in_order");
   const awaiting = filtered.filter((r) => r.status === "awaiting_delivery");
 
   type Bucketed = {
@@ -178,8 +176,6 @@ export default async function OrdersAwaitingPage({
             />
           </div>
         </div>
-
-        <OrdersTabs actionsCount={inOrderAll.length} deliveryCount={awaiting.length} />
 
         {sortedKeys.length === 0 ? (
           <Section title="Awaiting delivery" empty="No deals waiting on delivery yet.">{[]}</Section>

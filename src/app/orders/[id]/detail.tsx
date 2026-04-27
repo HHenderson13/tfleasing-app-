@@ -111,6 +111,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
     start(async () => {
       const res = await changeStatusAction(proposal.id, "awaiting_delivery");
       if (!res.ok) setError(res.error);
+      else if (res.nextPage) router.push(res.nextPage);
       else router.refresh();
     });
   }
