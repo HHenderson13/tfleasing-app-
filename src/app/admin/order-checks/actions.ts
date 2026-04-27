@@ -9,11 +9,13 @@ function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || randomUUID().slice(0, 8);
 }
 
-export async function createOrderCheck(input: { label: string; appliesToBq: boolean }) {
+export async function createOrderCheck(input: { label: string; appliesToBq: boolean; stage?: "order" | "delivery" }) {
   const label = input.label.trim();
   if (!label) return { ok: false as const, error: "Label is required." };
+  const stage = input.stage === "delivery" ? "delivery" : "order";
   const rows = await db.select().from(stageCheckDefs);
-  const maxSort = rows.reduce((m, r) => Math.max(m, r.sortOrder), 0);
+  const sameStage = rows.filter((r) => r.stage === stage);
+  const maxSort = sameStage.reduce((m, r) => Math.max(m, r.sortOrder), 0);
   let id = slugify(label);
   if (rows.some((r) => r.id === id)) id = `${id}-${randomUUID().slice(0, 4)}`;
   await db.insert(stageCheckDefs).values({
@@ -21,10 +23,12 @@ export async function createOrderCheck(input: { label: string; appliesToBq: bool
     label,
     sortOrder: maxSort + 10,
     appliesToBq: input.appliesToBq,
+    stage,
     createdAt: new Date(),
   });
   revalidatePath("/admin/order-checks");
   revalidatePath("/orders");
+  revalidatePath("/orders/awaiting");
   return { ok: true as const };
 }
 
@@ -44,4 +48,5 @@ export async function deleteOrderCheck(id: string) {
   await db.delete(stageCheckDefs).where(eq(stageCheckDefs.id, id));
   revalidatePath("/admin/order-checks");
   revalidatePath("/orders");
+  revalidatePath("/orders/awaiting");
 }

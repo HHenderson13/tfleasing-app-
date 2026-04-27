@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { db } from "@/db";
+import { ensureAppSchema } from "@/db/ensure-schema";
 import { sessions, users } from "@/db/schema";
 import { and, eq, gt } from "drizzle-orm";
 
@@ -101,6 +102,7 @@ export async function clearSessionCookie() {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  await ensureAppSchema();
   const jar = await cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
   if (!sid) return null;

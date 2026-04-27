@@ -1,16 +1,21 @@
 import { db } from "@/db";
-import { funders, ratebook, ratebookUploads } from "@/db/schema";
-import { desc, sql } from "drizzle-orm";
+import { funders, ratebookRemoteSettings, ratebookUploads } from "@/db/schema";
+import { ensureRatebookRemoteSettingsTable } from "@/lib/ratebook-remote";
+import { desc, eq, sql } from "drizzle-orm";
 import { UploadForm } from "./upload-form";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export default async function RatebooksPage() {
+  await ensureRatebookRemoteSettingsTable();
   const fs = await db.select().from(funders).orderBy(funders.name);
   const summary = await db.all<{ funder_id: string; is_maintained: number; rows: number }>(sql`
     SELECT funder_id, is_maintained, COUNT(*) as rows FROM ratebook GROUP BY funder_id, is_maintained
   `);
   const recent = await db.select().from(ratebookUploads).orderBy(desc(ratebookUploads.uploadedAt)).limit(20);
+  const [remote] = await db.select().from(ratebookRemoteSettings).where(eq(ratebookRemoteSettings.id, "default")).limit(1);
 
   const byKey = new Map(summary.map((s) => [`${s.funder_id}|${s.is_maintained}`, s.rows]));
 
@@ -18,7 +23,7 @@ export default async function RatebooksPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Ratebooks</h1>
-        <p className="mt-1 text-sm text-slate-500">Upload the 8 BCH ratebooks (4 funders × Customer Maintained + Maintained). PCH is calculated as BCH × 1.2 VAT at quote time. Uploading replaces all rows for that slice.</p>
+        <p className="mt-1 text-sm text-slate-500">Upload the 8 BCH ratebooks (4 funders x Customer Maintained + Maintained). PCH is calculated as BCH x 1.2 VAT at quote time. Uploading replaces all rows for that slice.</p>
       </div>
 
       <section>
@@ -46,8 +51,19 @@ export default async function RatebooksPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-slate-700">Upload</h2>
-        <UploadForm funders={fs.map((f) => ({ id: f.id, name: f.name }))} />
+        <h2 className="mb-2 text-sm font-medium text-slate-700">Import</h2>
+        <UploadForm
+          funders={fs.map((f) => ({ id: f.id, name: f.name }))}
+          initialRemoteSettings={{
+            protocol: (remote?.protocol ?? "sftp") as "sftp" | "ftp" | "ftps",
+            host: remote?.host ?? "",
+            port: remote?.port ? String(remote.port) : "",
+            username: remote?.username ?? "",
+            password: remote?.password ?? "",
+            remotePath: remote?.remotePath ?? "",
+            updatedAt: remote?.updatedAt ? remote.updatedAt.toISOString() : null,
+          }}
+        />
       </section>
 
       <section>

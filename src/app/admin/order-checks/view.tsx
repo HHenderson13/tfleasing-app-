@@ -3,8 +3,9 @@ import { useState, useTransition } from "react";
 import { createOrderCheck, deleteOrderCheck, updateOrderCheck } from "./actions";
 
 type Row = { id: string; label: string; sortOrder: number; appliesToBq: boolean };
+type Stage = "order" | "delivery";
 
-export function OrderChecksView({ rows }: { rows: Row[] }) {
+export function OrderChecksView({ rows, stage }: { rows: Row[]; stage: Stage }) {
   const [, start] = useTransition();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
@@ -15,7 +16,7 @@ export function OrderChecksView({ rows }: { rows: Row[] }) {
     setError(null);
     if (!label.trim()) { setError("Label is required."); return; }
     start(async () => {
-      const res = await createOrderCheck({ label, appliesToBq: newAppliesToBq });
+      const res = await createOrderCheck({ label, appliesToBq: newAppliesToBq, stage });
       if (!res.ok) { setError(res.error); return; }
       setLabel(""); setNewAppliesToBq(true); setAdding(false);
     });
@@ -75,7 +76,7 @@ export function OrderChecksView({ rows }: { rows: Row[] }) {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400">No extra order checks yet. Built-in ones (chip, MotorComplete, finance agreement, vehicle details) always apply.</td></tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400">No extra checks at this stage yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -99,7 +100,7 @@ export function OrderChecksView({ rows }: { rows: Row[] }) {
           onClick={() => setAdding(true)}
           className="flex w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-500 hover:border-slate-400 hover:text-slate-900"
         >
-          + Add order check
+          + Add {stage === "delivery" ? "delivery" : "order"} check
         </button>
       )}
     </div>

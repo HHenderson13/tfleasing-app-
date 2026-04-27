@@ -11,6 +11,7 @@ function revalidateForProposal(customerId: string) {
   revalidatePath("/proposals");
   revalidatePath("/orders");
   revalidatePath("/orders/awaiting");
+  revalidatePath("/orders/delivered");
   revalidatePath(`/customers/${customerId}`);
 }
 
@@ -21,6 +22,7 @@ function nextPageForStatus(toStatus: ProposalStatus, proposalId: string): string
     case "accepted":           return `/orders/${proposalId}`;
     case "in_order":           return `/orders/${proposalId}`;
     case "awaiting_delivery":  return "/orders/awaiting";
+    case "delivered":          return "/orders/delivered";
     default:                   return null;
   }
 }

@@ -3,11 +3,12 @@ import { listProposals } from "@/lib/proposals";
 import { STATUS_LABELS } from "@/lib/proposal-constants";
 import { TopNav } from "@/components/top-nav";
 import { db } from "@/db";
-import { proposals, salesExecs, stockVehicles } from "@/db/schema";
-import { asc, inArray, isNull, and } from "drizzle-orm";
+import { proposals, proposalStageChecks, salesExecs, stageCheckDefs, stockVehicles } from "@/db/schema";
+import { asc, eq, inArray, isNull, and } from "drizzle-orm";
 import { ExecFilter } from "../exec-filter";
 import { OrderRow, Section } from "../order-row";
 import { ManualEtaEditor } from "./manual-row";
+import { DeliveryEditor } from "./delivery-row";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +111,7 @@ export default async function OrdersAwaitingPage({
   const sp = await searchParams;
   const execFilter = sp.exec && sp.exec !== "all" ? sp.exec : null;
 
-  const [rows, execs, stockRaw] = await Promise.all([
+  const [rows, execs, stockRaw, deliveryDefs] = await Promise.all([
     listProposals("orders"),
     db.select().from(salesExecs).orderBy(asc(salesExecs.name)),
     db
@@ -122,12 +123,22 @@ export default async function OrdersAwaitingPage({
         etaAt: stockVehicles.etaAt,
       })
       .from(stockVehicles),
+    db.select().from(stageCheckDefs).where(eq(stageCheckDefs.stage, "delivery")).orderBy(asc(stageCheckDefs.sortOrder), asc(stageCheckDefs.label)),
   ]);
 
   const stock: StockRow[] = stockRaw;
 
   const filtered = execFilter ? rows.filter((r) => r.salesExecId === execFilter) : rows;
   const awaiting = filtered.filter((r) => r.status === "awaiting_delivery");
+
+  const ticksRaw = awaiting.length
+    ? await db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, awaiting.map((p) => p.id)))
+    : [];
+  const ticksByProposal = new Map<string, Set<string>>();
+  for (const t of ticksRaw) {
+    if (!ticksByProposal.has(t.proposalId)) ticksByProposal.set(t.proposalId, new Set());
+    ticksByProposal.get(t.proposalId)!.add(t.checkId);
+  }
 
   type Bucketed = {
     p: typeof awaiting[number];
@@ -210,6 +221,14 @@ export default async function OrdersAwaitingPage({
                         lastUpdatedAt={p.manualEtaUpdatedAt ? p.manualEtaUpdatedAt.toISOString() : null}
                       />
                     ) : null}
+                    <DeliveryEditor
+                      proposalId={p.id}
+                      initialBookedAt={p.deliveryBookedAt ? p.deliveryBookedAt.toISOString().slice(0, 10) : null}
+                      initialRegNumber={p.regNumber}
+                      checks={deliveryDefs
+                        .filter((d) => p.isGroupBq ? d.appliesToBq : true)
+                        .map((d) => ({ id: d.id, label: d.label, checked: ticksByProposal.get(p.id)?.has(d.id) ?? false }))}
+                    />
                   </div>
                 );
               })}

@@ -62,6 +62,17 @@ export const ratebookUploads = sqliteTable("ratebook_uploads", {
   uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
 });
 
+export const ratebookRemoteSettings = sqliteTable("ratebook_remote_settings", {
+  id: text("id").primaryKey(),
+  protocol: text("protocol").notNull().default("sftp"),
+  host: text("host").notNull(),
+  port: integer("port"),
+  username: text("username").notNull(),
+  password: text("password").notNull(),
+  remotePath: text("remote_path").notNull().default(""),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Persists cap_code → discount_key across vehicle deletions so mappings survive ratebook churn.
 export const savedDiscountKeys = sqliteTable("saved_discount_keys", {
   capCode: text("cap_code").primaryKey(),
@@ -94,9 +105,12 @@ export const PROPOSAL_STATUSES = [
   "declined",
   "referred_to_dealer",
   "referred_to_underwriter",
+  "not_eligible",
   "lost_sale",
+  "cancelled",
   "in_order",
   "awaiting_delivery",
+  "delivered",
 ] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 
@@ -137,6 +151,10 @@ export const proposals = sqliteTable(
     manualLocation: text("manual_location"),
     manualEtaUpdatedAt: integer("manual_eta_updated_at", { mode: "timestamp" }),
     deliveredDetectedAt: integer("delivered_detected_at", { mode: "timestamp" }),
+    // Customer-handover fields (used after Ford has delivered to us, before we hand to customer).
+    deliveryBookedAt: integer("delivery_booked_at", { mode: "timestamp" }),
+    regNumber: text("reg_number"),
+    deliveredAt: integer("delivered_at", { mode: "timestamp" }),
     isEv: integer("is_ev", { mode: "boolean" }).notNull().default(false),
     wallboxIncluded: integer("wallbox_included", { mode: "boolean" }).notNull().default(false),
     customerSavingGbp: real("customer_saving_gbp"),
@@ -171,6 +189,8 @@ export const stageCheckDefs = sqliteTable("stage_check_defs", {
   label: text("label").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
   appliesToBq: integer("applies_to_bq", { mode: "boolean" }).notNull().default(true),
+  // "order" = blocks in_order → awaiting_delivery; "delivery" = blocks awaiting_delivery → delivered.
+  stage: text("stage").notNull().default("order"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

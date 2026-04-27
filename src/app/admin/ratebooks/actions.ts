@@ -1,50 +1,166 @@
 "use server";
+
 import { db } from "@/db";
-import { ratebook, ratebookUploads, savedDiscountKeys, vehicles } from "@/db/schema";
-import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { ratebook, ratebookRemoteSettings, ratebookUploads, savedDiscountKeys, vehicles } from "@/db/schema";
+import { downloadRatebookRemoteFile, ensureRatebookRemoteSettingsTable, parseRatebookRemoteSettings, testRatebookRemoteConnection, type RatebookRemoteSettingsInput } from "@/lib/ratebook-remote";
 import { parseRatebookBuffer } from "@/lib/ratebook-parse";
+import { del } from "@vercel/blob";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+
+type RatebookImportInput = {
+  funderId: string;
+  isMaintained: boolean;
+  filename: string;
+  buffer: Buffer;
+};
+
+type RemoteImportInput = RatebookRemoteSettingsInput & {
+  funderId: string;
+  isMaintained: boolean;
+};
 
 export async function uploadRatebook(formData: FormData) {
   const file = formData.get("file") as File | null;
-  const funderId = String(formData.get("funderId") ?? "");
+  const funderId = String(formData.get("funderId") ?? "").trim();
   const isMaintained = String(formData.get("isMaintained") ?? "") === "true";
 
-  if (!file || !funderId) return { ok: false as const, error: "Missing file or funder" };
-  const buf = Buffer.from(await file.arrayBuffer());
-  const { rows, vehicles: parsedVehicles, warnings, diagnostics } = parseRatebookBuffer(buf, file.name);
-  if (!rows.length) return { ok: false as const, error: warnings.join("; ") || "No rows parsed", diagnostics };
+  if (!file || !funderId) return { ok: false as const, error: "Missing file or funder." };
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return importRatebookBuffer({
+    funderId,
+    isMaintained,
+    filename: file.name,
+    buffer,
+  });
+}
 
-  // Replace this funder/maintenance slice in ratebook.
+export async function processRatebookBlobAction(input: {
+  blobUrl: string;
+  filename: string;
+  funderId: string;
+  isMaintained: boolean;
+}) {
+  const res = await fetch(input.blobUrl);
+  if (!res.ok) {
+    return { ok: false as const, error: `Failed to fetch uploaded file (${res.status}).` };
+  }
+
+  try {
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return await importRatebookBuffer({
+      funderId: input.funderId,
+      isMaintained: input.isMaintained,
+      filename: input.filename,
+      buffer,
+    });
+  } finally {
+    try {
+      await del(input.blobUrl);
+    } catch {
+      // Ignore cleanup failures. The blob is only a temporary staging file.
+    }
+  }
+}
+
+export async function saveRatebookRemoteSettingsAction(input: RatebookRemoteSettingsInput) {
+  await ensureRatebookRemoteSettingsTable();
+
+  let settings;
+  try {
+    settings = parseRatebookRemoteSettings(input);
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Invalid remote settings." };
+  }
+
+  const updatedAt = new Date();
+  await db.insert(ratebookRemoteSettings).values({
+    id: "default",
+    protocol: settings.protocol,
+    host: settings.host,
+    port: settings.port,
+    username: settings.username,
+    password: settings.password,
+    remotePath: settings.remotePath,
+    updatedAt,
+  }).onConflictDoUpdate({
+    target: ratebookRemoteSettings.id,
+    set: {
+      protocol: settings.protocol,
+      host: settings.host,
+      port: settings.port,
+      username: settings.username,
+      password: settings.password,
+      remotePath: settings.remotePath,
+      updatedAt,
+    },
+  });
+
+  revalidatePath("/admin/ratebooks");
+  return {
+    ok: true as const,
+    updatedAt: updatedAt.toISOString(),
+  };
+}
+
+export async function testRatebookRemoteConnectionAction(input: RatebookRemoteSettingsInput) {
+  try {
+    const result = await testRatebookRemoteConnection(input);
+    return { ok: true as const, message: result.message };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Connection test failed." };
+  }
+}
+
+export async function importRatebookFromRemoteAction(input: RemoteImportInput) {
+  const funderId = input.funderId.trim();
+  if (!funderId) return { ok: false as const, error: "Choose a funder before importing." };
+
+  try {
+    const remote = await downloadRatebookRemoteFile(input);
+    return await importRatebookBuffer({
+      funderId,
+      isMaintained: input.isMaintained,
+      filename: remote.remotePath,
+      buffer: remote.buffer,
+    });
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Remote import failed." };
+  }
+}
+
+async function importRatebookBuffer(input: RatebookImportInput) {
+  const { rows, vehicles: parsedVehicles, warnings, diagnostics } = parseRatebookBuffer(input.buffer, input.filename);
+  if (!rows.length) {
+    return { ok: false as const, error: warnings.join("; ") || "No rows parsed.", diagnostics };
+  }
+
   await db.delete(ratebook).where(and(
-    eq(ratebook.funderId, funderId),
+    eq(ratebook.funderId, input.funderId),
     eq(ratebook.isBusiness, true),
-    eq(ratebook.isMaintained, isMaintained),
+    eq(ratebook.isMaintained, input.isMaintained),
   ));
 
-  const CHUNK = 500;
-  const allCapCodes = parsedVehicles.map((v) => v.capCode);
+  const chunkSize = 500;
+  const allCapCodes = parsedVehicles.map((vehicle) => vehicle.capCode);
 
-  // Restore any previously saved discount mappings for cap codes in this upload.
   const savedMappings = allCapCodes.length
     ? await db.select().from(savedDiscountKeys).where(inArray(savedDiscountKeys.capCode, allCapCodes))
     : [];
-  const savedMap = new Map(savedMappings.map((s) => [s.capCode, s.discountKey]));
+  const savedMap = new Map(savedMappings.map((row) => [row.capCode, row.discountKey]));
 
-  // Upsert vehicle master data. Refresh model/derivative/BLP/fuel; preserve discountKey.
-  // For brand-new rows, restore discountKey from savedMap if available.
-  const withData = parsedVehicles.filter((v) => v.model && v.derivative);
-  const placeholders = parsedVehicles.filter((v) => !(v.model && v.derivative));
+  const withData = parsedVehicles.filter((vehicle) => vehicle.model && vehicle.derivative);
+  const placeholders = parsedVehicles.filter((vehicle) => !(vehicle.model && vehicle.derivative));
 
-  for (let i = 0; i < withData.length; i += CHUNK) {
-    const slice = withData.slice(i, i + CHUNK).map((v) => ({
-      capCode: v.capCode,
-      model: v.model!,
-      derivative: v.derivative!,
-      fuelType: v.fuelType,
-      listPriceNet: v.listPriceNet,
+  for (let i = 0; i < withData.length; i += chunkSize) {
+    const slice = withData.slice(i, i + chunkSize).map((vehicle) => ({
+      capCode: vehicle.capCode,
+      model: vehicle.model!,
+      derivative: vehicle.derivative!,
+      fuelType: vehicle.fuelType,
+      listPriceNet: vehicle.listPriceNet,
       isVan: false,
-      discountKey: savedMap.get(v.capCode) ?? null,
+      discountKey: savedMap.get(vehicle.capCode) ?? null,
     }));
     await db.insert(vehicles).values(slice).onConflictDoUpdate({
       target: vehicles.capCode,
@@ -53,51 +169,48 @@ export async function uploadRatebook(formData: FormData) {
         derivative: sql`excluded.derivative`,
         fuelType: sql`COALESCE(excluded.fuel_type, vehicles.fuel_type)`,
         listPriceNet: sql`COALESCE(excluded.list_price_net, vehicles.list_price_net)`,
-        // Restore saved discountKey only if the row currently has none.
         discountKey: sql`COALESCE(vehicles.discount_key, excluded.discount_key)`,
       },
     });
   }
 
-  for (let i = 0; i < placeholders.length; i += CHUNK) {
-    const slice = placeholders.slice(i, i + CHUNK).map((v) => ({
-      capCode: v.capCode,
-      model: v.model ?? "Unknown",
-      derivative: v.derivative ?? v.capCode,
-      fuelType: v.fuelType,
-      listPriceNet: v.listPriceNet,
+  for (let i = 0; i < placeholders.length; i += chunkSize) {
+    const slice = placeholders.slice(i, i + chunkSize).map((vehicle) => ({
+      capCode: vehicle.capCode,
+      model: vehicle.model ?? "Unknown",
+      derivative: vehicle.derivative ?? vehicle.capCode,
+      fuelType: vehicle.fuelType,
+      listPriceNet: vehicle.listPriceNet,
       isVan: false,
-      discountKey: savedMap.get(v.capCode) ?? null,
+      discountKey: savedMap.get(vehicle.capCode) ?? null,
     }));
     await db.insert(vehicles).values(slice).onConflictDoNothing();
   }
 
-  // Insert ratebook rows.
   let inserted = 0;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const slice = rows.slice(i, i + CHUNK).map((r) => ({
-      funderId, ...r, isBusiness: true, isMaintained,
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const slice = rows.slice(i, i + chunkSize).map((row) => ({
+      funderId: input.funderId,
+      ...row,
+      isBusiness: true,
+      isMaintained: input.isMaintained,
     }));
     await db.insert(ratebook).values(slice).onConflictDoNothing();
     inserted += slice.length;
   }
 
-  // Reconcile vehicles: remove any cap code no longer present in ANY ratebook row.
-  // Save their discountKey first so it can be restored if the cap code returns.
   const orphans = await db
     .select({ capCode: vehicles.capCode, discountKey: vehicles.discountKey })
     .from(vehicles)
-    .where(
-      sql`cap_code NOT IN (SELECT DISTINCT cap_code FROM ratebook)`
-    );
+    .where(sql`cap_code NOT IN (SELECT DISTINCT cap_code FROM ratebook)`);
 
   if (orphans.length) {
-    const toSave = orphans.filter((o) => o.discountKey);
+    const toSave = orphans.filter((row) => row.discountKey);
     if (toSave.length) {
-      for (let i = 0; i < toSave.length; i += CHUNK) {
-        const slice = toSave.slice(i, i + CHUNK).map((o) => ({
-          capCode: o.capCode,
-          discountKey: o.discountKey!,
+      for (let i = 0; i < toSave.length; i += chunkSize) {
+        const slice = toSave.slice(i, i + chunkSize).map((row) => ({
+          capCode: row.capCode,
+          discountKey: row.discountKey!,
         }));
         await db.insert(savedDiscountKeys).values(slice).onConflictDoUpdate({
           target: savedDiscountKeys.capCode,
@@ -105,27 +218,38 @@ export async function uploadRatebook(formData: FormData) {
         });
       }
     }
-    const orphanCodes = orphans.map((o) => o.capCode);
-    for (let i = 0; i < orphanCodes.length; i += CHUNK) {
-      await db.delete(vehicles).where(inArray(vehicles.capCode, orphanCodes.slice(i, i + CHUNK)));
+
+    const orphanCodes = orphans.map((row) => row.capCode);
+    for (let i = 0; i < orphanCodes.length; i += chunkSize) {
+      await db.delete(vehicles).where(inArray(vehicles.capCode, orphanCodes.slice(i, i + chunkSize)));
     }
   }
 
-  // Clean up savedDiscountKeys for cap codes that are now live (no longer orphans).
   if (allCapCodes.length) {
-    for (let i = 0; i < allCapCodes.length; i += CHUNK) {
+    for (let i = 0; i < allCapCodes.length; i += chunkSize) {
       await db.delete(savedDiscountKeys).where(
-        inArray(savedDiscountKeys.capCode, allCapCodes.slice(i, i + CHUNK))
+        inArray(savedDiscountKeys.capCode, allCapCodes.slice(i, i + chunkSize)),
       );
     }
   }
 
   await db.insert(ratebookUploads).values({
-    funderId, isMaintained, filename: file.name, rowCount: inserted, uploadedAt: new Date(),
+    funderId: input.funderId,
+    isMaintained: input.isMaintained,
+    filename: input.filename,
+    rowCount: inserted,
+    uploadedAt: new Date(),
   });
 
   revalidatePath("/admin/ratebooks");
   revalidatePath("/admin/vehicles");
   revalidatePath("/admin/discounts");
-  return { ok: true as const, inserted, removed: orphans.length, warnings, diagnostics };
+
+  return {
+    ok: true as const,
+    inserted,
+    removed: orphans.length,
+    warnings,
+    diagnostics,
+  };
 }

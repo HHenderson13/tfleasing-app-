@@ -22,6 +22,7 @@ const TILE_TONES: Record<ProposalStatus, { bg: string; ring: string; text: strin
   lost_sale: { bg: "bg-slate-100", ring: "ring-slate-200", text: "text-slate-600", num: "text-slate-900", activeRing: "ring-slate-500" },
   in_order: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-500", num: "text-slate-700", activeRing: "ring-slate-500" },
   awaiting_delivery: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-500", num: "text-slate-700", activeRing: "ring-slate-500" },
+  delivered: { bg: "bg-teal-50", ring: "ring-teal-200", text: "text-teal-700", num: "text-teal-900", activeRing: "ring-teal-500" },
   cancelled: { bg: "bg-rose-50", ring: "ring-rose-200", text: "text-rose-700", num: "text-rose-900", activeRing: "ring-rose-500" },
 };
 

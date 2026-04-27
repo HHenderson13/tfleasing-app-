@@ -9,11 +9,12 @@ export const PROPOSAL_STATUSES = [
   "cancelled",
   "in_order",
   "awaiting_delivery",
+  "delivered",
 ] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 
 // Statuses that belong to the Proposals section vs. the Orders section.
-export const ORDER_STATUSES: ProposalStatus[] = ["in_order", "awaiting_delivery"];
+export const ORDER_STATUSES: ProposalStatus[] = ["in_order", "awaiting_delivery", "delivered"];
 export const PROPOSAL_SECTION_STATUSES: ProposalStatus[] = [
   "proposal_received", "accepted", "declined", "referred_to_dealer", "referred_to_underwriter", "not_eligible", "lost_sale", "cancelled",
 ];
@@ -32,6 +33,7 @@ export const STATUS_LABELS: Record<ProposalStatus, string> = {
   cancelled: "Cancelled",
   in_order: "In order",
   awaiting_delivery: "Awaiting delivery",
+  delivered: "Delivered",
 };
 
 const FALLBACK_STATUS_COLOR = { bg: "bg-slate-100", text: "text-slate-700", ring: "ring-slate-200" };
@@ -52,4 +54,5 @@ export const STATUS_COLORS: Record<ProposalStatus, { bg: string; text: string; r
   cancelled: { bg: "bg-rose-100", text: "text-rose-700", ring: "ring-rose-200" },
   in_order: { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-blue-200" },
   awaiting_delivery: { bg: "bg-violet-100", text: "text-violet-700", ring: "ring-violet-200" },
+  delivered: { bg: "bg-teal-100", text: "text-teal-700", ring: "ring-teal-200" },
 };

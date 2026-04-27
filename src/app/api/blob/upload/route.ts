@@ -19,12 +19,15 @@ export async function POST(request: Request) {
         }
         return {
           allowedContentTypes: [
+            "text/csv",
+            "application/csv",
+            "application/vnd.ms-excel",
             "application/vnd.ms-excel.sheet.macroEnabled.12",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/octet-stream",
           ],
           addRandomSuffix: true,
-          maximumSizeInBytes: 50 * 1024 * 1024,
+          maximumSizeInBytes: 100 * 1024 * 1024,
         };
       },
       onUploadCompleted: async () => {},

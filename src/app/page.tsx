@@ -12,6 +12,7 @@ const TILES: Tile[] = [
   { key: "proposals", href: "/proposals", title: "Proposals", desc: "Live proposals — accept, decline, refer.",       tone: "from-sky-500 to-sky-700" },
   { key: "orders",    href: "/orders",    title: "Orders",    desc: "Accepted deals moving through to delivery.",     tone: "from-amber-500 to-amber-700" },
   { key: "orders",    href: "/orders/awaiting", title: "Awaiting delivery", desc: "Live ETAs and delivery tracking for ordered vehicles.", tone: "from-teal-500 to-teal-700" },
+  { key: "orders",    href: "/orders/delivered", title: "Delivered", desc: "Deals handed over to the customer.", tone: "from-emerald-500 to-emerald-700" },
   { key: "reports",   href: "/reports",   title: "Reports",   desc: "Funder, source, model and EV performance.",      tone: "from-rose-500 to-fuchsia-600" },
   { key: "admin",     href: "/admin",     title: "Admin",     desc: "Ratebooks, discounts, mappings and data.",       tone: "from-slate-700 to-slate-900" },
 ];

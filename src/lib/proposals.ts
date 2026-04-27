@@ -133,7 +133,22 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     if (!isAld && !p.financeAgreementSigned) throw new Error("Confirm signed finance agreement received.");
     if (!isBq && !p.orderNumber && !p.vin) throw new Error("Enter an order number and/or VIN.");
 
-    const defs = await db.select().from(stageCheckDefs);
+    const defs = await db.select().from(stageCheckDefs).where(eq(stageCheckDefs.stage, "order"));
+    const applicable = defs.filter((d) => isBq ? d.appliesToBq : true);
+    if (applicable.length) {
+      const ticked = await db.select().from(proposalStageChecks).where(eq(proposalStageChecks.proposalId, proposalId));
+      const tickedIds = new Set(ticked.map((t) => t.checkId));
+      const missing = applicable.filter((d) => !tickedIds.has(d.id));
+      if (missing.length) {
+        throw new Error(`Confirm: ${missing.map((m) => m.label).join(", ")}.`);
+      }
+    }
+  }
+  if (toStatus === "delivered") {
+    if (p.status !== "awaiting_delivery") throw new Error("Move to awaiting delivery first.");
+    if (!p.deliveryBookedAt) throw new Error("Set the delivery date first.");
+    const isBq = p.isGroupBq;
+    const defs = await db.select().from(stageCheckDefs).where(eq(stageCheckDefs.stage, "delivery"));
     const applicable = defs.filter((d) => isBq ? d.appliesToBq : true);
     if (applicable.length) {
       const ticked = await db.select().from(proposalStageChecks).where(eq(proposalStageChecks.proposalId, proposalId));
@@ -149,6 +164,7 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
   const patch: Record<string, unknown> = { status: toStatus, updatedAt: now };
   if (toStatus === "referred_to_dealer") patch.underwritingNotes = note!.trim();
   if (toStatus === "accepted" && !p.acceptedAt) patch.acceptedAt = now;
+  if (toStatus === "delivered" && !p.deliveredAt) patch.deliveredAt = now;
   await db.update(proposals).set(patch).where(eq(proposals.id, proposalId));
   await db.insert(proposalEvents).values({
     proposalId,
@@ -182,6 +198,8 @@ export async function updateOrderFields(
     vin: string | null;
     model: string;
     derivative: string;
+    deliveryBookedAt: Date | null;
+    regNumber: string | null;
   }>
 ) {
   const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
@@ -226,6 +244,22 @@ export async function updateOrderFields(
     if (v !== (p.vin ?? null)) {
       clean.vin = v;
       events.push({ field: "VIN", value: v ?? "cleared" });
+    }
+  }
+  if (patch.deliveryBookedAt !== undefined) {
+    const v = patch.deliveryBookedAt;
+    if (v && Number.isNaN(v.getTime())) throw new Error("Bad delivery date");
+    const same = (v?.getTime() ?? null) === (p.deliveryBookedAt?.getTime() ?? null);
+    if (!same) {
+      clean.deliveryBookedAt = v;
+      events.push({ field: "Delivery date", value: v ? v.toISOString().slice(0, 10) : "cleared" });
+    }
+  }
+  if (patch.regNumber !== undefined) {
+    const v = patch.regNumber?.trim().toUpperCase() || null;
+    if (v !== (p.regNumber ?? null)) {
+      clean.regNumber = v;
+      events.push({ field: "Reg number", value: v ?? "cleared" });
     }
   }
   if (Object.keys(clean).length === 1) return; // only updatedAt
@@ -309,7 +343,12 @@ export async function listProposals(section?: Section) {
   }
   return ps.map((p) => {
     const ticked = ticksByProposal.get(p.id) ?? new Set<string>();
-    const applicable = defs.filter((d) => p.isGroupBq ? d.appliesToBq : true);
+    // Count remaining checks for the *next* transition: order checks while in_order,
+    // delivery checks while awaiting_delivery, none for terminal/other states.
+    const stageNeeded = p.status === "in_order" ? "order" : p.status === "awaiting_delivery" ? "delivery" : null;
+    const applicable = stageNeeded
+      ? defs.filter((d) => d.stage === stageNeeded && (p.isGroupBq ? d.appliesToBq : true))
+      : [];
     const customRemaining = applicable.filter((d) => !ticked.has(d.id)).length;
     return {
       ...p,
@@ -441,7 +480,10 @@ export async function getProposalWithContext(proposalId: string) {
   const ticks = await db.select().from(proposalStageChecks).where(eq(proposalStageChecks.proposalId, p.id));
   const tickedIds = new Set(ticks.map((t) => t.checkId));
   const customChecks = defs
-    .filter((d) => p.isGroupBq ? d.appliesToBq : true)
+    .filter((d) => d.stage === "order" && (p.isGroupBq ? d.appliesToBq : true))
     .map((d) => ({ id: d.id, label: d.label, checked: tickedIds.has(d.id) }));
-  return { proposal: p, customer: cust ?? null, exec: exec ?? null, groupSite: site ?? null, events, customChecks };
+  const deliveryChecks = defs
+    .filter((d) => d.stage === "delivery" && (p.isGroupBq ? d.appliesToBq : true))
+    .map((d) => ({ id: d.id, label: d.label, checked: tickedIds.has(d.id) }));
+  return { proposal: p, customer: cust ?? null, exec: exec ?? null, groupSite: site ?? null, events, customChecks, deliveryChecks };
 }
