@@ -4,6 +4,8 @@ import { desc, eq, sql } from "drizzle-orm";
 import { StockUploadView } from "./view";
 
 export const dynamic = "force-dynamic";
+// Workbook parse + DB replace can take a while; default 10s on Hobby would 504.
+export const maxDuration = 300;
 
 export default async function StockUploadPage() {
   const [latest] = await db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1);
