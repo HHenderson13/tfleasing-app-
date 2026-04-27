@@ -1,7 +1,8 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateWorkbookPasswordAction, uploadStockAction } from "./actions";
+import { upload } from "@vercel/blob/client";
+import { processStockBlobAction, updateWorkbookPasswordAction } from "./actions";
 
 export function StockUploadView({
   latest,
@@ -38,14 +39,21 @@ export function StockUploadView({
     setError(null);
     setSuccess(null);
     if (!file) { setError("Pick a file first."); return; }
-    const form = new FormData();
-    form.append("file", file);
     start(async () => {
-      const res = await uploadStockAction(form);
-      if (!res.ok) { setError(res.error); return; }
-      setSuccess(res.count);
-      setFile(null);
-      router.refresh();
+      try {
+        // Upload directly to Vercel Blob to bypass the 4.5MB serverless body cap.
+        const blob = await upload(`stock/${Date.now()}-${file.name}`, file, {
+          access: "public",
+          handleUploadUrl: "/api/blob/upload",
+        });
+        const res = await processStockBlobAction({ blobUrl: blob.url, filename: file.name });
+        if (!res.ok) { setError(res.error); return; }
+        setSuccess(res.count);
+        setFile(null);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Upload failed");
+      }
     });
   }
 

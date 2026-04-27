@@ -5,6 +5,7 @@ import { parseStockWorkbook } from "@/lib/stock-parser";
 import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
+import { del } from "@vercel/blob";
 
 async function getPassword(): Promise<string> {
   const [row] = await db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1);
@@ -25,11 +26,27 @@ export async function updateWorkbookPasswordAction(password: string) {
 }
 
 export async function uploadStockAction(form: FormData) {
+  // Legacy small-file path: kept for local dev where the 4.5MB Vercel platform
+  // body cap doesn't apply. Production uses processStockBlobAction instead.
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false as const, error: "Pick a file to upload." };
   }
   const buffer = Buffer.from(await file.arrayBuffer());
+  return processWorkbook(buffer, file.name);
+}
+
+export async function processStockBlobAction(input: { blobUrl: string; filename: string }) {
+  const res = await fetch(input.blobUrl);
+  if (!res.ok) return { ok: false as const, error: `Failed to fetch uploaded file (${res.status}).` };
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const result = await processWorkbook(buffer, input.filename);
+  // Tidy: blob is one-shot, no need to keep it once parsed.
+  try { await del(input.blobUrl); } catch { /* ignore */ }
+  return result;
+}
+
+async function processWorkbook(buffer: Buffer, filename: string) {
   const password = await getPassword();
   let parsed;
   try {
@@ -53,7 +70,7 @@ export async function uploadStockAction(form: FormData) {
     await tx.delete(stockVehicles);
     await tx.insert(stockUploads).values({
       id: uploadId,
-      filename: file.name,
+      filename,
       vehicleCount: parsed.length,
       uploadedAt: now,
     });

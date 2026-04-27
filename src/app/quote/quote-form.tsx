@@ -203,15 +203,11 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
 
         <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
           <div>
-            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Best monthly</div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold tabular-nums text-slate-900">£{best.totalMonthly.toFixed(2)}</span>
-              <span className="text-xs text-slate-500">via <span className="font-medium text-slate-700">{best.funderName}</span></span>
-            </div>
+            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Best funder</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{best.funderName}</div>
           </div>
           {result.funders.length > 1 && (
             <div className="text-right text-xs text-slate-500">
-              <div>vs next: +£{(result.funders[1].totalMonthly - best.totalMonthly).toFixed(2)}/mo</div>
               <div className="text-slate-400">{result.funders.length} funders returned rates</div>
             </div>
           )}
@@ -251,8 +247,17 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <div className="text-lg font-semibold tabular-nums text-slate-900">£{f.totalMonthly.toFixed(2)}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-slate-400">/ month</div>
+                  {isBest ? (
+                    <>
+                      <div className="text-lg font-semibold tabular-nums text-emerald-700">Cheapest</div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">rank #1</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-lg font-semibold tabular-nums text-slate-900">+£{(f.totalMonthly - best.totalMonthly).toFixed(2)}</div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">/ month vs #1</div>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={() => setSaveFor({ funderId: f.funderId, funderName: f.funderName, rank: f.rank, monthlyRental: f.totalMonthly })}
