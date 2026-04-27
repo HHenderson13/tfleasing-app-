@@ -8,6 +8,7 @@ import type { QuoteResult } from "@/lib/quote";
 const TERMS = [24, 36, 48];
 const MILEAGES = [5000, 6000, 8000, 10000, 12000, 15000, 20000, 25000, 30000];
 const UPFRONTS = [1, 3, 6, 9, 12];
+const RANKING_UPFRONT = 6;
 
 export function QuoteForm({ models }: { models: string[] }) {
   const [contract, setContract] = useState<"PCH" | "BCH">("PCH");
@@ -44,12 +45,12 @@ export function QuoteForm({ models }: { models: string[] }) {
         derivative,
         termMonths: term,
         annualMileage: mileage,
-        initialRentalMultiplier: upfront,
+        initialRentalMultiplier: RANKING_UPFRONT,
         wallbox,
       });
       if (myId === reqId.current) setResult(r);
     });
-  }, [canQuote, contract, maintenance, model, derivative, term, mileage, upfront, wallbox]);
+  }, [canQuote, contract, maintenance, model, derivative, term, mileage, wallbox]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,440px)_1fr]">
@@ -93,6 +94,7 @@ export function QuoteForm({ models }: { models: string[] }) {
           <PillPicker label="Term (months)" value={term} options={TERMS} onChange={setTerm} />
           <PillPicker label="Mileage per year" value={mileage} options={MILEAGES} onChange={setMileage} format={(v) => v.toLocaleString()} />
           <PillPicker label="Initial rental (months)" value={upfront} options={UPFRONTS} onChange={setUpfront} />
+          <div className="text-[11px] text-slate-400">Funders ranked at 6× upfront; your selection is saved on the proposal.</div>
         </div>
 
         {result?.wallboxAvailable && (
