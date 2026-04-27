@@ -1,7 +1,9 @@
 import { db } from "@/db";
 import { stockMappings, stockVehicles } from "@/db/schema";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { TopNav } from "@/components/top-nav";
 import { StockBrowser, type StockRow } from "./browser";
+import { requireStockAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +11,9 @@ type MapEntry = { name: string; hidden: boolean; promoteToVariant: boolean };
 type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "option" | "body" | "transmission" | "drive" | "status" | "derivative";
 
 export default async function PublicStockPage() {
+  await requireStockAccess();
   const [rows, mappings] = await Promise.all([
-    db.select().from(stockVehicles),
+    db.select().from(stockVehicles).where(and(eq(stockVehicles.customerAssigned, false), isNotNull(stockVehicles.vin))),
     db.select().from(stockMappings),
   ]);
 
@@ -46,9 +49,7 @@ export default async function PublicStockPage() {
     const drm = mapLookup(byKind.drive, v.drive);
     const sm = mapLookup(byKind.status, v.locationStatus);
     const dem = mapLookup(byKind.derivative, v.derivativeRaw);
-    // Hidden on most fields drops the whole vehicle. Hidden on derivative only drops the derivative value.
-    if (mm.hidden || dm.hidden || cm.hidden || em.hidden || zm.hidden || bm.hidden || tm.hidden || drm.hidden || sm.hidden) continue;
-
+    // Hidden on any per-field mapping clears that field for this vehicle but never drops the whole vehicle.
     // Options: map each; drop hidden options entirely (but keep the vehicle).
     const options: string[] = [];
     if (v.options) {
@@ -64,34 +65,44 @@ export default async function PublicStockPage() {
     // Variant default: when no explicit mapping, prefer the trim (seriesRaw) — not the model name.
     const hasMapping = variantKey ? byKind.model.has(variantKey) : false;
     let variant = hasMapping ? (mm.value ?? "") : (v.seriesRaw ?? "");
+    if (mm.hidden) variant = "";
 
-    // Derivative with promoteToVariant=true moves into the variant column and is cleared from derivative.
+    // Derivative with promoteToVariant=true normally replaces the variant (e.g. Explorer SELECT +
+    // STYLE → "Style"). For vans the variant is a payload code starting with a digit (e.g. "280 L1");
+    // we keep variant and derivative as separate fields so each can be filtered independently
+    // (variant=280 L1, derivative=Limited).
     let derivative = dem.value;
     if (dem.promoteToVariant && dem.value) {
-      variant = dem.value;
-      derivative = null;
+      const isPayloadVariant = /^\d/.test(variant);
+      if (!isPayloadVariant) {
+        variant = dem.value;
+        derivative = null;
+      }
     }
     if (dem.hidden) derivative = null;
 
     out.push({
-      vin: v.vin,
+      vin: v.vin ?? `row-${v.id}`,
       bucket: v.sourceSheet ?? "—",
       variant,
       derivative,
       series: v.seriesRaw,
       modelYear: v.modelYear,
-      bodyStyle: bm.value,
-      engine: em.value,
-      transmission: tm.value,
-      drive: drm.value,
-      colour: cm.value ?? "—",
+      bodyStyle: bm.hidden ? null : bm.value,
+      engine: em.hidden ? null : em.value,
+      transmission: tm.hidden ? null : tm.value,
+      drive: drm.hidden ? null : drm.value,
+      colour: cm.hidden ? "—" : (cm.value ?? "—"),
       options,
       orderNo: v.orderNo,
-      status: sm.value,
+      status: sm.hidden ? null : sm.value,
       gateRelease: v.gateReleaseAt ? v.gateReleaseAt.toISOString() : null,
       eta: v.etaAt ? v.etaAt.toISOString() : null,
-      dealer: dm.value ?? "—",
-      destination: zm.value,
+      delivered: v.deliveredAt ? v.deliveredAt.toISOString() : null,
+      interestBearing: v.interestBearingAt ? v.interestBearingAt.toISOString() : null,
+      adopted: v.adoptedAt ? v.adoptedAt.toISOString() : null,
+      dealer: dm.hidden ? "—" : (dm.value ?? "—"),
+      destination: zm.hidden ? null : zm.value,
     });
   }
 

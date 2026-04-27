@@ -146,10 +146,28 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
   }
   if (!result.funders.length) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-        <div className="font-medium">No funder has a rate for this configuration.</div>
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+          <div className="font-medium">No funder has a rate for this configuration.</div>
+          <div className="mt-1 text-xs text-amber-800">Discount % is still shown below — get a manual quote from each funder, then save the winner.</div>
+        </div>
         {result.missing.length > 0 && (
-          <ul className="mt-2 list-disc pl-4">{result.missing.map((m) => <li key={m}>{m}</li>)}</ul>
+          <MissingFundersList
+            missing={result.missing}
+            ratedCount={0}
+            onPick={(funderId, funderName, rank, monthlyRental) =>
+              setSaveFor({ funderId, funderName, rank, monthlyRental })
+            }
+          />
+        )}
+        {saveFor && (
+          <SaveProposalModal
+            result={result}
+            config={config}
+            funder={saveFor}
+            onClose={() => setSaveFor(null)}
+            onSaved={(r) => { setSaveFor(null); router.push(`/customers/${r.customerId}`); }}
+          />
         )}
       </div>
     );
@@ -249,9 +267,13 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
       </ul>
 
       {result.missing.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-          <span className="font-medium text-slate-700">{result.missing.length} funder{result.missing.length === 1 ? "" : "s"}</span> with no rate for this config: {result.missing.join(", ")}
-        </div>
+        <MissingFundersList
+          missing={result.missing}
+          ratedCount={result.funders.length}
+          onPick={(funderId, funderName, rank, monthlyRental) =>
+            setSaveFor({ funderId, funderName, rank, monthlyRental })
+          }
+        />
       )}
 
       {saveFor && (
@@ -344,6 +366,9 @@ function SaveProposalModal({
         brokerEmail: isBroker ? brokerEmail.trim() : null,
         isGroupBq,
         groupSiteId: isGroupBq ? groupSiteId : null,
+        isEv: result.wallboxAvailable,
+        wallboxIncluded: result.wallboxIncluded,
+        customerSavingGbp: result.wallboxIncluded ? null : (result.customerSavingGbp ?? null),
       });
       if (!res.ok) { setError(res.error); return; }
       onSaved({ customerId: res.customerId, customerName: customerName.trim() });
@@ -466,6 +491,89 @@ function SaveProposalModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MissingFundersList({
+  missing, ratedCount, onPick,
+}: {
+  missing: QuoteResult["missing"];
+  ratedCount: number;
+  onPick: (funderId: string, funderName: string, rank: number, monthlyRental: number) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [raw, setRaw] = useState("");
+  const parsed = parseFloat(raw);
+  const valid = Number.isFinite(parsed) && parsed > 0;
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">No ratebook data — manually check</div>
+        <div className="text-[11px] text-amber-700">{missing.length} funder{missing.length === 1 ? "" : "s"}</div>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {missing.map((m, i) => {
+          const open = openId === m.funderId;
+          return (
+            <li key={m.funderId} className="rounded-lg bg-white/70 px-3 py-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-medium text-slate-800">{m.funderName}</span>
+                  <span className="text-slate-600">
+                    {m.discountPct != null ? (
+                      <>Target discount <span className="font-semibold tabular-nums text-slate-900">{(m.discountPct * 100).toFixed(2)}%</span></>
+                    ) : (
+                      <span className="text-slate-400">discount n/a</span>
+                    )}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-600">£{m.commissionGbp} comm.</span>
+                </div>
+                {!open && (
+                  <button
+                    type="button"
+                    onClick={() => { setOpenId(m.funderId); setRaw(""); }}
+                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+                  >
+                    Save proposal
+                  </button>
+                )}
+              </div>
+              {open && (
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-amber-100 pt-2">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">£</span>
+                    <input
+                      autoFocus
+                      inputMode="decimal"
+                      placeholder="monthly"
+                      value={raw}
+                      onChange={(e) => setRaw(e.target.value)}
+                      className="w-28 rounded-md border border-slate-200 bg-white px-2 py-1 pl-5 text-xs tabular-nums shadow-sm focus:border-slate-900 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(null)}
+                    className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:text-slate-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!valid}
+                    onClick={() => onPick(m.funderId, m.funderName, ratedCount + i + 1, parsed)}
+                    className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:bg-slate-300"
+                  >
+                    Save proposal
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

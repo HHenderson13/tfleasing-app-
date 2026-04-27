@@ -18,6 +18,9 @@ export type StockRow = {
   status: string | null;
   gateRelease: string | null;
   eta: string | null;
+  delivered: string | null;
+  interestBearing: string | null;
+  adopted: string | null;
   dealer: string;
   destination: string | null;
 };
@@ -26,7 +29,20 @@ type SortKey = "eta-asc" | "eta-desc" | "gate-desc" | "model" | "dealer";
 
 type FacetId =
   | "model" | "variant" | "derivative" | "year" | "body" | "engine" | "transmission"
-  | "drive" | "colour" | "option" | "status" | "dealer" | "destination";
+  | "drive" | "colour" | "option" | "status" | "funding" | "dealer" | "destination";
+
+// Only flag funding when the date has actually passed — a future "interest bearing date"
+// means the vehicle isn't bearing interest yet, so don't surface it.
+function isPast(iso: string | null): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) && t <= Date.now();
+}
+function fundingState(r: StockRow): string | null {
+  if (isPast(r.adopted)) return "Adopted";
+  if (isPast(r.interestBearing)) return "Interest bearing";
+  return null;
+}
 
 const FACETS: { id: FacetId; label: string; get: (r: StockRow) => string | string[] | null }[] = [
   { id: "model",        label: "Model",        get: (r) => r.bucket },
@@ -40,6 +56,7 @@ const FACETS: { id: FacetId; label: string; get: (r: StockRow) => string | strin
   { id: "colour",       label: "Colour",       get: (r) => r.colour },
   { id: "option",       label: "Factory options", get: (r) => r.options },
   { id: "status",       label: "Status",       get: (r) => r.status },
+  { id: "funding",      label: "Funding",      get: (r) => fundingState(r) },
   { id: "dealer",       label: "Dealer",       get: (r) => r.dealer },
   { id: "destination",  label: "Destination",  get: (r) => r.destination },
 ];
@@ -63,6 +80,45 @@ function daysUntil(iso: string | null): number | null {
   return Math.round((d.getTime() - Date.now()) / 86_400_000);
 }
 
+function csvCell(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportCsv(rows: StockRow[]) {
+  const headers = [
+    "VIN", "Model", "Variant", "Derivative", "Series", "Model year",
+    "Body style", "Engine", "Transmission", "Drive",
+    "Colour", "Factory options", "Order no", "Status",
+    "Gate released", "ETA", "Delivered", "Interest bearing", "Adopted", "Dealer", "Destination",
+  ];
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    lines.push([
+      r.vin, r.bucket, r.variant, r.derivative, r.series, r.modelYear,
+      r.bodyStyle, r.engine, r.transmission, r.drive,
+      r.colour, r.options.join(" | "), r.orderNo, r.status,
+      r.gateRelease ? r.gateRelease.slice(0, 10) : "",
+      r.eta ? r.eta.slice(0, 10) : "",
+      r.delivered ? r.delivered.slice(0, 10) : "",
+      r.interestBearing ? r.interestBearing.slice(0, 10) : "",
+      r.adopted ? r.adopted.slice(0, 10) : "",
+      r.dealer, r.destination,
+    ].map(csvCell).join(","));
+  }
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const ts = new Date().toISOString().slice(0, 10);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tf-stock-${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function statusTone(s: string | null): { cls: string; dot: string } {
   const u = (s ?? "").toLowerCase();
   if (!u) return { cls: "bg-slate-100 text-slate-600", dot: "bg-slate-400" };
@@ -72,6 +128,10 @@ function statusTone(s: string | null): { cls: string; dot: string } {
   if (/order|schedul|allocat/.test(u)) return { cls: "bg-violet-50 text-violet-700 ring-1 ring-violet-100", dot: "bg-violet-500" };
   return { cls: "bg-slate-100 text-slate-600", dot: "bg-slate-400" };
 }
+
+// Natural-sort: alphabetical, with embedded numbers compared numerically (so "320 LWB" sits after "280 SWB", "MY24" before "MY25").
+const naturalCompare = (a: string, b: string) =>
+  a.localeCompare(b, "en", { numeric: true, sensitivity: "base" });
 
 function tally<T>(rows: T[], pick: (r: T) => string | string[] | null): [string, number][] {
   const m = new Map<string, number>();
@@ -84,7 +144,7 @@ function tally<T>(rows: T[], pick: (r: T) => string | string[] | null): [string,
       m.set(v, (m.get(v) ?? 0) + 1);
     }
   }
-  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return [...m.entries()].sort((a, b) => naturalCompare(a[0], b[0]));
 }
 
 export function StockBrowser({ rows }: { rows: StockRow[] }) {
@@ -140,10 +200,15 @@ export function StockBrowser({ rows }: { rows: StockRow[] }) {
 
   const filtered = useMemo(() => {
     const out = rows.filter((r) => matches(r, null));
+    // For "soonest", delivered/at-dealer vehicles count as "available now" and sort to the top —
+    // they don't have an ETA because they've already arrived.
+    const isHere = (r: StockRow) => /deliver|dealer|arrived|at site/i.test(r.status ?? "");
+    const etaAsc = (r: StockRow) => isHere(r) ? -Infinity : r.eta ? +new Date(r.eta) : Infinity;
+    const etaDesc = (r: StockRow) => isHere(r) ? Infinity : r.eta ? +new Date(r.eta) : -Infinity;
     out.sort((a, b) => {
       switch (sort) {
-        case "eta-asc":   return (a.eta ? +new Date(a.eta) : Infinity) - (b.eta ? +new Date(b.eta) : Infinity);
-        case "eta-desc":  return (b.eta ? +new Date(b.eta) : -Infinity) - (a.eta ? +new Date(a.eta) : -Infinity);
+        case "eta-asc":   return etaAsc(a) - etaAsc(b);
+        case "eta-desc":  return etaDesc(b) - etaDesc(a);
         case "gate-desc": return (b.gateRelease ? +new Date(b.gateRelease) : -Infinity) - (a.gateRelease ? +new Date(a.gateRelease) : -Infinity);
         case "model":     return a.bucket.localeCompare(b.bucket) || a.variant.localeCompare(b.variant) || a.colour.localeCompare(b.colour);
         case "dealer":    return a.dealer.localeCompare(b.dealer);
@@ -198,16 +263,21 @@ export function StockBrowser({ rows }: { rows: StockRow[] }) {
       {/* Sidebar */}
       <aside className={`${mobileFiltersOpen ? "block" : "hidden"} lg:block lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto`}>
         <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          {FACETS.map((f) => (
-            <FacetGroup
-              key={f.id}
-              title={f.label}
-              options={facetOptions[f.id]}
-              selected={sel[f.id]}
-              onToggle={(v) => toggle(f.id, v)}
-              defaultOpen={!!DEFAULT_OPEN[f.id] || sel[f.id].size > 0}
-            />
-          ))}
+          {FACETS.map((f) => {
+            const opts = facetOptions[f.id];
+            // Hide whole facet when current filters leave nothing to pick (and user hasn't already chosen one here).
+            if (opts.length === 0 && sel[f.id].size === 0) return null;
+            return (
+              <FacetGroup
+                key={f.id}
+                title={f.label}
+                options={opts}
+                selected={sel[f.id]}
+                onToggle={(v) => toggle(f.id, v)}
+                defaultOpen={!!DEFAULT_OPEN[f.id] || sel[f.id].size > 0}
+              />
+            );
+          })}
         </div>
       </aside>
 
@@ -245,6 +315,19 @@ export function StockBrowser({ rows }: { rows: StockRow[] }) {
               <option value="model">Model A→Z</option>
               <option value="dealer">Dealer A→Z</option>
             </select>
+            <button
+              onClick={() => exportCsv(filtered)}
+              disabled={filtered.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#0e6e3a] bg-[#107c41] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0e6e3a] disabled:cursor-not-allowed disabled:opacity-50"
+              title="Export the current filter to Excel (CSV)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4">
+                <rect x="3" y="3" width="18" height="18" rx="2" fill="#fff" />
+                <rect x="3" y="3" width="18" height="4" fill="#0e6e3a" />
+                <path d="M8 10l3 4-3 4M16 10l-3 4 3 4" stroke="#107c41" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              Export ({filtered.length.toLocaleString()})
+            </button>
           </div>
 
           {activeChips.length > 0 && (
@@ -303,6 +386,9 @@ function Card({ row: r, open, onToggle }: { row: StockRow; open: boolean; onTogg
   const tone = statusTone(r.status);
   const etaDays = daysUntil(r.eta);
   const etaLabel = fmtDate(r.eta);
+  const isDelivered = /deliver|dealer|arrived|at site/i.test(r.status ?? "");
+  const deliveredDays = daysUntil(r.delivered);
+  const deliveredLabel = fmtDate(r.delivered);
   const showVariant = r.variant && r.variant.toUpperCase() !== r.bucket.toUpperCase();
   const specBits = [r.bodyStyle, r.engine, r.transmission, r.drive].filter(Boolean) as string[];
 
@@ -326,20 +412,27 @@ function Card({ row: r, open, onToggle }: { row: StockRow; open: boolean; onTogg
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone.cls}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
-              {r.status ?? "Unknown"}
-            </span>
-            {etaLabel ? (
-              <div className="text-xs">
-                <span className="font-medium text-slate-700 tabular-nums">{etaLabel}</span>
-                <span className="ml-1 text-slate-500">
-                  {etaDays === null ? "" : etaDays < 0 ? `(${Math.abs(etaDays)}d ago)` : etaDays === 0 ? "(today)" : `(in ${etaDays}d)`}
-                </span>
-              </div>
+            {isDelivered ? (
+              // Single badge replaces the status pill so "Delivered" doesn't appear twice.
+              <DeliveredBadge label={deliveredLabel} days={deliveredDays} />
             ) : (
-              <div className="text-[11px] text-slate-400">no ETA</div>
+              <>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone.cls}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                  {r.status ?? "Unknown"}
+                </span>
+                <EtaBadge etaLabel={etaLabel} etaDays={etaDays} hasEta={!!r.eta} />
+              </>
             )}
+            {isPast(r.adopted) ? (
+              <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                Adopted · {fmtDate(r.adopted)}
+              </span>
+            ) : isPast(r.interestBearing) ? (
+              <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                Interest bearing · {fmtDate(r.interestBearing)}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -378,6 +471,9 @@ function Card({ row: r, open, onToggle }: { row: StockRow; open: boolean; onTogg
             <Pair k="Order No"      v={r.orderNo ?? "—"} />
             <Pair k="Gate released" v={fmtDate(r.gateRelease) ?? "—"} />
             <Pair k="ETA"           v={etaLabel ?? "—"} />
+            <Pair k="Delivered"     v={fmtDate(r.delivered) ?? "—"} />
+            <Pair k="Interest bearing" v={fmtDate(r.interestBearing) ?? "—"} />
+            <Pair k="Adopted"       v={fmtDate(r.adopted) ?? "—"} />
             <Pair k="Dealer"        v={r.dealer} />
             <Pair k="Destination"   v={r.destination ?? "—"} />
             <Pair k="Body style"    v={r.bodyStyle ?? "—"} />
@@ -476,6 +572,61 @@ function FacetGroup({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function DeliveredBadge({ label, days }: { label: string | null; days: number | null }) {
+  // Delivered = vehicle is here. Always emerald.
+  const rel =
+    days === null ? null :
+    days < -1 ? `${Math.abs(days)} days ago` :
+    days === -1 ? "Yesterday" :
+    days === 0 ? "Today" :
+    null;
+  return (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-right shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Delivered</div>
+      {label ? (
+        <>
+          <div className="text-sm font-semibold tabular-nums leading-tight text-emerald-900">{label}</div>
+          {rel && <div className="text-[11px] font-medium text-emerald-700">{rel}</div>}
+        </>
+      ) : (
+        <div className="text-xs font-medium text-emerald-700">In stock</div>
+      )}
+    </div>
+  );
+}
+
+function EtaBadge({ etaLabel, etaDays, hasEta }: { etaLabel: string | null; etaDays: number | null; hasEta: boolean }) {
+  if (!hasEta || !etaLabel) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-2.5 py-1.5 text-right">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">ETA</div>
+        <div className="text-xs font-medium text-slate-400">Not set</div>
+      </div>
+    );
+  }
+  // Tone by urgency: overdue → red, ≤7d → amber, ≤30d → sky, later → slate.
+  let cls = "border-slate-200 bg-slate-50 text-slate-700";
+  let labelCls = "text-slate-500";
+  if (etaDays !== null) {
+    if (etaDays < 0)       { cls = "border-red-200 bg-red-50 text-red-800";       labelCls = "text-red-600"; }
+    else if (etaDays <= 7) { cls = "border-amber-200 bg-amber-50 text-amber-800"; labelCls = "text-amber-700"; }
+    else if (etaDays <= 30){ cls = "border-sky-200 bg-sky-50 text-sky-800";       labelCls = "text-sky-700"; }
+  }
+  const rel =
+    etaDays === null ? "" :
+    etaDays < 0     ? `${Math.abs(etaDays)} day${Math.abs(etaDays) === 1 ? "" : "s"} ago` :
+    etaDays === 0   ? "Today" :
+    etaDays === 1   ? "Tomorrow" :
+                      `In ${etaDays} days`;
+  return (
+    <div className={`rounded-lg border px-2.5 py-1.5 text-right shadow-sm ${cls}`}>
+      <div className={`text-[10px] font-semibold uppercase tracking-wide ${labelCls}`}>ETA</div>
+      <div className="text-sm font-semibold tabular-nums leading-tight">{etaLabel}</div>
+      {rel && <div className={`text-[11px] font-medium ${labelCls}`}>{rel}</div>}
     </div>
   );
 }

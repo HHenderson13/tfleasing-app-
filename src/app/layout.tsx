@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TF Leasing",
+  title: "TrustFord Leasing",
 };
 
 export default function RootLayout({

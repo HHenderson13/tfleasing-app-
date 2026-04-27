@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { stockMappings, stockVehicles } from "@/db/schema";
-import { sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { StockMappingsView } from "./view";
 import type { MappingKind } from "./actions";
 
@@ -29,6 +29,7 @@ export default async function StockMappingsPage() {
         n: sql<number>`count(*)`,
       })
       .from(stockVehicles)
+      .where(and(eq(stockVehicles.customerAssigned, false), isNotNull(stockVehicles.vin)))
       .groupBy(
         stockVehicles.sourceSheet,
         stockVehicles.dealerRaw,

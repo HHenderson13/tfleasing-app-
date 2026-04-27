@@ -79,7 +79,7 @@ export function ProposalsFilter({
         <span className="font-medium uppercase tracking-wide">Sales exec</span>
         <select
           value={execValue}
-          onChange={(e) => updateParam("exec", e.target.value === "all" ? null : e.target.value)}
+          onChange={(e) => updateParam("exec", e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
         >
           <option value="all">All</option>

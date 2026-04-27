@@ -48,20 +48,20 @@ export async function uploadStockAction(form: FormData) {
   const uploadId = randomUUID();
   const now = new Date();
 
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     // Replace semantics: clear the previous snapshot.
-    tx.delete(stockVehicles).run();
-    tx.insert(stockUploads).values({
+    await tx.delete(stockVehicles);
+    await tx.insert(stockUploads).values({
       id: uploadId,
       filename: file.name,
       vehicleCount: parsed.length,
       uploadedAt: now,
-    }).run();
+    });
     // Insert in batches to keep the SQL statement size reasonable.
     const BATCH = 400;
     for (let i = 0; i < parsed.length; i += BATCH) {
       const slice = parsed.slice(i, i + BATCH);
-      tx.insert(stockVehicles).values(
+      await tx.insert(stockVehicles).values(
         slice.map((v) => ({
           vin: v.vin,
           modelRaw: v.modelRaw,
@@ -80,10 +80,14 @@ export async function uploadStockAction(form: FormData) {
           etaAt: v.etaAt,
           dealerRaw: v.dealerRaw,
           destinationRaw: v.destinationRaw,
+          deliveredAt: v.deliveredAt,
+          interestBearingAt: v.interestBearingAt,
+          adoptedAt: v.adoptedAt,
+          customerAssigned: v.customerAssigned,
           sourceSheet: v.sourceSheet,
           uploadId,
         }))
-      ).run();
+      );
     }
   });
 

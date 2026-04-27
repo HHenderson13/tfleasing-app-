@@ -29,6 +29,13 @@ export interface FunderQuote {
   rank: number;
 }
 
+export interface MissingFunder {
+  funderId: string;
+  funderName: string;
+  discountPct: number | null;
+  commissionGbp: number;
+}
+
 export interface QuoteResult {
   capCode: string;
   model: string;
@@ -41,7 +48,7 @@ export interface QuoteResult {
   wallboxAvailable: boolean;
   wallboxIncluded: boolean;
   funders: FunderQuote[];
-  missing: string[];
+  missing: MissingFunder[];
 }
 
 export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
@@ -62,7 +69,7 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
       listPriceNet: null, discountId: null, discountLabel: null,
       grantText: null, customerSavingGbp: null,
       wallboxAvailable: false, wallboxIncluded: false,
-      funders: [], missing: ["vehicle"],
+      funders: [], missing: [],
     };
   }
   const vehicle = v[0];
@@ -96,26 +103,9 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
 
   const allFunders = await db.select().from(funders);
   const results: FunderQuote[] = [];
-  const missing: string[] = [];
+  const missing: MissingFunder[] = [];
 
   for (const f of allFunders) {
-    const rb = await db
-      .select()
-      .from(ratebook)
-      .where(and(
-        eq(ratebook.funderId, f.id),
-        eq(ratebook.capCode, vehicle.capCode),
-        eq(ratebook.termMonths, input.termMonths),
-        eq(ratebook.annualMileage, input.annualMileage),
-        eq(ratebook.initialRentalMultiplier, irm),
-        eq(ratebook.isBusiness, true),
-        eq(ratebook.isMaintained, isMaintained),
-      ))
-      .limit(1);
-    if (!rb.length) { missing.push(f.name); continue; }
-    const row = rb[0];
-    const monthlyRental = row.monthlyRental * vatMultiplier + savingPerMonth;
-    const monthlyMaintenance = row.monthlyMaintenance * vatMultiplier;
     const comm = await db
       .select()
       .from(funderCommission)
@@ -135,6 +125,27 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
       const chipPct = f.id === "novuna" ? novunaChip : 0;
       discountPct = baseDiscount + extrasPct + chipPct - savingPct;
     }
+
+    const rb = await db
+      .select()
+      .from(ratebook)
+      .where(and(
+        eq(ratebook.funderId, f.id),
+        eq(ratebook.capCode, vehicle.capCode),
+        eq(ratebook.termMonths, input.termMonths),
+        eq(ratebook.annualMileage, input.annualMileage),
+        eq(ratebook.initialRentalMultiplier, irm),
+        eq(ratebook.isBusiness, true),
+        eq(ratebook.isMaintained, isMaintained),
+      ))
+      .limit(1);
+    if (!rb.length) {
+      missing.push({ funderId: f.id, funderName: f.name, discountPct, commissionGbp });
+      continue;
+    }
+    const row = rb[0];
+    const monthlyRental = row.monthlyRental * vatMultiplier + savingPerMonth;
+    const monthlyMaintenance = row.monthlyMaintenance * vatMultiplier;
     results.push({
       funderId: f.id,
       funderName: f.name,

@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import officecrypto from "officecrypto-tool";
 
 export interface ParsedStockVehicle {
-  vin: string;
+  vin: string | null; // may be missing — order-number match still works for awaiting-delivery
   modelRaw: string | null;
   modelYear: string | null;
   bodyStyle: string | null;
@@ -20,7 +20,11 @@ export interface ParsedStockVehicle {
   etaAt: Date | null;
   dealerRaw: string | null;
   destinationRaw: string | null;
-  sourceSheet: string; // model bucket e.g. "Puma"
+  deliveredAt: Date | null;       // input col AO
+  interestBearingAt: Date | null; // input col AQ
+  adoptedAt: Date | null;         // input col AR (overrides interest-bearing)
+  customerAssigned: boolean;       // true when row should be excluded from /stock — customer/fleet assigned, excluded branch, or model not in our bucket list. Kept in DB for awaiting-delivery VIN/order matching.
+  sourceSheet: string | null; // model bucket e.g. "Puma" — null when model isn't one we sell
 }
 
 function toStr(v: unknown): string | null {
@@ -345,6 +349,26 @@ function headerIndex(headers: unknown[]): Record<string, number> {
   return idx;
 }
 
+// Best-effort fuzzy header lookup: strip non-alphanumerics and try contains-matches,
+// so "DELIVERY DATE", "DEL_DATE", "DELIV_DATE" etc. all resolve to the same column.
+function findHeaderIndex(headers: unknown[], needles: string[]): number | undefined {
+  const norm = (s: string) => s.replace(/[^A-Z0-9]/g, "").toUpperCase();
+  const normHeaders = headers.map((h) => norm(String(h ?? "")));
+  for (const needle of needles) {
+    const n = norm(needle);
+    if (!n) continue;
+    const exact = normHeaders.indexOf(n);
+    if (exact >= 0) return exact;
+  }
+  for (const needle of needles) {
+    const n = norm(needle);
+    if (!n) continue;
+    const part = normHeaders.findIndex((h) => h.includes(n));
+    if (part >= 0) return part;
+  }
+  return undefined;
+}
+
 export async function parseStockWorkbook(buffer: Buffer, password: string): Promise<ParsedStockVehicle[]> {
   const wb = await readWorkbook(buffer, password);
   // Prefer a "Stock" tab (Ford Trust Report layout) with proper headers.
@@ -359,7 +383,8 @@ export async function parseStockWorkbook(buffer: Buffer, password: string): Prom
 function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, raw: true });
   if (rows.length < 2) return [];
-  const h = headerIndex(rows[0] ?? []);
+  const headers = rows[0] ?? [];
+  const h = headerIndex(headers);
 
   const pick = (row: unknown[], ...names: string[]) => {
     for (const n of names) {
@@ -371,6 +396,12 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     }
     return null;
   };
+
+  // Fuzzy lookups for less consistent date columns — same trick as pick() but tolerates header drift.
+  const deliveredIdx  = findHeaderIndex(headers, ["DELIVERY_DATE", "DELIV_DATE", "DEL_DATE", "DELIVERED_DATE", "DELIVERY"]) ?? col("AO");
+  const intBearingIdx = findHeaderIndex(headers, ["INTEREST_BEARING_DATE", "INT_BEARING_DATE", "INT_BEAR_DATE", "INTEREST_DATE", "INTEREST"]) ?? col("AQ");
+  const adoptedIdx    = findHeaderIndex(headers, ["ADOPTED_DATE", "ADOPT_DATE", "ADOPTION_DATE", "ADOPTED"]) ?? col("AR");
+  const pickIdx = (row: unknown[], i: number | undefined) => (i === undefined ? null : row[i] ?? null);
 
   // Options: every column whose header is WERS_OPTION_FEATURES_DESCR.
   const optionCols: number[] = [];
@@ -385,31 +416,33 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     const row = rows[r];
     if (!row) continue;
 
-    // Skip vehicles already assigned to a customer or fleet.
-    if (toStr(pick(row, "CUST1_SURNAME"))) continue;
-    if (toStr(pick(row, "FLEET_ID_NUMBER"))) continue;
-
     const vin = toStr(pick(row, "VIN"));
-    if (!vin || seen.has(vin)) continue;
+    const orderNo = toStr(pick(row, "ORDER_NO"));
+    if (!vin && !orderNo) continue; // no identifier — nothing we can match against
+    if (vin) {
+      if (seen.has(vin)) continue;
+      seen.add(vin);
+    }
 
     const branchRaw = toStr(pick(row, "DEALER"));
-    if (branchRaw && EXCLUDED_BRANCH_CODES.has(branchRaw)) continue;
-
     const modelRawUpper = (toStr(pick(row, "WERS_MODEL_NAME")) ?? "").toUpperCase();
-    if (!modelRawUpper) continue;
-    const bucket = sheetForModel(modelRawUpper);
-    if (!bucket) continue;
+    const bucket = modelRawUpper ? sheetForModel(modelRawUpper) : null;
 
-    seen.add(vin);
+    // Out-of-scope for /stock if assigned to customer/fleet, on an excluded branch, or
+    // a model we don't sell. Row still persisted so awaiting-delivery can match by VIN/order.
+    const customerAssigned =
+      !!(toStr(pick(row, "CUST1_SURNAME")) || toStr(pick(row, "FLEET_ID_NUMBER"))) ||
+      (!!branchRaw && EXCLUDED_BRANCH_CODES.has(branchRaw)) ||
+      !bucket;
 
     const statusRaw = toStr(pick(row, "LOCATION", "STATUS_TEXT"));
     const statusUpper = statusRaw ? statusRaw.toUpperCase() : null;
     const etaRaw = pick(row, "ETA_DATE");
     const eta = statusUpper === "DELIVERED" || statusUpper === "DEALER" ? null : toDate(etaRaw);
 
-    const modelTidy = MODEL_REPLACEMENTS[modelRawUpper] ?? modelRawUpper;
+    const modelTidy = modelRawUpper ? (MODEL_REPLACEMENTS[modelRawUpper] ?? modelRawUpper) : null;
 
-    const optRules = OPTION_REPLACEMENTS[bucket];
+    const optRules = bucket ? OPTION_REPLACEMENTS[bucket] : undefined;
     const options: string[] = [];
     for (const i of optionCols) {
       const v = applyReplacements(toStr(row[i]), optRules);
@@ -420,20 +453,24 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       vin,
       modelRaw: modelTidy,
       modelYear: toStr(pick(row, "WERS_MKT_MODEL_YEAR", "ANSWERS_MKT_MODEL_YEAR")),
-      bodyStyle: applyReplacements(toStr(pick(row, "WERS_BODY_STYLE_DESC")), BODY_STYLE_REPLACEMENTS[bucket]),
-      seriesRaw: applyReplacements(toStr(pick(row, "WERS_SERIES_MKT_DESCRIPTION")), SERIES_REPLACEMENTS[bucket]),
+      bodyStyle: applyReplacements(toStr(pick(row, "WERS_BODY_STYLE_DESC")), bucket ? BODY_STYLE_REPLACEMENTS[bucket] : undefined),
+      seriesRaw: applyReplacements(toStr(pick(row, "WERS_SERIES_MKT_DESCRIPTION")), bucket ? SERIES_REPLACEMENTS[bucket] : undefined),
       derivativeRaw: toStr(pick(row, "WERS_SUB_SERIES_DESC")),
-      engine: applyReplacements(toStr(pick(row, "WERS_ENGINE_DESC")), ENGINE_REPLACEMENTS[bucket]),
-      transmission: applyReplacements(toStr(pick(row, "WERS_TRANSMISSION_DESC")), TRANSMISSION_REPLACEMENTS[bucket]),
-      drive: applyReplacements(toStr(pick(row, "WERS_DRIVE_DESC")), DRIVE_REPLACEMENTS[bucket]),
-      colourRaw: applyReplacements(toStr(pick(row, "WERS_COLOUR_DESCR")), COLOUR_REPLACEMENTS[bucket]),
+      engine: applyReplacements(toStr(pick(row, "WERS_ENGINE_DESC")), bucket ? ENGINE_REPLACEMENTS[bucket] : undefined),
+      transmission: applyReplacements(toStr(pick(row, "WERS_TRANSMISSION_DESC")), bucket ? TRANSMISSION_REPLACEMENTS[bucket] : undefined),
+      drive: applyReplacements(toStr(pick(row, "WERS_DRIVE_DESC")), bucket ? DRIVE_REPLACEMENTS[bucket] : undefined),
+      colourRaw: applyReplacements(toStr(pick(row, "WERS_COLOUR_DESCR")), bucket ? COLOUR_REPLACEMENTS[bucket] : undefined),
       options,
-      orderNo: toStr(pick(row, "ORDER_NO")),
+      orderNo,
       locationStatus: statusRaw,
       gateReleaseAt: toDate(pick(row, "GATE_REL_DATE")),
       etaAt: eta,
       dealerRaw: formatBranchCode(branchRaw),
       destinationRaw: formatSiteCode(toStr(pick(row, "DESTINATION"))),
+      deliveredAt: toDate(pickIdx(row, deliveredIdx)),
+      interestBearingAt: toDate(pickIdx(row, intBearingIdx)),
+      adoptedAt: toDate(pickIdx(row, adoptedIdx)),
+      customerAssigned,
       sourceSheet: bucket,
     });
   }
@@ -460,6 +497,9 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     gateRelease: col("AK"),
     locationStatus: col("AX"),
     eta: col("BA"),
+    deliveredDate: col("AO"),
+    interestBearing: col("AQ"),
+    adopted: col("AR"),
     site: col("BE"),
     optionsStart: col("BM"),
     optionsEnd: col("CI"),
@@ -473,26 +513,31 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     if (!row) continue;
 
     const vin = toStr(row[C.vin]);
-    if (!vin || seen.has(vin)) continue;
-    if (toStr(row[C.colH])) continue;
+    const orderNo = toStr(row[C.orderNo]);
+    if (!vin && !orderNo) continue;
+    if (vin) {
+      if (seen.has(vin)) continue;
+      seen.add(vin);
+    }
 
     const branchRaw = toStr(row[C.branch]);
-    if (branchRaw && EXCLUDED_BRANCH_CODES.has(branchRaw)) continue;
-
     const modelRawUpper = (toStr(row[C.model]) ?? "").toUpperCase();
-    if (!modelRawUpper) continue;
-    const bucket = sheetForModel(modelRawUpper);
-    if (!bucket) continue;
+    const bucket = modelRawUpper ? sheetForModel(modelRawUpper) : null;
 
-    seen.add(vin);
+    // Out-of-scope for /stock if customer/fleet-assigned (col H), excluded branch, or unknown model.
+    // Row still persisted so awaiting-delivery can match by VIN/order.
+    const customerAssigned =
+      !!toStr(row[C.colH]) ||
+      (!!branchRaw && EXCLUDED_BRANCH_CODES.has(branchRaw)) ||
+      !bucket;
 
     const statusRaw = toStr(row[C.locationStatus]);
     const statusUpper = statusRaw ? statusRaw.toUpperCase() : null;
     const eta = statusUpper === "DELIVERED" || statusUpper === "DEALER" ? null : toDate(row[C.eta]);
 
-    const modelTidy = MODEL_REPLACEMENTS[modelRawUpper] ?? modelRawUpper;
+    const modelTidy = modelRawUpper ? (MODEL_REPLACEMENTS[modelRawUpper] ?? modelRawUpper) : null;
 
-    const optRules = OPTION_REPLACEMENTS[bucket];
+    const optRules = bucket ? OPTION_REPLACEMENTS[bucket] : undefined;
     const options: string[] = [];
     for (let i = C.optionsStart; i <= C.optionsEnd; i++) {
       const v = applyReplacements(toStr(row[i]), optRules);
@@ -503,20 +548,24 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       vin,
       modelRaw: modelTidy,
       modelYear: toStr(row[C.modelYear]),
-      bodyStyle: applyReplacements(toStr(row[C.bodyStyle]), BODY_STYLE_REPLACEMENTS[bucket]),
-      seriesRaw: applyReplacements(toStr(row[C.series]), SERIES_REPLACEMENTS[bucket]),
+      bodyStyle: applyReplacements(toStr(row[C.bodyStyle]), bucket ? BODY_STYLE_REPLACEMENTS[bucket] : undefined),
+      seriesRaw: applyReplacements(toStr(row[C.series]), bucket ? SERIES_REPLACEMENTS[bucket] : undefined),
       derivativeRaw: null, // input-tab layout doesn't expose sub_series
-      engine: applyReplacements(toStr(row[C.engine]), ENGINE_REPLACEMENTS[bucket]),
-      transmission: applyReplacements(toStr(row[C.transmission]), TRANSMISSION_REPLACEMENTS[bucket]),
-      drive: applyReplacements(toStr(row[C.drive]), DRIVE_REPLACEMENTS[bucket]),
-      colourRaw: applyReplacements(toStr(row[C.colour]), COLOUR_REPLACEMENTS[bucket]),
+      engine: applyReplacements(toStr(row[C.engine]), bucket ? ENGINE_REPLACEMENTS[bucket] : undefined),
+      transmission: applyReplacements(toStr(row[C.transmission]), bucket ? TRANSMISSION_REPLACEMENTS[bucket] : undefined),
+      drive: applyReplacements(toStr(row[C.drive]), bucket ? DRIVE_REPLACEMENTS[bucket] : undefined),
+      colourRaw: applyReplacements(toStr(row[C.colour]), bucket ? COLOUR_REPLACEMENTS[bucket] : undefined),
       options,
-      orderNo: toStr(row[C.orderNo]),
+      orderNo,
       locationStatus: statusRaw,
       gateReleaseAt: toDate(row[C.gateRelease]),
       etaAt: eta,
       dealerRaw: formatBranchCode(branchRaw),
       destinationRaw: formatSiteCode(toStr(row[C.site])),
+      deliveredAt: toDate(row[C.deliveredDate]),
+      interestBearingAt: toDate(row[C.interestBearing]),
+      adoptedAt: toDate(row[C.adopted]),
+      customerAssigned,
       sourceSheet: bucket,
     });
   }

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProposalWithContext } from "@/lib/proposals";
+import { db } from "@/db";
+import { salesExecs } from "@/db/schema";
+import { asc } from "drizzle-orm";
 import { TopNav } from "@/components/top-nav";
 import { OrderDetail } from "./detail";
 
@@ -11,6 +14,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const ctx = await getProposalWithContext(id);
   if (!ctx) notFound();
   const p = ctx.proposal;
+  const execs = await db.select().from(salesExecs).orderBy(asc(salesExecs.name));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -56,8 +60,12 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             brokerEmail: p.brokerEmail,
             isGroupBq: p.isGroupBq,
             groupSiteName: ctx.groupSite?.name ?? null,
+            isEv: p.isEv,
+            wallboxIncluded: p.wallboxIncluded,
+            customerSavingGbp: p.customerSavingGbp,
           }}
-          exec={ctx.exec ? { name: ctx.exec.name, email: ctx.exec.email } : null}
+          exec={ctx.exec ? { id: ctx.exec.id, name: ctx.exec.name, email: ctx.exec.email } : null}
+          execs={execs.map((e) => ({ id: e.id, name: e.name }))}
           customChecks={ctx.customChecks}
         />
       </main>

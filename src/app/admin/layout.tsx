@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { TopNav } from "@/components/top-nav";
 import { AdminNav } from "./admin-nav";
+import { requireAdmin } from "@/lib/auth-guard";
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  await requireAdmin();
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="admin" />

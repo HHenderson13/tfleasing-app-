@@ -13,8 +13,7 @@ export function ExecFilter({
 
   function onChange(next: string) {
     const qs = new URLSearchParams(params.toString());
-    if (next === "all") qs.delete("exec");
-    else qs.set("exec", next);
+    qs.set("exec", next);
     const s = qs.toString();
     router.push(s ? `/orders?${s}` : "/orders");
   }

@@ -2,7 +2,9 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { changeStatusAction, setStageCheckAction, updateOrderFieldsAction } from "../../proposals/actions";
-import { STATUS_COLORS, STATUS_LABELS, type ProposalStatus } from "@/lib/proposal-constants";
+import { STATUS_LABELS, statusColor, statusLabel, type ProposalStatus } from "@/lib/proposal-constants";
+import { SalesExecPicker } from "@/components/sales-exec-picker";
+import { CancelDealButton, DealEditor } from "@/components/deal-editor";
 
 type P = {
   id: string;
@@ -30,11 +32,14 @@ type P = {
   brokerEmail: string | null;
   isGroupBq: boolean;
   groupSiteName: string | null;
+  isEv: boolean;
+  wallboxIncluded: boolean;
+  customerSavingGbp: number | null;
 };
 
 type CustomCheck = { id: string; label: string; checked: boolean };
 
-export function OrderDetail({ proposal, exec, customChecks }: { proposal: P; exec: { name: string; email: string } | null; customChecks: CustomCheck[] }) {
+export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal: P; exec: { id: string; name: string; email: string } | null; execs: { id: string; name: string }[]; customChecks: CustomCheck[] }) {
   const router = useRouter();
   const [, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +52,7 @@ export function OrderDetail({ proposal, exec, customChecks }: { proposal: P; exe
   }, []);
 
   const status = proposal.status as ProposalStatus;
-  const c = STATUS_COLORS[status];
+  const c = statusColor(status);
   const isNovuna = proposal.funderId === "novuna";
   const isAld = proposal.funderId === "ald";
   const isBq = proposal.isGroupBq;
@@ -115,10 +120,30 @@ export function OrderDetail({ proposal, exec, customChecks }: { proposal: P; exe
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text} ring-1 ${c.ring}`}>
-            {STATUS_LABELS[status]}
+            {statusLabel(status)}
           </span>
           <span className="text-xs text-slate-400">Funder #{proposal.funderRank}</span>
           {proposal.financeProposalNumber && <span className="font-mono text-[11px] text-slate-500">FP {proposal.financeProposalNumber}</span>}
+          {proposal.isEv && (
+            proposal.wallboxIncluded ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">EV · Wallbox</span>
+            ) : proposal.customerSavingGbp ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">EV · £{proposal.customerSavingGbp.toFixed(0)} saving</span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">EV</span>
+            )
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <DealEditor
+              proposalId={proposal.id}
+              initialModel={proposal.model}
+              initialDerivative={proposal.derivative}
+              initialOrderNumber={proposal.orderNumber}
+              initialVin={proposal.vin}
+              showVehicleIds={!isBq}
+            />
+            <CancelDealButton proposalId={proposal.id} currentStatus={proposal.status} />
+          </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-slate-500 md:grid-cols-4">
           <div><div className="text-[10px] uppercase tracking-wide">Funder</div><div className="mt-0.5 text-sm text-slate-900">{proposal.funderName}</div></div>
@@ -133,8 +158,10 @@ export function OrderDetail({ proposal, exec, customChecks }: { proposal: P; exe
               </>
             ) : (
               <>
-                <div className="mt-0.5 text-sm text-slate-900">{exec?.name ?? "—"}</div>
-                {exec && <div className="text-[11px] text-slate-400">{exec.email}</div>}
+                <div className="mt-0.5">
+                  <SalesExecPicker proposalId={proposal.id} execs={execs} currentId={exec?.id ?? null} />
+                </div>
+                {exec && <div className="mt-0.5 text-[11px] text-slate-400">{exec.email}</div>}
               </>
             )}
           </div>

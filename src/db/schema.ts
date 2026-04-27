@@ -133,6 +133,13 @@ export const proposals = sqliteTable(
     financeAgreementSigned: integer("finance_agreement_signed", { mode: "boolean" }).notNull().default(false),
     orderNumber: text("order_number"),
     vin: text("vin"),
+    manualEtaAt: integer("manual_eta_at", { mode: "timestamp" }),
+    manualLocation: text("manual_location"),
+    manualEtaUpdatedAt: integer("manual_eta_updated_at", { mode: "timestamp" }),
+    deliveredDetectedAt: integer("delivered_detected_at", { mode: "timestamp" }),
+    isEv: integer("is_ev", { mode: "boolean" }).notNull().default(false),
+    wallboxIncluded: integer("wallbox_included", { mode: "boolean" }).notNull().default(false),
+    customerSavingGbp: real("customer_saving_gbp"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
@@ -191,7 +198,8 @@ export const stockUploads = sqliteTable("stock_uploads", {
 });
 
 export const stockVehicles = sqliteTable("stock_vehicles", {
-  vin: text("vin").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  vin: text("vin"), // may be null — VIN-less rows still match on order number
   modelRaw: text("model_raw"),
   modelYear: text("model_year"),
   bodyStyle: text("body_style"),
@@ -208,6 +216,10 @@ export const stockVehicles = sqliteTable("stock_vehicles", {
   etaAt: integer("eta_at", { mode: "timestamp" }),
   dealerRaw: text("dealer_raw"),
   destinationRaw: text("destination_raw"),
+  deliveredAt: integer("delivered_at", { mode: "timestamp" }),
+  interestBearingAt: integer("interest_bearing_at", { mode: "timestamp" }),
+  adoptedAt: integer("adopted_at", { mode: "timestamp" }),
+  customerAssigned: integer("customer_assigned", { mode: "boolean" }).notNull().default(false),
   sourceSheet: text("source_sheet"),
   uploadId: text("upload_id").notNull(),
 });
@@ -226,6 +238,26 @@ export const stockMappings = sqliteTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.kind, t.rawKey] }) })
 );
+
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  roles: text("roles").notNull().default("[]"), // JSON array of role strings
+  salesExecId: text("sales_exec_id"),           // links exec users to a salesExecs row
+  setupToken: text("setup_token"),
+  setupTokenExpiresAt: integer("setup_token_expires_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
 
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {

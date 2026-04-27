@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { listProposals } from "@/lib/proposals";
-import { STATUS_LABELS, STATUS_COLORS, PROPOSAL_SECTION_STATUSES, type ProposalStatus } from "@/lib/proposal-constants";
+import { STATUS_LABELS, PROPOSAL_SECTION_STATUSES, statusColor, statusLabel, type ProposalStatus } from "@/lib/proposal-constants";
 import { TopNav } from "@/components/top-nav";
 import { db } from "@/db";
 import { salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { ProposalsFilter, type RangeKey } from "./proposals-filter";
+import { ClickableRow } from "./clickable-row";
+import { requireProposalsAccess } from "@/lib/auth-guard";
+import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,7 @@ const TILE_TONES: Record<ProposalStatus, { bg: string; ring: string; text: strin
   lost_sale: { bg: "bg-slate-100", ring: "ring-slate-200", text: "text-slate-600", num: "text-slate-900", activeRing: "ring-slate-500" },
   in_order: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-500", num: "text-slate-700", activeRing: "ring-slate-500" },
   awaiting_delivery: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-500", num: "text-slate-700", activeRing: "ring-slate-500" },
+  cancelled: { bg: "bg-rose-50", ring: "ring-rose-200", text: "text-rose-700", num: "text-rose-900", activeRing: "ring-rose-500" },
 };
 
 const RANGE_KEYS = ["month", "last", "3m", "6m", "ytd", "all"] as const;
@@ -73,8 +77,11 @@ export default async function ProposalsPage({
 }: {
   searchParams: Promise<{ exec?: string; status?: string; range?: string; q?: string }>;
 }) {
+  const me = await requireProposalsAccess();
   const sp = await searchParams;
-  const execFilter = sp.exec && sp.exec !== "all" ? sp.exec : null;
+  const defaultExec = !isAdmin(me) && me.salesExecId ? me.salesExecId : null;
+  const execParam = sp.exec ?? (defaultExec ?? "all");
+  const execFilter = execParam && execParam !== "all" ? execParam : null;
   const statusFilter = (PROPOSAL_SECTION_STATUSES as readonly string[]).includes(sp.status ?? "")
     ? (sp.status as ProposalStatus)
     : null;
@@ -186,9 +193,9 @@ export default async function ProposalsPage({
               {visible.map((g) => {
                 const p = g.latest;
                 const status = p.status as ProposalStatus;
-                const c = STATUS_COLORS[status];
+                const c = statusColor(status);
                 return (
-                  <tr key={g.customerId}>
+                  <ClickableRow key={g.customerId} href={p.customer ? `/customers/${p.customer.id}` : "/proposals"}>
                     <td className="px-4 py-2 font-medium text-slate-900">
                       {p.customer ? (
                         <Link href={`/customers/${p.customer.id}`} className="hover:underline">{p.customer.name}</Link>
@@ -218,7 +225,7 @@ export default async function ProposalsPage({
                     </td>
                     <td className="px-4 py-2">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text} ring-1 ${c.ring}`}>
-                        {STATUS_LABELS[status]}
+                        {statusLabel(status)}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-xs">
@@ -227,11 +234,11 @@ export default async function ProposalsPage({
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {g.attempts.map((a) => {
-                            const ac = STATUS_COLORS[a.status as ProposalStatus];
+                            const ac = statusColor(a.status);
                             return (
                               <span
                                 key={a.id}
-                                title={`#${a.funderRank} ${a.funderName} — ${STATUS_LABELS[a.status as ProposalStatus]}`}
+                                title={`#${a.funderRank} ${a.funderName} — ${statusLabel(a.status)}`}
                                 className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${ac.bg} ${ac.text} ring-1 ${ac.ring}`}
                               >
                                 #{a.funderRank}
@@ -242,7 +249,7 @@ export default async function ProposalsPage({
                       )}
                     </td>
                     <td className="px-4 py-2 text-xs text-slate-500">{new Date(p.updatedAt).toLocaleString()}</td>
-                  </tr>
+                  </ClickableRow>
                 );
               })}
               {visible.length === 0 && (

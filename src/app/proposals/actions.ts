@@ -2,7 +2,7 @@
 import { changeStatus, createProposal, setStageCheck, updateOrderFields } from "@/lib/proposals";
 import type { ProposalStatus } from "@/lib/proposal-constants";
 import { db } from "@/db";
-import { proposals } from "@/db/schema";
+import { proposalEvents, proposals, salesExecs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getQuote } from "@/lib/quote";
@@ -86,9 +86,41 @@ export async function reproposeAction(input: {
       monthlyRental: target.totalMonthly,
       financeProposalNumber: input.financeProposalNumber,
       parentProposalId: input.parentProposalId,
+      isEv: parent.isEv,
+      wallboxIncluded: parent.wallboxIncluded,
+      customerSavingGbp: parent.customerSavingGbp,
     });
     revalidateForProposal(parent.customerId);
     return { ok: true as const, proposalId: res.id, customerId: res.customerId };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+export async function updateSalesExecAction(proposalId: string, salesExecId: string | null) {
+  try {
+    const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
+    if (!p) return { ok: false as const, error: "Proposal not found" };
+    if (p.isGroupBq) return { ok: false as const, error: "Group BQ deals can't have a sales exec." };
+
+    let execName: string | null = null;
+    if (salesExecId) {
+      const [e] = await db.select().from(salesExecs).where(eq(salesExecs.id, salesExecId)).limit(1);
+      if (!e) return { ok: false as const, error: "Sales exec not found" };
+      execName = e.name;
+    }
+    if ((p.salesExecId ?? null) === (salesExecId ?? null)) return { ok: true as const };
+
+    const now = new Date();
+    await db.update(proposals).set({ salesExecId, updatedAt: now }).where(eq(proposals.id, proposalId));
+    await db.insert(proposalEvents).values({
+      proposalId,
+      kind: "note",
+      note: execName ? `Sales exec changed to ${execName}.` : "Sales exec cleared.",
+      createdAt: now,
+    });
+    revalidateForProposal(p.customerId);
+    return { ok: true as const };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
   }

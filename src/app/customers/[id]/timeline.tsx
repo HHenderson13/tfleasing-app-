@@ -2,7 +2,9 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { changeStatusAction, listFundersForConfigAction, reproposeAction } from "../../proposals/actions";
-import { PROPOSAL_STATUSES, STATUS_COLORS, STATUS_LABELS, TERMINAL_STATUSES, type ProposalStatus } from "@/lib/proposal-constants";
+import { PROPOSAL_STATUSES, STATUS_LABELS, TERMINAL_STATUSES, statusColor, statusLabel, type ProposalStatus } from "@/lib/proposal-constants";
+import { SalesExecPicker } from "@/components/sales-exec-picker";
+import { DealEditor, CancelDealButton } from "@/components/deal-editor";
 
 type Proposal = {
   id: string;
@@ -27,6 +29,8 @@ type Proposal = {
   brokerName: string | null;
   brokerEmail: string | null;
   isGroupBq: boolean;
+  orderNumber: string | null;
+  vin: string | null;
 };
 type Event = {
   id: number;
@@ -46,7 +50,7 @@ type Item = {
 // Transitions available from the Proposals view (excludes order-stage moves).
 const PROPOSAL_TRANSITIONS: ProposalStatus[] = ["proposal_received", "accepted", "declined", "referred_to_dealer", "referred_to_underwriter"];
 
-export function CustomerTimeline({ items, customerId: _customerId, declinedCount }: { items: Item[]; customerId: string; declinedCount: number }) {
+export function CustomerTimeline({ items, customerId: _customerId, declinedCount, execs }: { items: Item[]; customerId: string; declinedCount: number; execs: { id: string; name: string }[] }) {
   return (
     <div className="space-y-6">
       {declinedCount >= 3 && (
@@ -55,13 +59,13 @@ export function CustomerTimeline({ items, customerId: _customerId, declinedCount
         </div>
       )}
       {items.map((it) => (
-        <ProposalCard key={it.proposal.id} item={it} declinedCount={declinedCount} />
+        <ProposalCard key={it.proposal.id} item={it} declinedCount={declinedCount} execs={execs} />
       ))}
     </div>
   );
 }
 
-function ProposalCard({ item, declinedCount }: { item: Item; declinedCount: number }) {
+function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCount: number; execs: { id: string; name: string }[] }) {
   const { proposal: p, exec, groupSite, events } = item;
   const [, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +77,7 @@ function ProposalCard({ item, declinedCount }: { item: Item; declinedCount: numb
   const [lostSaleNote, setLostSaleNote] = useState("");
   const [showRepropose, setShowRepropose] = useState(false);
   const status = p.status as ProposalStatus;
-  const c = STATUS_COLORS[status];
+  const c = statusColor(status);
   const isTerminal = (TERMINAL_STATUSES as ProposalStatus[]).includes(status);
 
   const canReproposeAfterDecline = status === "declined" && p.funderRank < 3 && declinedCount < 3;
@@ -112,7 +116,7 @@ function ProposalCard({ item, declinedCount }: { item: Item; declinedCount: numb
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text} ring-1 ${c.ring}`}>
-              {STATUS_LABELS[status]}
+              {statusLabel(status)}
             </span>
             <span className="text-xs text-slate-400">Funder rank #{p.funderRank} of 3</span>
             {p.financeProposalNumber && (
@@ -128,6 +132,17 @@ function ProposalCard({ item, declinedCount }: { item: Item; declinedCount: numb
           <div className="mt-0.5 text-xs text-slate-500">
             {p.funderName} · £{p.monthlyRental.toFixed(2)}/mo · {p.contract} {p.maintenance === "maintained" ? "maintained" : "customer maint."} · {p.termMonths}m / {p.annualMileage.toLocaleString()}mi / {p.initialRentalMultiplier}×
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <DealEditor
+              proposalId={p.id}
+              initialModel={p.model}
+              initialDerivative={p.derivative}
+              initialOrderNumber={p.orderNumber}
+              initialVin={p.vin}
+              showVehicleIds={!p.isGroupBq}
+            />
+            {!isTerminal && <CancelDealButton proposalId={p.id} currentStatus={p.status} />}
+          </div>
         </div>
         <div className="text-right text-xs text-slate-500">
           <div>Assigned to</div>
@@ -138,8 +153,8 @@ function ProposalCard({ item, declinedCount }: { item: Item; declinedCount: numb
             </>
           ) : (
             <>
-              <div className="font-medium text-slate-700">{exec?.name ?? "—"}</div>
-              {exec && <div className="text-slate-400">{exec.email}</div>}
+              <SalesExecPicker proposalId={p.id} execs={execs} currentId={exec?.id ?? null} />
+              {exec && <div className="mt-0.5 text-slate-400">{exec.email}</div>}
             </>
           )}
           {p.isBroker && (
@@ -296,9 +311,9 @@ function ProposalCard({ item, declinedCount }: { item: Item; declinedCount: numb
                 {e.kind === "created" && <span className="text-slate-700">Proposal created</span>}
                 {e.kind === "status_change" && (
                   <span className="text-slate-700">
-                    {e.fromStatus ? STATUS_LABELS[e.fromStatus as ProposalStatus] : "—"}
+                    {e.fromStatus ? statusLabel(e.fromStatus) : "—"}
                     <span className="mx-1 text-slate-400">→</span>
-                    <span className="font-medium">{e.toStatus ? STATUS_LABELS[e.toStatus as ProposalStatus] : "—"}</span>
+                    <span className="font-medium">{e.toStatus ? statusLabel(e.toStatus) : "—"}</span>
                   </span>
                 )}
                 {e.kind === "note" && <span className="text-slate-700">Note</span>}

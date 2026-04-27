@@ -3,6 +3,9 @@ import Link from "next/link";
 import { countDeclinedForCustomer, getCustomerTimeline } from "@/lib/proposals";
 import { CustomerTimeline } from "./timeline";
 import { TopNav } from "@/components/top-nav";
+import { db } from "@/db";
+import { salesExecs } from "@/db/schema";
+import { asc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +14,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const data = await getCustomerTimeline(id);
   if (!data) notFound();
   const declinedCount = await countDeclinedForCustomer(id);
+  const execs = await db.select().from(salesExecs).orderBy(asc(salesExecs.name));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -29,6 +33,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <CustomerTimeline
             customerId={id}
             declinedCount={declinedCount}
+            execs={execs.map((e) => ({ id: e.id, name: e.name }))}
             items={data.items.map((it) => ({
               proposal: {
                 id: it.proposal.id,
@@ -53,6 +58,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 brokerName: it.proposal.brokerName,
                 brokerEmail: it.proposal.brokerEmail,
                 isGroupBq: it.proposal.isGroupBq,
+                orderNumber: it.proposal.orderNumber,
+                vin: it.proposal.vin,
               },
               exec: it.exec ? { id: it.exec.id, name: it.exec.name, email: it.exec.email } : null,
               groupSite: it.groupSite ? { id: it.groupSite.id, name: it.groupSite.name } : null,

@@ -28,6 +28,9 @@ export interface CreateProposalInput {
   brokerEmail?: string | null;
   isGroupBq?: boolean;
   groupSiteId?: string | null;
+  isEv?: boolean;
+  wallboxIncluded?: boolean;
+  customerSavingGbp?: number | null;
 }
 
 export async function createProposal(input: CreateProposalInput) {
@@ -86,6 +89,9 @@ export async function createProposal(input: CreateProposalInput) {
     financeProposalNumber,
     monthlyRental: input.monthlyRental,
     parentProposalId: input.parentProposalId ?? null,
+    isEv: !!input.isEv,
+    wallboxIncluded: !!input.wallboxIncluded,
+    customerSavingGbp: input.customerSavingGbp ?? null,
     status: "proposal_received",
     createdAt: now,
     updatedAt: now,
@@ -109,6 +115,9 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
   }
   if (toStatus === "not_eligible" && !(note && note.trim())) {
     throw new Error("A reason is required when marking a proposal not eligible.");
+  }
+  if (toStatus === "cancelled" && !(note && note.trim())) {
+    throw new Error("A reason is required when cancelling a deal.");
   }
   if (toStatus === "in_order" && p.status !== "accepted") {
     throw new Error("Only accepted proposals can move to order stage.");
@@ -158,6 +167,8 @@ export async function updateOrderFields(
     financeAgreementSigned: boolean;
     orderNumber: string | null;
     vin: string | null;
+    model: string;
+    derivative: string;
   }>
 ) {
   const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
@@ -165,6 +176,16 @@ export async function updateOrderFields(
   const now = new Date();
   const clean: Record<string, unknown> = { updatedAt: now };
   const events: { field: string; value: string }[] = [];
+  if (typeof patch.model === "string") {
+    const v = patch.model.trim();
+    if (!v) throw new Error("Model can't be empty.");
+    if (v !== p.model) { clean.model = v; events.push({ field: "Model", value: v }); }
+  }
+  if (typeof patch.derivative === "string") {
+    const v = patch.derivative.trim();
+    if (!v) throw new Error("Derivative can't be empty.");
+    if (v !== p.derivative) { clean.derivative = v; events.push({ field: "Derivative", value: v }); }
+  }
   if (typeof patch.chipConfirmed === "boolean" && patch.chipConfirmed !== p.chipConfirmed) {
     clean.chipConfirmed = patch.chipConfirmed;
     events.push({ field: "Novuna chip", value: patch.chipConfirmed ? "confirmed" : "cleared" });
@@ -185,7 +206,10 @@ export async function updateOrderFields(
     }
   }
   if (patch.vin !== undefined) {
-    const v = patch.vin?.trim() || null;
+    const v = patch.vin?.trim().toUpperCase() || null;
+    if (v && !/^[A-Z0-9]{11}$/.test(v)) {
+      throw new Error("VIN must be exactly 11 characters (letters and numbers only).");
+    }
     if (v !== (p.vin ?? null)) {
       clean.vin = v;
       events.push({ field: "VIN", value: v ?? "cleared" });
@@ -282,6 +306,111 @@ export async function listProposals(section?: Section) {
       customRemaining,
     };
   });
+}
+
+export type AlertKind =
+  | "sign_deadline_soon"
+  | "sign_deadline_passed"
+  | "missing_order_after_acceptance"
+  | "missing_vin_after_order"
+  | "awaiting_too_long"
+  | "eta_passed";
+
+export interface Alert {
+  kind: AlertKind;
+  proposalId: string;
+  customerId: string;
+  customerName: string;
+  model: string;
+  derivative: string;
+  execId: string | null;
+  execName: string | null;
+  message: string;
+  ageDays: number;
+  severity: "warn" | "danger";
+}
+
+export async function getAlerts(execIdFilter: string | null = null): Promise<Alert[]> {
+  const ps = await db.select().from(proposals);
+  const execs = await db.select().from(salesExecs);
+  const custs = await db.select().from(customers);
+  const execMap = new Map(execs.map((e) => [e.id, e]));
+  const custMap = new Map(custs.map((c) => [c.id, c]));
+  const now = Date.now();
+  const dayMs = 86_400_000;
+  const out: Alert[] = [];
+  for (const p of ps) {
+    if (execIdFilter && p.salesExecId !== execIdFilter) continue;
+    const exec = p.salesExecId ? execMap.get(p.salesExecId) ?? null : null;
+    const cust = custMap.get(p.customerId);
+    if (!cust) continue;
+    const base = {
+      proposalId: p.id,
+      customerId: p.customerId,
+      customerName: cust.name,
+      model: p.model,
+      derivative: p.derivative,
+      execId: exec?.id ?? null,
+      execName: exec?.name ?? null,
+    };
+    if (p.status === "accepted" && p.acceptedAt) {
+      const days = Math.floor((now - p.acceptedAt.getTime()) / dayMs);
+      if (days >= 30) {
+        out.push({ ...base, kind: "sign_deadline_passed", ageDays: days, severity: "danger", message: `Finance window passed (${days}d since acceptance) — no order yet` });
+      } else if (days >= 25 && !p.orderNumber) {
+        out.push({ ...base, kind: "sign_deadline_soon", ageDays: days, severity: "warn", message: `Finance window closes in ${30 - days}d — still no order number` });
+      }
+    }
+    if ((p.status === "accepted" || p.status === "in_order") && !p.orderNumber) {
+      const since = (p.acceptedAt ?? p.createdAt).getTime();
+      const days = Math.floor((now - since) / dayMs);
+      if (days >= 14) {
+        out.push({ ...base, kind: "missing_order_after_acceptance", ageDays: days, severity: "warn", message: `No order number after ${days}d` });
+      }
+    }
+    if ((p.status === "in_order" || p.status === "awaiting_delivery") && !p.vin && !p.isGroupBq) {
+      const since = (p.acceptedAt ?? p.createdAt).getTime();
+      const days = Math.floor((now - since) / dayMs);
+      if (days >= 21) {
+        out.push({ ...base, kind: "missing_vin_after_order", ageDays: days, severity: "warn", message: `No VIN after ${days}d in order stage` });
+      }
+    }
+    if (p.status === "awaiting_delivery") {
+      const since = (p.acceptedAt ?? p.createdAt).getTime();
+      const days = Math.floor((now - since) / dayMs);
+      if (days >= 120) {
+        out.push({ ...base, kind: "awaiting_too_long", ageDays: days, severity: "danger", message: `Awaiting delivery ${days}d — chase Ford / dealer` });
+      }
+      if (p.manualEtaAt && p.manualEtaAt.getTime() < now) {
+        const passed = Math.floor((now - p.manualEtaAt.getTime()) / dayMs);
+        out.push({ ...base, kind: "eta_passed", ageDays: passed, severity: "warn", message: `Manual ETA passed ${passed}d ago — confirm or update` });
+      }
+    }
+  }
+  out.sort((a, b) => (b.severity === "danger" ? 1 : 0) - (a.severity === "danger" ? 1 : 0) || b.ageDays - a.ageDays);
+  return out;
+}
+
+export async function getRecentlyDelivered(limit = 10) {
+  const cutoff = new Date(Date.now() - 7 * 86_400_000);
+  const ps = await db.select().from(proposals);
+  const custs = await db.select().from(customers);
+  const execs = await db.select().from(salesExecs);
+  const custMap = new Map(custs.map((c) => [c.id, c]));
+  const execMap = new Map(execs.map((e) => [e.id, e]));
+  return ps
+    .filter((p) => p.deliveredDetectedAt && p.deliveredDetectedAt >= cutoff)
+    .sort((a, b) => (b.deliveredDetectedAt!.getTime()) - (a.deliveredDetectedAt!.getTime()))
+    .slice(0, limit)
+    .map((p) => ({
+      proposalId: p.id,
+      customerId: p.customerId,
+      customerName: custMap.get(p.customerId)?.name ?? "—",
+      model: p.model,
+      derivative: p.derivative,
+      execName: p.salesExecId ? execMap.get(p.salesExecId)?.name ?? null : null,
+      deliveredAt: p.deliveredDetectedAt!.toISOString(),
+    }));
 }
 
 export async function getProposalWithContext(proposalId: string) {

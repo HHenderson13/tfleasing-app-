@@ -1,10 +1,12 @@
 import { listModels } from "@/lib/quote";
 import { QuoteForm } from "./quote-form";
 import { TopNav } from "@/components/top-nav";
+import { requireQuoteAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function QuotePage() {
+  await requireQuoteAccess();
   const models = await listModels();
   return (
     <div className="min-h-screen bg-slate-50">
