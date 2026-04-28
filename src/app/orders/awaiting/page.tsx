@@ -165,6 +165,13 @@ export default async function OrdersAwaitingPage({
   }
   const sortedKeys = Array.from(groups.keys()).sort((a, b) => bucketSortValue(a) - bucketSortValue(b));
 
+  const total = items.length;
+  const etaConfirmed = items.filter(({ match }) => !match.delivered && !!match.etaAt).length;
+  const etaTba = items.filter(({ match }) => !match.delivered && !match.etaAt).length;
+  const deliveryBooked = items.filter(({ p, match }) => !match.delivered && !!p.deliveryBookedAt).length;
+  const arrivedAtUs = items.filter(({ match }) => match.delivered).length;
+  const monthlySum = items.reduce((acc, { p }) => acc + (p.monthlyRental ?? 0), 0);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="orders" />
@@ -187,6 +194,15 @@ export default async function OrdersAwaitingPage({
             />
           </div>
         </div>
+
+        <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatTile label="Awaiting" value={total} tone="slate" />
+          <StatTile label="ETA confirmed" value={etaConfirmed} tone="sky" />
+          <StatTile label="ETA TBA" value={etaTba} tone="amber" />
+          <StatTile label="Arrived at us" value={arrivedAtUs} tone="emerald" />
+          <StatTile label="Delivery booked" value={deliveryBooked} tone="teal" />
+        </section>
+        <div className="mt-2 text-right text-[11px] text-slate-400">Total monthly rental in pipeline: £{monthlySum.toFixed(2)}</div>
 
         {sortedKeys.length === 0 ? (
           <Section title="Awaiting delivery" empty="No deals waiting on delivery yet.">{[]}</Section>
@@ -236,6 +252,24 @@ export default async function OrdersAwaitingPage({
           ))
         )}
       </main>
+    </div>
+  );
+}
+
+const TILE_TONES: Record<string, { bg: string; ring: string; text: string; num: string }> = {
+  slate:   { bg: "bg-slate-50",   ring: "ring-slate-200",   text: "text-slate-600",   num: "text-slate-900" },
+  sky:     { bg: "bg-sky-50",     ring: "ring-sky-200",     text: "text-sky-700",     num: "text-sky-900" },
+  amber:   { bg: "bg-amber-50",   ring: "ring-amber-200",   text: "text-amber-700",   num: "text-amber-900" },
+  emerald: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", num: "text-emerald-900" },
+  teal:    { bg: "bg-teal-50",    ring: "ring-teal-200",    text: "text-teal-700",    num: "text-teal-900" },
+};
+
+function StatTile({ label, value, tone }: { label: string; value: number; tone: keyof typeof TILE_TONES }) {
+  const t = TILE_TONES[tone];
+  return (
+    <div className={`rounded-2xl ${t.bg} px-4 py-3 ring-1 ${t.ring}`}>
+      <div className={`text-[10px] font-semibold uppercase tracking-wide ${t.text}`}>{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${t.num}`}>{value}</div>
     </div>
   );
 }

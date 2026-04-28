@@ -38,6 +38,18 @@ export default async function DeliveredPage({
   }
   const sortedKeys = Array.from(groups.keys()).sort((a, b) => (a === "unknown" ? 1 : b === "unknown" ? -1 : b.localeCompare(a)));
 
+  const now = new Date();
+  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
+  const ytdYear = now.getFullYear();
+
+  const total = delivered.length;
+  const thisMonthCount = (groups.get(thisMonthKey) ?? []).length;
+  const lastMonthCount = (groups.get(lastMonthKey) ?? []).length;
+  const ytdCount = delivered.filter((p) => p.deliveredAt && p.deliveredAt.getFullYear() === ytdYear).length;
+  const monthlySum = delivered.reduce((acc, p) => acc + (p.monthlyRental ?? 0), 0);
+
   function bucketLabel(key: string) {
     if (key === "unknown") return "No delivery date";
     const [y, m] = key.split("-");
@@ -58,6 +70,14 @@ export default async function DeliveredPage({
             value={execFilter ?? "all"}
           />
         </div>
+
+        <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Total delivered" value={total} tone="slate" />
+          <StatTile label="This month" value={thisMonthCount} tone="emerald" />
+          <StatTile label="Last month" value={lastMonthCount} tone="teal" />
+          <StatTile label={`Year-to-date (${ytdYear})`} value={ytdCount} tone="sky" />
+        </section>
+        <div className="mt-2 text-right text-[11px] text-slate-400">Total monthly rental delivered: £{monthlySum.toFixed(2)}</div>
 
         {sortedKeys.length === 0 ? (
           <Section title="Delivered" empty="No deliveries yet.">{[]}</Section>
@@ -90,6 +110,23 @@ export default async function DeliveredPage({
           ))
         )}
       </main>
+    </div>
+  );
+}
+
+const TILE_TONES: Record<string, { bg: string; ring: string; text: string; num: string }> = {
+  slate:   { bg: "bg-slate-50",   ring: "ring-slate-200",   text: "text-slate-600",   num: "text-slate-900" },
+  sky:     { bg: "bg-sky-50",     ring: "ring-sky-200",     text: "text-sky-700",     num: "text-sky-900" },
+  emerald: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", num: "text-emerald-900" },
+  teal:    { bg: "bg-teal-50",    ring: "ring-teal-200",    text: "text-teal-700",    num: "text-teal-900" },
+};
+
+function StatTile({ label, value, tone }: { label: string; value: number; tone: keyof typeof TILE_TONES }) {
+  const t = TILE_TONES[tone];
+  return (
+    <div className={`rounded-2xl ${t.bg} px-4 py-3 ring-1 ${t.ring}`}>
+      <div className={`text-[10px] font-semibold uppercase tracking-wide ${t.text}`}>{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${t.num}`}>{value}</div>
     </div>
   );
 }
