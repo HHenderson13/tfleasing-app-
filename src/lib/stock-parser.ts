@@ -456,7 +456,11 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       bodyStyle: applyReplacements(toStr(pick(row, "WERS_BODY_STYLE_DESC")), bucket ? BODY_STYLE_REPLACEMENTS[bucket] : undefined),
       seriesRaw: applyReplacements(toStr(pick(row, "WERS_SERIES_MKT_DESCRIPTION")), bucket ? SERIES_REPLACEMENTS[bucket] : undefined),
       derivativeRaw: toStr(pick(row, "WERS_SUB_SERIES_DESC")),
-      engine: applyReplacements(toStr(pick(row, "WERS_ENGINE_DESC")), bucket ? ENGINE_REPLACEMENTS[bucket] : undefined),
+      engine: applyReplacements(
+        // Kuga: use the emissions column (literal column S = index 18) — WERS_ENGINE_DESC isn't useful for display.
+        bucket === "Kuga" ? toStr(row[col("S")]) : toStr(pick(row, "WERS_ENGINE_DESC")),
+        bucket ? ENGINE_REPLACEMENTS[bucket] : undefined,
+      ),
       transmission: applyReplacements(toStr(pick(row, "WERS_TRANSMISSION_DESC")), bucket ? TRANSMISSION_REPLACEMENTS[bucket] : undefined),
       drive: applyReplacements(toStr(pick(row, "WERS_DRIVE_DESC")), bucket ? DRIVE_REPLACEMENTS[bucket] : undefined),
       colourRaw: applyReplacements(toStr(pick(row, "WERS_COLOUR_DESCR")), bucket ? COLOUR_REPLACEMENTS[bucket] : undefined),
