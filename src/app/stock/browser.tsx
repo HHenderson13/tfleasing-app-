@@ -218,11 +218,13 @@ export function StockBrowser({ rows }: { rows: StockRow[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, q, sel, sort]);
 
-  // Facet options: each facet excludes its own selection so you can add/remove freely.
+  // Facet options always reflect the current selection across every filter (including this one),
+  // so picking an option immediately narrows what's left in every panel. Currently-selected
+  // values stay visible via FacetGroup's selectedOnly union.
   const facetOptions: Record<FacetId, [string, number][]> = useMemo(() => {
     const o = {} as Record<FacetId, [string, number][]>;
+    const pool = rows.filter((r) => matches(r, null));
     for (const f of FACETS) {
-      const pool = rows.filter((r) => matches(r, f.id));
       o[f.id] = tally(pool, f.get);
     }
     return o;

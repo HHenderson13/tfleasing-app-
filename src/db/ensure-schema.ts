@@ -28,6 +28,21 @@ async function runEnsureAppSchema() {
     { name: "stage", sqlType: "TEXT NOT NULL DEFAULT 'order'" },
   ]);
   await seedDefaultDeliveryChecks();
+  await seedKugaEngineMappings();
+}
+
+async function seedKugaEngineMappings() {
+  const seeds: { rawKey: string; displayName: string }[] = [
+    { rawKey: "STAGE 6.2 FHEV EMISSIONS", displayName: "2.5L PHEV" },
+    { rawKey: "STAGE 6.2 PHEV EMISSIONS", displayName: "2.5L PHEV" },
+    { rawKey: "EURO 6.2 EMISSIONS",       displayName: "1.5L EcoBoost" },
+  ];
+  for (const s of seeds) {
+    await db.run(sql`
+      INSERT OR IGNORE INTO stock_mappings (kind, raw_key, display_name, group_site_id, hidden, promote_to_variant)
+      VALUES ('engine', ${s.rawKey}, ${s.displayName}, NULL, 0, 0)
+    `);
+  }
 }
 
 async function seedDefaultDeliveryChecks() {

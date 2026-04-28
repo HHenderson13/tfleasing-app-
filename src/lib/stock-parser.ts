@@ -489,6 +489,7 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     bodyStyle: col("M"),
     series: col("O"),
     engine: col("P"),
+    emissions: col("S"),
     transmission: col("Q"),
     drive: col("R"),
     colour: col("AA"),
@@ -551,7 +552,11 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       bodyStyle: applyReplacements(toStr(row[C.bodyStyle]), bucket ? BODY_STYLE_REPLACEMENTS[bucket] : undefined),
       seriesRaw: applyReplacements(toStr(row[C.series]), bucket ? SERIES_REPLACEMENTS[bucket] : undefined),
       derivativeRaw: null, // input-tab layout doesn't expose sub_series
-      engine: applyReplacements(toStr(row[C.engine]), bucket ? ENGINE_REPLACEMENTS[bucket] : undefined),
+      engine: applyReplacements(
+        // Kuga: use emissions column (S) — the engine column (P) values aren't useful for display.
+        toStr(row[bucket === "Kuga" ? C.emissions : C.engine]),
+        bucket ? ENGINE_REPLACEMENTS[bucket] : undefined,
+      ),
       transmission: applyReplacements(toStr(row[C.transmission]), bucket ? TRANSMISSION_REPLACEMENTS[bucket] : undefined),
       drive: applyReplacements(toStr(row[C.drive]), bucket ? DRIVE_REPLACEMENTS[bucket] : undefined),
       colourRaw: applyReplacements(toStr(row[C.colour]), bucket ? COLOUR_REPLACEMENTS[bucket] : undefined),
