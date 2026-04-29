@@ -2,7 +2,7 @@
 import { changeStatus, createProposal, setStageCheck, updateOrderFields } from "@/lib/proposals";
 import type { ProposalStatus } from "@/lib/proposal-constants";
 import { db } from "@/db";
-import { proposalEvents, proposals, salesExecs } from "@/db/schema";
+import { funders, proposalEvents, proposals, salesExecs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getQuote } from "@/lib/quote";
@@ -57,6 +57,7 @@ export async function reproposeAction(input: {
   parentProposalId: string;
   funderId: string;
   financeProposalNumber: string;
+  manualMonthlyRental?: number | null;
 }) {
   const [parent] = await db.select().from(proposals).where(eq(proposals.id, input.parentProposalId)).limit(1);
   if (!parent) return { ok: false as const, error: "Proposal not found" };
@@ -74,7 +75,25 @@ export async function reproposeAction(input: {
     initialRentalMultiplier: parent.initialRentalMultiplier,
   });
   const target = quote.funders.find((f) => f.funderId === input.funderId);
-  if (!target) return { ok: false as const, error: "Chosen funder has no rate for this config." };
+
+  // Resolve funder name + monthly. Prefer ratebook hit; fall back to DB funder name + manual £/mo.
+  let funderName = target?.funderName ?? null;
+  let monthlyRental: number;
+  if (target) {
+    monthlyRental = target.totalMonthly;
+  } else {
+    const manual = Number(input.manualMonthlyRental);
+    if (!Number.isFinite(manual) || manual <= 0) {
+      return { ok: false as const, error: "Enter a manual monthly rental for this funder." };
+    }
+    monthlyRental = Number(manual.toFixed(2));
+  }
+  if (!funderName) {
+    const [f] = await db.select().from(funders).where(eq(funders.id, input.funderId)).limit(1);
+    funderName = f?.name
+      ?? quote.missing.find((m) => m.funderId === input.funderId)?.funderName
+      ?? input.funderId.toUpperCase();
+  }
 
   try {
     const res = await createProposal({
@@ -94,10 +113,10 @@ export async function reproposeAction(input: {
       termMonths: parent.termMonths,
       annualMileage: parent.annualMileage,
       initialRentalMultiplier: parent.initialRentalMultiplier,
-      funderId: target.funderId,
-      funderName: target.funderName,
+      funderId: input.funderId,
+      funderName,
       funderRank: nextRank,
-      monthlyRental: target.totalMonthly,
+      monthlyRental,
       financeProposalNumber: input.financeProposalNumber,
       parentProposalId: input.parentProposalId,
       isEv: parent.isEv,
@@ -151,7 +170,17 @@ export async function setStageCheckAction(proposalId: string, checkId: string, v
   }
 }
 
-export async function listFundersForConfigAction(proposalId: string) {
+// Always-available commission funders, even if the DB/ratebook is incomplete.
+const FALLBACK_COMMISSION_FUNDERS: { id: string; name: string }[] = [
+  { id: "ald",    name: "ALD" },
+  { id: "novuna", name: "Novuna" },
+  { id: "lex",    name: "Lex" },
+  { id: "arval",  name: "Arval" },
+];
+
+export async function listFundersForConfigAction(proposalId: string): Promise<
+  { id: string; name: string; rank: number | null; monthly: number | null }[]
+> {
   const [parent] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
   if (!parent) return [];
   const quote = await getQuote({
@@ -163,5 +192,9 @@ export async function listFundersForConfigAction(proposalId: string) {
     annualMileage: parent.annualMileage,
     initialRentalMultiplier: parent.initialRentalMultiplier,
   });
-  return quote.funders.map((f) => ({ id: f.funderId, name: f.funderName, rank: f.rank, monthly: f.totalMonthly }));
+  const rated = quote.funders.map((f) => ({ id: f.funderId, name: f.funderName, rank: f.rank as number | null, monthly: f.totalMonthly as number | null }));
+  const missingFromQuote = quote.missing.map((m) => ({ id: m.funderId, name: m.funderName, rank: null, monthly: null }));
+  const known = new Set([...rated.map((r) => r.id), ...missingFromQuote.map((r) => r.id)]);
+  const fallback = FALLBACK_COMMISSION_FUNDERS.filter((f) => !known.has(f.id)).map((f) => ({ id: f.id, name: f.name, rank: null, monthly: null }));
+  return [...rated, ...missingFromQuote, ...fallback];
 }

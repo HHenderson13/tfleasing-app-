@@ -352,9 +352,10 @@ function ReproposeModal({
   onError: (msg: string) => void;
 }) {
   const [pending, start] = useTransition();
-  const [funders, setFunders] = useState<{ id: string; name: string; rank: number; monthly: number }[] | null>(null);
+  const [funders, setFunders] = useState<{ id: string; name: string; rank: number | null; monthly: number | null }[] | null>(null);
   const [funderId, setFunderId] = useState("");
   const [fpn, setFpn] = useState("");
+  const [manualMonthly, setManualMonthly] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -363,18 +364,31 @@ function ReproposeModal({
       if (cancelled) return;
       const available = rows.filter((r) => r.id !== currentFunderId);
       setFunders(available);
-      const nextBest = available.find((r) => r.rank === nextRank) ?? available[0];
+      const nextBest = available.find((r) => r.rank === nextRank)
+        ?? available.find((r) => r.monthly !== null)
+        ?? available[0];
       setFunderId(nextBest?.id ?? "");
     });
     return () => { cancelled = true; };
   }, [proposalId, currentFunderId, nextRank]);
 
+  const selected = funders?.find((f) => f.id === funderId) ?? null;
+  const needsManual = selected !== null && selected.monthly === null;
+  const parsedManual = parseFloat(manualMonthly);
+  const manualValid = Number.isFinite(parsedManual) && parsedManual > 0;
+
   function submit() {
     setLocalError(null);
     if (!funderId) { setLocalError("Pick a funder."); return; }
     if (!fpn.trim()) { setLocalError("Finance Proposal Number is required."); return; }
+    if (needsManual && !manualValid) { setLocalError("Enter a manual monthly rental for this funder."); return; }
     start(async () => {
-      const res = await reproposeAction({ parentProposalId: proposalId, funderId, financeProposalNumber: fpn });
+      const res = await reproposeAction({
+        parentProposalId: proposalId,
+        funderId,
+        financeProposalNumber: fpn,
+        manualMonthlyRental: needsManual ? parsedManual : null,
+      });
       if (!res.ok) { onError(res.error); onClose(); return; }
       onClose();
     });
@@ -394,18 +408,37 @@ function ReproposeModal({
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-400">Loading…</div>
             ) : funders.length === 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                No other funders have a rate for this configuration.
+                No other funders configured.
               </div>
             ) : (
               <select value={funderId} onChange={(e) => setFunderId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                 {funders.map((f) => (
                   <option key={f.id} value={f.id}>
-                    #{f.rank} {f.name} · £{f.monthly.toFixed(2)}/mo
+                    {f.monthly !== null
+                      ? `#${f.rank} ${f.name} · £${f.monthly.toFixed(2)}/mo`
+                      : `${f.name} · enter monthly manually`}
                   </option>
                 ))}
               </select>
             )}
           </label>
+
+          {needsManual && (
+            <label className="block text-sm">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Manual monthly rental (£)</span>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">£</span>
+                <input
+                  inputMode="decimal"
+                  value={manualMonthly}
+                  onChange={(e) => setManualMonthly(e.target.value)}
+                  placeholder="e.g. 429.50"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pl-7 text-sm tabular-nums"
+                />
+              </div>
+              <span className="mt-1 block text-[11px] text-amber-700">No automatic rate for this funder — enter the £/mo you've quoted.</span>
+            </label>
+          )}
 
           <label className="block text-sm">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Finance Proposal Number</span>
