@@ -7,7 +7,7 @@ import {
   stockVehicles,
 } from "@/db/schema";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
-import { sendMail } from "@/lib/email";
+import { sendMail, renderEmailShell, ctaButton, escapeHtml as esc, EMAIL_BRAND } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,9 +21,7 @@ function ukDateLabel(d: Date): string {
 function fmtDate(d: Date | null | undefined): string {
   return d ? ukDateLabel(d) : "TBA";
 }
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-}
+const escapeHtml = esc;
 function sameDay(a: Date | null, b: Date | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -298,12 +296,30 @@ function buildHtml(name: string, b: { movements: EtaMovement[]; actions: Outstan
     .map((a) => `<li style="padding:2px 0"><strong>${escapeHtml(a.vehicle)}</strong> — ${escapeHtml(a.reason)}</li>`)
     .join("");
 
-  return `<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:640px;color:#0f172a">
-  <p>Hi ${escapeHtml(first)},</p>
-  <p style="color:#475569">Today's orderbank: <strong>${b.inOrderCount}</strong> in order · <strong>${b.awaitingCount}</strong> awaiting delivery.</p>
-  ${b.movements.length ? `<h3 style="font-size:15px;margin:20px 0 8px">ETA movements (last 24h)</h3><table style="border-collapse:collapse;font-size:14px">${movements}</table>` : ""}
-  ${b.actions.length ? `<h3 style="font-size:15px;margin:20px 0 8px">Outstanding actions</h3><ul style="font-size:14px;padding-left:18px;margin:0">${actions}</ul>` : ""}
-  ${b.movements.length === 0 && b.actions.length === 0 ? `<p style="color:#475569">No ETA changes or outstanding actions today.</p>` : ""}
-  <p style="margin-top:24px"><a href="${APP_URL}/orders" style="background:#0f172a;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:14px">Open orderbank</a></p>
-</div>`;
+  const stat = (n: number, label: string, color: string) => `
+    <td align="center" style="padding:14px 8px;background:${EMAIL_BRAND.bg};border:1px solid ${EMAIL_BRAND.border};border-radius:10px">
+      <div style="font-size:22px;font-weight:700;color:${color};line-height:1.1">${n}</div>
+      <div style="font-size:11px;color:${EMAIL_BRAND.muted};text-transform:uppercase;letter-spacing:0.06em;margin-top:4px">${label}</div>
+    </td>`;
+
+  const body = `
+    <p style="margin:0 0 16px 0">Hi ${escapeHtml(first)},</p>
+    <p style="margin:0 0 16px 0;color:${EMAIL_BRAND.muted}">Here's today's orderbank snapshot.</p>
+    <table role="presentation" cellspacing="8" cellpadding="0" style="width:100%;border-collapse:separate"><tr>
+      ${stat(b.inOrderCount, "In order", "#1d4ed8")}
+      ${stat(b.awaitingCount, "Awaiting", "#6d28d9")}
+      ${stat(b.movements.length, "ETA moves", "#0f766e")}
+      ${stat(b.actions.length, "Actions", "#b45309")}
+    </tr></table>
+    ${b.movements.length ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:${EMAIL_BRAND.muted};margin:24px 0 8px">ETA movements (last 24h)</h3><table style="border-collapse:collapse;font-size:14px;width:100%">${movements}</table>` : ""}
+    ${b.actions.length ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:${EMAIL_BRAND.muted};margin:24px 0 8px">Outstanding actions</h3><ul style="font-size:14px;padding-left:18px;margin:0">${actions}</ul>` : ""}
+    ${b.movements.length === 0 && b.actions.length === 0 ? `<p style="color:${EMAIL_BRAND.muted};margin-top:20px">No ETA changes or outstanding actions today.</p>` : ""}
+    <p style="margin-top:24px">${ctaButton(`${APP_URL}/orders`, "Open orderbank")}</p>
+  `;
+
+  return renderEmailShell({
+    preheader: `${b.inOrderCount} in order · ${b.awaitingCount} awaiting · ${b.movements.length} ETA moves · ${b.actions.length} actions`,
+    heading: `Daily orderbank — ${ukDateLabel(new Date())}`,
+    body,
+  });
 }
