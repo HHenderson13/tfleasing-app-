@@ -273,8 +273,6 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   let cancelledDeals = 0;
   let pendingDeals = 0;
   let decidedDeals = 0;
-  let referredDeals = 0;
-  let declinedDeals = 0;
   for (const arr of dealsByCustomer.values()) {
     const anyEligible = arr.some((r) => r.status !== "not_eligible");
     if (anyEligible) eligibleDeals++;
@@ -283,15 +281,14 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     if (anyEligible && !anyDecided) pendingDeals++;
     if (arr.some((r) => ACCEPTED_STATUSES.has(r.status))) acceptedDeals++;
     if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) cancelledDeals++;
-    if (arr.some((r) => REFERRED_STATUSES.has(r.status))) referredDeals++;
-    // Declined: every attempt was declined (no acceptance, no pending), and at least one was declined.
-    const allDeclinedOrNotEligible = arr.every((r) => DECLINED_STATUSES.has(r.status) || r.status === "not_eligible");
-    const anyDeclined = arr.some((r) => DECLINED_STATUSES.has(r.status));
-    if (anyDeclined && allDeclinedOrNotEligible) declinedDeals++;
   }
+  // Referred / declined are counted at proposal level (matches /proposals tab).
+  const referredDeals = activeRows.filter((r) => REFERRED_STATUSES.has(r.status)).length;
+  const declinedDeals = activeRows.filter((r) => DECLINED_STATUSES.has(r.status)).length;
+  const decidedProposals = activeRows.filter((r) => !PENDING_STATUSES.has(r.status) && r.status !== "not_eligible").length;
   const deptAcceptanceRate = pct(acceptedDeals, decidedDeals);
-  const referredRate = pct(referredDeals, eligibleDeals);
-  const declinedRate = pct(declinedDeals, decidedDeals);
+  const referredRate = pct(referredDeals, activeRows.length);
+  const declinedRate = pct(declinedDeals, decidedProposals);
 
   const funderTotals = new Map<string, {
     name: string; submitted: number; accepted: number; declined: number;
