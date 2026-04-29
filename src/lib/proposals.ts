@@ -174,7 +174,7 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     note: note?.trim() || null,
     createdAt: now,
   });
-  await sendStatusChangeEmail({
+  void sendStatusChangeEmail({
     id: p.id,
     customerId: p.customerId,
     salesExecId: p.salesExecId,
@@ -185,7 +185,7 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     fromStatus: p.status as ProposalStatus,
     toStatus,
     note: note?.trim() || null,
-  });
+  }).catch((e) => console.error("[email] sendStatusChangeEmail failed:", e));
 }
 
 export async function updateOrderFields(

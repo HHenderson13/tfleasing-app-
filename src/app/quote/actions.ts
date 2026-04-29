@@ -2,7 +2,7 @@
 import { getQuote, listDerivatives, listModels, type QuoteInput, type QuoteResult } from "@/lib/quote";
 import { createProposal, type CreateProposalInput } from "@/lib/proposals";
 import { db } from "@/db";
-import { groupSites, salesExecs } from "@/db/schema";
+import { funders, groupSites, salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -20,6 +20,11 @@ export async function quoteAction(input: QuoteInput): Promise<QuoteResult> {
 export async function listSalesExecsAction() {
   const rows = await db.select().from(salesExecs).orderBy(asc(salesExecs.name));
   return rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
+}
+
+export async function listFundersAction() {
+  const rows = await db.select().from(funders).orderBy(asc(funders.name));
+  return rows.map((r) => ({ id: r.id, name: r.name }));
 }
 
 export async function listGroupSitesAction() {

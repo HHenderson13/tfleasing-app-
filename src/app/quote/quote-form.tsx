@@ -134,6 +134,15 @@ type QuoteConfig = {
   initialRentalMultiplier: number;
 };
 
+// Always-available commission funders. Even if the DB doesn't have a rate or a commission entry
+// for one of them, the user can still save a 2nd/3rd string proposal manually against any of them.
+const FALLBACK_COMMISSION_FUNDERS: { id: string; name: string }[] = [
+  { id: "ald",    name: "ALD" },
+  { id: "novuna", name: "Novuna" },
+  { id: "lex",    name: "Lex" },
+  { id: "arval",  name: "Arval" },
+];
+
 function Results({ result, pending, config }: { result: QuoteResult | null; pending: boolean; config: QuoteConfig }) {
   const router = useRouter();
   const [saveFor, setSaveFor] = useState<{ funderId: string; funderName: string; rank: number; monthlyRental: number } | null>(null);
@@ -146,22 +155,32 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
       </div>
     );
   }
+  // Funders without an automatic rate. Real `missing` entries first, then any of the four commission
+  // funders that aren't already represented (rated or missing) — so 2nd/3rd-string manual saves are
+  // always possible even when the ratebook/commission data is incomplete.
+  const presentFunderIds = new Set([
+    ...result.funders.map((f) => f.funderId),
+    ...result.missing.map((m) => m.funderId),
+  ]);
+  const fallbackMissing = FALLBACK_COMMISSION_FUNDERS
+    .filter((f) => !presentFunderIds.has(f.id))
+    .map((f) => ({ funderId: f.id, funderName: f.name, discountPct: null, commissionGbp: 0 }));
+  const missingForSave = [...result.missing, ...fallbackMissing];
+
   if (!result.funders.length) {
     return (
       <div className="space-y-3">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-          <div className="font-medium">No funder has a rate for this configuration.</div>
-          <div className="mt-1 text-xs text-amber-800">Discount % is still shown below — get a manual quote from each funder, then save the winner.</div>
+          <div className="font-medium">No funder has an automatic rate for this configuration.</div>
+          <div className="mt-1 text-xs text-amber-800">Pick any commission funder below, enter a manual £/mo and save it as a 2nd or 3rd-string proposal.</div>
         </div>
-        {result.missing.length > 0 && (
-          <MissingFundersList
-            missing={result.missing}
-            ratedCount={0}
-            onPick={(funderId, funderName, rank, monthlyRental) =>
-              setSaveFor({ funderId, funderName, rank, monthlyRental })
-            }
-          />
-        )}
+        <MissingFundersList
+          missing={missingForSave}
+          ratedCount={0}
+          onPick={(funderId, funderName, rank, monthlyRental) =>
+            setSaveFor({ funderId, funderName, rank, monthlyRental })
+          }
+        />
         {saveFor && (
           <SaveProposalModal
             result={result}
@@ -273,9 +292,9 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
         })}
       </ul>
 
-      {result.missing.length > 0 && (
+      {missingForSave.length > 0 && (
         <MissingFundersList
-          missing={result.missing}
+          missing={missingForSave}
           ratedCount={result.funders.length}
           onPick={(funderId, funderName, rank, monthlyRental) =>
             setSaveFor({ funderId, funderName, rank, monthlyRental })

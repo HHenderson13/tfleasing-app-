@@ -14,10 +14,42 @@ function transporter(): nodemailer.Transporter | null {
   if (!user || !pass) return null;
   if (_transporter) return _transporter;
   _transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
     auth: { user, pass },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
   });
   return _transporter;
+}
+
+export async function verifyTransport(): Promise<{ ok: true } | { ok: false; reason: string; error?: string }> {
+  const t = transporter();
+  if (!t) return { ok: false, reason: "GMAIL_USER or GMAIL_APP_PASSWORD env var is not set" };
+  try {
+    await t.verify();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "SMTP verify failed", error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function sendTestMail(to: string): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  const t = transporter();
+  if (!t) return { ok: false, error: "GMAIL_USER or GMAIL_APP_PASSWORD env var is not set" };
+  try {
+    const info = await t.sendMail({
+      from: `"${FROM_NAME}" <${FROM}>`,
+      to,
+      subject: "TrustFord Leasing — email test",
+      text: "If you can read this, SMTP is working.",
+    });
+    return { ok: true, messageId: info.messageId };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export interface SendMailInput {
