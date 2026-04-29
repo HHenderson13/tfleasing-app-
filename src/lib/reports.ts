@@ -53,7 +53,7 @@ export function rangeBounds(range: RangeKey, now = new Date()): { from: Date | n
 
 type Row = typeof proposals.$inferSelect;
 
-export type DrillKind = "funder" | "model" | "exec" | "contract" | "term" | "ev" | "cancelled" | "second" | "source";
+export type DrillKind = "funder" | "model" | "exec" | "contract" | "term" | "ev" | "cancelled" | "second" | "source" | "accepted" | "referred";
 
 export interface DrillRow {
   id: string;
@@ -97,6 +97,8 @@ export async function getDrilldown(
       return r.isEv;
     }
     if (kind === "cancelled") return CANCELLED_STATUSES.has(r.status);
+    if (kind === "accepted") return ACCEPTED_STATUSES.has(r.status);
+    if (kind === "referred") return REFERRED_STATUSES.has(r.status);
     if (kind === "second") return r.funderRank >= 2 && r.funderId === value;
     return false;
   });
@@ -164,7 +166,7 @@ export async function getProposalsTimeseries(range: RangeKey, source: SourceKey 
   return [...buckets.entries()].map(([k, v]) => ({ label: label(k), ...v }));
 }
 
-const ACCEPTED_STATUSES = new Set(["accepted", "in_order", "awaiting_delivery"]);
+const ACCEPTED_STATUSES = new Set(["accepted", "in_order", "awaiting_delivery", "delivered"]);
 const DECLINED_STATUSES = new Set(["declined", "not_eligible"]);
 const CANCELLED_STATUSES = new Set(["lost_sale", "cancelled"]);
 const PENDING_STATUSES = new Set(["proposal_received", "referred_to_dealer", "referred_to_underwriter"]);
@@ -178,6 +180,8 @@ export interface ReportSummary {
   cancelledDeals: number;
   deptAcceptanceRate: number;
   pendingDeals: number;
+  referredDeals: number;
+  referredRate: number;
   funderSplit: { funderId: string; funderName: string; count: number; pct: number }[];
   funderAcceptance: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number }[];
   funderReferralRate: { funderId: string; funderName: string; referred: number; submitted: number; rate: number }[];
@@ -191,7 +195,7 @@ export interface ReportSummary {
   derivativeSplit: { model: string; derivative: string; count: number; pct: number }[];
   cancellationRate: number;
   cancellationByFunder: { funderId: string; funderName: string; count: number }[];
-  evSummary: { totalEv: number; wallbox: number; saving: number; wallboxPct: number; savingPct: number; avgSavingGbp: number };
+  evSummary: { totalEv: number; wallbox: number; saving: number; wallboxPct: number; savingPct: number; avgSavingGbp: number; evMixPct: number };
   evByModel: { model: string; total: number; wallbox: number; saving: number }[];
   execLeaderboard: { execId: string; execName: string; submitted: number; decided: number; accepted: number; pending: number; rate: number }[];
   sourceSplit: { key: Exclude<SourceKey, "all">; label: string; submitted: number; accepted: number; rate: number; pct: number }[];
@@ -258,6 +262,7 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   let cancelledDeals = 0;
   let pendingDeals = 0;
   let decidedDeals = 0;
+  let referredDeals = 0;
   for (const arr of dealsByCustomer.values()) {
     const anyEligible = arr.some((r) => r.status !== "not_eligible");
     if (anyEligible) eligibleDeals++;
@@ -266,8 +271,10 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     if (anyEligible && !anyDecided) pendingDeals++;
     if (arr.some((r) => ACCEPTED_STATUSES.has(r.status))) acceptedDeals++;
     if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) cancelledDeals++;
+    if (arr.some((r) => REFERRED_STATUSES.has(r.status))) referredDeals++;
   }
   const deptAcceptanceRate = pct(acceptedDeals, decidedDeals);
+  const referredRate = pct(referredDeals, eligibleDeals);
 
   const funderTotals = new Map<string, {
     name: string; submitted: number; accepted: number; declined: number;
@@ -407,6 +414,8 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     cancelledDeals,
     deptAcceptanceRate,
     pendingDeals,
+    referredDeals,
+    referredRate,
     funderSplit,
     funderAcceptance,
     funderReferralRate,
@@ -427,6 +436,7 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
       wallboxPct: pct(wallbox, totalEv),
       savingPct: pct(saving, totalEv),
       avgSavingGbp,
+      evMixPct: pct(totalEv, totalProposals),
     },
     evByModel,
     execLeaderboard,

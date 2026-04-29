@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const RANGE_KEYS: RangeKey[] = ["month", "quarter", "half", "ytd", "year", "all"];
 const SOURCE_KEYS: SourceKey[] = ["all", "retail", "broker", "bq"];
-const VALID_DRILLS: DrillKind[] = ["funder", "model", "exec", "contract", "term", "ev", "cancelled", "second", "source"];
+const VALID_DRILLS: DrillKind[] = ["funder", "model", "exec", "contract", "term", "ev", "cancelled", "second", "source", "accepted", "referred"];
 
 function drillHref(range: RangeKey, source: SourceKey, kind: DrillKind, id: string, label: string): string {
   const qs = new URLSearchParams();
@@ -94,11 +94,41 @@ export default async function ReportsPage({
           />
         )}
 
-        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <HeroTile gradient="from-sky-500 to-indigo-600" label="Proposals submitted" value={r.totalProposals.toString()} sub={`${r.uniqueDeals} unique deals`} />
-          <HeroTile gradient="from-emerald-500 to-teal-600" label="Departmental acceptance" value={`${r.deptAcceptanceRate}%`} sub={r.pendingDeals > 0 ? `${r.acceptedDeals} accepted · ${r.pendingDeals} pending` : `${r.acceptedDeals} accepted`} />
-          <HeroTile gradient="from-rose-500 to-rose-700" label="Cancellation rate" value={`${r.cancellationRate}%`} sub={`${r.cancelledDeals} cancelled`} />
-          <HeroTile gradient="from-violet-500 to-fuchsia-600" label="EV mix" value={`${r.evSummary.totalEv}`} sub={`${r.evSummary.wallboxPct}% wallbox · ${r.evSummary.savingPct}% saving`} />
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <HeroTile
+            gradient="from-sky-500 to-indigo-600"
+            label="Proposals submitted"
+            value={r.totalProposals.toString()}
+            sub={`${r.uniqueDeals} unique deals`}
+          />
+          <HeroTile
+            gradient="from-emerald-500 to-teal-600"
+            label="Acceptance rate"
+            value={`${r.deptAcceptanceRate}%`}
+            sub={r.pendingDeals > 0 ? `${r.acceptedDeals} accepted · ${r.pendingDeals} pending` : `${r.acceptedDeals} accepted`}
+            href={r.acceptedDeals > 0 ? drillHref(range, source, "accepted", "all", "Accepted proposals") : undefined}
+          />
+          <HeroTile
+            gradient="from-amber-500 to-orange-600"
+            label="Referred rate"
+            value={`${r.referredRate}%`}
+            sub={`${r.referredDeals} referred`}
+            href={r.referredDeals > 0 ? drillHref(range, source, "referred", "all", "Referred proposals") : undefined}
+          />
+          <HeroTile
+            gradient="from-rose-500 to-rose-700"
+            label="Cancellation rate"
+            value={`${r.cancellationRate}%`}
+            sub={`${r.cancelledDeals} cancelled`}
+            href={r.cancelledDeals > 0 ? drillHref(range, source, "cancelled", "all", "Cancelled proposals") : undefined}
+          />
+          <HeroTile
+            gradient="from-violet-500 to-fuchsia-600"
+            label="EV mix"
+            value={`${r.evSummary.evMixPct}%`}
+            sub={`${r.evSummary.totalEv} of ${r.totalProposals} proposals`}
+            href={r.evSummary.totalEv > 0 ? drillHref(range, source, "ev", "all", "All EV proposals") : undefined}
+          />
         </section>
 
         <Card
@@ -349,17 +379,21 @@ export default async function ReportsPage({
   );
 }
 
-function HeroTile({ gradient, label, value, sub }: { gradient: string; label: string; value: string; sub?: string }) {
-  return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-5 text-white shadow-lg`}>
+function HeroTile({ gradient, label, value, sub, href }: { gradient: string; label: string; value: string; sub?: string; href?: string }) {
+  const inner = (
+    <div className={`relative h-full overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-5 text-white shadow-lg ${href ? "transition hover:-translate-y-0.5 hover:shadow-xl" : ""}`}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
       <div className="relative">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
+          {href && <span className="text-[10px] font-medium text-white/70">Drill in →</span>}
+        </div>
         <div className="mt-1 text-3xl font-bold tabular-nums">{value}</div>
         {sub && <div className="mt-0.5 text-xs text-white/80">{sub}</div>}
       </div>
     </div>
   );
+  return href ? <Link href={href} className="block">{inner}</Link> : inner;
 }
 
 const ACCENT_BORDER: Record<string, string> = {
