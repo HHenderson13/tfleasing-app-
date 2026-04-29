@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
+  customers,
   proposalEtaSnapshots,
   proposals,
   salesExecs,
@@ -185,6 +186,14 @@ async function runDailySummary() {
   const execs = await db.select().from(salesExecs);
   const execById = new Map(execs.map((e) => [e.id, e]));
 
+  const custIds = Array.from(new Set(orderProps.map((p) => p.customerId)));
+  const custRows = custIds.length === 0 ? [] : await db.select().from(customers).where(inArray(customers.id, custIds));
+  const custNameById = new Map(custRows.map((c) => [c.id, c.name]));
+  const labelFor = (p: OrderRow) => {
+    const cn = custNameById.get(p.customerId);
+    return `${cn ? cn + " · " : ""}${p.model} ${p.derivative}`;
+  };
+
   type ExecBucket = {
     movements: EtaMovement[];
     actions: OutstandingAction[];
@@ -216,7 +225,7 @@ async function runDailySummary() {
         bucket.movements.push({
           proposalId: p.id,
           customerId: p.customerId,
-          vehicle: `${p.model} ${p.derivative}`,
+          vehicle: labelFor(p),
           fromEta: eta1,
           toEta: eta2,
           delivered: deliveredNow,
@@ -226,7 +235,8 @@ async function runDailySummary() {
     }
 
     // Outstanding actions (current state, not snapshot).
-    bucket.actions.push(...outstandingActions(p));
+    const label = labelFor(p);
+    bucket.actions.push(...outstandingActions(p).map((a) => ({ ...a, vehicle: label })));
 
     buckets.set(p.salesExecId, bucket);
   }

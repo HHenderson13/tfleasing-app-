@@ -53,7 +53,7 @@ export function rangeBounds(range: RangeKey, now = new Date()): { from: Date | n
 
 type Row = typeof proposals.$inferSelect;
 
-export type DrillKind = "funder" | "model" | "exec" | "contract" | "term" | "ev" | "cancelled" | "second" | "source" | "accepted" | "referred";
+export type DrillKind = "funder" | "model" | "exec" | "contract" | "term" | "ev" | "cancelled" | "second" | "source" | "accepted" | "referred" | "declined";
 
 export interface DrillRow {
   id: string;
@@ -99,6 +99,7 @@ export async function getDrilldown(
     if (kind === "cancelled") return CANCELLED_STATUSES.has(r.status);
     if (kind === "accepted") return ACCEPTED_STATUSES.has(r.status);
     if (kind === "referred") return REFERRED_STATUSES.has(r.status);
+    if (kind === "declined") return DECLINED_STATUSES.has(r.status);
     if (kind === "second") return r.funderRank >= 2 && r.funderId === value;
     return false;
   });
@@ -125,7 +126,7 @@ export async function getProposalsTimeseries(range: RangeKey, source: SourceKey 
   const wheres = [lte(proposals.createdAt, to)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const all = await db.select().from(proposals).where(and(...wheres));
-  const rows = all.filter((r) => matchesSource(r, source));
+  const rows = all.filter((r) => matchesSource(r, source) && !CANCELLED_STATUSES.has(r.status));
 
   const start = from ?? (rows.length ? rows.reduce((a, b) => a.createdAt < b.createdAt ? a : b).createdAt : to);
   const end = to;
@@ -182,6 +183,8 @@ export interface ReportSummary {
   pendingDeals: number;
   referredDeals: number;
   referredRate: number;
+  declinedDeals: number;
+  declinedRate: number;
   funderSplit: { funderId: string; funderName: string; count: number; pct: number }[];
   funderAcceptance: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number }[];
   funderReferralRate: { funderId: string; funderName: string; referred: number; submitted: number; rate: number }[];
@@ -246,14 +249,22 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     };
   });
 
-  const totalProposals = rows.length;
+  // Strip out cancelled / lost-sale rows from "active" reporting. The
+  // cancellation card below still uses the full row set.
+  const activeRows = rows.filter((r) => !CANCELLED_STATUSES.has(r.status));
+  const totalProposals = activeRows.length;
+
   const dealsByCustomer = new Map<string, Row[]>();
   for (const r of rows) {
     const arr = dealsByCustomer.get(r.customerId) ?? [];
     arr.push(r);
     dealsByCustomer.set(r.customerId, arr);
   }
-  const uniqueDeals = dealsByCustomer.size;
+  // Active deals exclude wholly-cancelled deals.
+  let uniqueDeals = 0;
+  for (const arr of dealsByCustomer.values()) {
+    if (!arr.every((r) => CANCELLED_STATUSES.has(r.status))) uniqueDeals++;
+  }
 
   // Eligible: deal has at least one attempt that isn't not_eligible.
   // Pending: deal has no decided attempt yet (every attempt is pending or not_eligible).
@@ -263,6 +274,7 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   let pendingDeals = 0;
   let decidedDeals = 0;
   let referredDeals = 0;
+  let declinedDeals = 0;
   for (const arr of dealsByCustomer.values()) {
     const anyEligible = arr.some((r) => r.status !== "not_eligible");
     if (anyEligible) eligibleDeals++;
@@ -272,9 +284,14 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     if (arr.some((r) => ACCEPTED_STATUSES.has(r.status))) acceptedDeals++;
     if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) cancelledDeals++;
     if (arr.some((r) => REFERRED_STATUSES.has(r.status))) referredDeals++;
+    // Declined: every attempt was declined (no acceptance, no pending), and at least one was declined.
+    const allDeclinedOrNotEligible = arr.every((r) => DECLINED_STATUSES.has(r.status) || r.status === "not_eligible");
+    const anyDeclined = arr.some((r) => DECLINED_STATUSES.has(r.status));
+    if (anyDeclined && allDeclinedOrNotEligible) declinedDeals++;
   }
   const deptAcceptanceRate = pct(acceptedDeals, decidedDeals);
   const referredRate = pct(referredDeals, eligibleDeals);
+  const declinedRate = pct(declinedDeals, decidedDeals);
 
   const funderTotals = new Map<string, {
     name: string; submitted: number; accepted: number; declined: number;
@@ -282,7 +299,7 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     second: number; secondDecided: number; secondAccepted: number; secondPending: number;
     cancelled: number;
   }>();
-  for (const r of rows) {
+  for (const r of activeRows) {
     const cur = funderTotals.get(r.funderId) ?? {
       name: r.funderName, submitted: 0, accepted: 0, declined: 0,
       firstSubmitted: 0, firstDecided: 0, firstAccepted: 0, firstPending: 0, firstReferred: 0,
@@ -305,8 +322,16 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
       else if (r.status !== "not_eligible") cur.secondDecided++;
       if (ACCEPTED_STATUSES.has(r.status)) cur.secondAccepted++;
     }
-    if (CANCELLED_STATUSES.has(r.status)) cur.cancelled++;
     funderTotals.set(r.funderId, cur);
+  }
+  // Cancellation counts come from the full row set so that cancelled deals
+  // are still attributed to the funder they were against.
+  const cancelByFunder = new Map<string, { name: string; count: number }>();
+  for (const r of rows) {
+    if (!CANCELLED_STATUSES.has(r.status)) continue;
+    const cur = cancelByFunder.get(r.funderId) ?? { name: r.funderName, count: 0 };
+    cur.count++;
+    cancelByFunder.set(r.funderId, cur);
   }
 
   const funderSplit = [...funderTotals.entries()]
@@ -348,15 +373,15 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     }))
     .sort((a, b) => b.decided + b.pending - (a.decided + a.pending));
 
-  const contractSplit = bucketCount(rows, (r) => r.contract, totalProposals);
-  const maintenanceSplit = bucketCount(rows, (r) => r.maintenance === "maintained" ? "Maintained" : "Customer maintained", totalProposals);
-  const termSplit = bucketCount(rows, (r) => `${r.termMonths}m`, totalProposals);
-  const mileageSplit = bucketCount(rows, (r) => `${r.annualMileage.toLocaleString()}`, totalProposals);
-  const upfrontSplit = bucketCount(rows, (r) => `${r.initialRentalMultiplier}×`, totalProposals);
+  const contractSplit = bucketCount(activeRows, (r) => r.contract, totalProposals);
+  const maintenanceSplit = bucketCount(activeRows, (r) => r.maintenance === "maintained" ? "Maintained" : "Customer maintained", totalProposals);
+  const termSplit = bucketCount(activeRows, (r) => `${r.termMonths}m`, totalProposals);
+  const mileageSplit = bucketCount(activeRows, (r) => `${r.annualMileage.toLocaleString()}`, totalProposals);
+  const upfrontSplit = bucketCount(activeRows, (r) => `${r.initialRentalMultiplier}×`, totalProposals);
 
   const modelMap = new Map<string, number>();
   const derivMap = new Map<string, { model: string; derivative: string; count: number }>();
-  for (const r of rows) {
+  for (const r of activeRows) {
     modelMap.set(r.model, (modelMap.get(r.model) ?? 0) + 1);
     const k = `${r.model}|${r.derivative}`;
     const cur = derivMap.get(k) ?? { model: r.model, derivative: r.derivative, count: 0 };
@@ -370,13 +395,13 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     .map((d) => ({ ...d, pct: pct(d.count, totalProposals) }))
     .sort((a, b) => b.count - a.count);
 
-  const cancellationRate = pct(cancelledDeals, uniqueDeals);
-  const cancellationByFunder = [...funderTotals.entries()]
-    .filter(([, v]) => v.cancelled > 0)
-    .map(([funderId, v]) => ({ funderId, funderName: v.name, count: v.cancelled }))
+  // Cancellation rate denominator is the full deal count (incl. cancelled).
+  const cancellationRate = pct(cancelledDeals, dealsByCustomer.size);
+  const cancellationByFunder = [...cancelByFunder.entries()]
+    .map(([funderId, v]) => ({ funderId, funderName: v.name, count: v.count }))
     .sort((a, b) => b.count - a.count);
 
-  const evRows = rows.filter((r) => r.isEv);
+  const evRows = activeRows.filter((r) => r.isEv);
   const wallbox = evRows.filter((r) => r.wallboxIncluded).length;
   const saving = evRows.filter((r) => !r.wallboxIncluded && r.customerSavingGbp != null).length;
   const totalEv = evRows.length;
@@ -393,7 +418,7 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   const evByModel = [...evByModelMap.values()].sort((a, b) => b.total - a.total);
 
   const execTotals = new Map<string, { name: string; submitted: number; decided: number; accepted: number; pending: number }>();
-  for (const r of rows) {
+  for (const r of activeRows) {
     if (!r.salesExecId) continue;
     const cur = execTotals.get(r.salesExecId) ?? { name: execMap.get(r.salesExecId) ?? "—", submitted: 0, decided: 0, accepted: 0, pending: 0 };
     cur.submitted++;
@@ -416,6 +441,8 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     pendingDeals,
     referredDeals,
     referredRate,
+    declinedDeals,
+    declinedRate,
     funderSplit,
     funderAcceptance,
     funderReferralRate,

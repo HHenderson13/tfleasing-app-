@@ -174,9 +174,11 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     note: note?.trim() || null,
     createdAt: now,
   });
+  const [cust] = await db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1);
   void sendStatusChangeEmail({
     id: p.id,
     customerId: p.customerId,
+    customerName: cust?.name ?? null,
     salesExecId: p.salesExecId,
     model: p.model,
     derivative: p.derivative,

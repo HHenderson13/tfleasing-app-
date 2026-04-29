@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const RANGE_KEYS: RangeKey[] = ["month", "quarter", "half", "ytd", "year", "all"];
 const SOURCE_KEYS: SourceKey[] = ["all", "retail", "broker", "bq"];
-const VALID_DRILLS: DrillKind[] = ["funder", "model", "exec", "contract", "term", "ev", "cancelled", "second", "source", "accepted", "referred"];
+const VALID_DRILLS: DrillKind[] = ["funder", "model", "exec", "contract", "term", "ev", "cancelled", "second", "source", "accepted", "referred", "declined"];
 
 function drillHref(range: RangeKey, source: SourceKey, kind: DrillKind, id: string, label: string): string {
   const qs = new URLSearchParams();
@@ -94,13 +94,7 @@ export default async function ReportsPage({
           />
         )}
 
-        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <HeroTile
-            gradient="from-sky-500 to-indigo-600"
-            label="Proposals submitted"
-            value={r.totalProposals.toString()}
-            sub={`${r.uniqueDeals} unique deals`}
-          />
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <HeroTile
             gradient="from-emerald-500 to-teal-600"
             label="Acceptance rate"
@@ -116,7 +110,23 @@ export default async function ReportsPage({
             href={r.referredDeals > 0 ? drillHref(range, source, "referred", "all", "Referred proposals") : undefined}
           />
           <HeroTile
-            gradient="from-rose-500 to-rose-700"
+            gradient="from-red-500 to-rose-700"
+            label="Declined rate"
+            value={`${r.declinedRate}%`}
+            sub={`${r.declinedDeals} declined`}
+            href={r.declinedDeals > 0 ? drillHref(range, source, "declined", "all", "Declined proposals") : undefined}
+          />
+        </section>
+
+        <section className="mt-3 grid gap-3 sm:grid-cols-3">
+          <HeroTile
+            gradient="from-sky-500 to-indigo-600"
+            label="Proposals submitted"
+            value={r.totalProposals.toString()}
+            sub={`${r.uniqueDeals} unique deals`}
+          />
+          <HeroTile
+            gradient="from-rose-400 to-rose-600"
             label="Cancellation rate"
             value={`${r.cancellationRate}%`}
             sub={`${r.cancelledDeals} cancelled`}

@@ -178,6 +178,7 @@ async function execEmail(salesExecId: string | null): Promise<{ email: string; n
 export async function sendStatusChangeEmail(p: {
   id: string;
   customerId: string;
+  customerName?: string | null;
   salesExecId: string | null;
   model: string;
   derivative: string;
@@ -196,14 +197,16 @@ export async function sendStatusChangeEmail(p: {
   const monthly = `£${p.monthlyRental.toFixed(2)}`;
   const firstName = exec.name.split(" ")[0];
   const vehicle = `${p.model} ${p.derivative}`;
-  const subject = `[${toLbl}] ${vehicle} · ${p.funderName}`;
-  const preheader = `${vehicle} · ${p.funderName} · ${monthly}/mo — moved to ${toLbl}`;
+  const customer = (p.customerName ?? "").trim() || "—";
+  const subject = `[${toLbl}] ${customer !== "—" ? `${customer} · ` : ""}${vehicle} · ${p.funderName}`;
+  const preheader = `${customer !== "—" ? `${customer} · ` : ""}${vehicle} · ${p.funderName} · ${monthly}/mo — moved to ${toLbl}`;
 
   const text =
 `Hi ${firstName},
 
 A proposal has moved to "${toLbl}".
 
+Customer: ${customer}
 Vehicle:  ${vehicle}
 Funder:   ${p.funderName}
 Monthly:  ${monthly}
@@ -223,7 +226,8 @@ Open: ${link}
     <p style="margin:0 0 14px 0">Hi ${escapeHtml(firstName)},</p>
     <p style="margin:0 0 18px 0;color:${EMAIL_BRAND.muted}">A proposal has moved to ${statusBadgeHtml(p.toStatus)}.</p>
     <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;border:1px solid ${EMAIL_BRAND.border};border-radius:10px;overflow:hidden">
-      ${row("Vehicle", `<strong>${escapeHtml(vehicle)}</strong>`)}
+      ${row("Customer", `<strong>${escapeHtml(customer)}</strong>`)}
+      ${row("Vehicle", escapeHtml(vehicle))}
       ${row("Funder", escapeHtml(p.funderName))}
       ${row("Monthly", `<strong>${monthly}</strong>`)}
       ${row("Status change", `${escapeHtml(fromLbl)} &nbsp;→&nbsp; ${statusBadgeHtml(p.toStatus)}`)}
