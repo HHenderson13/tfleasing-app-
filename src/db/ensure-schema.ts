@@ -27,8 +27,78 @@ async function runEnsureAppSchema() {
   await ensureColumns("stage_check_defs", [
     { name: "stage", sqlType: "TEXT NOT NULL DEFAULT 'order'" },
   ]);
+  await ensureScraperTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
+}
+
+// Auto-creates the scraper tables on first request so deploys don't need a
+// manual migration step. Idempotent — CREATE TABLE IF NOT EXISTS.
+async function ensureScraperTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS scraper_runs (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'pending',
+      urls TEXT NOT NULL,
+      label TEXT,
+      total_urls INTEGER NOT NULL DEFAULT 0,
+      urls_completed INTEGER NOT NULL DEFAULT 0,
+      total_results INTEGER NOT NULL DEFAULT 0,
+      workflow_id TEXT,
+      error TEXT,
+      started_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS scraper_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL,
+      source_url TEXT,
+      manufacturer TEXT,
+      range TEXT,
+      model TEXT,
+      derivative TEXT,
+      fuel_type TEXT,
+      transmission TEXT,
+      body_style TEXT,
+      trim TEXT,
+      monthly_price_gbp REAL,
+      initial_rental_gbp REAL,
+      total_lease_cost_gbp REAL,
+      additional_fees_gbp REAL,
+      contract_length_months INTEGER,
+      annual_mileage INTEGER,
+      deposit_months INTEGER,
+      broker_dealer_name TEXT,
+      advertiser_category TEXT,
+      in_stock TEXT,
+      finance_type TEXT,
+      deal_identifier TEXT,
+      leasing_url TEXT,
+      scraped_at INTEGER
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_scraper_results_run ON scraper_results(run_id)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS scraper_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL,
+      level TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_scraper_logs_run ON scraper_logs(run_id)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS scraper_url_lists (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      urls TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `));
 }
 
 async function seedKugaEngineMappings() {

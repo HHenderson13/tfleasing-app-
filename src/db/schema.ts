@@ -277,6 +277,65 @@ export const stockMappings = sqliteTable(
   (t) => ({ pk: primaryKey({ columns: [t.kind, t.rawKey] }) })
 );
 
+// Web scraper for leasing.com deals — admin only.
+export const scraperRuns = sqliteTable("scraper_runs", {
+  id: text("id").primaryKey(),
+  status: text("status").notNull().default("pending"), // pending | running | done | cancelled | error
+  urls: text("urls").notNull(), // JSON array of URLs to scrape
+  label: text("label"), // User-provided label for the run
+  totalUrls: integer("total_urls").notNull().default(0),
+  urlsCompleted: integer("urls_completed").notNull().default(0),
+  totalResults: integer("total_results").notNull().default(0),
+  workflowId: text("workflow_id"), // Vercel Workflow run ID
+  error: text("error"), // Error message if failed
+  startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+  finishedAt: integer("finished_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const scraperResults = sqliteTable("scraper_results", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: text("run_id").notNull(),
+  sourceUrl: text("source_url"),
+  manufacturer: text("manufacturer"),
+  range: text("range"),
+  model: text("model"),
+  derivative: text("derivative"),
+  fuelType: text("fuel_type"),
+  transmission: text("transmission"),
+  bodyStyle: text("body_style"),
+  trim: text("trim"),
+  monthlyPriceGbp: real("monthly_price_gbp"),
+  initialRentalGbp: real("initial_rental_gbp"),
+  totalLeaseCostGbp: real("total_lease_cost_gbp"),
+  additionalFeesGbp: real("additional_fees_gbp"),
+  contractLengthMonths: integer("contract_length_months"),
+  annualMileage: integer("annual_mileage"),
+  depositMonths: integer("deposit_months"),
+  brokerDealerName: text("broker_dealer_name"),
+  advertiserCategory: text("advertiser_category"),
+  inStock: text("in_stock"), // "Yes" | "No"
+  financeType: text("finance_type"),
+  dealIdentifier: text("deal_identifier"),
+  leasingUrl: text("leasing_url"),
+  scrapedAt: integer("scraped_at", { mode: "timestamp" }),
+}, (t) => ({ byRun: index("idx_scraper_results_run").on(t.runId) }));
+
+export const scraperLogs = sqliteTable("scraper_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: text("run_id").notNull(),
+  level: text("level").notNull(), // info | success | warning | error
+  message: text("message").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({ byRun: index("idx_scraper_logs_run").on(t.runId) }));
+
+export const scraperUrlLists = sqliteTable("scraper_url_lists", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  urls: text("urls").notNull(), // JSON array of URLs
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

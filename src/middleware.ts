@@ -14,6 +14,13 @@ export function middleware(req: NextRequest) {
   ) {
     return NextResponse.next();
   }
+  // API-key authenticated endpoints (validated by route handler) bypass cookie auth
+  if (
+    pathname === "/api/scraper/upload" &&
+    req.headers.get("x-api-key")
+  ) {
+    return NextResponse.next();
+  }
   const sid = req.cookies.get("tf_session")?.value;
   if (!sid) {
     const url = req.nextUrl.clone();
