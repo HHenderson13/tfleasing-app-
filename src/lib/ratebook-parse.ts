@@ -9,10 +9,12 @@ export interface ParsedRatebookRow {
   isMaintained: boolean;
   monthlyRental: number;
   monthlyMaintenance: number;
+  excessMileage: number | null;
 }
 
 export interface ParsedVehicle {
   capCode: string;
+  capId: string | null;
   model: string | null;
   derivative: string | null;
   fuelType: string | null;
@@ -48,7 +50,9 @@ const asNum = (v: any) => {
 
 // Zero-based column indices for vehicle metadata (consistent across all funder ratebook files).
 const COL = {
+  capId: 4,      // E — numeric CAP master ID
   capCode: 5,    // F
+  excessMileage: 25, // Z — pence/mile
   model: 35,     // AJ
   fuelType: 46,  // AU
   derivative: 50, // AY
@@ -86,6 +90,8 @@ export function parseRatebookBuffer(buf: ArrayBuffer | Buffer, filename: string)
     mo: findIdx(["monthlyrentalprice", "monthlyrental", "rental"]),
     moMaint: findIdx(["monthlymaintenanceprice", "monthlymaintenance", "maintenance"]),
     // Header-name fallbacks for vehicle metadata (used if the fixed cell letter is blank).
+    capId: findIdx(["capid", "capmasterid", "capidnumber"]),
+    excessMileage: findIdx(["excessmileage", "excessmiles", "ppm", "penceperexcessmile", "excesspencepermile"]),
     model: findIdx(["model", "modelname", "rangedescription", "range"]),
     derivative: findIdx(["derivative", "trim", "variant", "description", "shortdescription"]),
     fuelType: findIdx(["fueltype", "fuel", "fueldescription"]),
@@ -153,17 +159,6 @@ export function parseRatebookBuffer(buf: ArrayBuffer | Buffer, filename: string)
     const irm = asNum(row[idx.irm]);
     if (!Number.isFinite(monthly) || !Number.isFinite(term) || !Number.isFinite(mileage) || !Number.isFinite(irm)) continue;
 
-    rows.push({
-      capCode,
-      initialRentalMultiplier: irm,
-      termMonths: term,
-      annualMileage: mileage,
-      isBusiness: idx.biz >= 0 ? asBool(row[idx.biz]) : true,
-      isMaintained: idx.maint >= 0 ? asBool(row[idx.maint]) : false,
-      monthlyRental: monthly,
-      monthlyMaintenance: idx.moMaint >= 0 ? asNum(row[idx.moMaint]) || 0 : 0,
-    });
-
     const pickStr = (fixedCol: number, headerIdx: number) =>
       asStr(row[fixedCol]) ?? (headerIdx >= 0 ? asStr(row[headerIdx]) : null);
     const pickNum = (fixedCol: number, headerIdx: number) => {
@@ -175,8 +170,22 @@ export function parseRatebookBuffer(buf: ArrayBuffer | Buffer, filename: string)
       }
       return null;
     };
+
+    rows.push({
+      capCode,
+      initialRentalMultiplier: irm,
+      termMonths: term,
+      annualMileage: mileage,
+      isBusiness: idx.biz >= 0 ? asBool(row[idx.biz]) : true,
+      isMaintained: idx.maint >= 0 ? asBool(row[idx.maint]) : false,
+      monthlyRental: monthly,
+      monthlyMaintenance: idx.moMaint >= 0 ? asNum(row[idx.moMaint]) || 0 : 0,
+      excessMileage: pickNum(COL.excessMileage, idx.excessMileage),
+    });
+
     const vehicle: ParsedVehicle = {
       capCode,
+      capId: pickStr(COL.capId, idx.capId),
       model: pickStr(COL.model, idx.model),
       derivative: pickStr(COL.derivative, idx.derivative),
       fuelType: pickStr(COL.fuelType, idx.fuelType),
@@ -187,6 +196,7 @@ export function parseRatebookBuffer(buf: ArrayBuffer | Buffer, filename: string)
       vehicleMap.set(capCode, vehicle);
     } else {
       // Carry forward any values this row has that a prior row for the same cap code was missing.
+      prev.capId ??= vehicle.capId;
       prev.model ??= vehicle.model;
       prev.derivative ??= vehicle.derivative;
       prev.fuelType ??= vehicle.fuelType;

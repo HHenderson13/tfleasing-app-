@@ -27,6 +27,12 @@ async function runEnsureAppSchema() {
   await ensureColumns("stage_check_defs", [
     { name: "stage", sqlType: "TEXT NOT NULL DEFAULT 'order'" },
   ]);
+  await ensureColumns("vehicles", [
+    { name: "cap_id", sqlType: "TEXT" },
+  ]);
+  await ensureColumns("ratebook", [
+    { name: "excess_mileage", sqlType: "REAL" },
+  ]);
   await ensureScraperTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();

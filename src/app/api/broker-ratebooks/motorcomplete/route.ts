@@ -53,7 +53,10 @@ export async function GET() {
       for (const r of rows) {
         lines.push(
           [
-            csvEscape(r.capCode),
+            // MotorComplete's CapId expects the numeric CAP master ID (col E of
+            // source); fall back to capCode if a vehicle hasn't been re-ingested
+            // since the cap_id column was added.
+            csvEscape(r.capId ?? r.capCode),
             r.annualMileage,
             r.initialRentalMultiplier,
             r.termMonths,
@@ -70,7 +73,7 @@ export async function GET() {
             "", // OutrightPurchaseDeliveryCost
             "", // OutrightPurchaseRegistrationFee
             "", // OutrightPurchaseRoadTax
-            "", // ExcessMileage — not tracked in ratebook DB
+            r.excessMileage ?? "",
             csvEscape(r.funderName),
           ].join(",")
         );

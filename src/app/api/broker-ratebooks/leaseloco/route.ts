@@ -51,7 +51,7 @@ export async function GET() {
         aoa.push([
           r.capCode,
           r.isVan ? "LIGHT" : "CAR",
-          "", // CAP ID — not tracked
+          r.capId ?? "",
           r.manufacturer,
           r.model,
           r.derivative,
@@ -62,7 +62,7 @@ export async function GET() {
           r.monthlyRental,
           r.annualMileage,
           r.monthlyMaintenance, // 0 → non-maintained
-          "", // ExcessMileage — not stored in ratebook DB
+          r.excessMileage ?? "",
         ]);
       }
       const ws = XLSX.utils.aoa_to_sheet(aoa);

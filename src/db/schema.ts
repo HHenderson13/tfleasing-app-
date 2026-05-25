@@ -21,6 +21,7 @@ export const vehicles = sqliteTable(
   "vehicles",
   {
     capCode: text("cap_code").primaryKey(),
+    capId: text("cap_id"), // numeric CAP master ID, parsed from col E of source ratebook
     model: text("model").notNull(),
     derivative: text("derivative").notNull(),
     isVan: integer("is_van", { mode: "boolean" }).notNull().default(false),
@@ -43,6 +44,7 @@ export const ratebook = sqliteTable(
     isMaintained: integer("is_maintained", { mode: "boolean" }).notNull(),
     monthlyRental: real("monthly_rental").notNull(),
     monthlyMaintenance: real("monthly_maintenance").notNull().default(0),
+    excessMileage: real("excess_mileage"), // pence/mile, parsed from col Z of source ratebook
   },
   (t) => ({
     pk: primaryKey({

@@ -19,11 +19,13 @@ export interface SourceRow {
   funderId: string;
   funderName: string;
   capCode: string;
+  capId: string | null;
   termMonths: number;
   annualMileage: number;
   isMaintained: boolean;
   monthlyRental: number;
   monthlyMaintenance: number;
+  excessMileage: number | null;
   model: string;
   derivative: string;
   isVan: boolean;
@@ -36,11 +38,13 @@ export interface SourceRow {
 // non-maintained funder, maintenance from cheapest maintained funder.
 export interface MergedSlot {
   capCode: string;
+  capId: string | null;
   manufacturer: string;
   model: string;
   derivative: string;
   termMonths: number;
   annualMileage: number;
+  excessMileage: number | null;  // pence/mile from the rental ratebook row
   isVan: boolean;
   fuelType: string | null;
   // Rental side
@@ -58,6 +62,7 @@ export interface BrokerRow {
   funderId: string;              // rental funder — for the Funder column
   funderName: string;
   capCode: string;
+  capId: string | null;
   manufacturer: string;
   model: string;
   derivative: string;
@@ -66,6 +71,7 @@ export interface BrokerRow {
   initialRentalMultiplier: number;
   monthlyRental: number;         // bare rental @ IRM, with commission added
   monthlyMaintenance: number;    // unchanged across IRMs
+  excessMileage: number | null;
   maintenanceFunderName: string; // maintenance source (often same as funderName)
   isVan: boolean;
   fuelType: string | null;
@@ -77,11 +83,13 @@ export async function loadBrokerSourceRows(): Promise<SourceRow[]> {
       funderId: ratebook.funderId,
       funderName: funders.name,
       capCode: ratebook.capCode,
+      capId: vehicles.capId,
       termMonths: ratebook.termMonths,
       annualMileage: ratebook.annualMileage,
       isMaintained: ratebook.isMaintained,
       monthlyRental: ratebook.monthlyRental,
       monthlyMaintenance: ratebook.monthlyMaintenance,
+      excessMileage: ratebook.excessMileage,
       model: vehicles.model,
       derivative: vehicles.derivative,
       isVan: vehicles.isVan,
@@ -101,11 +109,13 @@ export async function loadBrokerSourceRows(): Promise<SourceRow[]> {
     funderId: r.funderId,
     funderName: r.funderName,
     capCode: r.capCode,
+    capId: r.capId,
     termMonths: r.termMonths,
     annualMileage: r.annualMileage,
     isMaintained: !!r.isMaintained,
     monthlyRental: r.monthlyRental,
     monthlyMaintenance: r.monthlyMaintenance,
+    excessMileage: r.excessMileage,
     model: r.model,
     derivative: r.derivative,
     isVan: !!r.isVan,
@@ -176,11 +186,13 @@ export function mergePerSlot(rows: SourceRow[]): MergedSlot[] {
     const m = acc.cheapestMaintenanceFunder;
     out.push({
       capCode: rentalSource.capCode,
+      capId: rentalSource.capId,
       manufacturer: rentalSource.manufacturer,
       model: rentalSource.model,
       derivative: rentalSource.derivative,
       termMonths: rentalSource.termMonths,
       annualMileage: rentalSource.annualMileage,
+      excessMileage: rentalSource.excessMileage,
       isVan: rentalSource.isVan,
       fuelType: rentalSource.fuelType,
       bareRental: rentalSource.monthlyRental,
@@ -216,6 +228,7 @@ export function expandIrms(slot: MergedSlot, commissionGbp: number): BrokerRow[]
       funderId: slot.rentalFunderId,
       funderName: slot.rentalFunderName,
       capCode: slot.capCode,
+      capId: slot.capId,
       manufacturer: slot.manufacturer,
       model: slot.model,
       derivative: slot.derivative,
@@ -224,6 +237,7 @@ export function expandIrms(slot: MergedSlot, commissionGbp: number): BrokerRow[]
       initialRentalMultiplier: n,
       monthlyRental: round2(rentalAtN),
       monthlyMaintenance: round2(slot.maintenance),
+      excessMileage: slot.excessMileage,
       maintenanceFunderName: slot.maintenanceFunderName,
       isVan: slot.isVan,
       fuelType: slot.fuelType,

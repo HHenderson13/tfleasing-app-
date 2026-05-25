@@ -155,6 +155,7 @@ async function importRatebookBuffer(input: RatebookImportInput) {
   for (let i = 0; i < withData.length; i += chunkSize) {
     const slice = withData.slice(i, i + chunkSize).map((vehicle) => ({
       capCode: vehicle.capCode,
+      capId: vehicle.capId,
       model: vehicle.model!,
       derivative: vehicle.derivative!,
       fuelType: vehicle.fuelType,
@@ -165,6 +166,7 @@ async function importRatebookBuffer(input: RatebookImportInput) {
     await db.insert(vehicles).values(slice).onConflictDoUpdate({
       target: vehicles.capCode,
       set: {
+        capId: sql`COALESCE(excluded.cap_id, vehicles.cap_id)`,
         model: sql`excluded.model`,
         derivative: sql`excluded.derivative`,
         fuelType: sql`COALESCE(excluded.fuel_type, vehicles.fuel_type)`,
@@ -177,6 +179,7 @@ async function importRatebookBuffer(input: RatebookImportInput) {
   for (let i = 0; i < placeholders.length; i += chunkSize) {
     const slice = placeholders.slice(i, i + chunkSize).map((vehicle) => ({
       capCode: vehicle.capCode,
+      capId: vehicle.capId,
       model: vehicle.model ?? "Unknown",
       derivative: vehicle.derivative ?? vehicle.capCode,
       fuelType: vehicle.fuelType,
