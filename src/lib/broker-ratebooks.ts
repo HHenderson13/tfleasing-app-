@@ -32,10 +32,30 @@ export interface SourceRow {
   manufacturer: string;
 }
 
-// One output row of the broker ratebook — keyed by slot + IRM, with the cheapest
-// funder selected per (capCode, term, mileage, maintenance).
+// One merged row per (capCode, term, mileage) slot — bare rental from cheapest
+// non-maintained funder, maintenance from cheapest maintained funder.
+export interface MergedSlot {
+  capCode: string;
+  manufacturer: string;
+  model: string;
+  derivative: string;
+  termMonths: number;
+  annualMileage: number;
+  isVan: boolean;
+  fuelType: string | null;
+  // Rental side
+  bareRental: number;            // monthlyRental at 6× upfront
+  rentalFunderId: string;
+  rentalFunderName: string;
+  // Maintenance side — cheapest maintenance value across maintained funders
+  maintenance: number;           // 0 only when this slot is dropped upstream
+  maintenanceFunderId: string;
+  maintenanceFunderName: string;
+}
+
+// One output row of the broker ratebook — one per (slot × IRM × commission tier).
 export interface BrokerRow {
-  funderId: string;
+  funderId: string;              // rental funder — for the Funder column
   funderName: string;
   capCode: string;
   manufacturer: string;
@@ -43,10 +63,10 @@ export interface BrokerRow {
   derivative: string;
   termMonths: number;
   annualMileage: number;
-  isMaintained: boolean;
   initialRentalMultiplier: number;
-  monthlyRental: number;        // includes commission
-  monthlyMaintenance: number;   // unchanged across IRMs
+  monthlyRental: number;         // bare rental @ IRM, with commission added
+  monthlyMaintenance: number;    // unchanged across IRMs
+  maintenanceFunderName: string; // maintenance source (often same as funderName)
   isVan: boolean;
   fuelType: string | null;
 }
@@ -96,73 +116,132 @@ export async function loadBrokerSourceRows(): Promise<SourceRow[]> {
   }));
 }
 
-function slotKey(r: { capCode: string; termMonths: number; annualMileage: number; isMaintained: boolean }) {
-  return `${r.capCode}|${r.termMonths}|${r.annualMileage}|${r.isMaintained ? 1 : 0}`;
+function groupKey(r: { capCode: string; termMonths: number; annualMileage: number }) {
+  return `${r.capCode}|${r.termMonths}|${r.annualMileage}`;
 }
 
-// Pick the cheapest funder per (capCode, term, mileage, maintenance) slot.
-// "Cheapest" = monthlyRental + monthlyMaintenance.
-export function bestPerSlot(rows: SourceRow[]): SourceRow[] {
-  const best = new Map<string, SourceRow>();
+// One row per (capCode, term, mileage):
+//   • bareRental = cheapest monthlyRental from non-maintained funders.
+//     Falls back to cheapest maintained rental only if non-maintained is missing.
+//   • maintenance = cheapest monthlyMaintenance (>0) from any maintained funder.
+//   • Slots with no maintained funder at all are dropped (per spec).
+export function mergePerSlot(rows: SourceRow[]): MergedSlot[] {
+  type Acc = {
+    base: SourceRow;
+    bestNonMaintained: SourceRow | null;
+    bestMaintained: SourceRow | null;          // by rental
+    cheapestMaintenanceFunder: SourceRow | null; // by maintenance value
+  };
+  const groups = new Map<string, Acc>();
+
   for (const r of rows) {
-    const k = slotKey(r);
-    const cur = best.get(k);
-    const myTotal = r.monthlyRental + r.monthlyMaintenance;
-    const curTotal = cur ? cur.monthlyRental + cur.monthlyMaintenance : Infinity;
-    if (myTotal < curTotal) best.set(k, r);
+    const k = groupKey(r);
+    const cur = groups.get(k);
+    const acc: Acc = cur ?? {
+      base: r,
+      bestNonMaintained: null,
+      bestMaintained: null,
+      cheapestMaintenanceFunder: null,
+    };
+    if (r.isMaintained) {
+      if (!acc.bestMaintained || r.monthlyRental < acc.bestMaintained.monthlyRental) {
+        acc.bestMaintained = r;
+      }
+      // Cheapest maintenance pays only attention to the maintenance figure.
+      // A funder selling maintenance for £30 wins over one selling at £50
+      // even if their rentals differ.
+      if (
+        r.monthlyMaintenance > 0 &&
+        (!acc.cheapestMaintenanceFunder || r.monthlyMaintenance < acc.cheapestMaintenanceFunder.monthlyMaintenance)
+      ) {
+        acc.cheapestMaintenanceFunder = r;
+      }
+    } else {
+      if (!acc.bestNonMaintained || r.monthlyRental < acc.bestNonMaintained.monthlyRental) {
+        acc.bestNonMaintained = r;
+      }
+    }
+    groups.set(k, acc);
   }
-  return Array.from(best.values());
+
+  const out: MergedSlot[] = [];
+  for (const acc of groups.values()) {
+    // Drop slots without any maintained funder — the spec says skip when no
+    // maintenance value is available.
+    if (!acc.cheapestMaintenanceFunder) continue;
+
+    const rentalSource = acc.bestNonMaintained ?? acc.bestMaintained;
+    if (!rentalSource) continue; // shouldn't happen — maintained implies a row exists
+
+    const m = acc.cheapestMaintenanceFunder;
+    out.push({
+      capCode: rentalSource.capCode,
+      manufacturer: rentalSource.manufacturer,
+      model: rentalSource.model,
+      derivative: rentalSource.derivative,
+      termMonths: rentalSource.termMonths,
+      annualMileage: rentalSource.annualMileage,
+      isVan: rentalSource.isVan,
+      fuelType: rentalSource.fuelType,
+      bareRental: rentalSource.monthlyRental,
+      rentalFunderId: rentalSource.funderId,
+      rentalFunderName: rentalSource.funderName,
+      maintenance: m.monthlyMaintenance,
+      maintenanceFunderId: m.funderId,
+      maintenanceFunderName: m.funderName,
+    });
+  }
+  return out;
 }
 
-// Convert one 6×-IRM source row into N rows — one per IRM in IRM_OUTPUT — with
+// Convert one merged 6×-IRM slot into N rows — one per IRM in IRM_OUTPUT — with
 // the requested commission amortised across the payments.
 //
 // Math:
 //   followOns = term - 1
-//   totalCost = (6 + followOns) * baseRental
+//   totalCost = (6 + followOns) * bareRental
 //   rentalAtN = (totalCost + commission) / (N + followOns)
-//             = baseRental * (6 + followOns)/(N + followOns) + commission/(N + followOns)
+//             = bareRental * (6 + followOns)/(N + followOns) + commission/(N + followOns)
 //
 // NOTE: when interest is introduced later, the conversion will need to spread
 // interest across the (N + followOns) payments rather than treat them as flat.
-export function expandIrms(row: SourceRow, commissionGbp: number): BrokerRow[] {
-  const followOns = row.termMonths - 1;
-  const totalContractCost = (6 + followOns) * row.monthlyRental;
+export function expandIrms(slot: MergedSlot, commissionGbp: number): BrokerRow[] {
+  const followOns = slot.termMonths - 1;
+  const totalContractCost = (6 + followOns) * slot.bareRental;
   const out: BrokerRow[] = [];
   for (const n of IRM_OUTPUT) {
     const denom = n + followOns;
     const rentalAtN = (totalContractCost + commissionGbp) / denom;
     out.push({
-      funderId: row.funderId,
-      funderName: row.funderName,
-      capCode: row.capCode,
-      manufacturer: row.manufacturer,
-      model: row.model,
-      derivative: row.derivative,
-      termMonths: row.termMonths,
-      annualMileage: row.annualMileage,
-      isMaintained: row.isMaintained,
+      funderId: slot.rentalFunderId,
+      funderName: slot.rentalFunderName,
+      capCode: slot.capCode,
+      manufacturer: slot.manufacturer,
+      model: slot.model,
+      derivative: slot.derivative,
+      termMonths: slot.termMonths,
+      annualMileage: slot.annualMileage,
       initialRentalMultiplier: n,
       monthlyRental: round2(rentalAtN),
-      monthlyMaintenance: round2(row.monthlyMaintenance),
-      isVan: row.isVan,
-      fuelType: row.fuelType,
+      monthlyMaintenance: round2(slot.maintenance),
+      maintenanceFunderName: slot.maintenanceFunderName,
+      isVan: slot.isVan,
+      fuelType: slot.fuelType,
     });
   }
   return out;
 }
 
 export function buildBrokerRows(source: SourceRow[], commissionGbp: number): BrokerRow[] {
-  const best = bestPerSlot(source);
+  const slots = mergePerSlot(source);
   const out: BrokerRow[] = [];
-  for (const r of best) out.push(...expandIrms(r, commissionGbp));
+  for (const s of slots) out.push(...expandIrms(s, commissionGbp));
   // Sort for stable, readable output.
   out.sort((a, b) =>
     a.manufacturer.localeCompare(b.manufacturer) ||
     a.model.localeCompare(b.model) ||
     a.derivative.localeCompare(b.derivative) ||
     a.capCode.localeCompare(b.capCode) ||
-    Number(a.isMaintained) - Number(b.isMaintained) ||
     a.termMonths - b.termMonths ||
     a.annualMileage - b.annualMileage ||
     a.initialRentalMultiplier - b.initialRentalMultiplier
