@@ -6,6 +6,7 @@ import { salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { TopNav } from "@/components/top-nav";
 import { OrderDetail } from "./detail";
+import { BackLink } from "@/components/back-link";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
     <div className="min-h-screen bg-slate-50">
       <TopNav active="orders" />
       <main className="mx-auto max-w-4xl px-6 py-8">
-        <Link href="/orders" className="text-xs text-slate-500 hover:text-slate-900">← Orders</Link>
+        <BackLink fallback="/orders" label="Back" />
         <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">{ctx.customer?.name ?? "—"}</h1>
