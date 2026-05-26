@@ -156,6 +156,11 @@ async function ensureFunderInterestRatesTable() {
       PRIMARY KEY (funder_id, term_follow_ons)
     )
   `));
+  await ensureColumns("funder_interest_rates", [
+    { name: "rental_1adv", sqlType: "REAL" },
+    { name: "rental_12adv", sqlType: "REAL" },
+    { name: "updated_at", sqlType: "INTEGER" },
+  ]);
 
   const seeds: Array<{ funderId: string; rates: Record<23 | 35 | 47, number> }> = [
     { funderId: "ald",    rates: { 23: 0.067378, 35: 0.067547, 47: 0.068448 } },

@@ -6,6 +6,8 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { signOutAction } from "../login/actions";
 import { COMMISSION_TIERS, IRM_OUTPUT } from "@/lib/broker-ratebooks";
 import { BrokerRatebooksClient } from "./client";
+import { InterestRatesSection } from "./interest-rates";
+import { loadFunderRateSnapshots } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,7 @@ export default async function BrokerRatebooksPage() {
 
   // Lightweight summary so the page communicates what the export will contain
   // before the user pays the (multi-MB) download cost.
-  const [slotsRow, funderCounts] = await Promise.all([
+  const [slotsRow, funderCounts, rateSnapshots] = await Promise.all([
     db.all<{ slots: number; capCodes: number; rentals: number }>(sql`
       SELECT
         COUNT(DISTINCT r.cap_code || '|' || r.term_months || '|' || r.annual_mileage || '|' || r.is_maintained) AS slots,
@@ -42,6 +44,7 @@ export default async function BrokerRatebooksPage() {
       .leftJoin(vehicles, eq(vehicles.capCode, ratebook.capCode))
       .where(sql`${vehicles.model} IS NULL OR ${vehicles.model} != 'Unknown'`)
       .groupBy(funders.id),
+    loadFunderRateSnapshots(),
   ]);
 
   const summary = slotsRow[0] ?? { slots: 0, capCodes: 0, rentals: 0 };
@@ -88,22 +91,27 @@ export default async function BrokerRatebooksPage() {
           </ul>
         </section>
 
+        <InterestRatesSection snapshots={rateSnapshots} />
+
         <BrokerRatebooksClient commissionTiers={[...COMMISSION_TIERS]} />
 
         <section className="mt-10 text-xs text-slate-500">
           <h3 className="font-semibold text-slate-700">How rentals are derived</h3>
           <p className="mt-2">
-            Source ratebooks only carry the 6× upfront. Other upfronts are calculated
-            by holding the total contract cost constant:
+            Source ratebooks carry the 6× upfront. Other upfronts hold the total
+            contract cost constant for the bare lease; commission is amortised on
+            top with annuity-due interest at the (funder, term) rate solved above.
           </p>
           <pre className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700">
 {`followOns      = term - 1   (24m → 23, 36m → 35, 48m → 47)
 totalCost      = (6 + followOns) × rental@6×
-rental@N×      = (totalCost + commission) / (N + followOns)`}
+bareRental@N×  = totalCost / (N + followOns)
+commissionPmt  = pmtDue(annualRate/12, N + followOns, commission)
+rental@N×      = bareRental@N× + commissionPmt`}
           </pre>
           <p className="mt-2">
-            Commission is added as a flat spread across (N + followOns) payments.
-            Interest-based amortisation will replace this once the interest model is wired in.
+            Higher upfront → more payments share the financed commission → smaller
+            per-month addition. £0 commission tier collapses to the flat-split base.
           </p>
         </section>
       </main>
