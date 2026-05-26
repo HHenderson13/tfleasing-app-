@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { requireAdmin } from "@/lib/auth-guard";
+import { logError } from "@/lib/logger";
 import {
   COMMISSION_TIERS,
   buildBrokerRows,
@@ -88,7 +89,7 @@ export async function GET() {
       },
     });
   } catch (e) {
-    console.error("Broker Manual Ratebook export error:", e);
+    logError("api/broker-ratebooks/leaseloco", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

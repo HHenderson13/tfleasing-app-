@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { scraperRuns, scraperResults } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
+import { logError } from "@/lib/logger";
 import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -142,7 +143,7 @@ export async function GET(req: NextRequest) {
       count: rows.length,
     });
   } catch (e) {
-    console.error("Results query error:", e);
+    logError("api/scraper/results", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

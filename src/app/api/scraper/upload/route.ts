@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { scraperRuns, scraperResults } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
+import { logError } from "@/lib/logger";
 import { eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
       finalized: finalize,
     });
   } catch (e) {
-    console.error("Upload CSV error:", e);
+    logError("api/scraper/upload", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

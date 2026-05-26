@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { scraperUrlLists } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
+import { logError } from "@/lib/logger";
 import { desc } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -21,7 +22,7 @@ export async function GET() {
       urls: JSON.parse(list.urls),
     })));
   } catch (e) {
-    console.error("URL lists error:", e);
+    logError("api/scraper/url-lists.GET", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id, name, urls, createdAt });
   } catch (e) {
-    console.error("Create URL list error:", e);
+    logError("api/scraper/url-lists.POST", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

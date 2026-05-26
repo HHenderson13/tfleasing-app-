@@ -8,6 +8,7 @@ import {
   loadInterestRates,
 } from "@/lib/broker-ratebooks";
 import { buildZip } from "@/lib/mini-zip";
+import { logError } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -96,7 +97,7 @@ export async function GET() {
       },
     });
   } catch (e) {
-    console.error("Broker MotorComplete export error:", e);
+    logError("api/broker-ratebooks/motorcomplete", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

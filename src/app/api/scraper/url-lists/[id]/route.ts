@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { scraperUrlLists } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
+import { logError } from "@/lib/logger";
 import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("Delete URL list error:", e);
+    logError("api/scraper/url-lists/[id]", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

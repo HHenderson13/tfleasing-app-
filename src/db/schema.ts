@@ -374,6 +374,23 @@ export const users = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Each failed sign-in records one row. We rate-limit by IP over a sliding 15
+// minute window — older rows are ignored, fresh rows count toward the limit.
+// Stored as an append-only log; no purge job needed (volume is tiny).
+export const loginAttempts = sqliteTable(
+  "login_attempts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ip: text("ip").notNull(),
+    email: text("email"),
+    success: integer("success", { mode: "boolean" }).notNull().default(false),
+    attemptedAt: integer("attempted_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byIpRecent: index("idx_login_attempts_ip_recent").on(t.ip, t.attemptedAt),
+  }),
+);
+
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),

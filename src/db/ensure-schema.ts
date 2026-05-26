@@ -43,6 +43,7 @@ async function runEnsureAppSchema() {
   ]);
   await ensureFunderInterestRatesTable();
   await ensureScraperTables();
+  await ensureLoginAttemptsTable();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
 }
@@ -185,6 +186,21 @@ async function ensureFunderInterestRatesTable() {
       `);
     }
   }
+}
+
+async function ensureLoginAttemptsTable() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ip TEXT NOT NULL,
+      email TEXT,
+      success INTEGER NOT NULL DEFAULT 0,
+      attempted_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_recent ON login_attempts(ip, attempted_at)`
+  ));
 }
 
 async function ensureRatebookRemoteSettingsTable() {
