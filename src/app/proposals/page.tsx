@@ -9,21 +9,22 @@ import { ProposalsFilter, type RangeKey } from "./proposals-filter";
 import { ClickableRow } from "./clickable-row";
 import { requireProposalsAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
+import { StatTile, type StatTone } from "@/components/stat-tile";
 
 export const dynamic = "force-dynamic";
 
-const TILE_TONES: Record<ProposalStatus, { bg: string; ring: string; text: string; num: string; activeRing: string }> = {
-  proposal_received: { bg: "bg-sky-50", ring: "ring-sky-200", text: "text-sky-700", num: "text-sky-900", activeRing: "ring-sky-500" },
-  accepted: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", num: "text-emerald-900", activeRing: "ring-emerald-500" },
-  referred_to_underwriter: { bg: "bg-amber-50", ring: "ring-amber-200", text: "text-amber-700", num: "text-amber-900", activeRing: "ring-amber-500" },
-  referred_to_dealer: { bg: "bg-violet-50", ring: "ring-violet-200", text: "text-violet-700", num: "text-violet-900", activeRing: "ring-violet-500" },
-  declined: { bg: "bg-rose-50", ring: "ring-rose-200", text: "text-rose-700", num: "text-rose-900", activeRing: "ring-rose-500" },
-  not_eligible: { bg: "bg-orange-50", ring: "ring-orange-200", text: "text-orange-700", num: "text-orange-900", activeRing: "ring-orange-500" },
-  lost_sale: { bg: "bg-slate-100", ring: "ring-slate-200", text: "text-slate-600", num: "text-slate-900", activeRing: "ring-slate-500" },
-  in_order: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-500", num: "text-slate-700", activeRing: "ring-slate-500" },
-  awaiting_delivery: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-500", num: "text-slate-700", activeRing: "ring-slate-500" },
-  delivered: { bg: "bg-teal-50", ring: "ring-teal-200", text: "text-teal-700", num: "text-teal-900", activeRing: "ring-teal-500" },
-  cancelled: { bg: "bg-rose-50", ring: "ring-rose-200", text: "text-rose-700", num: "text-rose-900", activeRing: "ring-rose-500" },
+const STATUS_TONES: Record<ProposalStatus, StatTone> = {
+  proposal_received: "sky",
+  accepted: "emerald",
+  referred_to_underwriter: "amber",
+  referred_to_dealer: "violet",
+  declined: "rose",
+  not_eligible: "orange",
+  lost_sale: "slate",
+  in_order: "slate",
+  awaiting_delivery: "slate",
+  delivered: "teal",
+  cancelled: "rose",
 };
 
 const RANGE_KEYS = ["month", "last", "3m", "6m", "ytd", "all"] as const;
@@ -157,7 +158,7 @@ export default async function ProposalsPage({
               key={s}
               label={STATUS_LABELS[s]}
               value={counts[s]}
-              tone={s}
+              tone={STATUS_TONES[s]}
               href={buildQuery({ ...base, status: statusFilter === s ? null : s })}
               active={statusFilter === s}
             />
@@ -264,13 +265,3 @@ export default async function ProposalsPage({
   );
 }
 
-function StatTile({ label, value, tone, href, active }: { label: string; value: number; tone: ProposalStatus; href: string; active: boolean }) {
-  const t = TILE_TONES[tone];
-  const ring = active ? `ring-2 ${t.activeRing}` : `ring-1 ${t.ring}`;
-  return (
-    <Link href={href} className={`block rounded-2xl ${t.bg} px-4 py-3 ${ring} transition hover:brightness-[0.98]`}>
-      <div className={`text-[10px] font-semibold uppercase tracking-wide ${t.text}`}>{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${t.num}`}>{value}</div>
-    </Link>
-  );
-}

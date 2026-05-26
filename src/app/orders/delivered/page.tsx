@@ -6,6 +6,7 @@ import { salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { ExecFilter } from "../exec-filter";
 import { OrderRow, Section } from "../order-row";
+import { StatTile } from "@/components/stat-tile";
 
 export const dynamic = "force-dynamic";
 
@@ -114,19 +115,3 @@ export default async function DeliveredPage({
   );
 }
 
-const TILE_TONES: Record<string, { bg: string; ring: string; text: string; num: string }> = {
-  slate:   { bg: "bg-slate-50",   ring: "ring-slate-200",   text: "text-slate-600",   num: "text-slate-900" },
-  sky:     { bg: "bg-sky-50",     ring: "ring-sky-200",     text: "text-sky-700",     num: "text-sky-900" },
-  emerald: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", num: "text-emerald-900" },
-  teal:    { bg: "bg-teal-50",    ring: "ring-teal-200",    text: "text-teal-700",    num: "text-teal-900" },
-};
-
-function StatTile({ label, value, tone }: { label: string; value: number; tone: keyof typeof TILE_TONES }) {
-  const t = TILE_TONES[tone];
-  return (
-    <div className={`rounded-2xl ${t.bg} px-4 py-3 ring-1 ${t.ring}`}>
-      <div className={`text-[10px] font-semibold uppercase tracking-wide ${t.text}`}>{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${t.num}`}>{value}</div>
-    </div>
-  );
-}

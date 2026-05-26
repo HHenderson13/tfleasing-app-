@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { STATUS_LABELS, statusColor, statusLabel } from "@/lib/proposal-constants";
 
+// Section is shared with non-orders pages and lives in @/components/section.
+// Re-exported here so existing callers (… from "../order-row") keep working.
+export { Section } from "@/components/section";
+
 export type OutstandingAction = { id: string; label: string; tone: "violet" | "sky" | "amber" | "emerald" | "red" | "slate" };
 
 const CHIP: Record<OutstandingAction["tone"], string> = {
@@ -11,21 +15,6 @@ const CHIP: Record<OutstandingAction["tone"], string> = {
   red:     "bg-red-50 text-red-700 ring-red-200",
   slate:   "bg-slate-100 text-slate-700 ring-slate-200",
 };
-
-export function Section({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
-  const arr = Array.isArray(children) ? children : [children];
-  const hasItems = arr.flat().filter(Boolean).length > 0;
-  return (
-    <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-      <div className="mt-3 space-y-2">
-        {hasItems ? children : (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400">{empty}</div>
-        )}
-      </div>
-    </section>
-  );
-}
 
 export function OrderRow({
   id, customerId, customer, title, meta, status, actions, customCount, right, href,

@@ -7,6 +7,7 @@ import { salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { ExecFilter } from "./exec-filter";
 import { OrderRow, Section, CountdownBadge, type OutstandingAction } from "./order-row";
+import { StatTile } from "@/components/stat-tile";
 import { requireOrdersAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
 
@@ -161,21 +162,3 @@ export default async function OrdersActionsPage({
   );
 }
 
-const TONES: Record<string, { bg: string; ring: string; text: string; num: string; activeRing: string }> = {
-  violet:  { bg: "bg-violet-50",  ring: "ring-violet-200",  text: "text-violet-700",  num: "text-violet-900",  activeRing: "ring-violet-500" },
-  sky:     { bg: "bg-sky-50",     ring: "ring-sky-200",     text: "text-sky-700",     num: "text-sky-900",     activeRing: "ring-sky-500" },
-  amber:   { bg: "bg-amber-50",   ring: "ring-amber-200",   text: "text-amber-700",   num: "text-amber-900",   activeRing: "ring-amber-500" },
-  emerald: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", num: "text-emerald-900", activeRing: "ring-emerald-500" },
-  red:     { bg: "bg-red-50",     ring: "ring-red-200",     text: "text-red-700",     num: "text-red-900",     activeRing: "ring-red-500" },
-};
-
-function StatTile({ label, value, tone, href, active }: { label: string; value: number; tone: keyof typeof TONES; href: string; active: boolean }) {
-  const t = TONES[tone];
-  const ring = active ? `ring-2 ${t.activeRing}` : `ring-1 ${t.ring}`;
-  return (
-    <Link href={href} className={`block rounded-2xl ${t.bg} px-4 py-3 ${ring} transition hover:brightness-[0.98]`}>
-      <div className={`text-[10px] font-semibold uppercase tracking-wide ${t.text}`}>{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${t.num}`}>{value}</div>
-    </Link>
-  );
-}
