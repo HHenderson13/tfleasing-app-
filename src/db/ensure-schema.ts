@@ -33,6 +33,7 @@ async function runEnsureAppSchema() {
   await ensureColumns("ratebook", [
     { name: "excess_mileage", sqlType: "REAL" },
   ]);
+  await ensureFunderInterestRatesTable();
   await ensureScraperTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
@@ -140,6 +141,36 @@ async function seedDefaultDeliveryChecks() {
       INSERT OR IGNORE INTO stage_check_defs (id, label, sort_order, applies_to_bq, stage, created_at)
       VALUES (${s.id}, ${s.label}, ${s.sort}, 1, 'delivery', ${now})
     `);
+  }
+}
+
+// Per-funder, per-term annual interest rates. Seeded from the Ratebook Pricing
+// Engine settings.json on first init — edit the table directly to change rates.
+// termFollowOns is termMonths - 1 (so 23/35/47 for 2yr/3yr/4yr contracts).
+async function ensureFunderInterestRatesTable() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS funder_interest_rates (
+      funder_id TEXT NOT NULL,
+      term_follow_ons INTEGER NOT NULL,
+      annual_rate REAL NOT NULL,
+      PRIMARY KEY (funder_id, term_follow_ons)
+    )
+  `));
+
+  const seeds: Array<{ funderId: string; rates: Record<23 | 35 | 47, number> }> = [
+    { funderId: "ald",    rates: { 23: 0.067378, 35: 0.067547, 47: 0.068448 } },
+    { funderId: "novuna", rates: { 23: 0.071602, 35: 0.070469, 47: 0.069665 } },
+    { funderId: "arval",  rates: { 23: 0.092834, 35: 0.07137,  47: 0.059322 } },
+    { funderId: "lex",    rates: { 23: 0.058581, 35: 0.051387, 47: 0.047729 } },
+  ];
+  for (const s of seeds) {
+    for (const [followOns, rate] of Object.entries(s.rates)) {
+      // INSERT OR IGNORE leaves any admin edits intact on subsequent boots.
+      await db.run(sql`
+        INSERT OR IGNORE INTO funder_interest_rates (funder_id, term_follow_ons, annual_rate)
+        VALUES (${s.funderId}, ${parseInt(followOns, 10)}, ${rate})
+      `);
+    }
   }
 }
 

@@ -5,6 +5,7 @@ import {
   buildBrokerRows,
   commissionFileLabel,
   loadBrokerSourceRows,
+  loadInterestRates,
 } from "@/lib/broker-ratebooks";
 import { buildZip } from "@/lib/mini-zip";
 
@@ -42,13 +43,13 @@ function csvEscape(v: string | number | null | undefined): string {
 export async function GET() {
   try {
     await requireAdmin();
-    const source = await loadBrokerSourceRows();
+    const [source, rates] = await Promise.all([loadBrokerSourceRows(), loadInterestRates()]);
     if (source.length === 0) {
       return NextResponse.json({ error: "No ratebook data found" }, { status: 404 });
     }
 
     const entries = COMMISSION_TIERS.map((commission) => {
-      const rows = buildBrokerRows(source, commission);
+      const rows = buildBrokerRows(source, commission, rates);
       const lines: string[] = [HEADER.join(",")];
       for (const r of rows) {
         lines.push(

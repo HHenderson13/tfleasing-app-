@@ -1,6 +1,10 @@
 import { db } from "@/db";
-import { ratebook, vehicles, funders } from "@/db/schema";
+import { ratebook, vehicles, funders, funderInterestRates } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+
+// Fallback annual interest rate when a (funder, term) pair has no entry in
+// funder_interest_rates. Matches the Pricing Engine's `rate_adjuster.interest_rate` default.
+const DEFAULT_ANNUAL_RATE = 0.07;
 
 // Commission tiers (£) that produce one ratebook file each.
 export const COMMISSION_TIERS = [0, 300, 500, 750] as const;
@@ -206,24 +210,70 @@ export function mergePerSlot(rows: SourceRow[]): MergedSlot[] {
   return out;
 }
 
+// Maps (funderId, termFollowOns) → annualRate. Populated from
+// funder_interest_rates; unknown pairs fall back to DEFAULT_ANNUAL_RATE.
+export type InterestRateMap = Map<string, number>;
+
+function rateKey(funderId: string, termFollowOns: number) {
+  return `${funderId}|${termFollowOns}`;
+}
+
+export async function loadInterestRates(): Promise<InterestRateMap> {
+  const rows = await db.select().from(funderInterestRates);
+  const map: InterestRateMap = new Map();
+  for (const r of rows) map.set(rateKey(r.funderId, r.termFollowOns), r.annualRate);
+  return map;
+}
+
+function lookupAnnualRate(rates: InterestRateMap, funderId: string, termFollowOns: number): number {
+  return rates.get(rateKey(funderId, termFollowOns)) ?? DEFAULT_ANNUAL_RATE;
+}
+
+// Annuity-due (payments at start of period) PMT — the periodic payment that
+// fully amortises a present-value loan `pv` over `nper` periods at periodic
+// `rate`. Matches numpy_financial.pmt(rate, nper, pv, when='begin') with a sign
+// flip (we want positive outflow). Falls back to flat split when rate = 0.
+function pmtDue(rate: number, nper: number, pv: number): number {
+  if (pv === 0 || nper === 0) return 0;
+  if (rate === 0) return pv / nper;
+  const f = Math.pow(1 + rate, nper);
+  return (pv * rate * f) / ((f - 1) * (1 + rate));
+}
+
 // Convert one merged 6×-IRM slot into N rows — one per IRM in IRM_OUTPUT — with
-// the requested commission amortised across the payments.
+// the requested commission amortised across the payments with interest.
 //
-// Math:
-//   followOns = term - 1
-//   totalCost = (6 + followOns) * bareRental
-//   rentalAtN = (totalCost + commission) / (N + followOns)
-//             = bareRental * (6 + followOns)/(N + followOns) + commission/(N + followOns)
+// Base rental math (no interest applied — the source ratebook already prices
+// in funder financing for the bare lease):
+//   followOns  = termMonths - 1
+//   totalCost  = (6 + followOns) * bareRental
+//   bareAtN    = totalCost / (N + followOns)
 //
-// NOTE: when interest is introduced later, the conversion will need to spread
-// interest across the (N + followOns) payments rather than treat them as flat.
-export function expandIrms(slot: MergedSlot, commissionGbp: number): BrokerRow[] {
+// Commission addition (annuity-due PMT — interest comes in here):
+//   n          = N + followOns
+//   monthlyRate = annualRate / 12      (looked up by rental funder + term)
+//   commissionPmt = pmtDue(monthlyRate, n, commissionGbp)
+//
+//   rental@N   = bareAtN + commissionPmt
+//
+// Net effect: smaller deposit → larger commissionPmt per month (more months
+// being charged interest on the financed commission). Larger deposit → smaller
+// per-month addition. At commission = 0, this collapses back to the flat math.
+export function expandIrms(
+  slot: MergedSlot,
+  commissionGbp: number,
+  rates: InterestRateMap,
+): BrokerRow[] {
   const followOns = slot.termMonths - 1;
   const totalContractCost = (6 + followOns) * slot.bareRental;
+  const annualRate = lookupAnnualRate(rates, slot.rentalFunderId, followOns);
+  const monthlyRate = annualRate / 12;
   const out: BrokerRow[] = [];
   for (const n of IRM_OUTPUT) {
     const denom = n + followOns;
-    const rentalAtN = (totalContractCost + commissionGbp) / denom;
+    const bareAtN = totalContractCost / denom;
+    const commissionPmt = pmtDue(monthlyRate, denom, commissionGbp);
+    const rentalAtN = bareAtN + commissionPmt;
     out.push({
       funderId: slot.rentalFunderId,
       funderName: slot.rentalFunderName,
@@ -246,10 +296,14 @@ export function expandIrms(slot: MergedSlot, commissionGbp: number): BrokerRow[]
   return out;
 }
 
-export function buildBrokerRows(source: SourceRow[], commissionGbp: number): BrokerRow[] {
+export function buildBrokerRows(
+  source: SourceRow[],
+  commissionGbp: number,
+  rates: InterestRateMap,
+): BrokerRow[] {
   const slots = mergePerSlot(source);
   const out: BrokerRow[] = [];
-  for (const s of slots) out.push(...expandIrms(s, commissionGbp));
+  for (const s of slots) out.push(...expandIrms(s, commissionGbp, rates));
   // Sort for stable, readable output.
   out.sort((a, b) =>
     a.manufacturer.localeCompare(b.manufacturer) ||

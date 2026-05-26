@@ -6,6 +6,7 @@ import {
   buildBrokerRows,
   commissionSheetLabel,
   loadBrokerSourceRows,
+  loadInterestRates,
 } from "@/lib/broker-ratebooks";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ const HEADER = [
 export async function GET() {
   try {
     await requireAdmin();
-    const source = await loadBrokerSourceRows();
+    const [source, rates] = await Promise.all([loadBrokerSourceRows(), loadInterestRates()]);
     if (source.length === 0) {
       return NextResponse.json({ error: "No ratebook data found" }, { status: 404 });
     }
@@ -45,7 +46,7 @@ export async function GET() {
     const wb = XLSX.utils.book_new();
 
     for (const commission of COMMISSION_TIERS) {
-      const rows = buildBrokerRows(source, commission);
+      const rows = buildBrokerRows(source, commission, rates);
       const aoa: (string | number)[][] = [HEADER];
       for (const r of rows) {
         aoa.push([

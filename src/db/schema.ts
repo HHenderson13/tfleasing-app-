@@ -17,6 +17,20 @@ export const funderCommission = sqliteTable(
   (t) => ({ pk: primaryKey({ columns: [t.funderId, t.contract, t.maintenance] }) })
 );
 
+// Per-funder, per-term annual interest rate used to amortise capital
+// adjustments (commission, discounts, grants) into the monthly rental.
+// termFollowOns = termMonths - 1 (23 for 2yr, 35 for 3yr, 47 for 4yr).
+// Mirrors the Ratebook Pricing Engine settings.json convention.
+export const funderInterestRates = sqliteTable(
+  "funder_interest_rates",
+  {
+    funderId: text("funder_id").notNull(),
+    termFollowOns: integer("term_follow_ons").notNull(),
+    annualRate: real("annual_rate").notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.funderId, t.termFollowOns] }) })
+);
+
 export const vehicles = sqliteTable(
   "vehicles",
   {
