@@ -16,7 +16,7 @@ const TILES: Tile[] = [
   { key: "reports",   href: "/reports",   title: "Reports",   desc: "Funder, source, model and EV performance.",      tone: "from-rose-500 to-fuchsia-600" },
   { key: "admin",     href: "/scraper", title: "Market Analysis", desc: "Compare our rates to competitors across the market.",    tone: "from-indigo-500 to-indigo-700" },
   { key: "admin",     href: "/funders", title: "Funder Comparison", desc: "Compare funder rates side by side across our ratebooks.", tone: "from-fuchsia-500 to-purple-700" },
-  { key: "admin",     href: "/broker-ratebooks", title: "Broker Ratebooks", desc: "Export MotorComplete & LeaseLoco ratebooks across commission tiers.", tone: "from-amber-500 to-orange-700" },
+  { key: "admin",     href: "/broker-ratebooks", title: "Broker Ratebooks", desc: "Export MotorComplete & Manual broker ratebooks across commission tiers.", tone: "from-amber-500 to-orange-700" },
   { key: "admin",     href: "/admin",     title: "Admin",     desc: "Ratebooks, discounts, mappings and data.",       tone: "from-slate-700 to-slate-900" },
 ];
 
