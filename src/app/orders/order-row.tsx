@@ -28,7 +28,7 @@ export function Section({ title, empty, children }: { title: string; empty: stri
 }
 
 export function OrderRow({
-  id, customerId, customer, title, meta, status, actions, customCount, right,
+  id, customerId, customer, title, meta, status, actions, customCount, right, href,
 }: {
   id: string;
   customerId: string;
@@ -39,11 +39,15 @@ export function OrderRow({
   actions?: OutstandingAction[];
   customCount?: number;
   right: React.ReactNode;
+  href?: string | null;
 }) {
   const c = statusColor(status);
+  const linkHref = href === undefined ? `/orders/${id}` : href;
   return (
     <div className="group relative flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 hover:shadow-md">
-      <Link href={`/orders/${id}`} aria-label={`Open order for ${customer}`} className="absolute inset-0 z-0 rounded-2xl" />
+      {linkHref && (
+        <Link href={linkHref} aria-label={`Open order for ${customer}`} className="absolute inset-0 z-0 rounded-2xl" />
+      )}
       <div className="relative z-10 min-w-0 flex-1 pointer-events-none">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-slate-900 group-hover:underline">{customer}</span>

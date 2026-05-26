@@ -116,6 +116,7 @@ export const groupSites = sqliteTable("group_sites", {
 export const customers = sqliteTable("customers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  businessName: text("business_name"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -175,6 +176,10 @@ export const proposals = sqliteTable(
     deliveryBookedAt: integer("delivery_booked_at", { mode: "timestamp" }),
     regNumber: text("reg_number"),
     deliveredAt: integer("delivered_at", { mode: "timestamp" }),
+    // Admin-only manual back-load into awaiting delivery. These deals have
+    // incomplete fields (no funder/term/etc captured) and must be excluded
+    // from reports/KPIs.
+    backLoaded: integer("back_loaded", { mode: "boolean" }).notNull().default(false),
     isEv: integer("is_ev", { mode: "boolean" }).notNull().default(false),
     wallboxIncluded: integer("wallbox_included", { mode: "boolean" }).notNull().default(false),
     customerSavingGbp: real("customer_saving_gbp"),

@@ -146,10 +146,20 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
             <CancelDealButton proposalId={proposal.id} currentStatus={proposal.status} />
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-slate-500 md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-slate-500 md:grid-cols-3">
           <div><div className="text-[10px] uppercase tracking-wide">Funder</div><div className="mt-0.5 text-sm text-slate-900">{proposal.funderName}</div></div>
-          <div><div className="text-[10px] uppercase tracking-wide">Monthly</div><div className="mt-0.5 text-sm text-slate-900 tabular-nums">£{proposal.monthlyRental.toFixed(2)}</div></div>
-          <div><div className="text-[10px] uppercase tracking-wide">Config</div><div className="mt-0.5 text-sm text-slate-900">{proposal.contract} {proposal.maintenance === "maintained" ? "maintained" : "customer"} · {proposal.termMonths}m / {proposal.annualMileage.toLocaleString()}mi / {proposal.initialRentalMultiplier}×</div></div>
+          {proposal.isEv && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide">EV option</div>
+              <div className="mt-0.5 text-sm text-slate-900">
+                {proposal.wallboxIncluded
+                  ? "Wallbox"
+                  : proposal.customerSavingGbp != null
+                    ? `Customer saving £${proposal.customerSavingGbp.toFixed(0)}`
+                    : "—"}
+              </div>
+            </div>
+          )}
           <div>
             <div className="text-[10px] uppercase tracking-wide">{isBq ? "Assigned to" : "Sales exec"}</div>
             {isBq ? (

@@ -33,6 +33,14 @@ async function runEnsureAppSchema() {
   await ensureColumns("ratebook", [
     { name: "excess_mileage", sqlType: "REAL" },
   ]);
+  await ensureColumns("customers", [
+    { name: "business_name", sqlType: "TEXT" },
+  ]);
+  await ensureColumns("proposals", [
+    // Back-loaded deals are admin-only entries with incomplete fields, kept
+    // out of reports/KPIs. Existing rows default to 0 (false).
+    { name: "back_loaded", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+  ]);
   await ensureFunderInterestRatesTable();
   await ensureScraperTables();
   await seedDefaultDeliveryChecks();

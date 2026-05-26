@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { proposalEtaSnapshots, proposals, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
 import { parseStockWorkbook } from "@/lib/stock-parser";
 import { eq, inArray } from "drizzle-orm";
+import { matchProposalAgainstStock } from "@/lib/stock-match";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { del } from "@vercel/blob";
@@ -117,8 +118,6 @@ async function processWorkbook(buffer: Buffer, filename: string) {
   return { ok: true as const, count: parsed.length };
 }
 
-const TF_BRANCH_CODES = ["62133", "62134"];
-
 async function captureEtaSnapshots(uploadId: string, capturedAt: Date) {
   const orderProps = await db
     .select({
@@ -142,16 +141,7 @@ async function captureEtaSnapshots(uploadId: string, capturedAt: Date) {
 
   const rows: { proposalId: string; uploadId: string; etaAt: Date | null; locationStatus: string | null; capturedAt: Date }[] = [];
   for (const p of orderProps) {
-    let hit: (typeof stock)[number] | undefined;
-    if (p.vin) hit = stock.find((s) => s.vin === p.vin);
-    if (!hit && p.orderNumber) {
-      hit = stock.find(
-        (s) =>
-          s.orderNo === p.orderNumber &&
-          s.dealerRaw &&
-          TF_BRANCH_CODES.some((c) => s.dealerRaw!.includes(c)),
-      );
-    }
+    const { hit } = matchProposalAgainstStock(p, stock);
     rows.push({
       proposalId: p.id,
       uploadId,

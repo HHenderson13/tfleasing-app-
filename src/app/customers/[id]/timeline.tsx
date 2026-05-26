@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { changeStatusAction, listFundersForConfigAction, reproposeAction } from "../../proposals/actions";
+import { changeStatusAction, listFundersForConfigAction, reproposeAction, setEvOptionAction } from "../../proposals/actions";
 import { PROPOSAL_STATUSES, STATUS_LABELS, TERMINAL_STATUSES, statusColor, statusLabel, type ProposalStatus } from "@/lib/proposal-constants";
 import { SalesExecPicker } from "@/components/sales-exec-picker";
 import { DealEditor, CancelDealButton } from "@/components/deal-editor";
@@ -32,6 +32,9 @@ type Proposal = {
   isGroupBq: boolean;
   orderNumber: string | null;
   vin: string | null;
+  isEv: boolean;
+  wallboxIncluded: boolean;
+  customerSavingGbp: number | null;
 };
 type Event = {
   id: number;
@@ -78,6 +81,9 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
   const [showLostSale, setShowLostSale] = useState(false);
   const [lostSaleNote, setLostSaleNote] = useState("");
   const [showRepropose, setShowRepropose] = useState(false);
+  const [showEvConfirm, setShowEvConfirm] = useState(false);
+  const [evChoice, setEvChoice] = useState<"wallbox" | "saving">(p.wallboxIncluded ? "wallbox" : "saving");
+  const [evSaving, setEvSaving] = useState<string>(p.customerSavingGbp != null ? String(p.customerSavingGbp) : "");
   const status = p.status as ProposalStatus;
   const c = statusColor(status);
   const isTerminal = (TERMINAL_STATUSES as ProposalStatus[]).includes(status);
@@ -204,7 +210,15 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
 
         {status === "accepted" && (
           <button
-            onClick={() => changeStatus("in_order")}
+            onClick={() => {
+              if (p.isEv) {
+                setEvChoice(p.wallboxIncluded ? "wallbox" : "saving");
+                setEvSaving(p.customerSavingGbp != null ? String(p.customerSavingGbp) : "");
+                setShowEvConfirm(true);
+              } else {
+                changeStatus("in_order");
+              }
+            }}
             className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
           >
             → Move to order stage
@@ -298,6 +312,61 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
               Mark lost sale
             </button>
             <button onClick={() => { setShowLostSale(false); setLostSaleNote(""); setError(null); }} className="text-xs text-slate-500 hover:text-slate-900">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showEvConfirm && (
+        <div className="space-y-3 border-t border-emerald-100 bg-emerald-50/60 px-5 py-3">
+          <div className="text-xs">
+            <span className="font-medium text-emerald-900">EV option — confirm before moving to order</span>
+            <div className="mt-0.5 text-emerald-800">
+              Currently set to: <span className="font-medium">{p.wallboxIncluded ? "Wallbox" : p.customerSavingGbp ? `Customer saving £${p.customerSavingGbp.toFixed(0)}` : "(not set)"}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-emerald-900">
+            <label className="flex items-center gap-1">
+              <input type="radio" name={`ev-${p.id}`} checked={evChoice === "wallbox"} onChange={() => setEvChoice("wallbox")} />
+              Wallbox
+            </label>
+            <label className="flex items-center gap-1">
+              <input type="radio" name={`ev-${p.id}`} checked={evChoice === "saving"} onChange={() => setEvChoice("saving")} />
+              Customer saving £
+              <input
+                type="number"
+                value={evSaving}
+                disabled={evChoice !== "saving"}
+                onChange={(e) => setEvSaving(e.target.value)}
+                className="w-24 rounded border border-emerald-300 bg-white px-1.5 py-0.5 disabled:bg-slate-100"
+              />
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setError(null);
+                start(async () => {
+                  const wallbox = evChoice === "wallbox";
+                  const saving = wallbox ? null : Number(evSaving);
+                  if (!wallbox && (!Number.isFinite(saving!) || saving! <= 0)) {
+                    setError("Enter a customer saving amount.");
+                    return;
+                  }
+                  const ev = await setEvOptionAction(p.id, { wallboxIncluded: wallbox, customerSavingGbp: saving });
+                  if (!ev.ok) { setError(ev.error); return; }
+                  const res = await changeStatusAction(p.id, "in_order");
+                  if (!res.ok) { setError(res.error); return; }
+                  setShowEvConfirm(false);
+                  if (res.nextPage) router.push(res.nextPage);
+                });
+              }}
+              className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              Confirm and move to order
+            </button>
+            <button onClick={() => { setShowEvConfirm(false); setError(null); }} className="text-xs text-slate-500 hover:text-slate-900">
               Cancel
             </button>
           </div>

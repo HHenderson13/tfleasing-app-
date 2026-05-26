@@ -75,7 +75,7 @@ export async function getDrilldown(
   source: SourceKey = "all",
 ): Promise<DrillRow[]> {
   const { from, to } = rangeBounds(range);
-  const wheres = [lte(proposals.createdAt, to)];
+  const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const all = await db.select().from(proposals).where(and(...wheres));
   const rows = all.filter((r) => matchesSource(r, source));
@@ -83,6 +83,27 @@ export async function getDrilldown(
   const execs = await db.select().from(salesExecs);
   const custMap = new Map(custs.map((c) => [c.id, c.name]));
   const execMap = new Map(execs.map((e) => [e.id, e.name]));
+
+  // For accepted/referred/declined we bucket each customer into one mutually
+  // exclusive end-state (priority accepted > referred > declined) so the
+  // drilldown matches the headline KPI tiles.
+  const customerBucket = new Map<string, "accepted" | "referred" | "declined" | null>();
+  if (kind === "accepted" || kind === "referred" || kind === "declined") {
+    const byCust = new Map<string, Row[]>();
+    for (const r of rows) {
+      const arr = byCust.get(r.customerId) ?? [];
+      arr.push(r);
+      byCust.set(r.customerId, arr);
+    }
+    for (const [cid, arr] of byCust.entries()) {
+      const active = arr.filter((r) => !CANCELLED_STATUSES.has(r.status));
+      if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) { customerBucket.set(cid, null); continue; }
+      if (active.some((r) => ACCEPTED_STATUSES.has(r.status))) { customerBucket.set(cid, "accepted"); continue; }
+      if (active.some((r) => REFERRED_STATUSES.has(r.status))) { customerBucket.set(cid, "referred"); continue; }
+      if (active.some((r) => DECLINED_STATUSES.has(r.status))) { customerBucket.set(cid, "declined"); continue; }
+      customerBucket.set(cid, null);
+    }
+  }
 
   const filtered = rows.filter((r) => {
     if (kind === "source") return rowSource(r) === value;
@@ -97,9 +118,9 @@ export async function getDrilldown(
       return r.isEv;
     }
     if (kind === "cancelled") return CANCELLED_STATUSES.has(r.status);
-    if (kind === "accepted") return ACCEPTED_STATUSES.has(r.status);
-    if (kind === "referred") return REFERRED_STATUSES.has(r.status);
-    if (kind === "declined") return DECLINED_STATUSES.has(r.status);
+    if (kind === "accepted") return customerBucket.get(r.customerId) === "accepted" && !CANCELLED_STATUSES.has(r.status);
+    if (kind === "referred") return customerBucket.get(r.customerId) === "referred" && !CANCELLED_STATUSES.has(r.status);
+    if (kind === "declined") return customerBucket.get(r.customerId) === "declined" && !CANCELLED_STATUSES.has(r.status);
     if (kind === "second") return r.funderRank >= 2 && r.funderId === value;
     return false;
   });
@@ -123,7 +144,7 @@ export async function getDrilldown(
 
 export async function getProposalsTimeseries(range: RangeKey, source: SourceKey = "all"): Promise<{ label: string; submitted: number; accepted: number }[]> {
   const { from, to } = rangeBounds(range);
-  const wheres = [lte(proposals.createdAt, to)];
+  const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const all = await db.select().from(proposals).where(and(...wheres));
   const rows = all.filter((r) => matchesSource(r, source) && !CANCELLED_STATUSES.has(r.status));
@@ -216,7 +237,7 @@ function bucketCount<K extends string | number>(rows: Row[], pick: (r: Row) => K
 
 export async function buildReport(range: RangeKey, source: SourceKey = "all"): Promise<ReportSummary> {
   const { from, to } = rangeBounds(range);
-  const wheres = [lte(proposals.createdAt, to)];
+  const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const allRows = await db.select().from(proposals).where(and(...wheres));
   const rows = allRows.filter((r) => matchesSource(r, source));
@@ -273,22 +294,26 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   let cancelledDeals = 0;
   let pendingDeals = 0;
   let decidedDeals = 0;
+  // Bucket each customer by current end-state. A customer is mutually
+  // exclusively one of: accepted > referred > declined (cancelled / pending
+  // / not_eligible-only customers fall into none).
+  let referredDeals = 0;
+  let declinedDeals = 0;
   for (const arr of dealsByCustomer.values()) {
-    const anyEligible = arr.some((r) => r.status !== "not_eligible");
+    const active = arr.filter((r) => !CANCELLED_STATUSES.has(r.status));
+    const anyEligible = active.some((r) => r.status !== "not_eligible");
     if (anyEligible) eligibleDeals++;
-    const anyDecided = arr.some((r) => !PENDING_STATUSES.has(r.status) && r.status !== "not_eligible");
-    if (anyEligible && anyDecided) decidedDeals++;
-    if (anyEligible && !anyDecided) pendingDeals++;
-    if (arr.some((r) => ACCEPTED_STATUSES.has(r.status))) acceptedDeals++;
-    if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) cancelledDeals++;
+    if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) { cancelledDeals++; continue; }
+    if (active.some((r) => ACCEPTED_STATUSES.has(r.status))) { acceptedDeals++; decidedDeals++; continue; }
+    if (active.some((r) => REFERRED_STATUSES.has(r.status))) { referredDeals++; continue; }
+    if (active.some((r) => DECLINED_STATUSES.has(r.status))) { declinedDeals++; decidedDeals++; continue; }
+    if (anyEligible) pendingDeals++;
   }
-  // Referred / declined are counted at proposal level (matches /proposals tab).
-  const referredDeals = activeRows.filter((r) => REFERRED_STATUSES.has(r.status)).length;
-  const declinedDeals = activeRows.filter((r) => DECLINED_STATUSES.has(r.status)).length;
-  const decidedProposals = activeRows.filter((r) => !PENDING_STATUSES.has(r.status) && r.status !== "not_eligible").length;
-  const deptAcceptanceRate = pct(acceptedDeals, decidedDeals);
-  const referredRate = pct(referredDeals, activeRows.length);
-  const declinedRate = pct(declinedDeals, decidedProposals);
+  // Bucketed customers all add to ~100%: accepted + referred + declined.
+  const bucketedTotal = acceptedDeals + referredDeals + declinedDeals;
+  const deptAcceptanceRate = pct(acceptedDeals, bucketedTotal);
+  const referredRate = pct(referredDeals, bucketedTotal);
+  const declinedRate = pct(declinedDeals, bucketedTotal);
 
   const funderTotals = new Map<string, {
     name: string; submitted: number; accepted: number; declined: number;

@@ -1,9 +1,10 @@
 "use server";
 import { db } from "@/db";
-import { customers, funders, proposalEvents, proposals } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { customers, funders, proposalEvents, proposals, salesExecs } from "@/db/schema";
+import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
+import { requireAdmin } from "@/lib/auth-guard";
 
 export async function updateManualEtaAction(
   proposalId: string,
@@ -48,65 +49,66 @@ export async function updateManualEtaAction(
 
 export async function createAwaitingDealAction(input: {
   customerName: string;
+  businessName?: string | null;
   model: string;
   derivative: string;
-  funderId: string;
-  monthlyRental: number;
-  termMonths: number;
-  annualMileage: number;
-  contract: "PCH" | "BCH";
-  maintenance: "customer" | "maintained";
   vin?: string | null;
   orderNumber?: string | null;
-  financeProposalNumber?: string | null;
-  manualEtaAt?: string | null;
-  manualLocation?: string | null;
+  salesExecId: string;
 }) {
   try {
+    await requireAdmin();
     const name = input.customerName.trim();
     if (!name) return { ok: false as const, error: "Customer name required" };
     if (!input.model.trim() || !input.derivative.trim()) return { ok: false as const, error: "Model and derivative required" };
+    const vinClean = input.vin?.trim().toUpperCase() || null;
+    const orderClean = input.orderNumber?.trim() || null;
+    if (!vinClean && !orderClean) return { ok: false as const, error: "VIN or order number required" };
 
-    const [funder] = await db.select().from(funders).where(eq(funders.id, input.funderId)).limit(1);
-    if (!funder) return { ok: false as const, error: "Funder not found" };
+    const [exec] = await db.select().from(salesExecs).where(eq(salesExecs.id, input.salesExecId)).limit(1);
+    if (!exec) return { ok: false as const, error: "Exec not found" };
+
+    // Pick any funder as a placeholder — back-loaded deals are excluded from
+    // reports so the funder/term/rental fields are display-only.
+    const [funder] = await db.select().from(funders).orderBy(asc(funders.name)).limit(1);
+    if (!funder) return { ok: false as const, error: "No funders configured" };
 
     const now = new Date();
     const customerId = randomUUID();
-    await db.insert(customers).values({ id: customerId, name, createdAt: now });
+    await db.insert(customers).values({
+      id: customerId,
+      name,
+      businessName: input.businessName?.trim() || null,
+      createdAt: now,
+    });
 
     const id = randomUUID();
-    const eta = input.manualEtaAt ? new Date(input.manualEtaAt) : null;
-    if (eta && Number.isNaN(eta.getTime())) return { ok: false as const, error: "Bad ETA date" };
-
     await db.insert(proposals).values({
       id,
       customerId,
-      salesExecId: null,
+      salesExecId: exec.id,
       isBroker: false,
       isGroupBq: false,
       capCode: "",
       model: input.model.trim(),
       derivative: input.derivative.trim(),
-      contract: input.contract,
-      maintenance: input.maintenance,
-      termMonths: input.termMonths,
-      annualMileage: input.annualMileage,
-      initialRentalMultiplier: 6,
-      funderId: input.funderId,
+      contract: "BCH",
+      maintenance: "customer",
+      termMonths: 0,
+      annualMileage: 0,
+      initialRentalMultiplier: 0,
+      funderId: funder.id,
       funderName: funder.name,
       funderRank: 1,
-      financeProposalNumber: input.financeProposalNumber?.trim() || null,
-      monthlyRental: input.monthlyRental,
+      monthlyRental: 0,
       status: "awaiting_delivery",
       acceptedAt: now,
       chipConfirmed: true,
       motorCompleteSigned: true,
       financeAgreementSigned: true,
-      orderNumber: input.orderNumber?.trim() || null,
-      vin: input.vin?.trim() || null,
-      manualEtaAt: eta,
-      manualLocation: input.manualLocation?.trim() || null,
-      manualEtaUpdatedAt: eta || input.manualLocation ? now : null,
+      orderNumber: orderClean,
+      vin: vinClean,
+      backLoaded: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -114,7 +116,7 @@ export async function createAwaitingDealAction(input: {
       proposalId: id,
       kind: "created",
       toStatus: "awaiting_delivery",
-      note: `Back-loaded into awaiting delivery (${funder.name}, £${input.monthlyRental.toFixed(2)}/mo).`,
+      note: `Back-loaded into awaiting delivery by admin (allocated to ${exec.name}).`,
       createdAt: now,
     });
     revalidatePath("/orders/awaiting");

@@ -10,11 +10,13 @@ export function DeliveryEditor({
   initialBookedAt,
   initialRegNumber,
   checks,
+  isGroupBq = false,
 }: {
   proposalId: string;
   initialBookedAt: string | null; // ISO yyyy-mm-dd
   initialRegNumber: string | null;
   checks: Check[];
+  isGroupBq?: boolean;
 }) {
   const router = useRouter();
   const [bookedAt, setBookedAt] = useState(initialBookedAt ?? "");
@@ -27,7 +29,7 @@ export function DeliveryEditor({
     reg.trim().toUpperCase() !== (initialRegNumber ?? "");
 
   const allChecked = checks.every((c) => c.checked);
-  const canMarkDelivered = !!bookedAt && allChecked;
+  const canMarkDelivered = isGroupBq ? allChecked : (!!bookedAt && allChecked);
 
   function saveFields() {
     setErr(null);
@@ -61,35 +63,40 @@ export function DeliveryEditor({
 
   return (
     <div className="mt-2 space-y-2 rounded-lg bg-teal-50 px-3 py-2 text-[12px] ring-1 ring-teal-200">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="font-medium text-teal-800">Customer delivery</span>
-        <label className="flex items-center gap-1 text-teal-900">
-          Date
-          <input
-            type="date"
-            value={bookedAt}
-            onChange={(e) => setBookedAt(e.target.value)}
-            className="rounded border border-teal-300 bg-white px-1 py-0.5"
-          />
-        </label>
-        <label className="flex items-center gap-1 text-teal-900">
-          Reg
-          <input
-            value={reg}
-            onChange={(e) => setReg(e.target.value)}
-            placeholder="optional"
-            className="w-28 rounded border border-teal-300 bg-white px-1 py-0.5 uppercase"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={saveFields}
-          disabled={!fieldsDirty || pending}
-          className="rounded bg-teal-600 px-2 py-0.5 font-medium text-white disabled:opacity-50"
-        >
-          {pending ? "Saving…" : "Save"}
-        </button>
-      </div>
+      {!isGroupBq && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-medium text-teal-800">Customer delivery</span>
+          <label className="flex items-center gap-1 text-teal-900">
+            Date
+            <input
+              type="date"
+              value={bookedAt}
+              onChange={(e) => setBookedAt(e.target.value)}
+              className="rounded border border-teal-300 bg-white px-1 py-0.5"
+            />
+          </label>
+          <label className="flex items-center gap-1 text-teal-900">
+            Reg
+            <input
+              value={reg}
+              onChange={(e) => setReg(e.target.value)}
+              placeholder="optional"
+              className="w-28 rounded border border-teal-300 bg-white px-1 py-0.5 uppercase"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={saveFields}
+            disabled={!fieldsDirty || pending}
+            className="rounded bg-teal-600 px-2 py-0.5 font-medium text-white disabled:opacity-50"
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+        </div>
+      )}
+      {isGroupBq && (
+        <div className="font-medium text-teal-800">Group BQ delivery — tick the checklist to mark as delivered.</div>
+      )}
 
       {checks.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
@@ -116,8 +123,9 @@ export function DeliveryEditor({
         >
           Mark as delivered →
         </button>
-        {!bookedAt && <span className="text-[11px] text-teal-700">Set delivery date first.</span>}
-        {bookedAt && !allChecked && <span className="text-[11px] text-teal-700">Tick all checks first.</span>}
+        {!isGroupBq && !bookedAt && <span className="text-[11px] text-teal-700">Set delivery date first.</span>}
+        {!isGroupBq && bookedAt && !allChecked && <span className="text-[11px] text-teal-700">Tick all checks first.</span>}
+        {isGroupBq && !allChecked && <span className="text-[11px] text-teal-700">Tick all checks first.</span>}
         {err && <span className="text-red-600">{err}</span>}
       </div>
     </div>

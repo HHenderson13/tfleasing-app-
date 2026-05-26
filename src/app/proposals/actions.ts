@@ -130,6 +130,45 @@ export async function reproposeAction(input: {
   }
 }
 
+// Set the EV option (wallbox vs customer saving) on a proposal — used when
+// transitioning to in_order so the rep confirms the right option for the
+// stage. customerSavingGbp is required when wallboxIncluded is false.
+export async function setEvOptionAction(
+  proposalId: string,
+  input: { wallboxIncluded: boolean; customerSavingGbp: number | null },
+) {
+  try {
+    const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
+    if (!p) return { ok: false as const, error: "Proposal not found" };
+    if (!p.isEv) return { ok: false as const, error: "Proposal is not flagged EV." };
+    if (!input.wallboxIncluded) {
+      const v = Number(input.customerSavingGbp);
+      if (!Number.isFinite(v) || v <= 0) return { ok: false as const, error: "Enter a customer saving amount." };
+    }
+    const now = new Date();
+    const newWallbox = !!input.wallboxIncluded;
+    const newSaving = newWallbox ? null : Number(input.customerSavingGbp);
+    if (newWallbox === p.wallboxIncluded && (newSaving ?? null) === (p.customerSavingGbp ?? null)) {
+      return { ok: true as const };
+    }
+    await db.update(proposals).set({
+      wallboxIncluded: newWallbox,
+      customerSavingGbp: newSaving,
+      updatedAt: now,
+    }).where(eq(proposals.id, proposalId));
+    await db.insert(proposalEvents).values({
+      proposalId,
+      kind: "note",
+      note: newWallbox ? "EV option set to Wallbox." : `EV option set to Customer saving £${newSaving!.toFixed(0)}.`,
+      createdAt: now,
+    });
+    revalidateForProposal(p.customerId);
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
 export async function updateSalesExecAction(proposalId: string, salesExecId: string | null) {
   try {
     const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
