@@ -9,6 +9,8 @@ import { ExecFilter } from "../exec-filter";
 import { OrderRow, Section } from "../order-row";
 import { ManualEtaEditor } from "./manual-row";
 import { DeliveryEditor } from "./delivery-row";
+import { requireOrdersAccess } from "@/lib/auth-guard";
+import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +111,12 @@ export default async function OrdersAwaitingPage({
   searchParams: Promise<{ exec?: string }>;
 }) {
   const sp = await searchParams;
-  const execFilter = sp.exec && sp.exec !== "all" ? sp.exec : null;
+  const me = await requireOrdersAccess();
+  // Non-admin execs default to their own deals; admins default to "all".
+  // Either can override via the dropdown.
+  const defaultExec = !isAdmin(me) && me.salesExecId ? me.salesExecId : null;
+  const execParam = sp.exec ?? (defaultExec ?? "all");
+  const execFilter = execParam && execParam !== "all" ? execParam : null;
 
   const [rows, execs, stockRaw, deliveryDefs] = await Promise.all([
     listProposals("orders"),

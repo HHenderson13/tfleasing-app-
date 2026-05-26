@@ -1,5 +1,5 @@
 "use client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export function ExecFilter({
   execs,
@@ -10,12 +10,13 @@ export function ExecFilter({
 }) {
   const router = useRouter();
   const params = useSearchParams();
+  const pathname = usePathname();
 
   function onChange(next: string) {
     const qs = new URLSearchParams(params.toString());
     qs.set("exec", next);
     const s = qs.toString();
-    router.push(s ? `/orders?${s}` : "/orders");
+    router.push(s ? `${pathname}?${s}` : pathname);
   }
 
   return (
