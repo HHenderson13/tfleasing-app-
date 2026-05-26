@@ -5,6 +5,30 @@ import { asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-guard";
+import { z } from "zod";
+
+// Back-loaded deal entry comes straight from a form; treat as untrusted.
+// VIN must be exactly 11 alphanumeric chars (Ford convention used elsewhere).
+const createAwaitingSchema = z
+  .object({
+    customerName: z.string().trim().min(1, "Customer name required").max(200),
+    businessName: z.string().trim().max(200).nullable().optional(),
+    model: z.string().trim().min(1, "Model required").max(120),
+    derivative: z.string().trim().min(1, "Derivative required").max(200),
+    vin: z
+      .string()
+      .trim()
+      .transform((v) => v.toUpperCase())
+      .pipe(z.string().regex(/^[A-Z0-9]{11}$/, "VIN must be 11 letters/numbers"))
+      .nullable()
+      .optional(),
+    orderNumber: z.string().trim().max(40).nullable().optional(),
+    salesExecId: z.string().min(1, "Sales exec required"),
+  })
+  .refine((d) => !!d.vin || !!d.orderNumber, {
+    message: "VIN or order number required",
+    path: ["vin"],
+  });
 
 export async function updateManualEtaAction(
   proposalId: string,
@@ -58,14 +82,15 @@ export async function createAwaitingDealAction(input: {
 }) {
   try {
     await requireAdmin();
-    const name = input.customerName.trim();
-    if (!name) return { ok: false as const, error: "Customer name required" };
-    if (!input.model.trim() || !input.derivative.trim()) return { ok: false as const, error: "Model and derivative required" };
-    const vinClean = input.vin?.trim().toUpperCase() || null;
-    const orderClean = input.orderNumber?.trim() || null;
-    if (!vinClean && !orderClean) return { ok: false as const, error: "VIN or order number required" };
+    const parsed = createAwaitingSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+    const { customerName: name, businessName, model, derivative, vin, orderNumber, salesExecId } = parsed.data;
+    const vinClean = vin ?? null;
+    const orderClean = orderNumber ?? null;
 
-    const [exec] = await db.select().from(salesExecs).where(eq(salesExecs.id, input.salesExecId)).limit(1);
+    const [exec] = await db.select().from(salesExecs).where(eq(salesExecs.id, salesExecId)).limit(1);
     if (!exec) return { ok: false as const, error: "Exec not found" };
 
     // Pick any funder as a placeholder — back-loaded deals are excluded from
@@ -78,7 +103,7 @@ export async function createAwaitingDealAction(input: {
     await db.insert(customers).values({
       id: customerId,
       name,
-      businessName: input.businessName?.trim() || null,
+      businessName: businessName ?? null,
       createdAt: now,
     });
 
@@ -90,8 +115,8 @@ export async function createAwaitingDealAction(input: {
       isBroker: false,
       isGroupBq: false,
       capCode: "",
-      model: input.model.trim(),
-      derivative: input.derivative.trim(),
+      model,
+      derivative,
       contract: "BCH",
       maintenance: "customer",
       termMonths: 0,

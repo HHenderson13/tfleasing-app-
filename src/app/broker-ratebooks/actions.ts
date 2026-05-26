@@ -11,6 +11,28 @@ import {
   type TermFollowOns,
 } from "@/lib/interest-rate-solver";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+// Validates rental quotes coming from the Interest Rates section. Inputs are
+// nullable so the UI can submit partial sets (only some terms filled in).
+const rentalSchema = z.number().positive().finite().max(50_000).nullable();
+const quotesSchema = z
+  .object(
+    Object.fromEntries(
+      TERM_FOLLOW_ONS.map((t) => [
+        String(t),
+        z
+          .object({ rental1Adv: rentalSchema, rental12Adv: rentalSchema })
+          .optional(),
+      ]),
+    ),
+  )
+  .partial();
+
+const solveAndSaveSchema = z.object({
+  funderId: z.enum(RATE_FUNDER_IDS),
+  quotes: quotesSchema,
+});
 
 export interface FunderRateSnapshot {
   funderId: string;
@@ -82,10 +104,15 @@ export interface SolveAndSaveResult {
 // and return solver output for UI display.
 export async function solveAndSaveRatesAction(input: SolveAndSaveInput): Promise<SolveAndSaveResult> {
   await requireAdmin();
-  if (!RATE_FUNDER_IDS.includes(input.funderId)) {
-    return { ok: false, error: "Unknown funder", solved: [] };
+  const parsed = solveAndSaveSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input", solved: [] };
   }
-  const solved = solveAllTerms(input.quotes);
+  // Re-key quotes by numeric termFollowOns for solveAllTerms.
+  const quotesByTerm = Object.fromEntries(
+    Object.entries(parsed.data.quotes).map(([k, v]) => [Number(k), v]),
+  ) as Partial<Record<TermFollowOns, { rental1Adv: number | null; rental12Adv: number | null }>>;
+  const solved = solveAllTerms(quotesByTerm);
   const now = new Date();
 
   for (const row of solved) {
@@ -93,7 +120,7 @@ export async function solveAndSaveRatesAction(input: SolveAndSaveInput): Promise
     await db
       .insert(funderInterestRates)
       .values({
-        funderId: input.funderId,
+        funderId: parsed.data.funderId,
         termFollowOns: row.termFollowOns,
         annualRate: row.annualRate,
         rental1Adv: row.rental1Adv,
