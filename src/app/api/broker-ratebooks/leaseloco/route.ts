@@ -12,12 +12,12 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// LeaseLoco-style column set, trimmed per spec:
+// Manual broker ratebook — trimmed column set per spec:
 //   - A SiteID, B Reference removed
 //   - O MaintenanceType removed (MaintenanceValue alone distinguishes maintained vs not)
 //   - Q DocumentFee removed
 //   - S:W (Stock, ExpiryDate, StartDate, Tags, Funder) removed
-//   - R ExcessMileage left blank (not tracked in our DB)
+//   - R ExcessMileage populated from ratebook.excess_mileage when available
 const HEADER = [
   "CAP Code",
   "CAPType",
@@ -70,18 +70,25 @@ export async function GET() {
       XLSX.utils.book_append_sheet(wb, ws, commissionSheetLabel(commission));
     }
 
-    const buf: Buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    // compression: true DEFLATE-compresses the XML inside the .xlsx container.
+    // The default (false) writes them uncompressed for speed, producing files
+    // 3–5× larger than they need to be on repetitive ratebook data.
+    const buf: Buffer = XLSX.write(wb, {
+      type: "buffer",
+      bookType: "xlsx",
+      compression: true,
+    });
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="TrustFord Broker Ratebooks - LeaseLoco.xlsx"`,
+        "Content-Disposition": `attachment; filename="TrustFord Manual Broker Ratebook.xlsx"`,
         "Cache-Control": "no-store",
       },
     });
   } catch (e) {
-    console.error("Broker LeaseLoco export error:", e);
+    console.error("Broker Manual Ratebook export error:", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed" },
       { status: 500 }

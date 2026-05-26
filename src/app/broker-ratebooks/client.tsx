@@ -20,7 +20,7 @@ export function BrokerRatebooksClient({ commissionTiers }: { commissionTiers: nu
       const cd = res.headers.get("Content-Disposition") ?? "";
       const m = cd.match(/filename="([^"]+)"/);
       const fallback = url.endsWith("leaseloco")
-        ? "TrustFord Broker Ratebooks - LeaseLoco.xlsx"
+        ? "TrustFord Manual Broker Ratebook.xlsx"
         : "TrustFord Broker Ratebooks - MotorComplete.zip";
       const filename = m ? m[1] : fallback;
       const blob = await res.blob();
@@ -53,9 +53,9 @@ export function BrokerRatebooksClient({ commissionTiers }: { commissionTiers: nu
         onClick={() => download("/api/broker-ratebooks/motorcomplete", setMcStatus)}
       />
       <Card
-        title="LeaseLoco"
+        title="Manual Broker Ratebook"
         format="Excel workbook"
-        desc="One .xlsx with a separate sheet per commission tier. Trimmed to the LeaseLoco column set."
+        desc="One .xlsx with a separate sheet per commission tier. Trimmed broker column set."
         tierLine={tiers}
         button="Download XLSX"
         status={llStatus}
