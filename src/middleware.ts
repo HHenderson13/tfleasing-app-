@@ -14,10 +14,13 @@ export function middleware(req: NextRequest) {
   ) {
     return NextResponse.next();
   }
-  // API-key authenticated endpoints (validated by route handler) bypass cookie auth
+  // API-key authenticated endpoints bypass cookie auth. We validate the key
+  // value here so any random x-api-key header doesn't reach the route handler.
+  // (The handler validates again — defence in depth.)
   if (
     pathname === "/api/scraper/upload" &&
-    req.headers.get("x-api-key")
+    process.env.SCRAPER_API_KEY &&
+    req.headers.get("x-api-key") === process.env.SCRAPER_API_KEY
   ) {
     return NextResponse.next();
   }
