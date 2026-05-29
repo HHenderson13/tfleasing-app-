@@ -64,23 +64,31 @@ export default async function WorldCupPage() {
               Group games open now; knockout rounds unlock as results land.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled
-                className="inline-flex cursor-not-allowed rounded-lg bg-emerald-600/60 px-3.5 py-2 text-sm font-semibold text-white"
-                title="Coming next"
+              <Link
+                href="/world-cup/predictions"
+                className="inline-flex rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
               >
-                Make predictions → (batch 2)
-              </button>
+                Make predictions →
+              </Link>
+              <Link
+                href="/world-cup/leaderboard"
+                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Leaderboard
+              </Link>
+              <Link
+                href="/world-cup/groups"
+                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Group tables
+              </Link>
               {admin && (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex cursor-not-allowed rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700"
+                <span
+                  className="inline-flex cursor-not-allowed rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-400"
                   title="Coming next"
                 >
                   Admin: enter results → (batch 3)
-                </button>
+                </span>
               )}
             </div>
           </div>
