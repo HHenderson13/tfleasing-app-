@@ -147,12 +147,15 @@ export function canSeeProposals(u: CurrentUser | null): boolean {
 export function canSeeOrders(u: CurrentUser | null): boolean {
   return isAdmin(u) || isExec(u);
 }
-// World Cup: wc plays; wc_admin manages scores + access. Global admins inherit both.
+// World Cup access is its own silo — global site admins do NOT automatically
+// get WC roles. You need explicit 'wc' (play) or 'wc_admin' (play + manage)
+// to participate. The bootstrap (see ensureWorldCupTables) grants wc_admin
+// to a configured email so there's at least one WC admin from day one.
 export function canPlayWc(u: CurrentUser | null): boolean {
-  return !!u && (isAdmin(u) || u.roles.includes("wc") || u.roles.includes("wc_admin"));
+  return !!u && (u.roles.includes("wc") || u.roles.includes("wc_admin"));
 }
 export function isWcAdmin(u: CurrentUser | null): boolean {
-  return !!u && (isAdmin(u) || u.roles.includes("wc_admin"));
+  return !!u && u.roles.includes("wc_admin");
 }
 
 export interface SectionAccess {

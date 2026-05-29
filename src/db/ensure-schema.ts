@@ -246,6 +246,35 @@ async function ensureWorldCupTables() {
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_predictions_user ON wc_predictions(user_id)`));
 
   await seedWcFixturesIfEmpty();
+  await bootstrapWcAdmin();
+}
+
+// Grants wc_admin to a single email on every boot — idempotent. Without this,
+// nobody could administer the World Cup game on first deploy (we deliberately
+// stopped global admins inheriting wc_admin). Override via env if you want to
+// hand-off the main WC admin to someone else.
+const DEFAULT_WC_ADMIN_EMAIL = "harry.edward.henderson@gmail.com";
+async function bootstrapWcAdmin() {
+  const targetEmail = (process.env.WC_BOOTSTRAP_ADMIN_EMAIL ?? DEFAULT_WC_ADMIN_EMAIL).toLowerCase().trim();
+  if (!targetEmail) return;
+  // Find the user by email. Email is unique in the users table.
+  const rows = await db.all<{ id: string; roles: string }>(sql`
+    SELECT id, roles FROM users WHERE LOWER(email) = ${targetEmail} LIMIT 1
+  `);
+  const u = rows[0];
+  if (!u) return; // user hasn't been created yet — bootstrap runs again next boot
+  let parsed: string[] = [];
+  try { parsed = JSON.parse(u.roles || "[]"); } catch { parsed = []; }
+  if (parsed.includes("wc_admin")) return;
+  // Remove a pre-existing 'wc' (if any) before adding wc_admin so we don't
+  // duplicate the player tier under the admin tier.
+  const next = parsed.filter((r) => r !== "wc");
+  next.push("wc_admin");
+  const nowMs = Math.floor(Date.now() / 1000);
+  await db.run(sql`
+    UPDATE users SET roles = ${JSON.stringify(Array.from(new Set(next)))}, updated_at = ${nowMs}
+    WHERE id = ${u.id}
+  `);
 }
 
 async function seedWcFixturesIfEmpty() {

@@ -34,7 +34,8 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  level: "none" | "wc" | "wc_admin" | "admin";
+  level: "none" | "wc" | "wc_admin";
+  isSiteAdmin: boolean;
 }
 
 type Tab = "results" | "players" | "knockouts";
@@ -335,23 +336,24 @@ function PlayersTab({ users, currentUserId }: { users: AdminUser[]; currentUserI
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => (
               <tr key={u.id} className={u.id === currentUserId ? "bg-emerald-50/30" : ""}>
-                <td className="px-4 py-2 font-medium text-slate-900">{u.name}</td>
+                <td className="px-4 py-2 font-medium text-slate-900">
+                  {u.name}
+                  {u.isSiteAdmin && (
+                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500" title="Has the global 'admin' role on the leasing system">site admin</span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-slate-600">{u.email}</td>
                 <td className="px-4 py-2 text-right">
-                  {u.level === "admin" ? (
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Admin (full)</span>
-                  ) : (
-                    <select
-                      value={u.level}
-                      onChange={(e) => changeLevel(u.id, e.target.value as "none" | "wc" | "wc_admin")}
-                      disabled={pending}
-                      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
-                    >
-                      <option value="none">No access</option>
-                      <option value="wc">Player</option>
-                      <option value="wc_admin">Player + Admin</option>
-                    </select>
-                  )}
+                  <select
+                    value={u.level}
+                    onChange={(e) => changeLevel(u.id, e.target.value as "none" | "wc" | "wc_admin")}
+                    disabled={pending}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
+                  >
+                    <option value="none">No access</option>
+                    <option value="wc">Player</option>
+                    <option value="wc_admin">Player + Admin</option>
+                  </select>
                 </td>
               </tr>
             ))}

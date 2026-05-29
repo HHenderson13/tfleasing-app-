@@ -41,16 +41,18 @@ export default async function WcAdminPage() {
       : null,
   }));
 
+  // Note: global site admins are NOT auto-granted WC access — they appear
+  // as 'none' (or whatever WC role they've been explicitly given) and can
+  // be edited like any other user.
   const usersWithLevel = allUsers.map((u) => {
     const roles: string[] = JSON.parse(u.roles || "[]");
-    const level: "none" | "wc" | "wc_admin" | "admin" = roles.includes("admin")
-      ? "admin"
-      : roles.includes("wc_admin")
-        ? "wc_admin"
-        : roles.includes("wc")
-          ? "wc"
-          : "none";
-    return { id: u.id, name: u.name, email: u.email, level };
+    const level: "none" | "wc" | "wc_admin" = roles.includes("wc_admin")
+      ? "wc_admin"
+      : roles.includes("wc")
+        ? "wc"
+        : "none";
+    const isSiteAdmin = roles.includes("admin");
+    return { id: u.id, name: u.name, email: u.email, level, isSiteAdmin };
   });
 
   // Quick counters for the page header.

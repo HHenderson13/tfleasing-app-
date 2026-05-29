@@ -103,7 +103,6 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
     LEFT JOIN wc_predictions p ON p.user_id = u.id
     WHERE u.roles LIKE '%"wc"%'
        OR u.roles LIKE '%"wc_admin"%'
-       OR u.roles LIKE '%"admin"%'
     GROUP BY u.id
     ORDER BY total DESC, made DESC, name ASC
   `);
@@ -181,7 +180,8 @@ export async function grantWcRole(userId: string): Promise<void> {
   const [u] = await db.select({ roles: users.roles }).from(users).where(eq(users.id, userId)).limit(1);
   if (!u) return;
   const roles: string[] = JSON.parse(u.roles || "[]");
-  if (roles.includes("wc") || roles.includes("wc_admin") || roles.includes("admin")) return;
+  // Global admin no longer auto-includes WC — explicit grant required.
+  if (roles.includes("wc") || roles.includes("wc_admin")) return;
   roles.push("wc");
   await db.update(users).set({ roles: JSON.stringify(roles), updatedAt: new Date() }).where(eq(users.id, userId));
 }
