@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { users, wcFixtures, wcLiveScores, wcPayments, wcResults } from "@/db/schema";
+import { users, wcFixtures, wcPayments, wcResults } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireWcAdmin } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
@@ -11,15 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function WcAdminPage() {
   const user = await requireWcAdmin();
 
-  const [fixtures, results, allUsers, paid, liveScores] = await Promise.all([
+  const [fixtures, results, allUsers, paid] = await Promise.all([
     db.select().from(wcFixtures).orderBy(wcFixtures.kickoffAt, wcFixtures.fixtureNumber),
     db.select().from(wcResults),
     db.select({ id: users.id, name: users.name, email: users.email, roles: users.roles }).from(users).orderBy(users.name),
     db.select({ userId: wcPayments.userId }).from(wcPayments),
-    db.select().from(wcLiveScores),
   ]);
   const paidSet = new Set(paid.map((p) => p.userId));
-  const liveByFx = new Map(liveScores.map((l) => [l.fixtureNumber, l]));
 
   const resultByFx = new Map(results.map((r) => [r.fixtureNumber, r]));
   const fixturesWithResults = fixtures.map((f) => ({
@@ -41,13 +39,6 @@ export default async function WcAdminPage() {
           penTeam1: resultByFx.get(f.fixtureNumber)!.penTeam1,
           penTeam2: resultByFx.get(f.fixtureNumber)!.penTeam2,
           winnerTeam: resultByFx.get(f.fixtureNumber)!.winnerTeam,
-        }
-      : null,
-    liveScore: liveByFx.has(f.fixtureNumber)
-      ? {
-          team1Goals: liveByFx.get(f.fixtureNumber)!.team1Goals,
-          team2Goals: liveByFx.get(f.fixtureNumber)!.team2Goals,
-          minute: liveByFx.get(f.fixtureNumber)!.minute,
         }
       : null,
   }));

@@ -2,12 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
-  clearLiveScoreAction,
   createWcUserAction,
   recomputeAllPointsAction,
   recordResultAction,
   setKnockoutTeamsAction,
-  setLiveScoreAction,
   setPaidStatusAction,
   setWcAccessAction,
 } from "./actions";
@@ -31,11 +29,6 @@ export interface AdminFixture {
     penTeam2: number | null;
     winnerTeam: string;
   } | null;
-  liveScore: {
-    team1Goals: number;
-    team2Goals: number;
-    minute: number | null;
-  } | null;
 }
 
 export interface AdminUser {
@@ -47,7 +40,7 @@ export interface AdminUser {
   paid: boolean;
 }
 
-type Tab = "results" | "live" | "knockouts" | "players";
+type Tab = "results" | "knockouts" | "players";
 
 export function AdminClient({ fixtures, users, currentUserId }: {
   fixtures: AdminFixture[];
@@ -59,18 +52,11 @@ export function AdminClient({ fixtures, users, currentUserId }: {
     <div className="mt-6">
       <nav className="inline-flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-sm">
         <TabButton active={tab === "results"} onClick={() => setTab("results")}>Results</TabButton>
-        <TabButton active={tab === "live"} onClick={() => setTab("live")}>
-          Live updates
-          {fixtures.filter((f) => f.liveScore).length > 0 && (
-            <span className="ml-1.5 inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-          )}
-        </TabButton>
         <TabButton active={tab === "knockouts"} onClick={() => setTab("knockouts")}>Knockout teams</TabButton>
         <TabButton active={tab === "players"} onClick={() => setTab("players")}>Players</TabButton>
       </nav>
 
       {tab === "results" && <ResultsTab fixtures={fixtures} />}
-      {tab === "live" && <LiveTab fixtures={fixtures} />}
       {tab === "knockouts" && <KnockoutsTab fixtures={fixtures} />}
       {tab === "players" && <PlayersTab users={users} currentUserId={currentUserId} />}
     </div>
@@ -505,153 +491,6 @@ function RecomputeFooter() {
       >
         {pending ? "Recomputing…" : msg ?? "Recompute all points"}
       </button>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// Live tab — quick goal +/- entry during a match. Each fixture row gets
-// +/- buttons so an admin watching from their phone can keep the live
-// score updated in 1 tap. Live scores feed the landing-page "leading
-// on this match" widget.
-// ───────────────────────────────────────────────────────────────────
-function LiveTab({ fixtures }: { fixtures: AdminFixture[] }) {
-  // Show fixtures within a 24h window around their kickoff, settled
-  // (in case admin needs to backtrack) or already-live (to keep editing).
-  const now = Date.now();
-  const candidates = fixtures.filter((f) => {
-    const kickoff = new Date(f.kickoffAt).getTime();
-    const liveWindowEnd = kickoff + 3 * 3600 * 1000;
-    const previewWindowStart = kickoff - 2 * 3600 * 1000;
-    return f.team1 && f.team2 && !f.result && (
-      f.liveScore !== null || (now >= previewWindowStart && now <= liveWindowEnd)
-    );
-  });
-
-  return (
-    <div className="mt-6 space-y-3">
-      <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-900">
-        Tap +/- to bump goals as they go in. The landing page shows the live score
-        and who's leading the projected points on this match in near-real time. Enter
-        the full-time result in the Results tab to settle it; the live row clears automatically.
-      </p>
-      {candidates.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-400">
-          No matches in their live window right now. Come back closer to kickoff.
-        </div>
-      )}
-      {candidates.map((f) => <LiveRow key={f.fixtureNumber} fixture={f} />)}
-    </div>
-  );
-}
-
-function LiveRow({ fixture: f }: { fixture: AdminFixture }) {
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
-  const [t1, setT1] = useState<number>(f.liveScore?.team1Goals ?? 0);
-  const [t2, setT2] = useState<number>(f.liveScore?.team2Goals ?? 0);
-  const [min, setMin] = useState<string>(f.liveScore?.minute?.toString() ?? "");
-
-  function save(nextT1: number, nextT2: number, nextMin: string) {
-    setErr(null);
-    const minute = nextMin.trim() ? Number(nextMin) : null;
-    if (minute !== null && (!Number.isFinite(minute) || minute < 0 || minute > 150)) {
-      setErr("Minute 0–150"); return;
-    }
-    start(async () => {
-      const res = await setLiveScoreAction({
-        fixtureNumber: f.fixtureNumber,
-        team1Goals: nextT1,
-        team2Goals: nextT2,
-        minute,
-      });
-      if (!res.ok) setErr(res.error ?? "Save failed");
-    });
-  }
-
-  function bump(side: "t1" | "t2", delta: 1 | -1) {
-    if (side === "t1") {
-      const next = Math.max(0, t1 + delta);
-      setT1(next); save(next, t2, min);
-    } else {
-      const next = Math.max(0, t2 + delta);
-      setT2(next); save(t1, next, min);
-    }
-  }
-
-  function clearAll() {
-    setErr(null);
-    setT1(0); setT2(0); setMin("");
-    start(async () => {
-      await clearLiveScoreAction(f.fixtureNumber);
-    });
-  }
-
-  return (
-    <div className={`overflow-hidden rounded-xl border-2 ${f.liveScore ? "border-red-300 bg-white" : "border-slate-200 bg-white"} shadow-sm`}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2 text-[11px]">
-        <div className="flex items-center gap-2">
-          {f.liveScore && (
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500" />
-              <span className="font-bold uppercase tracking-wide text-red-700">Live</span>
-            </span>
-          )}
-          <StageChip stage={f.stage} group={f.groupName} />
-          <span className="font-mono text-slate-400">M{f.fixtureNumber}</span>
-        </div>
-        <span className="text-slate-500">
-          {new Date(f.kickoffAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK
-        </span>
-      </div>
-      <div className="px-4 py-3">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="text-right text-sm font-semibold text-slate-900">{f.team1}</div>
-          <div className="flex items-center gap-2">
-            <BumpStack value={t1} disabled={pending} onUp={() => bump("t1", 1)} onDown={() => bump("t1", -1)} />
-            <span className="font-mono text-2xl text-slate-300">–</span>
-            <BumpStack value={t2} disabled={pending} onUp={() => bump("t2", 1)} onDown={() => bump("t2", -1)} />
-          </div>
-          <div className="text-left text-sm font-semibold text-slate-900">{f.team2}</div>
-        </div>
-        <div className="mt-3 flex items-center justify-center gap-3 text-xs">
-          <label className="flex items-center gap-1.5 text-slate-500">
-            <span>Min</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="0"
-              max="150"
-              value={min}
-              onChange={(e) => setMin(e.target.value)}
-              onBlur={() => save(t1, t2, min)}
-              className="w-14 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono"
-              placeholder="–"
-            />
-          </label>
-          {f.liveScore && (
-            <button
-              type="button"
-              onClick={clearAll}
-              disabled={pending}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Stop tracking
-            </button>
-          )}
-        </div>
-        {err && <div className="mt-2 text-center text-[11px] text-red-600">{err}</div>}
-      </div>
-    </div>
-  );
-}
-
-function BumpStack({ value, onUp, onDown, disabled }: { value: number; onUp: () => void; onDown: () => void; disabled: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <button type="button" onClick={onUp} disabled={disabled} className="h-7 w-12 rounded-md border-2 border-emerald-300 bg-emerald-50 text-base font-bold text-emerald-700 active:bg-emerald-100 disabled:opacity-50">+</button>
-      <div className="w-12 rounded-xl border-2 border-slate-300 bg-white py-1 text-center font-mono text-2xl font-bold tabular-nums text-slate-900">{value}</div>
-      <button type="button" onClick={onDown} disabled={disabled || value <= 0} className="h-7 w-12 rounded-md border-2 border-slate-300 bg-slate-50 text-base font-bold text-slate-700 active:bg-slate-100 disabled:opacity-30">−</button>
     </div>
   );
 }
