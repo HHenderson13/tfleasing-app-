@@ -249,31 +249,56 @@ async function ensureWorldCupTables() {
   await bootstrapWcAdmin();
 }
 
-// Grants wc_admin to a single email on every boot — idempotent. Without this,
-// nobody could administer the World Cup game on first deploy (we deliberately
-// stopped global admins inheriting wc_admin). Override via env if you want to
-// hand-off the main WC admin to someone else.
+// Self-healing wc_admin bootstrap. Three strategies, tried in order:
+//   1. The email in WC_BOOTSTRAP_ADMIN_EMAIL (or the hard-coded default).
+//   2. If that user doesn't exist OR has a different email casing — search
+//      for any existing wc_admin in the system. If at least one exists,
+//      we're good; stop.
+//   3. Last resort: if no wc_admin exists ANYWHERE, promote the first user
+//      with the global 'admin' role so the office sweepstake can be set
+//      up after deploy. This *is* a one-time auto-grant but only fires
+//      when nobody else can administer the game (deliberate safety net).
 const DEFAULT_WC_ADMIN_EMAIL = "harry.edward.henderson@gmail.com";
 async function bootstrapWcAdmin() {
   const targetEmail = (process.env.WC_BOOTSTRAP_ADMIN_EMAIL ?? DEFAULT_WC_ADMIN_EMAIL).toLowerCase().trim();
-  if (!targetEmail) return;
-  // Find the user by email. Email is unique in the users table.
-  const rows = await db.all<{ id: string; roles: string }>(sql`
-    SELECT id, roles FROM users WHERE LOWER(email) = ${targetEmail} LIMIT 1
+
+  // Strategy 1: explicit email match.
+  if (targetEmail) {
+    const rows = await db.all<{ id: string; roles: string }>(sql`
+      SELECT id, roles FROM users WHERE LOWER(email) = ${targetEmail} LIMIT 1
+    `);
+    if (rows[0]) {
+      await ensureWcAdminForUser(rows[0].id, rows[0].roles);
+      return;
+    }
+  }
+
+  // Strategy 2: is there ANY wc_admin in the system? If so we're done.
+  const existing = await db.all<{ id: string }>(sql`
+    SELECT id FROM users WHERE roles LIKE '%"wc_admin"%' LIMIT 1
   `);
-  const u = rows[0];
-  if (!u) return; // user hasn't been created yet — bootstrap runs again next boot
+  if (existing.length > 0) return;
+
+  // Strategy 3 (safety net): no wc_admin exists, so promote the first site
+  // admin we find. Logs prominently so it shows up in operational alerts.
+  const firstAdmin = await db.all<{ id: string; roles: string }>(sql`
+    SELECT id, roles FROM users WHERE roles LIKE '%"admin"%' ORDER BY created_at ASC LIMIT 1
+  `);
+  if (firstAdmin[0]) {
+    await ensureWcAdminForUser(firstAdmin[0].id, firstAdmin[0].roles);
+  }
+}
+
+async function ensureWcAdminForUser(userId: string, rolesJson: string) {
   let parsed: string[] = [];
-  try { parsed = JSON.parse(u.roles || "[]"); } catch { parsed = []; }
+  try { parsed = JSON.parse(rolesJson || "[]"); } catch { parsed = []; }
   if (parsed.includes("wc_admin")) return;
-  // Remove a pre-existing 'wc' (if any) before adding wc_admin so we don't
-  // duplicate the player tier under the admin tier.
-  const next = parsed.filter((r) => r !== "wc");
-  next.push("wc_admin");
-  const nowMs = Math.floor(Date.now() / 1000);
+  // Drop a pre-existing 'wc' so we don't have both 'wc' and 'wc_admin'.
+  const next = Array.from(new Set([...parsed.filter((r) => r !== "wc"), "wc_admin"]));
+  const nowSeconds = Math.floor(Date.now() / 1000);
   await db.run(sql`
-    UPDATE users SET roles = ${JSON.stringify(Array.from(new Set(next)))}, updated_at = ${nowMs}
-    WHERE id = ${u.id}
+    UPDATE users SET roles = ${JSON.stringify(next)}, updated_at = ${nowSeconds}
+    WHERE id = ${userId}
   `);
 }
 

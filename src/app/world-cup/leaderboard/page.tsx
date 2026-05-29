@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import { loadLeaderboard } from "@/lib/world-cup-data";
+import { calculatePrizePool, fmtGbp } from "@/lib/world-cup-prize";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ export default async function LeaderboardPage() {
   });
 
   const top = ranked.slice(0, 3);
+  const prize = calculatePrizePool(rows.length);
+  const prizeByRank: Record<number, number> = { 1: prize.first, 2: prize.second, 3: prize.third };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -54,10 +57,25 @@ export default async function LeaderboardPage() {
                 points={p.totalPoints}
                 exact={p.exactScores}
                 isMe={p.isMe}
+                prize={prizeByRank[i + 1]}
               />
             ))}
           </section>
         )}
+
+        <section className="mt-6 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-5 py-4 shadow-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Prize pool</div>
+              <div className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900 sm:text-3xl">{fmtGbp(prize.totalPool)}</div>
+            </div>
+            <div className="flex gap-4 text-xs text-amber-800">
+              <span><span className="font-semibold">1st</span> {fmtGbp(prize.first)}</span>
+              <span><span className="font-semibold">2nd</span> {fmtGbp(prize.second)}</span>
+              <span><span className="font-semibold">3rd</span> {fmtGbp(prize.third)}</span>
+            </div>
+          </div>
+        </section>
 
         <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
@@ -102,7 +120,7 @@ export default async function LeaderboardPage() {
   );
 }
 
-function PodiumCard({ position, name, points, exact, isMe }: { position: number; name: string; points: number; exact: number; isMe: boolean }) {
+function PodiumCard({ position, name, points, exact, isMe, prize }: { position: number; name: string; points: number; exact: number; isMe: boolean; prize: number | undefined }) {
   const medal = position === 1 ? "🥇" : position === 2 ? "🥈" : "🥉";
   const tone =
     position === 1 ? "border-amber-300 bg-amber-50" :
@@ -116,6 +134,11 @@ function PodiumCard({ position, name, points, exact, isMe }: { position: number;
       </div>
       <div className="mt-2 truncate text-lg font-semibold text-slate-900">{name}{isMe && " (you)"}</div>
       <div className="mt-0.5 text-xs text-slate-500">{exact} exact scoreline{exact === 1 ? "" : "s"}</div>
+      {prize !== undefined && prize > 0 && (
+        <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">
+          On track for {fmtGbp(prize)}
+        </div>
+      )}
     </div>
   );
 }

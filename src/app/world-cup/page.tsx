@@ -6,27 +6,39 @@ import { requireWcAccess } from "@/lib/auth-guard";
 import { isWcAdmin } from "@/lib/auth";
 import { signOutAction } from "../login/actions";
 import { loadLeaderboard } from "@/lib/world-cup-data";
+import { calculatePrizePool, fmtGbp, ENTRY_FEE_GBP } from "@/lib/world-cup-prize";
 
 export const dynamic = "force-dynamic";
+
+const STAGE_LABELS: Record<string, string> = {
+  group: "Group stage",
+  r32: "Round of 32",
+  r16: "Round of 16",
+  qf: "Quarter-finals",
+  sf: "Semi-finals",
+  third: "3rd-place playoff",
+  final: "Final",
+};
 
 export default async function WorldCupPage() {
   const user = await requireWcAccess();
   const admin = isWcAdmin(user);
-
   const now = new Date();
 
-  // Cheap counts + leaderboard so the page can show personalised standing.
-  const [groupCountRow, upcomingRow, totalRow, leaderboard] = await Promise.all([
-    db.select({ n: count() }).from(wcFixtures).where(eq(wcFixtures.stage, "group")),
+  const [stageCounts, upcomingRow, totalRow, leaderboard] = await Promise.all([
+    db
+      .select({ stage: wcFixtures.stage, n: count() })
+      .from(wcFixtures)
+      .groupBy(wcFixtures.stage),
     db.select({ n: count() }).from(wcFixtures).where(gte(wcFixtures.kickoffAt, now)),
     db.select({ n: count() }).from(wcFixtures),
     loadLeaderboard(),
   ]);
 
+  // Player rank + standing.
   let myRank: number | null = null;
   let myPoints = 0;
   let myExact = 0;
-  // Tied players share a rank — same algorithm as the leaderboard page.
   let cursor = 0;
   let lastPoints: number | null = null;
   for (let i = 0; i < leaderboard.length; i++) {
@@ -42,12 +54,12 @@ export default async function WorldCupPage() {
     }
   }
   const playerCount = leaderboard.length;
+  const prize = calculatePrizePool(playerCount);
 
-  const groupCount = groupCountRow[0]?.n ?? 0;
+  const stageCountMap = new Map(stageCounts.map((s) => [s.stage, s.n]));
   const upcomingCount = upcomingRow[0]?.n ?? 0;
   const totalCount = totalRow[0]?.n ?? 0;
 
-  // Next 5 group fixtures by kickoff — the "what's coming up" rail.
   const next5 = await db
     .select()
     .from(wcFixtures)
@@ -71,55 +83,65 @@ export default async function WorldCupPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 py-8 sm:py-10">
         <section className="relative overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-700" />
-          <div className="px-7 pt-7 pb-6">
+          <div className="px-5 pt-6 pb-5 sm:px-7 sm:pt-7 sm:pb-6">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
               {admin ? "Admin · Play + manage" : "Office prediction game"}
             </div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">FIFA World Cup 2026</h1>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">FIFA World Cup 2026</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Predict scorelines for every match. Score 2 pts for the right total goals,
-              3 pts for the right result, and 5 pts when you call the exact scoreline.
-              Group games open now; knockout rounds unlock as results land.
+              {fmtGbp(ENTRY_FEE_GBP)} entry. {playerCount > 0 ? <>Currently {playerCount} player{playerCount === 1 ? "" : "s"} in.</> : "Be the first to enter."}{" "}
+              Predict every match across all 7 stages — 104 fixtures in total. Knockout
+              brackets fill in automatically as group games are settled.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link
-                href="/world-cup/predictions"
-                className="inline-flex rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
-              >
+              <Link href="/world-cup/predictions" className="inline-flex rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
                 Make predictions →
               </Link>
-              <Link
-                href="/world-cup/leaderboard"
-                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-              >
+              <Link href="/world-cup/leaderboard" className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                 Leaderboard
               </Link>
-              <Link
-                href="/world-cup/groups"
-                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-              >
+              <Link href="/world-cup/groups" className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                 Group tables
               </Link>
               {admin && (
-                <Link
-                  href="/world-cup/admin"
-                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-                >
+                <Link href="/world-cup/admin" className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                   Admin
                 </Link>
               )}
             </div>
           </div>
           <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 bg-emerald-50/40">
-            <Pill label="Group games" value={groupCount.toLocaleString()} />
-            <Pill label="Upcoming matches" value={upcomingCount.toLocaleString()} />
-            <Pill label="Total fixtures" value={totalCount.toLocaleString()} />
+            <Pill label="Players" value={playerCount.toLocaleString()} />
+            <Pill label="Upcoming" value={upcomingCount.toLocaleString()} />
+            <Pill label="Fixtures" value={totalCount.toLocaleString()} />
           </div>
         </section>
 
+        {/* Prize pool — big and proud */}
+        <section className="mt-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 px-5 py-4 sm:px-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Prize pool</div>
+                <div className="mt-0.5 text-3xl font-bold tabular-nums text-slate-900 sm:text-4xl">{fmtGbp(prize.totalPool)}</div>
+              </div>
+              <div className="text-right text-xs text-amber-800">
+                {playerCount === 0 ? <>No entries yet — pool grows {fmtGbp(ENTRY_FEE_GBP)} per player.</> :
+                  <>{playerCount} × {fmtGbp(ENTRY_FEE_GBP)} entry</>}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 divide-x divide-amber-100">
+            <PrizeSlot pos="1st" pct="70%" value={prize.first} medal="🥇" />
+            <PrizeSlot pos="2nd" pct="20%" value={prize.second} medal="🥈" />
+            <PrizeSlot pos="3rd" pct="10%" value={prize.third} medal="🥉" />
+          </div>
+        </section>
+
+        {/* Personal standing — only after the user is on the leaderboard */}
         {myRank !== null && (
           <section className="mt-6 grid gap-4 sm:grid-cols-3">
             <StandingCard label="Your rank" value={`#${myRank}`} sub={`of ${playerCount} player${playerCount === 1 ? "" : "s"}`} tone={myRank <= 3 ? "amber" : "slate"} />
@@ -128,15 +150,37 @@ export default async function WorldCupPage() {
           </section>
         )}
 
+        {/* Tournament map — proves every stage's fixtures are in the system */}
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900">Tournament map</h2>
+          <p className="mt-1 text-xs text-slate-500">All 104 fixtures are loaded. Tap any stage to jump to those matches.</p>
+          <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(["group", "r32", "r16", "qf", "sf", "third", "final"] as const).map((s) => {
+              const n = stageCountMap.get(s) ?? 0;
+              return (
+                <li key={s}>
+                  <Link
+                    href={`/world-cup/predictions#stage-${s}`}
+                    className="block rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/40"
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{STAGE_LABELS[s]}</div>
+                    <div className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900">{n}</div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
         <section className="mt-8">
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">Coming up</h2>
           <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {next5.length === 0 ? (
-              <li className="px-5 py-6 text-center text-sm text-slate-400">No upcoming fixtures yet — kicks off June 2026.</li>
+              <li className="px-5 py-6 text-center text-sm text-slate-400">No upcoming fixtures — tournament's over!</li>
             ) : (
               next5.map((f) => (
-                <li key={f.fixtureNumber} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
-                  <div className="flex items-center gap-3 min-w-0">
+                <li key={f.fixtureNumber} className="flex items-center justify-between gap-3 px-4 py-3 text-sm sm:px-5">
+                  <div className="flex items-center gap-2 min-w-0 sm:gap-3">
                     <span className="inline-flex shrink-0 items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
                       {stageChip(f.stage, f.groupName)}
                     </span>
@@ -191,11 +235,21 @@ function StandingCard({ label, value, sub, tone }: { label: string; value: strin
   );
 }
 
+function PrizeSlot({ pos, pct, value, medal }: { pos: string; pct: string; value: number; medal: string }) {
+  return (
+    <div className="px-3 py-3 text-center sm:px-5">
+      <div className="text-2xl sm:text-3xl">{medal}</div>
+      <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">{pos} · {pct}</div>
+      <div className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{fmtGbp(value)}</div>
+    </div>
+  );
+}
+
 function Pill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-6 py-4">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold text-slate-900">{value}</div>
+    <div className="px-3 py-3 text-center sm:px-6 sm:text-left">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500 sm:text-[11px]">{label}</div>
+      <div className="mt-0.5 text-xl font-semibold text-slate-900 sm:text-2xl">{value}</div>
     </div>
   );
 }
