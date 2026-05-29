@@ -278,12 +278,15 @@ async function bootstrapWcAdmin() {
 }
 
 async function seedWcFixturesIfEmpty() {
-  // Lazy-load seed JSON via require so the (~30KB) payload isn't bundled into
-  // every request — only loaded the first time the schema needs to migrate.
-  const rows = await db.all<{ n: number }>(sql.raw(`SELECT COUNT(*) AS n FROM wc_fixtures`));
-  const existing = Number(rows[0]?.n ?? 0);
-  if (existing >= 104) return;
-
+  // Seed-syncs the 104 fixtures from src/lib/wc-fixtures-seed.json. Static
+  // metadata (kickoff time, stage, group, stadium, next-match wiring) is
+  // force-synced on every boot — corrections in the seed file propagate to
+  // already-deployed rows without needing a one-shot migration.
+  //
+  // Team names are NOT force-synced: admins may have manually advanced
+  // bracket teams, and we don't want to clobber those edits. New rows get
+  // teams from the seed (groups have the 48 known teams; knockouts start
+  // blank).
   type Seed = {
     fixtureNumber: number;
     stage: string;
@@ -299,11 +302,25 @@ async function seedWcFixturesIfEmpty() {
   const seed: Seed[] = (await import("@/lib/wc-fixtures-seed.json")).default as Seed[];
   for (const f of seed) {
     const kickoffMs = Math.floor(new Date(f.kickoffAt).getTime() / 1000);
+    // Insert if missing (first boot).
     await db.run(sql`
       INSERT OR IGNORE INTO wc_fixtures
         (fixture_number, stage, group_name, kickoff_at, stadium, city, team1, team2, next_fixture_number, next_slot)
       VALUES
         (${f.fixtureNumber}, ${f.stage}, ${f.groupName}, ${kickoffMs}, ${f.stadium}, ${f.city}, ${f.team1}, ${f.team2}, ${f.nextFixtureNumber}, ${f.nextSlot})
+    `);
+    // Force-sync static metadata on every boot (cheap; UPDATE is a no-op
+    // when the values already match). Don't touch team1/team2.
+    await db.run(sql`
+      UPDATE wc_fixtures
+      SET stage = ${f.stage},
+          group_name = ${f.groupName},
+          kickoff_at = ${kickoffMs},
+          stadium = ${f.stadium},
+          city = ${f.city},
+          next_fixture_number = ${f.nextFixtureNumber},
+          next_slot = ${f.nextSlot}
+      WHERE fixture_number = ${f.fixtureNumber}
     `);
   }
 }
