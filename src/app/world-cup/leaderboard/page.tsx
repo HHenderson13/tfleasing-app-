@@ -60,40 +60,42 @@ export default async function LeaderboardPage() {
         )}
 
         <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2.5 text-left font-semibold">Rank</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Player</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Picks</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Correct</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Exact</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Points</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {ranked.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
-                    No players yet — admins can grant World Cup access from the admin page (batch 3).
-                  </td>
+                  <th className="px-3 py-2.5 text-left font-semibold sm:px-4">Rank</th>
+                  <th className="px-3 py-2.5 text-left font-semibold sm:px-4">Player</th>
+                  <th className="px-2 py-2.5 text-right font-semibold sm:px-4">Picks</th>
+                  <th className="hidden px-2 py-2.5 text-right font-semibold sm:table-cell sm:px-4">Correct</th>
+                  <th className="px-2 py-2.5 text-right font-semibold sm:px-4">Exact</th>
+                  <th className="px-3 py-2.5 text-right font-semibold sm:px-4">Points</th>
                 </tr>
-              ) : (
-                ranked.map((r) => (
-                  <tr key={r.userId} className={r.isMe ? "bg-emerald-50/50" : ""}>
-                    <td className="px-4 py-2.5 font-mono text-slate-500">{r.rank}</td>
-                    <td className="px-4 py-2.5 font-medium text-slate-900">
-                      {r.name}{r.isMe && <span className="ml-1.5 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {ranked.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
+                      No players yet — admin can grant access from the Players tab.
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-slate-700">{r.predictionsMade}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-slate-700">{r.correctResults}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-slate-700">{r.exactScores}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-base font-semibold text-slate-900">{r.totalPoints}</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  ranked.map((r) => (
+                    <tr key={r.userId} className={r.isMe ? "bg-emerald-50/50" : ""}>
+                      <td className="px-3 py-2.5 font-mono text-slate-500 sm:px-4">{r.rank}</td>
+                      <td className="px-3 py-2.5 font-medium text-slate-900 sm:px-4">
+                        <span className="truncate">{r.name}</span>{r.isMe && <span className="ml-1.5 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-mono text-slate-700 sm:px-4">{r.predictionsMade}</td>
+                      <td className="hidden px-2 py-2.5 text-right font-mono text-slate-700 sm:table-cell sm:px-4">{r.correctResults}</td>
+                      <td className="px-2 py-2.5 text-right font-mono text-slate-700 sm:px-4">{r.exactScores}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-base font-semibold text-slate-900 sm:px-4">{r.totalPoints}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       </main>
     </div>

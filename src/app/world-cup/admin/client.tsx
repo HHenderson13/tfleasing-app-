@@ -176,48 +176,84 @@ function ResultRow({ fixture: f }: { fixture: AdminFixture }) {
 
   return (
     <div className={`overflow-hidden rounded-xl border ${settled ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200 bg-white"} shadow-sm`}>
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
+      {/* Meta strip: chip + kickoff time + stadium. Stacks on mobile via flex-wrap. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2 text-[11px]">
+        <div className="flex items-center gap-2 min-w-0">
           <StageChip stage={f.stage} group={f.groupName} />
-          <div className="min-w-0">
-            <div className={`truncate font-medium ${teamsKnown ? "text-slate-900" : "text-slate-400"}`}>
-              {f.team1 ?? "TBD"} <span className="text-slate-400">vs</span> {f.team2 ?? "TBD"}
-            </div>
-            <div className="truncate text-[11px] text-slate-500">
-              {new Date(f.kickoffAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK
-              {f.stadium ? ` · ${f.stadium}` : ""}
-            </div>
-          </div>
+          <span className="font-mono text-slate-400">M{f.fixtureNumber}</span>
+          {f.stadium && <span className="truncate text-slate-500">{f.stadium}</span>}
         </div>
+        <div className="text-right text-slate-500">
+          {new Date(f.kickoffAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK
+        </div>
+      </div>
+
+      {/* Teams + score input — same stacked layout as the player page. */}
+      <div className="px-4 py-3">
         {teamsKnown ? (
-          <div className="flex items-center gap-2">
-            <input type="number" min="0" max="30" value={t1} onChange={(e) => setT1(e.target.value)} className="w-14 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono text-base focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100" aria-label={`${f.team1} goals`} />
-            <span className="text-slate-400">–</span>
-            <input type="number" min="0" max="30" value={t2} onChange={(e) => setT2(e.target.value)} className="w-14 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono text-base focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100" aria-label={`${f.team2} goals`} />
-            <button
-              type="button"
-              onClick={save}
-              disabled={pending}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
-              {pending ? "Saving…" : settled ? "Update" : "Save"}
-            </button>
-          </div>
+          <>
+            <div className="flex items-center justify-between text-sm font-semibold text-slate-900 sm:text-base">
+              <span className="truncate text-right" style={{ maxWidth: "44%" }}>{f.team1}</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">vs</span>
+              <span className="truncate text-left" style={{ maxWidth: "44%" }}>{f.team2}</span>
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max="30"
+                value={t1}
+                onChange={(e) => setT1(e.target.value)}
+                className="w-16 rounded-xl border-2 border-slate-300 bg-white py-2 text-center font-mono text-2xl font-bold tabular-nums text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-20 sm:py-3 sm:text-3xl"
+                aria-label={`${f.team1} goals`}
+              />
+              <span className="font-mono text-2xl text-slate-300">–</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max="30"
+                value={t2}
+                onChange={(e) => setT2(e.target.value)}
+                className="w-16 rounded-xl border-2 border-slate-300 bg-white py-2 text-center font-mono text-2xl font-bold tabular-nums text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-20 sm:py-3 sm:text-3xl"
+                aria-label={`${f.team2} goals`}
+              />
+            </div>
+            <div className="mt-3 flex justify-center">
+              <button
+                type="button"
+                onClick={save}
+                disabled={pending}
+                className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {pending ? "Saving…" : settled ? "Update result" : "Save result"}
+              </button>
+            </div>
+          </>
         ) : (
-          <span className="text-xs italic text-slate-400">Teams not set yet (use Knockout teams tab)</span>
+          <p className="py-2 text-center text-sm italic text-slate-400">Teams not set yet — use the Knockout teams tab</p>
         )}
       </div>
       {f.stage !== "group" && (showET || (f.result && (f.result.etTeam1Goals !== null || f.result.penTeam1 !== null))) && (
-        <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 text-xs">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-semibold uppercase tracking-wide text-slate-500">ET</span>
-            <input type="number" min="0" value={et1} onChange={(e) => setET1(e.target.value)} className="w-12 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono" />
-            <span className="text-slate-400">–</span>
-            <input type="number" min="0" value={et2} onChange={(e) => setET2(e.target.value)} className="w-12 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono" />
-            <span className="ml-4 font-semibold uppercase tracking-wide text-slate-500">Pens</span>
-            <input type="number" min="0" value={pen1} onChange={(e) => setPen1(e.target.value)} className="w-12 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono" />
-            <span className="text-slate-400">–</span>
-            <input type="number" min="0" value={pen2} onChange={(e) => setPen2(e.target.value)} className="w-12 rounded-md border border-slate-300 bg-white px-2 py-1 text-center font-mono" />
+        <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div className="text-center">
+              <div className="font-semibold uppercase tracking-wide text-slate-500">Extra time</div>
+              <div className="mt-1.5 flex items-center justify-center gap-2">
+                <input type="number" inputMode="numeric" min="0" value={et1} onChange={(e) => setET1(e.target.value)} className="w-14 rounded-lg border-2 border-slate-300 bg-white py-2 text-center font-mono text-lg font-semibold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+                <span className="text-slate-400">–</span>
+                <input type="number" inputMode="numeric" min="0" value={et2} onChange={(e) => setET2(e.target.value)} className="w-14 rounded-lg border-2 border-slate-300 bg-white py-2 text-center font-mono text-lg font-semibold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="font-semibold uppercase tracking-wide text-slate-500">Penalties</div>
+              <div className="mt-1.5 flex items-center justify-center gap-2">
+                <input type="number" inputMode="numeric" min="0" value={pen1} onChange={(e) => setPen1(e.target.value)} className="w-14 rounded-lg border-2 border-slate-300 bg-white py-2 text-center font-mono text-lg font-semibold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+                <span className="text-slate-400">–</span>
+                <input type="number" inputMode="numeric" min="0" value={pen2} onChange={(e) => setPen2(e.target.value)} className="w-14 rounded-lg border-2 border-slate-300 bg-white py-2 text-center font-mono text-lg font-semibold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+              </div>
+            </div>
           </div>
         </div>
       )}

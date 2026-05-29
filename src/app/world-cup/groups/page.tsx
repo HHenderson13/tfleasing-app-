@@ -41,27 +41,29 @@ export default async function GroupsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-slate-400">
-                    <th className="pl-5 pr-2 py-2 text-left font-semibold">Team</th>
-                    <th className="px-1.5 py-2 text-right font-semibold">P</th>
-                    <th className="px-1.5 py-2 text-right font-semibold">W</th>
-                    <th className="px-1.5 py-2 text-right font-semibold">D</th>
-                    <th className="px-1.5 py-2 text-right font-semibold">L</th>
-                    <th className="px-1.5 py-2 text-right font-semibold">GD</th>
-                    <th className="pl-1.5 pr-5 py-2 text-right font-semibold">Pts</th>
+                    <th className="pl-4 pr-2 py-2 text-left font-semibold sm:pl-5">Team</th>
+                    <th className="px-1 py-2 text-right font-semibold sm:px-1.5">P</th>
+                    <th className="px-1 py-2 text-right font-semibold sm:px-1.5">W</th>
+                    <th className="hidden px-1 py-2 text-right font-semibold sm:table-cell sm:px-1.5">D</th>
+                    <th className="hidden px-1 py-2 text-right font-semibold sm:table-cell sm:px-1.5">L</th>
+                    <th className="px-1 py-2 text-right font-semibold sm:px-1.5">GD</th>
+                    <th className="pl-1 pr-4 py-2 text-right font-semibold sm:pl-1.5 sm:pr-5">Pts</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {g.standings.map((row, i) => (
                     <tr key={row.team} className={i < 2 ? "bg-emerald-50/40" : ""}>
-                      <td className="pl-5 pr-2 py-2 font-medium text-slate-900">{row.team}</td>
-                      <td className="px-1.5 py-2 text-right font-mono text-xs text-slate-700">{row.played}</td>
-                      <td className="px-1.5 py-2 text-right font-mono text-xs text-slate-700">{row.won}</td>
-                      <td className="px-1.5 py-2 text-right font-mono text-xs text-slate-700">{row.drawn}</td>
-                      <td className="px-1.5 py-2 text-right font-mono text-xs text-slate-700">{row.lost}</td>
-                      <td className={`px-1.5 py-2 text-right font-mono text-xs ${row.goalDiff > 0 ? "text-emerald-700" : row.goalDiff < 0 ? "text-red-700" : "text-slate-500"}`}>
+                      <td className="pl-4 pr-2 py-2 font-medium text-slate-900 sm:pl-5">
+                        <span className="inline-block min-w-[20px] text-slate-400 mr-1.5">{i + 1}</span>{row.team}
+                      </td>
+                      <td className="px-1 py-2 text-right font-mono text-xs text-slate-700 sm:px-1.5">{row.played}</td>
+                      <td className="px-1 py-2 text-right font-mono text-xs text-slate-700 sm:px-1.5">{row.won}</td>
+                      <td className="hidden px-1 py-2 text-right font-mono text-xs text-slate-700 sm:table-cell sm:px-1.5">{row.drawn}</td>
+                      <td className="hidden px-1 py-2 text-right font-mono text-xs text-slate-700 sm:table-cell sm:px-1.5">{row.lost}</td>
+                      <td className={`px-1 py-2 text-right font-mono text-xs sm:px-1.5 ${row.goalDiff > 0 ? "text-emerald-700" : row.goalDiff < 0 ? "text-red-700" : "text-slate-500"}`}>
                         {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff}
                       </td>
-                      <td className="pl-1.5 pr-5 py-2 text-right font-mono text-sm font-semibold text-slate-900">{row.points}</td>
+                      <td className="pl-1 pr-4 py-2 text-right font-mono text-sm font-semibold text-slate-900 sm:pl-1.5 sm:pr-5">{row.points}</td>
                     </tr>
                   ))}
                 </tbody>
