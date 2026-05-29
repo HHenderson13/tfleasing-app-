@@ -1,8 +1,28 @@
 import "server-only";
 import { db } from "@/db";
-import { wcFixtures, wcPredictions, wcResults, users } from "@/db/schema";
+import { wcFixtures, wcPayments, wcPredictions, wcResults, users } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { computeGroupStandings, type GroupStandingRow } from "./world-cup-scoring";
+
+// Payment deadline — past this point, unpaid players are removed from the
+// game. The tournament starts 11 June 2026, so the cut-off is the day before.
+// Stored UTC so the comparison is unambiguous across timezones.
+export const PAYMENT_DEADLINE = new Date("2026-06-10T23:00:00.000Z"); // midnight BST
+export const PAYMENT_BANK = {
+  payee: "Jacob Birch",
+  sortCode: "04-00-75",
+  accountNumber: "73131571",
+} as const;
+
+export async function getPaidUserIds(): Promise<Set<string>> {
+  const rows = await db.select({ userId: wcPayments.userId }).from(wcPayments);
+  return new Set(rows.map((r) => r.userId));
+}
+
+export async function isUserPaid(userId: string): Promise<boolean> {
+  const [row] = await db.select({ userId: wcPayments.userId }).from(wcPayments).where(eq(wcPayments.userId, userId)).limit(1);
+  return !!row;
+}
 
 export interface FixtureRow {
   fixtureNumber: number;

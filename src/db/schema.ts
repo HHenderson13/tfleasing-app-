@@ -375,6 +375,15 @@ export const users = sqliteTable("users", {
 });
 
 // ─── World Cup prediction game ─────────────────────────────────────────────
+// Office sweepstake payment tracking — one row per paid player. Admin marks
+// paid via the Players tab; non-paid players see a deadline banner until
+// they're marked.
+export const wcPayments = sqliteTable("wc_payments", {
+  userId: text("user_id").primaryKey(),
+  paidAt: integer("paid_at", { mode: "timestamp" }).notNull(),
+  markedByUserId: text("marked_by_user_id").notNull(),
+});
+
 // Fixtures table is the 104 matches (12 groups × 6 + 16 R32 + 8 R16 + 4 QF + 2 SF + 1 3rd + 1 final).
 // Seeded idempotently from the spreadsheet template; admins can edit the
 // teams on a fixture (knockouts start blank and get filled by auto-advance).

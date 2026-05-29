@@ -245,6 +245,14 @@ async function ensureWorldCupTables() {
   ));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_predictions_user ON wc_predictions(user_id)`));
 
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS wc_payments (
+      user_id TEXT PRIMARY KEY,
+      paid_at INTEGER NOT NULL,
+      marked_by_user_id TEXT NOT NULL
+    )
+  `));
+
   await seedWcFixturesIfEmpty();
   await bootstrapWcAdmin();
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { users, wcFixtures, wcResults } from "@/db/schema";
+import { users, wcFixtures, wcPayments, wcResults } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireWcAdmin } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
@@ -11,11 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function WcAdminPage() {
   const user = await requireWcAdmin();
 
-  const [fixtures, results, allUsers] = await Promise.all([
+  const [fixtures, results, allUsers, paid] = await Promise.all([
     db.select().from(wcFixtures).orderBy(wcFixtures.kickoffAt, wcFixtures.fixtureNumber),
     db.select().from(wcResults),
     db.select({ id: users.id, name: users.name, email: users.email, roles: users.roles }).from(users).orderBy(users.name),
+    db.select({ userId: wcPayments.userId }).from(wcPayments),
   ]);
+  const paidSet = new Set(paid.map((p) => p.userId));
 
   const resultByFx = new Map(results.map((r) => [r.fixtureNumber, r]));
   const fixturesWithResults = fixtures.map((f) => ({
@@ -52,7 +54,7 @@ export default async function WcAdminPage() {
         ? "wc"
         : "none";
     const isSiteAdmin = roles.includes("admin");
-    return { id: u.id, name: u.name, email: u.email, level, isSiteAdmin };
+    return { id: u.id, name: u.name, email: u.email, level, isSiteAdmin, paid: paidSet.has(u.id) };
   });
 
   // Quick counters for the page header.

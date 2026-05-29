@@ -6,6 +6,7 @@ import {
   recomputeAllPointsAction,
   recordResultAction,
   setKnockoutTeamsAction,
+  setPaidStatusAction,
   setWcAccessAction,
 } from "./actions";
 
@@ -36,6 +37,7 @@ export interface AdminUser {
   email: string;
   level: "none" | "wc" | "wc_admin";
   isSiteAdmin: boolean;
+  paid: boolean;
 }
 
 type Tab = "results" | "players" | "knockouts";
@@ -350,6 +352,15 @@ function PlayersTab({ users, currentUserId }: { users: AdminUser[]; currentUserI
     });
   }
 
+  function togglePaid(userId: string, paid: boolean) {
+    setBannerErr(null); setBannerMsg(null);
+    start(async () => {
+      const res = await setPaidStatusAction({ userId, paid });
+      if (!res.ok) setBannerErr(res.error ?? "Failed");
+      else setBannerMsg(paid ? "Marked as paid" : "Marked as unpaid");
+    });
+  }
+
   return (
     <div className="mt-6 space-y-6">
       <NewPlayerForm onResult={(ok, msg) => { if (ok) setBannerMsg(msg); else setBannerErr(msg); }} />
@@ -365,7 +376,8 @@ function PlayersTab({ users, currentUserId }: { users: AdminUser[]; currentUserI
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Name</th>
-              <th className="px-4 py-2 text-left font-semibold">Email</th>
+              <th className="hidden px-4 py-2 text-left font-semibold sm:table-cell">Email</th>
+              <th className="px-3 py-2 text-center font-semibold">Paid</th>
               <th className="px-4 py-2 text-right font-semibold">Access</th>
             </tr>
           </thead>
@@ -378,7 +390,23 @@ function PlayersTab({ users, currentUserId }: { users: AdminUser[]; currentUserI
                     <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500" title="Has the global 'admin' role on the leasing system">site admin</span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-slate-600">{u.email}</td>
+                <td className="hidden px-4 py-2 text-slate-600 sm:table-cell">{u.email}</td>
+                <td className="px-3 py-2 text-center">
+                  {u.level === "none" ? (
+                    <span className="text-[11px] text-slate-300">—</span>
+                  ) : (
+                    <label className="inline-flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={u.paid}
+                        onChange={(e) => togglePaid(u.id, e.target.checked)}
+                        disabled={pending}
+                        className="h-4 w-4 cursor-pointer rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      {u.paid && <span className="text-[10px] font-semibold uppercase text-emerald-700">paid</span>}
+                    </label>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-right">
                   <select
                     value={u.level}

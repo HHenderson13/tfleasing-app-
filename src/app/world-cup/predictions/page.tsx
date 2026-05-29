@@ -3,6 +3,7 @@ import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import { listFixturesWithMyPredictions } from "@/lib/world-cup-data";
 import { PredictionsClient } from "./client";
+import { PaymentBanner } from "../payment-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function PredictionsPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
+        <PaymentBanner userId={user.id} />
         <div className="flex items-baseline justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">My predictions</h1>
           <div className="text-xs text-slate-500">

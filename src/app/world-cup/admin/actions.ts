@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { users, wcFixtures, wcPredictions, wcResults } from "@/db/schema";
+import { users, wcFixtures, wcPayments, wcPredictions, wcResults } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -281,6 +281,29 @@ export async function createWcUserAction(input: { name: string; email: string; p
 
   revalidatePath("/world-cup/admin");
   return { ok: true as const, userId: id };
+}
+
+// Mark a player as paid / unpaid. wc_admin only.
+const paidSchema = z.object({ userId: z.string().min(1), paid: z.boolean() });
+
+export async function setPaidStatusAction(input: { userId: string; paid: boolean }) {
+  const me = await requireWcAdmin();
+  const parsed = paidSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  if (parsed.data.paid) {
+    await db
+      .insert(wcPayments)
+      .values({ userId: parsed.data.userId, paidAt: new Date(), markedByUserId: me.id })
+      .onConflictDoUpdate({
+        target: wcPayments.userId,
+        set: { paidAt: new Date(), markedByUserId: me.id },
+      });
+  } else {
+    await db.delete(wcPayments).where(eq(wcPayments.userId, parsed.data.userId));
+  }
+  revalidatePath("/world-cup");
+  revalidatePath("/world-cup/admin");
+  return { ok: true as const };
 }
 
 // Manual override — used when a knockout fixture or a 3rd-place qualifier

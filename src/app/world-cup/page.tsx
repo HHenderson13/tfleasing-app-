@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { wcFixtures } from "@/db/schema";
-import { count, eq, gte, sql } from "drizzle-orm";
+import { wcFixtures, wcPredictions } from "@/db/schema";
+import { and, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { isWcAdmin } from "@/lib/auth";
 import { signOutAction } from "../login/actions";
 import { loadLeaderboard } from "@/lib/world-cup-data";
 import { calculatePrizePool, fmtGbp, ENTRY_FEE_GBP } from "@/lib/world-cup-prize";
+import { PaymentBanner } from "./payment-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,19 @@ export default async function WorldCupPage() {
     .orderBy(wcFixtures.kickoffAt)
     .limit(5);
 
+  // Pull only this user's predictions for the upcoming 5 — one extra query
+  // beats N joins. Empty when the user hasn't picked any of them yet.
+  const next5Predictions = next5.length > 0
+    ? await db
+        .select()
+        .from(wcPredictions)
+        .where(and(
+          eq(wcPredictions.userId, user.id),
+          inArray(wcPredictions.fixtureNumber, next5.map((f) => f.fixtureNumber)),
+        ))
+    : [];
+  const myPickByFx = new Map(next5Predictions.map((p) => [p.fixtureNumber, p]));
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -84,6 +98,7 @@ export default async function WorldCupPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8 sm:py-10">
+        <PaymentBanner userId={user.id} />
         <section className="relative overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-700" />
           <div className="px-5 pt-6 pb-5 sm:px-7 sm:pt-7 sm:pb-6">
@@ -178,27 +193,50 @@ export default async function WorldCupPage() {
             {next5.length === 0 ? (
               <li className="px-5 py-6 text-center text-sm text-slate-400">No upcoming fixtures — tournament's over!</li>
             ) : (
-              next5.map((f) => (
-                <li key={f.fixtureNumber} className="flex items-center justify-between gap-3 px-4 py-3 text-sm sm:px-5">
-                  <div className="flex items-center gap-2 min-w-0 sm:gap-3">
-                    <span className="inline-flex shrink-0 items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                      {stageChip(f.stage, f.groupName)}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-slate-900">
-                        {f.team1 ?? "TBD"} <span className="text-slate-400">vs</span> {f.team2 ?? "TBD"}
+              next5.map((f) => {
+                const pick = myPickByFx.get(f.fixtureNumber);
+                const teamsKnown = !!(f.team1 && f.team2);
+                return (
+                  <li key={f.fixtureNumber}>
+                    <Link
+                      href={`/world-cup/predictions#stage-${f.stage}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition hover:bg-slate-50 sm:px-5"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 sm:gap-3">
+                        <span className="inline-flex shrink-0 items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                          {stageChip(f.stage, f.groupName)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-slate-900">
+                            {f.team1 ?? "TBD"} <span className="text-slate-400">vs</span> {f.team2 ?? "TBD"}
+                          </div>
+                          <div className="truncate text-[11px] text-slate-500">{f.stadium}{f.city ? ` · ${f.city}` : ""}</div>
+                        </div>
                       </div>
-                      <div className="truncate text-[11px] text-slate-500">{f.stadium}{f.city ? ` · ${f.city}` : ""}</div>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right text-xs text-slate-500">
-                    {f.kickoffAt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
-                    <div className="text-[10px] text-slate-400">
-                      {f.kickoffAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK
-                    </div>
-                  </div>
-                </li>
-              ))
+                      <div className="flex shrink-0 items-center gap-2.5 text-xs">
+                        {teamsKnown && (
+                          pick ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                              <span className="text-[9px] uppercase tracking-wide text-emerald-600">Pick</span>
+                              <span className="font-mono">{pick.team1Goals}–{pick.team2Goals}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">
+                              Pick →
+                            </span>
+                          )
+                        )}
+                        <div className="text-right text-slate-500">
+                          {f.kickoffAt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                          <div className="text-[10px] text-slate-400">
+                            {f.kickoffAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })
             )}
           </ul>
         </section>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import { loadGroupViews } from "@/lib/world-cup-data";
+import { PaymentBanner } from "../payment-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function GroupsPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
+        <PaymentBanner userId={user.id} />
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Group standings</h1>
         <p className="mt-1 text-sm text-slate-500">
           Live tables — recompute the instant a group-stage result is entered. Top two from each group advance automatically;
