@@ -223,6 +223,45 @@ export interface GroupView {
   }>;
 }
 
+export interface BracketCell {
+  fixtureNumber: number;
+  stage: "r32" | "r16" | "qf" | "sf" | "third" | "final";
+  kickoffAt: Date;
+  team1: string | null;
+  team2: string | null;
+  result: { team1Goals: number; team2Goals: number; winnerTeam: string } | null;
+}
+
+// Returns the 32 knockout fixtures, grouped by stage and sorted by their
+// position in the bracket (fixture_number order matches the tree layout).
+// The page renders them as five columns: R32 → R16 → QF → SF → Final, plus
+// the 3rd-place playoff as a separate card.
+export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"], BracketCell[]>> {
+  const fixtures = await db
+    .select()
+    .from(wcFixtures)
+    .where(sql`${wcFixtures.stage} IN ('r32','r16','qf','sf','third','final')`)
+    .orderBy(wcFixtures.fixtureNumber);
+  const results = await db.select().from(wcResults);
+  const resByFx = new Map(results.map((r) => [r.fixtureNumber, r]));
+
+  const groups: Record<BracketCell["stage"], BracketCell[]> = {
+    r32: [], r16: [], qf: [], sf: [], third: [], final: [],
+  };
+  for (const f of fixtures) {
+    const r = resByFx.get(f.fixtureNumber);
+    groups[f.stage as BracketCell["stage"]].push({
+      fixtureNumber: f.fixtureNumber,
+      stage: f.stage as BracketCell["stage"],
+      kickoffAt: f.kickoffAt,
+      team1: f.team1,
+      team2: f.team2,
+      result: r ? { team1Goals: r.team1Goals, team2Goals: r.team2Goals, winnerTeam: r.winnerTeam } : null,
+    });
+  }
+  return groups;
+}
+
 export async function loadGroupViews(): Promise<GroupView[]> {
   const fixtures = await db
     .select()
