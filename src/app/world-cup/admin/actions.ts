@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { users, wcFixtures, wcPayments, wcPredictions, wcResults } from "@/db/schema";
+import { users, wcFixtures, wcLiveScores, wcPayments, wcPredictions, wcResults } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -147,6 +147,10 @@ export async function recordResultAction(input: {
       }
     }
 
+    // The match is now settled; any live snapshot for it is stale, so drop
+    // the row so the landing-page "LIVE" widget doesn't keep showing it.
+    await db.delete(wcLiveScores).where(eq(wcLiveScores.fixtureNumber, fx.fixtureNumber));
+
     revalidatePath("/world-cup");
     revalidatePath("/world-cup/predictions");
     revalidatePath("/world-cup/leaderboard");
@@ -281,6 +285,70 @@ export async function createWcUserAction(input: { name: string; email: string; p
 
   revalidatePath("/world-cup/admin");
   return { ok: true as const, userId: id };
+}
+
+// Live-score update during an in-progress match. wc_admin only. Upserts the
+// wc_live_scores row, which the landing page reads to show the "leading on
+// this match" widget. Clearing the live score (pass null) makes the widget
+// disappear — useful if a final result has been entered separately.
+const liveScoreSchema = z.object({
+  fixtureNumber: z.number().int().min(1).max(104),
+  team1Goals: z.number().int().min(0).max(30),
+  team2Goals: z.number().int().min(0).max(30),
+  minute: z.number().int().min(0).max(150).nullable().optional(),
+});
+
+export async function setLiveScoreAction(input: {
+  fixtureNumber: number;
+  team1Goals: number;
+  team2Goals: number;
+  minute?: number | null;
+}) {
+  const user = await requireWcAdmin();
+  const parsed = liveScoreSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  // Hard-stop on settled fixtures — once the canonical result is in, the
+  // projection no longer means anything.
+  const [existingResult] = await db
+    .select({ fixtureNumber: wcResults.fixtureNumber })
+    .from(wcResults)
+    .where(eq(wcResults.fixtureNumber, parsed.data.fixtureNumber))
+    .limit(1);
+  if (existingResult) return { ok: false as const, error: "Match already settled — clear the result first if you want to track it live again." };
+
+  const now = new Date();
+  await db
+    .insert(wcLiveScores)
+    .values({
+      fixtureNumber: parsed.data.fixtureNumber,
+      team1Goals: parsed.data.team1Goals,
+      team2Goals: parsed.data.team2Goals,
+      minute: parsed.data.minute ?? null,
+      updatedAt: now,
+      updatedByUserId: user.id,
+    })
+    .onConflictDoUpdate({
+      target: wcLiveScores.fixtureNumber,
+      set: {
+        team1Goals: parsed.data.team1Goals,
+        team2Goals: parsed.data.team2Goals,
+        minute: parsed.data.minute ?? null,
+        updatedAt: now,
+        updatedByUserId: user.id,
+      },
+    });
+  revalidatePath("/world-cup");
+  revalidatePath("/world-cup/admin");
+  return { ok: true as const };
+}
+
+export async function clearLiveScoreAction(fixtureNumber: number) {
+  await requireWcAdmin();
+  await db.delete(wcLiveScores).where(eq(wcLiveScores.fixtureNumber, fixtureNumber));
+  revalidatePath("/world-cup");
+  revalidatePath("/world-cup/admin");
+  return { ok: true as const };
 }
 
 // Mark a player as paid / unpaid. wc_admin only.

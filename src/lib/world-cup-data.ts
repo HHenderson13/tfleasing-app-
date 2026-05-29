@@ -1,8 +1,8 @@
 import "server-only";
 import { db } from "@/db";
-import { wcFixtures, wcPayments, wcPredictions, wcResults, users } from "@/db/schema";
+import { wcFixtures, wcLiveScores, wcPayments, wcPredictions, wcResults, users } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { computeGroupStandings, type GroupStandingRow } from "./world-cup-scoring";
+import { computeGroupStandings, scorePrediction, type GroupStandingRow } from "./world-cup-scoring";
 
 // Payment deadline — past this point, unpaid players are removed from the
 // game. The tournament starts 11 June 2026, so the cut-off is the day before.
@@ -297,6 +297,95 @@ export interface GroupView {
     team2: string;
     result: { team1Goals: number; team2Goals: number } | null;
   }>;
+}
+
+// "Live now" = any wc_live_scores row whose fixture hasn't yet been settled
+// in wc_results. Snapshot is at the moment of the most recent update; the
+// projected leaderboard treats the live score as if it were the final.
+export interface LiveMatch {
+  fixtureNumber: number;
+  stage: string;
+  groupName: string | null;
+  kickoffAt: Date;
+  team1: string;
+  team2: string;
+  team1Goals: number;
+  team2Goals: number;
+  minute: number | null;
+  updatedAt: Date;
+  projected: Array<{ userId: string; name: string; pickT1: number; pickT2: number; points: number }>;
+}
+
+export async function loadLiveMatches(): Promise<LiveMatch[]> {
+  const rows = await db.all<{
+    fixture_number: number;
+    stage: string;
+    group_name: string | null;
+    kickoff_at: number;
+    team1: string;
+    team2: string;
+    t1_goals: number;
+    t2_goals: number;
+    minute: number | null;
+    updated_at: number;
+  }>(sql`
+    SELECT
+      f.fixture_number, f.stage, f.group_name, f.kickoff_at,
+      f.team1, f.team2,
+      l.team1_goals AS t1_goals,
+      l.team2_goals AS t2_goals,
+      l.minute,
+      l.updated_at
+    FROM wc_live_scores l
+    INNER JOIN wc_fixtures f ON f.fixture_number = l.fixture_number
+    LEFT JOIN wc_results r ON r.fixture_number = l.fixture_number
+    WHERE r.fixture_number IS NULL
+    ORDER BY f.kickoff_at ASC
+  `);
+  if (rows.length === 0) return [];
+
+  // Pull all predictions + player names for the live fixtures in one go,
+  // so per-fixture projections don't trigger N+1.
+  const fixtureNumbers = rows.map((r) => r.fixture_number);
+  const preds = await db.all<{
+    user_id: string; name: string; fixture_number: number;
+    t1: number; t2: number;
+  }>(sql`
+    SELECT p.user_id, u.name, p.fixture_number, p.team1_goals AS t1, p.team2_goals AS t2
+    FROM wc_predictions p
+    INNER JOIN users u ON u.id = p.user_id
+    WHERE p.fixture_number IN (${sql.join(fixtureNumbers.map((n) => sql`${n}`), sql`, `)})
+  `);
+
+  return rows.map((r) => {
+    const stage = r.stage;
+    const projected = preds
+      .filter((p) => p.fixture_number === r.fixture_number)
+      .map((p) => {
+        const pts = scorePrediction(
+          { team1Goals: p.t1, team2Goals: p.t2 },
+          { team1Goals: r.t1_goals, team2Goals: r.t2_goals },
+          stage,
+        );
+        return { userId: p.user_id, name: p.name, pickT1: p.t1, pickT2: p.t2, points: pts.total };
+      })
+      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
+      .slice(0, 5);
+
+    return {
+      fixtureNumber: r.fixture_number,
+      stage,
+      groupName: r.group_name,
+      kickoffAt: new Date(r.kickoff_at * 1000),
+      team1: r.team1,
+      team2: r.team2,
+      team1Goals: r.t1_goals,
+      team2Goals: r.t2_goals,
+      minute: r.minute,
+      updatedAt: new Date(r.updated_at * 1000),
+      projected,
+    };
+  });
 }
 
 export interface BracketCell {

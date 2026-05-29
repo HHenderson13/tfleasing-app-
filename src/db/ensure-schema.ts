@@ -253,6 +253,17 @@ async function ensureWorldCupTables() {
     )
   `));
 
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS wc_live_scores (
+      fixture_number INTEGER PRIMARY KEY,
+      team1_goals INTEGER NOT NULL,
+      team2_goals INTEGER NOT NULL,
+      minute INTEGER,
+      updated_at INTEGER NOT NULL,
+      updated_by_user_id TEXT NOT NULL
+    )
+  `));
+
   await seedWcFixturesIfEmpty();
   await bootstrapWcAdmin();
 }

@@ -5,7 +5,7 @@ import { and, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { isWcAdmin } from "@/lib/auth";
 import { signOutAction } from "../login/actions";
-import { loadLeaderboard } from "@/lib/world-cup-data";
+import { loadLeaderboard, loadLiveMatches } from "@/lib/world-cup-data";
 import { calculatePrizePool, fmtGbp, ENTRY_FEE_GBP } from "@/lib/world-cup-prize";
 import { PaymentBanner } from "./payment-banner";
 
@@ -26,7 +26,7 @@ export default async function WorldCupPage() {
   const admin = isWcAdmin(user);
   const now = new Date();
 
-  const [stageCounts, upcomingRow, totalRow, leaderboard] = await Promise.all([
+  const [stageCounts, upcomingRow, totalRow, leaderboard, live] = await Promise.all([
     db
       .select({ stage: wcFixtures.stage, n: count() })
       .from(wcFixtures)
@@ -34,6 +34,7 @@ export default async function WorldCupPage() {
     db.select({ n: count() }).from(wcFixtures).where(gte(wcFixtures.kickoffAt, now)),
     db.select({ n: count() }).from(wcFixtures),
     loadLeaderboard(),
+    loadLiveMatches(),
   ]);
 
   // Player rank + standing.
@@ -155,6 +156,51 @@ export default async function WorldCupPage() {
             <PrizeSlot pos="3rd" pct="10%" value={prize.third} medal="🥉" />
           </div>
         </section>
+
+        {/* Live now — drops in only when at least one match has a live score */}
+        {live.length > 0 && (
+          <section className="mt-6 space-y-3">
+            {live.map((m) => (
+              <article key={m.fixtureNumber} className="overflow-hidden rounded-2xl border-2 border-red-300 bg-white shadow-md">
+                <div className="flex items-center justify-between gap-2 border-b border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]" />
+                    <span className="font-bold uppercase tracking-wide text-red-700">Live</span>
+                    {m.minute !== null && <span className="font-mono text-red-700">{m.minute}'</span>}
+                    <span className="text-red-700/70">·</span>
+                    <span className="text-red-700/70">updated {timeAgo(m.updatedAt)}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-4">
+                  <div className="text-right text-base font-semibold text-slate-900 sm:text-lg">{m.team1}</div>
+                  <div className="flex items-baseline gap-1 font-mono text-3xl font-bold tabular-nums text-slate-900 sm:text-4xl">
+                    <span>{m.team1Goals}</span><span className="text-slate-300">–</span><span>{m.team2Goals}</span>
+                  </div>
+                  <div className="text-left text-base font-semibold text-slate-900 sm:text-lg">{m.team2}</div>
+                </div>
+                {m.projected.length > 0 && (
+                  <div className="border-t border-red-100 bg-red-50/40 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">Leading on this match if it ended now</div>
+                    <ol className="mt-2 space-y-1.5 text-sm">
+                      {m.projected.slice(0, 3).map((p, i) => (
+                        <li key={p.userId} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold text-slate-700 ring-1 ring-slate-200">{i + 1}</span>
+                            <span className="truncate font-medium text-slate-900">{p.name}</span>
+                            <span className="shrink-0 font-mono text-[11px] text-slate-500">{p.pickT1}–{p.pickT2}</span>
+                          </div>
+                          <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ${pointsTone(p.points)}`}>
+                            {p.points}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </article>
+            ))}
+          </section>
+        )}
 
         {/* Personal standing — only after the user is on the leaderboard */}
         {myRank !== null && (
@@ -290,6 +336,21 @@ function Pill({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 text-xl font-semibold text-slate-900 sm:text-2xl">{value}</div>
     </div>
   );
+}
+
+function pointsTone(p: number): string {
+  if (p >= 8) return "bg-emerald-200 text-emerald-900";
+  if (p >= 3) return "bg-amber-100 text-amber-800";
+  return "bg-slate-100 text-slate-500";
+}
+
+function timeAgo(d: Date): string {
+  const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
 }
 
 function stageChip(stage: string, group: string | null): string {

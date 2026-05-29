@@ -375,6 +375,19 @@ export const users = sqliteTable("users", {
 });
 
 // ─── World Cup prediction game ─────────────────────────────────────────────
+// Live (in-progress) match score. Updated by admin during a match — or by a
+// future feed integration; the table is shape-compatible. Cleared when the
+// final result is recorded via wc_results (the live snapshot was a
+// projection; the wc_results row is the canonical truth once full-time hits).
+export const wcLiveScores = sqliteTable("wc_live_scores", {
+  fixtureNumber: integer("fixture_number").primaryKey(),
+  team1Goals: integer("team1_goals").notNull(),
+  team2Goals: integer("team2_goals").notNull(),
+  minute: integer("minute"), // optional, e.g. 32 = "32' played"
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  updatedByUserId: text("updated_by_user_id").notNull(),
+});
+
 // Office sweepstake payment tracking — one row per paid player. Admin marks
 // paid via the Players tab; non-paid players see a deadline banner until
 // they're marked.
