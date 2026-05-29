@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../../login/actions";
-import { loadPlayerHistory } from "@/lib/world-cup-data";
+import { loadConsensus, loadPlayerHistory } from "@/lib/world-cup-data";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,7 @@ export default async function PlayerHistoryPage({
 
   const { player, rows } = data;
   const isMe = player.id === me.id;
+  const consensus = await loadConsensus(rows.map((r) => r.fixtureNumber));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -91,6 +92,20 @@ export default async function PlayerHistoryPage({
                         <span className="font-mono font-semibold text-slate-900">{r.pick.team1Goals}–{r.pick.team2Goals}</span>
                       </div>
                     )}
+                    {(() => {
+                      const c = consensus.get(r.fixtureNumber);
+                      if (!c || c.total < 2) return null;
+                      return (
+                        <div className="mt-2 flex flex-wrap justify-center gap-1.5 text-[10px] text-slate-500">
+                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5">
+                            <span className="font-semibold text-slate-700">{c.exact}</span> of {c.total} on the score
+                          </span>
+                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5">
+                            <span className="font-semibold text-slate-700">{c.sameResult}</span> same result
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </li>

@@ -110,7 +110,16 @@ export default async function LeaderboardPage() {
                       </td>
                       <td className="px-3 py-0 font-medium text-slate-900 sm:px-4">
                         <Link href={`/world-cup/leaderboard/${r.userId}`} className="flex items-center gap-1.5 py-2.5 group-hover:underline">
-                          <span className="truncate">{r.name}</span>{r.isMe && <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+                          <span className="truncate">{r.name}</span>
+                          {r.isMe && <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+                          {r.streak >= 2 && (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 tabular-nums"
+                              title={`${r.streak} correct results in a row`}
+                            >
+                              🔥 {r.streak}
+                            </span>
+                          )}
                         </Link>
                       </td>
                       <td className="px-2 py-0 text-right font-mono text-slate-700 sm:px-4">

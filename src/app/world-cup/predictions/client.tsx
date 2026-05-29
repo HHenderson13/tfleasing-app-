@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { savePredictionAction } from "../actions";
-import type { FixtureWithMyPrediction } from "@/lib/world-cup-data";
+import type { FixtureConsensus, FixtureWithMyPrediction } from "@/lib/world-cup-data";
 
 interface StageGroup {
   stage: string;
@@ -19,7 +19,7 @@ const STAGE_LABELS: Record<string, string> = {
   final: "Final",
 };
 
-export function PredictionsClient({ stages }: { stages: StageGroup[] }) {
+export function PredictionsClient({ stages, consensusByFx }: { stages: StageGroup[]; consensusByFx: Record<string, FixtureConsensus> }) {
   return (
     <div className="mt-6 space-y-8">
       {/* Sticky stage jump-nav — quick way to skip ahead on a long list,
@@ -46,7 +46,7 @@ export function PredictionsClient({ stages }: { stages: StageGroup[] }) {
           <ul className="mt-3 space-y-3">
             {s.fixtures.map((f) => (
               <li key={f.fixtureNumber}>
-                <FixtureCard fixture={f} />
+                <FixtureCard fixture={f} consensus={consensusByFx[f.fixtureNumber]} />
               </li>
             ))}
           </ul>
@@ -68,7 +68,7 @@ function StageHeading({ stage, count }: { stage: string; count: number }) {
 // Card layout — stacks vertically on phones, lays out horizontally only when
 // there's room (≥ sm). The score input takes centre stage on mobile so the
 // thumb can hit it without zooming.
-function FixtureCard({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
+function FixtureCard({ fixture: f, consensus }: { fixture: FixtureWithMyPrediction; consensus?: FixtureConsensus }) {
   const settled = !!f.result;
   const teamsKnown = !!(f.team1 && f.team2);
   const cardTone = settled
@@ -98,7 +98,7 @@ function FixtureCard({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
       {/* Teams + score input — stacked on mobile, big touch targets */}
       <div className="px-4 py-4">
         {teamsKnown ? (
-          settled ? <SettledTeams fixture={f} /> :
+          settled ? <SettledTeams fixture={f} consensus={consensus} /> :
           f.isLocked ? <LockedTeams fixture={f} /> :
           <EditableTeams fixture={f} />
         ) : (
@@ -202,7 +202,7 @@ function LockedTeams({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
   );
 }
 
-function SettledTeams({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
+function SettledTeams({ fixture: f, consensus }: { fixture: FixtureWithMyPrediction; consensus?: FixtureConsensus }) {
   const r = f.result!;
   return (
     <div className="space-y-3">
@@ -229,6 +229,27 @@ function SettledTeams({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
           No prediction · 0 pts
         </div>
       )}
+      <ConsensusChip consensus={consensus} />
+    </div>
+  );
+}
+
+// Subtle stat: how many players got it right, no "vs. the office" labelling.
+// Hidden when there are fewer than 2 predictions in total.
+function ConsensusChip({ consensus }: { consensus?: FixtureConsensus }) {
+  if (!consensus || consensus.total < 2) return null;
+  const exactPct = Math.round((consensus.exact / consensus.total) * 100);
+  return (
+    <div className="flex flex-wrap justify-center gap-1.5 text-[10px] text-slate-500">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5">
+        <span className="font-semibold text-slate-700">{consensus.exact}</span>
+        <span>of {consensus.total} on the score</span>
+        {exactPct > 0 && <span className="text-slate-400">({exactPct}%)</span>}
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5">
+        <span className="font-semibold text-slate-700">{consensus.sameResult}</span>
+        <span>same result</span>
+      </span>
     </div>
   );
 }

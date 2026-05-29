@@ -96,6 +96,10 @@ export interface LeaderboardEntry {
   predictionsMade: number;
   exactScores: number;
   correctResults: number;
+  // Current consecutive correct results (>=3pt picks) ordered by kickoff,
+  // counted backwards from the most recent settled prediction. Broken by
+  // any sub-3pt prediction or a missed match.
+  streak: number;
 }
 
 // Aggregates points across all settled wc_predictions for every user with
@@ -127,6 +131,36 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
     ORDER BY total DESC, made DESC, name ASC
   `);
 
+  // Streak computation: one batch query orders settled predictions per user
+  // by kickoff DESC; we walk each user's series and stop at the first
+  // non-correct (or missed) prediction.
+  const streakRows = await db.all<{ user_id: string; points: number | null }>(sql`
+    SELECT p.user_id, p.points
+    FROM wc_predictions p
+    INNER JOIN wc_fixtures f ON f.fixture_number = p.fixture_number
+    INNER JOIN wc_results  r ON r.fixture_number = p.fixture_number
+    ORDER BY p.user_id, f.kickoff_at DESC
+  `);
+  const streakByUser = new Map<string, number>();
+  {
+    let cur: string | null = null;
+    let count = 0;
+    let stillActive = true;
+    const commit = (uid: string | null) => { if (uid) streakByUser.set(uid, count); };
+    for (const row of streakRows) {
+      if (row.user_id !== cur) {
+        commit(cur);
+        cur = row.user_id;
+        count = 0;
+        stillActive = true;
+      }
+      if (!stillActive) continue;
+      if (row.points !== null && row.points >= 3) count++;
+      else stillActive = false;
+    }
+    commit(cur);
+  }
+
   return rows.map((r) => ({
     userId: r.user_id,
     name: r.name,
@@ -134,6 +168,7 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
     predictionsMade: Number(r.made) || 0,
     exactScores: Number(r.exact) || 0,
     correctResults: Number(r.correct) || 0,
+    streak: streakByUser.get(r.user_id) ?? 0,
   }));
 }
 
@@ -209,6 +244,47 @@ export async function loadPlayerHistory(userId: string): Promise<{
     player: { id: u.id, name: u.name, totalPoints, predictionsMade },
     rows: history,
   };
+}
+
+// How many players matched this fixture's outcome vs total predictions made.
+// Used for the subtle "5 / 12 same result" chip on settled cards — no
+// inline "vs. the office" labelling, just a count.
+export interface FixtureConsensus {
+  total: number;
+  exact: number;       // exact scoreline match
+  sameResult: number;  // matches W/D/L
+}
+
+export async function loadConsensus(
+  fixtureNumbers: number[],
+): Promise<Map<number, FixtureConsensus>> {
+  if (fixtureNumbers.length === 0) return new Map();
+  const rows = await db.all<{
+    fx: number; total: number; exact: number; same_result: number;
+  }>(sql`
+    SELECT
+      p.fixture_number AS fx,
+      COUNT(*) AS total,
+      SUM(CASE WHEN p.team1_goals = r.team1_goals AND p.team2_goals = r.team2_goals THEN 1 ELSE 0 END) AS exact,
+      SUM(CASE
+        WHEN (p.team1_goals > p.team2_goals AND r.team1_goals > r.team2_goals)
+          OR (p.team1_goals < p.team2_goals AND r.team1_goals < r.team2_goals)
+          OR (p.team1_goals = p.team2_goals AND r.team1_goals = r.team2_goals)
+        THEN 1 ELSE 0 END) AS same_result
+    FROM wc_predictions p
+    INNER JOIN wc_results r ON r.fixture_number = p.fixture_number
+    WHERE p.fixture_number IN (${sql.join(fixtureNumbers.map((n) => sql`${n}`), sql`, `)})
+    GROUP BY p.fixture_number
+  `);
+  const out = new Map<number, FixtureConsensus>();
+  for (const r of rows) {
+    out.set(Number(r.fx), {
+      total: Number(r.total) || 0,
+      exact: Number(r.exact) || 0,
+      sameResult: Number(r.same_result) || 0,
+    });
+  }
+  return out;
 }
 
 export interface GroupView {

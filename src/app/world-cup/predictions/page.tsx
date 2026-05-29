@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
-import { listFixturesWithMyPredictions } from "@/lib/world-cup-data";
+import { listFixturesWithMyPredictions, loadConsensus } from "@/lib/world-cup-data";
 import { PredictionsClient } from "./client";
 import { PaymentBanner } from "../payment-banner";
 
@@ -10,6 +10,12 @@ export const dynamic = "force-dynamic";
 export default async function PredictionsPage() {
   const user = await requireWcAccess();
   const fixtures = await listFixturesWithMyPredictions(user.id);
+
+  // Consensus is computed for settled fixtures only (others have nothing to
+  // compare against). One batched query for all settled fixture numbers.
+  const settledFixtureNumbers = fixtures.filter((f) => f.result).map((f) => f.fixtureNumber);
+  const consensus = await loadConsensus(settledFixtureNumbers);
+  const consensusByFx = Object.fromEntries(Array.from(consensus.entries()));
 
   // Group fixtures by stage so the page reads as a tournament timeline.
   const byStage = new Map<string, typeof fixtures>();
@@ -63,7 +69,7 @@ export default async function PredictionsPage() {
           Knockout matches unlock as the bracket advances.
         </p>
 
-        <PredictionsClient stages={ordered} />
+        <PredictionsClient stages={ordered} consensusByFx={consensusByFx} />
       </main>
     </div>
   );
