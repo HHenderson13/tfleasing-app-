@@ -5,6 +5,7 @@ import { count, eq, gte, sql } from "drizzle-orm";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { isWcAdmin } from "@/lib/auth";
 import { signOutAction } from "../login/actions";
+import { loadLeaderboard } from "@/lib/world-cup-data";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +15,33 @@ export default async function WorldCupPage() {
 
   const now = new Date();
 
-  // Cheap counts — used in the landing tiles and to tell the user how much is
-  // still to come. Real predictions UI lands in batch 2.
-  const [groupCountRow, upcomingRow, totalRow] = await Promise.all([
+  // Cheap counts + leaderboard so the page can show personalised standing.
+  const [groupCountRow, upcomingRow, totalRow, leaderboard] = await Promise.all([
     db.select({ n: count() }).from(wcFixtures).where(eq(wcFixtures.stage, "group")),
     db.select({ n: count() }).from(wcFixtures).where(gte(wcFixtures.kickoffAt, now)),
     db.select({ n: count() }).from(wcFixtures),
+    loadLeaderboard(),
   ]);
+
+  let myRank: number | null = null;
+  let myPoints = 0;
+  let myExact = 0;
+  // Tied players share a rank — same algorithm as the leaderboard page.
+  let cursor = 0;
+  let lastPoints: number | null = null;
+  for (let i = 0; i < leaderboard.length; i++) {
+    if (leaderboard[i].totalPoints !== lastPoints) {
+      cursor = i + 1;
+      lastPoints = leaderboard[i].totalPoints;
+    }
+    if (leaderboard[i].userId === user.id) {
+      myRank = cursor;
+      myPoints = leaderboard[i].totalPoints;
+      myExact = leaderboard[i].exactScores;
+      break;
+    }
+  }
+  const playerCount = leaderboard.length;
 
   const groupCount = groupCountRow[0]?.n ?? 0;
   const upcomingCount = upcomingRow[0]?.n ?? 0;
@@ -83,12 +104,12 @@ export default async function WorldCupPage() {
                 Group tables
               </Link>
               {admin && (
-                <span
-                  className="inline-flex cursor-not-allowed rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-400"
-                  title="Coming next"
+                <Link
+                  href="/world-cup/admin"
+                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                 >
-                  Admin: enter results → (batch 3)
-                </span>
+                  Admin
+                </Link>
               )}
             </div>
           </div>
@@ -98,6 +119,14 @@ export default async function WorldCupPage() {
             <Pill label="Total fixtures" value={totalCount.toLocaleString()} />
           </div>
         </section>
+
+        {myRank !== null && (
+          <section className="mt-6 grid gap-4 sm:grid-cols-3">
+            <StandingCard label="Your rank" value={`#${myRank}`} sub={`of ${playerCount} player${playerCount === 1 ? "" : "s"}`} tone={myRank <= 3 ? "amber" : "slate"} />
+            <StandingCard label="Your points" value={myPoints.toString()} sub="total this tournament" tone="emerald" />
+            <StandingCard label="Exact scorelines" value={myExact.toString()} sub="5 points each" tone="teal" />
+          </section>
+        )}
 
         <section className="mt-8">
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">Coming up</h2>
@@ -142,6 +171,22 @@ export default async function WorldCupPage() {
           </table>
         </section>
       </main>
+    </div>
+  );
+}
+
+function StandingCard({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: "amber" | "emerald" | "teal" | "slate" }) {
+  const t = {
+    amber: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", num: "text-amber-900" },
+    emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", num: "text-emerald-900" },
+    teal: { bg: "bg-teal-50", border: "border-teal-200", text: "text-teal-700", num: "text-teal-900" },
+    slate: { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-600", num: "text-slate-900" },
+  }[tone];
+  return (
+    <div className={`rounded-2xl border ${t.border} ${t.bg} p-5 shadow-sm`}>
+      <div className={`text-[11px] font-semibold uppercase tracking-wide ${t.text}`}>{label}</div>
+      <div className={`mt-0.5 text-3xl font-semibold tabular-nums ${t.num}`}>{value}</div>
+      <div className="mt-0.5 text-xs text-slate-500">{sub}</div>
     </div>
   );
 }
