@@ -4,6 +4,8 @@ import { signOutAction } from "../../login/actions";
 import { loadGroupViews } from "@/lib/world-cup-data";
 import { PaymentBanner } from "../payment-banner";
 
+// Stays dynamic — payment banner check is per-user. Snappy nav comes from
+// loading.tsx in this directory.
 export const dynamic = "force-dynamic";
 
 export default async function GroupsPage() {

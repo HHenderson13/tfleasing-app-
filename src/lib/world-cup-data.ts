@@ -137,6 +137,80 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
   }));
 }
 
+// Returns the user's predictions for SETTLED fixtures only — used by the
+// public "see this player's history" page so a quick look at someone's
+// picks doesn't reveal what they've predicted for matches still to come.
+export interface PlayerHistoryRow {
+  fixtureNumber: number;
+  stage: string;
+  groupName: string | null;
+  kickoffAt: Date;
+  team1: string;
+  team2: string;
+  actual: { team1Goals: number; team2Goals: number; winnerTeam: string };
+  pick: { team1Goals: number; team2Goals: number; predictedWinner: string; points: number | null } | null;
+}
+
+export async function loadPlayerHistory(userId: string): Promise<{
+  player: { id: string; name: string; totalPoints: number; predictionsMade: number };
+  rows: PlayerHistoryRow[];
+} | null> {
+  const [u] = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!u) return null;
+
+  // Only settled fixtures are returned, so any "what did Sarah pick for
+  // tomorrow" question is structurally impossible from this query.
+  const rows = await db.all<{
+    fixture_number: number;
+    stage: string;
+    group_name: string | null;
+    kickoff_at: number;
+    team1: string;
+    team2: string;
+    actual_t1: number;
+    actual_t2: number;
+    winner_team: string;
+    pick_t1: number | null;
+    pick_t2: number | null;
+    pick_winner: string | null;
+    pick_points: number | null;
+  }>(sql`
+    SELECT
+      f.fixture_number, f.stage, f.group_name, f.kickoff_at, f.team1, f.team2,
+      r.team1_goals AS actual_t1, r.team2_goals AS actual_t2, r.winner_team,
+      p.team1_goals AS pick_t1, p.team2_goals AS pick_t2,
+      p.predicted_winner AS pick_winner, p.points AS pick_points
+    FROM wc_results r
+    INNER JOIN wc_fixtures f ON f.fixture_number = r.fixture_number
+    LEFT JOIN wc_predictions p ON p.fixture_number = r.fixture_number AND p.user_id = ${userId}
+    ORDER BY f.kickoff_at DESC, f.fixture_number DESC
+  `);
+
+  let totalPoints = 0;
+  let predictionsMade = 0;
+  const history: PlayerHistoryRow[] = rows.map((r) => {
+    if (r.pick_points != null) totalPoints += r.pick_points;
+    if (r.pick_t1 != null) predictionsMade++;
+    return {
+      fixtureNumber: r.fixture_number,
+      stage: r.stage,
+      groupName: r.group_name,
+      kickoffAt: new Date(r.kickoff_at * 1000),
+      team1: r.team1,
+      team2: r.team2,
+      actual: { team1Goals: r.actual_t1, team2Goals: r.actual_t2, winnerTeam: r.winner_team },
+      pick: r.pick_t1 != null && r.pick_t2 != null
+        ? { team1Goals: r.pick_t1, team2Goals: r.pick_t2, predictedWinner: r.pick_winner ?? "", points: r.pick_points }
+        : null,
+    };
+  });
+
+  return {
+    player: { id: u.id, name: u.name, totalPoints, predictionsMade },
+    rows: history,
+  };
+}
+
 export interface GroupView {
   groupName: string;
   standings: GroupStandingRow[];

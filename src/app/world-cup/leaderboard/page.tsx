@@ -5,6 +5,9 @@ import { loadLeaderboard } from "@/lib/world-cup-data";
 import { calculatePrizePool, fmtGbp } from "@/lib/world-cup-prize";
 import { PaymentBanner } from "../payment-banner";
 
+// Stays dynamic — the leaderboard highlights the current user's row, which
+// can't be safely shared across users via ISR. Snappy navigation comes from
+// loading.tsx in this directory.
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
@@ -101,15 +104,27 @@ export default async function LeaderboardPage() {
                   </tr>
                 ) : (
                   ranked.map((r) => (
-                    <tr key={r.userId} className={r.isMe ? "bg-emerald-50/50" : ""}>
-                      <td className="px-3 py-2.5 font-mono text-slate-500 sm:px-4">{r.rank}</td>
-                      <td className="px-3 py-2.5 font-medium text-slate-900 sm:px-4">
-                        <span className="truncate">{r.name}</span>{r.isMe && <span className="ml-1.5 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+                    <tr key={r.userId} className={`group transition hover:bg-emerald-50/60 ${r.isMe ? "bg-emerald-50/50" : ""}`}>
+                      <td className="px-3 py-0 font-mono text-slate-500 sm:px-4">
+                        <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5 group-hover:text-slate-700">{r.rank}</Link>
                       </td>
-                      <td className="px-2 py-2.5 text-right font-mono text-slate-700 sm:px-4">{r.predictionsMade}</td>
-                      <td className="hidden px-2 py-2.5 text-right font-mono text-slate-700 sm:table-cell sm:px-4">{r.correctResults}</td>
-                      <td className="px-2 py-2.5 text-right font-mono text-slate-700 sm:px-4">{r.exactScores}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-base font-semibold text-slate-900 sm:px-4">{r.totalPoints}</td>
+                      <td className="px-3 py-0 font-medium text-slate-900 sm:px-4">
+                        <Link href={`/world-cup/leaderboard/${r.userId}`} className="flex items-center gap-1.5 py-2.5 group-hover:underline">
+                          <span className="truncate">{r.name}</span>{r.isMe && <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-0 text-right font-mono text-slate-700 sm:px-4">
+                        <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5">{r.predictionsMade}</Link>
+                      </td>
+                      <td className="hidden px-2 py-0 text-right font-mono text-slate-700 sm:table-cell sm:px-4">
+                        <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5">{r.correctResults}</Link>
+                      </td>
+                      <td className="px-2 py-0 text-right font-mono text-slate-700 sm:px-4">
+                        <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5">{r.exactScores}</Link>
+                      </td>
+                      <td className="px-3 py-0 text-right font-mono text-base font-semibold text-slate-900 sm:px-4">
+                        <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5">{r.totalPoints}</Link>
+                      </td>
                     </tr>
                   ))
                 )}
