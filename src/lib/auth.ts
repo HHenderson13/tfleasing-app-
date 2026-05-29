@@ -7,7 +7,7 @@ import { ensureAppSchema } from "@/db/ensure-schema";
 import { sessions, users } from "@/db/schema";
 import { and, eq, gt } from "drizzle-orm";
 
-export const ROLES = ["admin", "exec", "quote", "stock"] as const;
+export const ROLES = ["admin", "exec", "quote", "stock", "wc", "wc_admin"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const SESSION_COOKIE = "tf_session";
@@ -147,6 +147,13 @@ export function canSeeProposals(u: CurrentUser | null): boolean {
 export function canSeeOrders(u: CurrentUser | null): boolean {
   return isAdmin(u) || isExec(u);
 }
+// World Cup: wc plays; wc_admin manages scores + access. Global admins inherit both.
+export function canPlayWc(u: CurrentUser | null): boolean {
+  return !!u && (isAdmin(u) || u.roles.includes("wc") || u.roles.includes("wc_admin"));
+}
+export function isWcAdmin(u: CurrentUser | null): boolean {
+  return !!u && (isAdmin(u) || u.roles.includes("wc_admin"));
+}
 
 export interface SectionAccess {
   quote: boolean;
@@ -155,6 +162,7 @@ export interface SectionAccess {
   orders: boolean;
   reports: boolean;
   admin: boolean;
+  wc: boolean;
 }
 
 export function sectionAccess(u: CurrentUser | null): SectionAccess {
@@ -165,5 +173,6 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     orders: canSeeOrders(u),
     reports: isAdmin(u),
     admin: isAdmin(u),
+    wc: canPlayWc(u),
   };
 }

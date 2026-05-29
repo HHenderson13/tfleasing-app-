@@ -374,6 +374,72 @@ export const users = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// ─── World Cup prediction game ─────────────────────────────────────────────
+// Fixtures table is the 104 matches (12 groups × 6 + 16 R32 + 8 R16 + 4 QF + 2 SF + 1 3rd + 1 final).
+// Seeded idempotently from the spreadsheet template; admins can edit the
+// teams on a fixture (knockouts start blank and get filled by auto-advance).
+// nextFixtureNumber + nextSlot describe where the winner of this match
+// propagates to (null for group games, third-place, and the final).
+export const wcFixtures = sqliteTable(
+  "wc_fixtures",
+  {
+    fixtureNumber: integer("fixture_number").primaryKey(),
+    stage: text("stage").notNull(), // group | r32 | r16 | qf | sf | third | final
+    groupName: text("group_name"),   // 'A'..'L' for group games
+    kickoffAt: integer("kickoff_at", { mode: "timestamp" }).notNull(),
+    stadium: text("stadium"),
+    city: text("city"),
+    team1: text("team1"),
+    team2: text("team2"),
+    nextFixtureNumber: integer("next_fixture_number"),
+    nextSlot: text("next_slot"), // 't1' | 't2'
+  },
+  (t) => ({
+    byStage: index("idx_wc_fixtures_stage").on(t.stage),
+    byKickoff: index("idx_wc_fixtures_kickoff").on(t.kickoffAt),
+  }),
+);
+
+// One row per settled match. winnerTeam stores the team name that progresses
+// (or 'Draw' for group games). Stored separately from wc_fixtures so editing
+// a result doesn't risk clobbering the match metadata.
+export const wcResults = sqliteTable(
+  "wc_results",
+  {
+    fixtureNumber: integer("fixture_number").primaryKey(),
+    team1Goals: integer("team1_goals").notNull(),
+    team2Goals: integer("team2_goals").notNull(),
+    etTeam1Goals: integer("et_team1_goals"),
+    etTeam2Goals: integer("et_team2_goals"),
+    penTeam1: integer("pen_team1"),
+    penTeam2: integer("pen_team2"),
+    winnerTeam: text("winner_team").notNull(), // team name or 'Draw'
+    settledAt: integer("settled_at", { mode: "timestamp" }).notNull(),
+    settledByUserId: text("settled_by_user_id").notNull(),
+  },
+);
+
+// One row per (user, fixture). points is cached after the result lands; null
+// while the match is still pending. Predictions are read-only after kickoff.
+export const wcPredictions = sqliteTable(
+  "wc_predictions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    fixtureNumber: integer("fixture_number").notNull(),
+    team1Goals: integer("team1_goals").notNull(),
+    team2Goals: integer("team2_goals").notNull(),
+    predictedWinner: text("predicted_winner").notNull(),
+    points: integer("points"),
+    submittedAt: integer("submitted_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    uniqUserFixture: index("uniq_wc_predictions_user_fixture").on(t.userId, t.fixtureNumber),
+    byUser: index("idx_wc_predictions_user").on(t.userId),
+  }),
+);
+
 // Each failed sign-in records one row. We rate-limit by IP over a sliding 15
 // minute window — older rows are ignored, fresh rows count toward the limit.
 // Stored as an append-only log; no purge job needed (volume is tiny).

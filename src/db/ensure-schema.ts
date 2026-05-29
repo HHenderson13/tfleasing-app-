@@ -44,6 +44,7 @@ async function runEnsureAppSchema() {
   await ensureFunderInterestRatesTable();
   await ensureScraperTables();
   await ensureLoginAttemptsTable();
+  await ensureWorldCupTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
 }
@@ -185,6 +186,96 @@ async function ensureFunderInterestRatesTable() {
         VALUES (${s.funderId}, ${parseInt(followOns, 10)}, ${rate})
       `);
     }
+  }
+}
+
+// Creates the three World Cup tables and idempotently seeds wc_fixtures with
+// the 104 matches from the template. Re-running on boot is safe:
+//   - CREATE TABLE IF NOT EXISTS
+//   - INSERT OR IGNORE on the seed (admins can edit dates/stadiums/etc later
+//     without those edits being overwritten on the next deploy).
+async function ensureWorldCupTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS wc_fixtures (
+      fixture_number INTEGER PRIMARY KEY,
+      stage TEXT NOT NULL,
+      group_name TEXT,
+      kickoff_at INTEGER NOT NULL,
+      stadium TEXT,
+      city TEXT,
+      team1 TEXT,
+      team2 TEXT,
+      next_fixture_number INTEGER,
+      next_slot TEXT
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_fixtures_stage ON wc_fixtures(stage)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_fixtures_kickoff ON wc_fixtures(kickoff_at)`));
+
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS wc_results (
+      fixture_number INTEGER PRIMARY KEY,
+      team1_goals INTEGER NOT NULL,
+      team2_goals INTEGER NOT NULL,
+      et_team1_goals INTEGER,
+      et_team2_goals INTEGER,
+      pen_team1 INTEGER,
+      pen_team2 INTEGER,
+      winner_team TEXT NOT NULL,
+      settled_at INTEGER NOT NULL,
+      settled_by_user_id TEXT NOT NULL
+    )
+  `));
+
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS wc_predictions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      fixture_number INTEGER NOT NULL,
+      team1_goals INTEGER NOT NULL,
+      team2_goals INTEGER NOT NULL,
+      predicted_winner TEXT NOT NULL,
+      points INTEGER,
+      submitted_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uniq_wc_predictions_user_fixture ON wc_predictions(user_id, fixture_number)`,
+  ));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_predictions_user ON wc_predictions(user_id)`));
+
+  await seedWcFixturesIfEmpty();
+}
+
+async function seedWcFixturesIfEmpty() {
+  // Lazy-load seed JSON via require so the (~30KB) payload isn't bundled into
+  // every request — only loaded the first time the schema needs to migrate.
+  const rows = await db.all<{ n: number }>(sql.raw(`SELECT COUNT(*) AS n FROM wc_fixtures`));
+  const existing = Number(rows[0]?.n ?? 0);
+  if (existing >= 104) return;
+
+  type Seed = {
+    fixtureNumber: number;
+    stage: string;
+    groupName: string | null;
+    kickoffAt: string;
+    stadium: string | null;
+    city: string | null;
+    team1: string | null;
+    team2: string | null;
+    nextFixtureNumber: number | null;
+    nextSlot: string | null;
+  };
+  const seed: Seed[] = (await import("@/lib/wc-fixtures-seed.json")).default as Seed[];
+  for (const f of seed) {
+    const kickoffMs = Math.floor(new Date(f.kickoffAt).getTime() / 1000);
+    await db.run(sql`
+      INSERT OR IGNORE INTO wc_fixtures
+        (fixture_number, stage, group_name, kickoff_at, stadium, city, team1, team2, next_fixture_number, next_slot)
+      VALUES
+        (${f.fixtureNumber}, ${f.stage}, ${f.groupName}, ${kickoffMs}, ${f.stadium}, ${f.city}, ${f.team1}, ${f.team2}, ${f.nextFixtureNumber}, ${f.nextSlot})
+    `);
   }
 }
 

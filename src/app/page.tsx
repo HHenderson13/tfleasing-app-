@@ -14,6 +14,7 @@ const TILES: Tile[] = [
   { key: "orders",    href: "/orders/awaiting", title: "Awaiting delivery", desc: "Live ETAs and delivery tracking for ordered vehicles.", tone: "from-teal-500 to-teal-700" },
   { key: "orders",    href: "/orders/delivered", title: "Delivered", desc: "Deals handed over to the customer.", tone: "from-emerald-500 to-emerald-700" },
   { key: "reports",   href: "/reports",   title: "Reports",   desc: "Funder, source, model and EV performance.",      tone: "from-rose-500 to-fuchsia-600" },
+  { key: "wc",        href: "/world-cup", title: "World Cup",  desc: "Predict scores, climb the leaderboard — the office World Cup game.", tone: "from-emerald-500 to-teal-700" },
   { key: "admin",     href: "/scraper", title: "Market Analysis", desc: "Compare our rates to competitors across the market.",    tone: "from-indigo-500 to-indigo-700" },
   { key: "admin",     href: "/funders", title: "Funder Comparison", desc: "Compare funder rates side by side across our ratebooks.", tone: "from-fuchsia-500 to-purple-700" },
   { key: "admin",     href: "/broker-ratebooks", title: "Broker Ratebooks", desc: "Export MotorComplete & Manual broker ratebooks across commission tiers.", tone: "from-amber-500 to-orange-700" },
