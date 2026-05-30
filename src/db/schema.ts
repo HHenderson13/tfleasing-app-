@@ -384,6 +384,13 @@ export const wcLiveScores = sqliteTable("wc_live_scores", {
   team1Goals: integer("team1_goals").notNull(),
   team2Goals: integer("team2_goals").notNull(),
   minute: integer("minute"), // optional, e.g. 32 = "32' played"
+  // 'live' | 'halftime' | 'final' — mirrors what the ESPN feed reports.
+  // Used by the auto-record path to track when a fixture has been in FT
+  // long enough for us to trust the score.
+  status: text("status"),
+  // First time we observed ESPN reporting status='final'. Group games where
+  // this is >=30 min old auto-settle via the live API route.
+  firstFinalAt: integer("first_final_at", { mode: "timestamp" }),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   updatedByUserId: text("updated_by_user_id").notNull(),
 });

@@ -12,6 +12,7 @@ import {
   scorePrediction,
   winnerForGroup,
 } from "@/lib/world-cup-scoring";
+import { commitFixtureResult } from "@/lib/world-cup-settle";
 
 const resultSchema = z.object({
   fixtureNumber: z.number().int().min(1).max(104),
@@ -70,65 +71,18 @@ export async function recordResultAction(input: {
     }
 
     const now = new Date();
-    await db
-      .insert(wcResults)
-      .values({
-        fixtureNumber: parsed.data.fixtureNumber,
-        team1Goals: parsed.data.team1Goals,
-        team2Goals: parsed.data.team2Goals,
-        etTeam1Goals: parsed.data.etTeam1Goals ?? null,
-        etTeam2Goals: parsed.data.etTeam2Goals ?? null,
-        penTeam1: parsed.data.penTeam1 ?? null,
-        penTeam2: parsed.data.penTeam2 ?? null,
-        winnerTeam: winner,
-        settledAt: now,
-        settledByUserId: user.id,
-      })
-      .onConflictDoUpdate({
-        target: wcResults.fixtureNumber,
-        set: {
-          team1Goals: parsed.data.team1Goals,
-          team2Goals: parsed.data.team2Goals,
-          etTeam1Goals: parsed.data.etTeam1Goals ?? null,
-          etTeam2Goals: parsed.data.etTeam2Goals ?? null,
-          penTeam1: parsed.data.penTeam1 ?? null,
-          penTeam2: parsed.data.penTeam2 ?? null,
-          winnerTeam: winner,
-          settledAt: now,
-          settledByUserId: user.id,
-        },
-      });
-
-    // Score every existing prediction for this fixture. Re-runs even if the
-    // result is being EDITED — late corrections to a typo need the points
-    // to follow. Editing a result with predictions stored is rare.
-    const predRows = await db.select().from(wcPredictions).where(eq(wcPredictions.fixtureNumber, parsed.data.fixtureNumber));
-    for (const p of predRows) {
-      const pts = scorePrediction(
-        { team1Goals: p.team1Goals, team2Goals: p.team2Goals },
-        { team1Goals: parsed.data.team1Goals, team2Goals: parsed.data.team2Goals },
-        fx.stage,
-      );
-      await db.update(wcPredictions).set({ points: pts.total, updatedAt: now }).where(eq(wcPredictions.id, p.id));
-    }
-
-    // Auto-advance: write the winner into the next fixture's slot. Only for
-    // knockout rounds (group games have nextFixtureNumber=null), and only
-    // for the winning team (not 'Draw' — knockouts can't draw).
-    let advancedTo: { fixtureNumber: number; slot: "t1" | "t2" } | null = null;
-    if (fx.nextFixtureNumber && fx.nextSlot && winner !== "Draw") {
-      const slot = fx.nextSlot as "t1" | "t2";
-      const col = slot === "t1" ? wcFixtures.team1 : wcFixtures.team2;
-      await db.update(wcFixtures).set({ [slot === "t1" ? "team1" : "team2"]: winner } as Record<string, string>).where(eq(wcFixtures.fixtureNumber, fx.nextFixtureNumber));
-      void col;
-      advancedTo = { fixtureNumber: fx.nextFixtureNumber, slot };
-      // Semi-final losers also feed into the 3rd-place playoff (match 103).
-      if (fx.stage === "sf") {
-        const sfLoser = winner === fx.team1 ? fx.team2 : fx.team1;
-        const sfSlot = fx.fixtureNumber === 101 ? "team1" : "team2";
-        await db.update(wcFixtures).set({ [sfSlot]: sfLoser } as Record<string, string>).where(eq(wcFixtures.fixtureNumber, 103));
-      }
-    }
+    const { advancedTo } = await commitFixtureResult({
+      fx,
+      team1Goals: parsed.data.team1Goals,
+      team2Goals: parsed.data.team2Goals,
+      etTeam1Goals: parsed.data.etTeam1Goals,
+      etTeam2Goals: parsed.data.etTeam2Goals,
+      penTeam1: parsed.data.penTeam1,
+      penTeam2: parsed.data.penTeam2,
+      winnerTeam: winner,
+      settledByUserId: user.id,
+      now,
+    });
 
     // If a group game has been settled, see if the group is complete and
     // surface the top 3 so admin can resolve advancement.
@@ -146,10 +100,6 @@ export async function recordResultAction(input: {
         };
       }
     }
-
-    // The match is now settled; any live snapshot for it is stale, so drop
-    // the row so the landing-page "LIVE" widget doesn't keep showing it.
-    await db.delete(wcLiveScores).where(eq(wcLiveScores.fixtureNumber, fx.fixtureNumber));
 
     revalidatePath("/world-cup");
     revalidatePath("/world-cup/predictions");

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { users, wcFixtures, wcPayments, wcResults } from "@/db/schema";
+import { users, wcFixtures, wcLiveScores, wcPayments, wcResults } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireWcAdmin } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
@@ -11,13 +11,18 @@ export const dynamic = "force-dynamic";
 export default async function WcAdminPage() {
   const user = await requireWcAdmin();
 
-  const [fixtures, results, allUsers, paid] = await Promise.all([
+  const [fixtures, results, allUsers, paid, feedRows] = await Promise.all([
     db.select().from(wcFixtures).orderBy(wcFixtures.kickoffAt, wcFixtures.fixtureNumber),
     db.select().from(wcResults),
     db.select({ id: users.id, name: users.name, email: users.email, roles: users.roles }).from(users).orderBy(users.name),
     db.select({ userId: wcPayments.userId }).from(wcPayments),
+    db.select().from(wcLiveScores),
   ]);
   const paidSet = new Set(paid.map((p) => p.userId));
+  // ESPN-feed snapshot per fixture — used to hint the admin on knockouts that
+  // ESPN reports as final but we haven't yet recorded (ET/pens). Group games
+  // auto-settle in the live API route so they never linger here.
+  const feedByFx = new Map(feedRows.map((r) => [r.fixtureNumber, r]));
 
   const resultByFx = new Map(results.map((r) => [r.fixtureNumber, r]));
   const fixturesWithResults = fixtures.map((f) => ({
@@ -39,6 +44,17 @@ export default async function WcAdminPage() {
           penTeam1: resultByFx.get(f.fixtureNumber)!.penTeam1,
           penTeam2: resultByFx.get(f.fixtureNumber)!.penTeam2,
           winnerTeam: resultByFx.get(f.fixtureNumber)!.winnerTeam,
+        }
+      : null,
+    // For unrecorded knockouts that ESPN has already reported as Full Time,
+    // surface ESPN's score so the admin can confirm in one tap. Group games
+    // settle automatically so this is null for them.
+    feedFinal: !resultByFx.has(f.fixtureNumber) && f.stage !== "group"
+      && feedByFx.get(f.fixtureNumber)?.status === "final"
+      ? {
+          team1Goals: feedByFx.get(f.fixtureNumber)!.team1Goals,
+          team2Goals: feedByFx.get(f.fixtureNumber)!.team2Goals,
+          firstFinalAt: feedByFx.get(f.fixtureNumber)!.firstFinalAt?.toISOString() ?? null,
         }
       : null,
   }));

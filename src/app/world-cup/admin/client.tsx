@@ -29,6 +29,10 @@ export interface AdminFixture {
     penTeam2: number | null;
     winnerTeam: string;
   } | null;
+  // For knockouts where ESPN reports FT but we haven't yet entered the
+  // canonical result (ET/pens need manual entry). Hint shown above the
+  // score inputs so admin can confirm in one tap.
+  feedFinal: { team1Goals: number; team2Goals: number; firstFinalAt: string | null } | null;
 }
 
 export interface AdminUser {
@@ -137,8 +141,10 @@ function ResultRow({ fixture: f }: { fixture: AdminFixture }) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [t1, setT1] = useState<string>(f.result?.team1Goals.toString() ?? "");
-  const [t2, setT2] = useState<string>(f.result?.team2Goals.toString() ?? "");
+  // Prefill from ESPN's FT score for unrecorded knockouts when present —
+  // admin just needs to confirm + add ET/pens if relevant.
+  const [t1, setT1] = useState<string>(f.result?.team1Goals.toString() ?? f.feedFinal?.team1Goals.toString() ?? "");
+  const [t2, setT2] = useState<string>(f.result?.team2Goals.toString() ?? f.feedFinal?.team2Goals.toString() ?? "");
   const [showET, setShowET] = useState<boolean>(f.stage !== "group" && t1 !== "" && t1 === t2);
   const [et1, setET1] = useState<string>(f.result?.etTeam1Goals?.toString() ?? "");
   const [et2, setET2] = useState<string>(f.result?.etTeam2Goals?.toString() ?? "");
@@ -189,6 +195,18 @@ function ResultRow({ fixture: f }: { fixture: AdminFixture }) {
           {new Date(f.kickoffAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK
         </div>
       </div>
+
+      {/* ESPN-reported FT score for unconfirmed knockouts — admin nudge. */}
+      {f.feedFinal && !settled && (
+        <div className="border-b border-amber-100 bg-amber-50/70 px-4 py-2 text-xs">
+          <span className="font-semibold uppercase tracking-wide text-amber-800">ESPN reports FT</span>
+          <span className="ml-2 font-mono font-bold text-amber-950">{f.feedFinal.team1Goals}–{f.feedFinal.team2Goals}</span>
+          {f.feedFinal.firstFinalAt && (
+            <span className="ml-2 text-amber-700">· first seen {timeAgo(new Date(f.feedFinal.firstFinalAt))}</span>
+          )}
+          <span className="ml-2 text-amber-700">· confirm + add ET/pens if needed</span>
+        </div>
+      )}
 
       {/* Teams + score input — same stacked layout as the player page. */}
       <div className="px-4 py-3">
@@ -493,6 +511,15 @@ function RecomputeFooter() {
       </button>
     </div>
   );
+}
+
+function timeAgo(d: Date): string {
+  const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
 }
 
 function StageChip({ stage, group }: { stage: string; group: string | null }) {

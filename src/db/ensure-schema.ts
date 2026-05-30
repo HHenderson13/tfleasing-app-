@@ -259,10 +259,17 @@ async function ensureWorldCupTables() {
       team1_goals INTEGER NOT NULL,
       team2_goals INTEGER NOT NULL,
       minute INTEGER,
+      status TEXT,
+      first_final_at INTEGER,
       updated_at INTEGER NOT NULL,
       updated_by_user_id TEXT NOT NULL
     )
   `));
+  // Migrations for existing wc_live_scores rows from before the ESPN feed.
+  await ensureColumns("wc_live_scores", [
+    { name: "status", sqlType: "TEXT" },
+    { name: "first_final_at", sqlType: "INTEGER" },
+  ]);
 
   await seedWcFixturesIfEmpty();
   await bootstrapWcAdmin();
