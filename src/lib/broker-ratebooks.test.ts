@@ -153,9 +153,53 @@ describe("expandIrms — commission amortization", () => {
     expect(irm(12)).toBeCloseTo(255.59, 0);
   });
 
-  it("preserves the maintenance figure unchanged across IRMs", () => {
-    const rows = expandIrms(slot({ maintenance: 42.5 }), 0, NO_RATES);
-    for (const r of rows) expect(r.monthlyMaintenance).toBe(42.5);
+  it("at rate=0, maintenance redistributes flat across upfronts (no interest)", () => {
+    // Same total maintenance cost, different payment shape — exactly like
+    // bare rental at zero rate. Total = 42.5 × (6 + 35) = £1,742.5 (3yr).
+    const rates: InterestRateMap = new Map([
+      ["ald|35", 0],    // rental funder
+      ["ald|35", 0],    // maintenance funder (same here)
+    ]);
+    const rows = expandIrms(slot({ termMonths: 36, maintenance: 42.5 }), 0, rates);
+    const irm = (n: number) => rows.find((r) => r.initialRentalMultiplier === n)!.monthlyMaintenance;
+    expect(irm(6)).toBeCloseTo(42.50, 2);
+    expect(irm(1)).toBeCloseTo(42.5 * 41 / 36, 2);  // 48.40
+    expect(irm(12)).toBeCloseTo(42.5 * 41 / 47, 2); // 37.07
+  });
+
+  it("at rate>0, maintenance follows the same NPV-equivalence as the bare rental", () => {
+    // Rental funder = Lex (cheaper), maintenance funder = ALD — each uses
+    // its own annual rate per (funderId, term). At 6× both rentals and
+    // maintenance return the source values (identity case).
+    const rates: InterestRateMap = new Map([
+      ["lex|35", 0.05],
+      ["ald|35", 0.07],
+    ]);
+    const rows = expandIrms(slot({
+      termMonths: 36, bareRental: 300, maintenance: 30,
+      rentalFunderId: "lex", rentalFunderName: "Lex",
+      maintenanceFunderId: "ald", maintenanceFunderName: "ALD",
+    }), 0, rates);
+    const m1 = rows.find((r) => r.initialRentalMultiplier === 1)!;
+    const m6 = rows.find((r) => r.initialRentalMultiplier === 6)!;
+    const m12 = rows.find((r) => r.initialRentalMultiplier === 12)!;
+    // 6× = identity for both rental and maintenance.
+    expect(m6.monthlyRental).toBeCloseTo(300, 2);
+    expect(m6.monthlyMaintenance).toBeCloseTo(30, 2);
+    // Less upfront → higher maintenance (interest cost), more upfront → lower.
+    expect(m1.monthlyMaintenance).toBeGreaterThan(30);
+    expect(m12.monthlyMaintenance).toBeLessThan(30);
+    // Maintenance moves monotonically just like rental.
+    const ms = rows.map((r) => r.monthlyMaintenance);
+    for (let i = 1; i < ms.length; i++) expect(ms[i]).toBeLessThan(ms[i - 1]);
+  });
+
+  it("when maintenance is zero, the maintenance funder rate is ignored", () => {
+    // Don't blow up looking up rates for a non-maintained slot — the loop
+    // short-circuits and every row's maintenance is exactly 0.
+    const rates: InterestRateMap = new Map([["lex|35", 0.05]]);
+    const rows = expandIrms(slot({ maintenance: 0 }), 0, rates);
+    for (const r of rows) expect(r.monthlyMaintenance).toBe(0);
   });
 });
 

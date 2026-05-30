@@ -279,6 +279,7 @@ export function expandIrms(
   rates: InterestRateMap,
 ): BrokerRow[] {
   const followOns = slot.termMonths - 1;
+  // Bare rental side — rate is the rental funder's.
   const annualRate = lookupAnnualRate(rates, slot.rentalFunderId, followOns);
   const monthlyRate = annualRate / 12;
   const ann = annuityFactor(monthlyRate, followOns);
@@ -286,12 +287,23 @@ export function expandIrms(
   // to other upfronts. With rate = 0, ann = followOns and npvAt6 reduces to
   // (6 + followOns) × bareRental — the old flat "total contract cost".
   const npvAt6 = slot.bareRental * (6 + ann);
+  // Maintenance side — its own funder might differ from the rental funder
+  // (mergePerSlot picks each independently for the cheapest offer). Use the
+  // maintenance funder's rate so the NPV conservation matches how that
+  // funder finances the service contract. When maintenance is zero this
+  // loop is a no-op.
+  const hasMaint = slot.maintenance > 0;
+  const maintAnnualRate = hasMaint ? lookupAnnualRate(rates, slot.maintenanceFunderId, followOns) : 0;
+  const maintMonthlyRate = maintAnnualRate / 12;
+  const maintAnn = hasMaint ? annuityFactor(maintMonthlyRate, followOns) : followOns;
+  const maintNpvAt6 = slot.maintenance * (6 + maintAnn);
   const out: BrokerRow[] = [];
   for (const n of IRM_OUTPUT) {
     const denom = n + followOns;
     const bareAtN = npvAt6 / (n + ann);
     const commissionPmt = pmtDue(monthlyRate, denom, commissionGbp);
     const rentalAtN = bareAtN + commissionPmt;
+    const maintAtN = hasMaint ? maintNpvAt6 / (n + maintAnn) : 0;
     out.push({
       funderId: slot.rentalFunderId,
       funderName: slot.rentalFunderName,
@@ -304,7 +316,7 @@ export function expandIrms(
       annualMileage: slot.annualMileage,
       initialRentalMultiplier: n,
       monthlyRental: round2(rentalAtN),
-      monthlyMaintenance: round2(slot.maintenance),
+      monthlyMaintenance: round2(maintAtN),
       excessMileage: slot.excessMileage,
       maintenanceFunderName: slot.maintenanceFunderName,
       isVan: slot.isVan,
