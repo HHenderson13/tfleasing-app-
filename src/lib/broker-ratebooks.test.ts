@@ -94,33 +94,63 @@ describe("expandIrms — commission amortization", () => {
     expect(at9.monthlyRental).toBeCloseTo(295.31, 2);
   });
 
-  it("at rate>0, more upfront → smaller per-month addition", () => {
-    // Sanity check the directionality the user asked for: higher deposit
-    // spreads the financed commission over more payments → smaller addition.
+  it("at rate>0, more upfront → smaller rental (interest works in both directions)", () => {
+    // The original test asserted the commission addition fell as upfront
+    // rose. Under the new NPV formula the *bare* rental also moves with
+    // upfront in the same direction, so this collapses to the cleaner
+    // statement: at non-zero rate, higher upfront produces a lower rental.
     const rates: InterestRateMap = new Map([["ald|35", 0.07]]);
     const rows = expandIrms(slot({ termMonths: 36, bareRental: 300, maintenance: 0 }), 750, rates);
-
-    const at1  = rows.find((r) => r.initialRentalMultiplier === 1)!;
-    const at12 = rows.find((r) => r.initialRentalMultiplier === 12)!;
-    // The commission share is rental − bare share; bare share differs too, so
-    // compare commission contribution directly.
-    const bareAt1 = (6 + 35) * 300 / (1 + 35);
-    const bareAt12 = (6 + 35) * 300 / (12 + 35);
-    const commAt1 = at1.monthlyRental - bareAt1;
-    const commAt12 = at12.monthlyRental - bareAt12;
-    expect(commAt1).toBeGreaterThan(commAt12);
-    // With non-zero rate, commission addition exceeds the flat split.
-    expect(commAt1).toBeGreaterThan(750 / (1 + 35));
-    expect(commAt12).toBeGreaterThan(750 / (12 + 35));
+    const r1 = rows.find((r) => r.initialRentalMultiplier === 1)!.monthlyRental;
+    const r3 = rows.find((r) => r.initialRentalMultiplier === 3)!.monthlyRental;
+    const r6 = rows.find((r) => r.initialRentalMultiplier === 6)!.monthlyRental;
+    const r9 = rows.find((r) => r.initialRentalMultiplier === 9)!.monthlyRental;
+    const r12 = rows.find((r) => r.initialRentalMultiplier === 12)!.monthlyRental;
+    // Monotonically decreasing as upfront rises.
+    expect(r1).toBeGreaterThan(r3);
+    expect(r3).toBeGreaterThan(r6);
+    expect(r6).toBeGreaterThan(r9);
+    expect(r9).toBeGreaterThan(r12);
+    // And the bare-only versions also move: the upfront-conversion is now
+    // interest-adjusted, not flat. At 6× the bare component is exactly the
+    // source rental (the 6+ann / 6+ann identity holds).
+    const bareOnly = expandIrms(slot({ termMonths: 36, bareRental: 300, maintenance: 0 }), 0, rates);
+    expect(bareOnly.find((r) => r.initialRentalMultiplier === 6)!.monthlyRental).toBeCloseTo(300, 2);
+    expect(bareOnly.find((r) => r.initialRentalMultiplier === 1)!.monthlyRental).toBeGreaterThan(300);
+    expect(bareOnly.find((r) => r.initialRentalMultiplier === 12)!.monthlyRental).toBeLessThan(300);
   });
 
   it("falls back to the DEFAULT 7% rate when no rate is configured for (funder, term)", () => {
     // Same input but no rate map entry — DEFAULT_ANNUAL_RATE applies (7%).
-    const rows = expandIrms(slot({ termMonths: 36, bareRental: 300, maintenance: 0 }), 300, NO_RATES);
-    const at6 = rows.find((r) => r.initialRentalMultiplier === 6)!;
+    // At rate > 0, the bare component already differs at 6× from the flat
+    // identity by the NPV adjustment; the test compares against a no-comm
+    // baseline rather than the literal 300 to keep the contract clear.
+    const withComm = expandIrms(slot({ termMonths: 36, bareRental: 300, maintenance: 0 }), 300, NO_RATES);
+    const noComm = expandIrms(slot({ termMonths: 36, bareRental: 300, maintenance: 0 }), 0, NO_RATES);
+    const at6Comm = withComm.find((r) => r.initialRentalMultiplier === 6)!.monthlyRental;
+    const at6Bare = noComm.find((r) => r.initialRentalMultiplier === 6)!.monthlyRental;
+    const commContribution = at6Comm - at6Bare;
     // 7% annuity-due over 41 months on PV=300 yields a positive PMT > flat 300/41.
-    const commContribution = at6.monthlyRental - 300;
     expect(commContribution).toBeGreaterThan(300 / 41);
+  });
+
+  it("reproduces the Novuna calc spreadsheet at 8% APR / 48 months", () => {
+    // From Novuna Ratebook Calc.xlsm: source 6× rental of 288.84 on a 48-month
+    // contract at 8% APR yields these published values across the upfronts.
+    // ±£0.50 tolerance — Novuna's macro uses slightly different rounding
+    // mid-calculation than a clean JS double pipeline, so figures land within
+    // half a pound but not to the cent.
+    const rates: InterestRateMap = new Map([["novuna|47", 0.08]]);
+    const rows = expandIrms(slot({
+      termMonths: 48, bareRental: 288.84, maintenance: 0,
+      rentalFunderId: "novuna", rentalFunderName: "Novuna",
+    }), 0, rates);
+    const irm = (n: number) => rows.find((r) => r.initialRentalMultiplier === n)!.monthlyRental;
+    expect(irm(1)).toBeCloseTo(323.80, 0);
+    expect(irm(3)).toBeCloseTo(308.87, 0);
+    expect(irm(6)).toBeCloseTo(288.84, 0);
+    expect(irm(9)).toBeCloseTo(271.22, 0);
+    expect(irm(12)).toBeCloseTo(255.59, 0);
   });
 
   it("preserves the maintenance figure unchanged across IRMs", () => {
