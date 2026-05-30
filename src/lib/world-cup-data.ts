@@ -2,7 +2,19 @@ import "server-only";
 import { db } from "@/db";
 import { wcFixtures, wcLiveScores, wcPayments, wcPredictions, wcResults, users } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { computeGroupStandings, scorePrediction, type GroupStandingRow } from "./world-cup-scoring";
+
+// Cache keys used by both the read path (unstable_cache) and the write path
+// (revalidateTag in server actions). When a result lands, anything that
+// depends on results invalidates and refetches. When fixture team1/team2
+// changes (knockout advance), the bracket invalidates. Predictions don't
+// affect any cached read — they're always per-user, so loaded fresh.
+export const WC_CACHE_TAGS = {
+  fixtures: "wc-fixtures",   // wc_fixtures rows (team1/team2 mutable on knockouts)
+  results: "wc-results",     // wc_results rows (settled fixtures)
+  predictions: "wc-predictions", // wc_predictions rows
+} as const;
 
 // Payment deadline — past this point, unpaid players are removed from the
 // game. The tournament starts 11 June 2026, so the cut-off is the day before.
@@ -401,6 +413,12 @@ export interface BracketCell {
 // position in the bracket (fixture_number order matches the tree layout).
 // The page renders them as five columns: R32 → R16 → QF → SF → Final, plus
 // the 3rd-place playoff as a separate card.
+export const loadKnockoutBracketCached = unstable_cache(
+  () => loadKnockoutBracket(),
+  ["wc-knockout-bracket"],
+  { tags: [WC_CACHE_TAGS.results, WC_CACHE_TAGS.fixtures] },
+);
+
 export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"], BracketCell[]>> {
   const fixtures = await db
     .select()
@@ -426,6 +444,15 @@ export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"]
   }
   return groups;
 }
+
+// Cached version of loadGroupViews. Group standings + fixtures don't change
+// per-user; one cache fill serves every visitor. Invalidated when a result
+// lands (revalidateTag(WC_CACHE_TAGS.results) from commitFixtureResult).
+export const loadGroupViewsCached = unstable_cache(
+  () => loadGroupViews(),
+  ["wc-group-views"],
+  { tags: [WC_CACHE_TAGS.results, WC_CACHE_TAGS.fixtures] },
+);
 
 export async function loadGroupViews(): Promise<GroupView[]> {
   const fixtures = await db

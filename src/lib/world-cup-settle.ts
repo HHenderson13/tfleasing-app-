@@ -1,8 +1,10 @@
 import "server-only";
+import { updateTag } from "next/cache";
 import { db } from "@/db";
 import { wcFixtures, wcLiveScores, wcPredictions, wcResults } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { scorePrediction } from "./world-cup-scoring";
+import { WC_CACHE_TAGS } from "./world-cup-data";
 
 // Sentinel user id used when the auto-record path (ESPN feed) settles a
 // fixture without a human admin involved. Stored in wc_results.settled_by_
@@ -111,6 +113,14 @@ export async function commitFixtureResult(input: SettleInput): Promise<SettleOut
 
   // The live snapshot is meaningless once the canonical result is in.
   await db.delete(wcLiveScores).where(eq(wcLiveScores.fixtureNumber, fx.fixtureNumber));
+
+  // Bust the global caches that depend on results / fixtures (the bracket
+  // may have just advanced a team). loadGroupViewsCached, loadKnockoutBracket
+  // Cached, and loadAllFixturesCached all key off these tags. Next 16 uses
+  // updateTag() instead of revalidateTag() for read-your-own-writes from
+  // server actions.
+  updateTag(WC_CACHE_TAGS.results);
+  if (advancedTo) updateTag(WC_CACHE_TAGS.fixtures);
 
   return { advancedTo };
 }

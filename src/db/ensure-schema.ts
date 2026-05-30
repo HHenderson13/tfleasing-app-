@@ -5,12 +5,16 @@ type TableInfoRow = {
   name: string;
 };
 
+// Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
+// ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
+// re-run on every authenticated page load (getCurrentUser awaits it).
+// Stored as a promise so concurrent cold-start requests share one run.
 let ensurePromise: Promise<void> | null = null;
 
 export async function ensureAppSchema() {
   if (!ensurePromise) {
     ensurePromise = runEnsureAppSchema().catch((error) => {
-      ensurePromise = null;
+      ensurePromise = null; // retry on next request rather than stay stuck
       throw error;
     });
   }

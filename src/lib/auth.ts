@@ -2,6 +2,7 @@ import "server-only";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
+import { cache } from "react";
 import { db } from "@/db";
 import { ensureAppSchema } from "@/db/ensure-schema";
 import { sessions, users } from "@/db/schema";
@@ -101,7 +102,12 @@ export async function clearSessionCookie() {
   jar.delete(SESSION_COOKIE);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+// Wrapped in React's cache() so repeated calls within a single request
+// (e.g. requireWcAccess() + PaymentBanner running in parallel + auth-gated
+// API routes called inside server components) share one DB lookup instead
+// of doing the session-join multiple times. The cache is request-scoped —
+// no risk of leaking user data across requests.
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<CurrentUser | null> {
   await ensureAppSchema();
   const jar = await cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
@@ -127,7 +133,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     roles: parseRoles(row.roles),
     salesExecId: row.salesExecId,
   };
-}
+});
 
 export function isAdmin(u: CurrentUser | null): boolean {
   return !!u && u.roles.includes("admin");

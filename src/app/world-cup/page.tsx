@@ -1,16 +1,28 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { db } from "@/db";
 import { wcFixtures, wcPredictions } from "@/db/schema";
-import { and, count, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { isWcAdmin } from "@/lib/auth";
 import { signOutAction } from "../login/actions";
-import { loadLeaderboard } from "@/lib/world-cup-data";
+import { loadLeaderboard, WC_CACHE_TAGS } from "@/lib/world-cup-data";
 import { LiveWidget } from "./live-widget";
 import { calculatePrizePool, fmtGbp, ENTRY_FEE_GBP } from "@/lib/world-cup-prize";
 import { PaymentBanner } from "./payment-banner";
 
 export const dynamic = "force-dynamic";
+
+// Pull every fixture once and derive counts + the next-5 rail in JS. One DB
+// roundtrip beats three count queries on Turso; the dataset is fixed at 104.
+// Cached globally with a wc-fixtures tag — invalidated when knockout teams
+// advance (via revalidateTag in setKnockoutTeamsAction / commitFixtureResult).
+const loadAllFixturesCached = unstable_cache(
+  async () => db.select().from(wcFixtures).orderBy(wcFixtures.kickoffAt, wcFixtures.fixtureNumber),
+  ["wc-all-fixtures"],
+  { tags: [WC_CACHE_TAGS.fixtures] },
+);
 
 const STAGE_LABELS: Record<string, string> = {
   group: "Group stage",
@@ -27,15 +39,23 @@ export default async function WorldCupPage() {
   const admin = isWcAdmin(user);
   const now = new Date();
 
-  const [stageCounts, upcomingRow, totalRow, leaderboard] = await Promise.all([
-    db
-      .select({ stage: wcFixtures.stage, n: count() })
-      .from(wcFixtures)
-      .groupBy(wcFixtures.stage),
-    db.select({ n: count() }).from(wcFixtures).where(gte(wcFixtures.kickoffAt, now)),
-    db.select({ n: count() }).from(wcFixtures),
+  // One Promise.all batches everything that doesn't depend on `next5`.
+  // Previously this was four parallel queries followed by two more
+  // sequential ones — now it's two parallel calls (cached fixtures + the
+  // leaderboard, which is small but per-result-dependent).
+  const [allFixtures, leaderboard] = await Promise.all([
+    loadAllFixturesCached(),
     loadLeaderboard(),
   ]);
+
+  const stageCountMap = new Map<string, number>();
+  let upcomingCount = 0;
+  for (const f of allFixtures) {
+    stageCountMap.set(f.stage, (stageCountMap.get(f.stage) ?? 0) + 1);
+    if (f.kickoffAt >= now) upcomingCount++;
+  }
+  const totalCount = allFixtures.length;
+  const next5 = allFixtures.filter((f) => f.kickoffAt >= now).slice(0, 5);
 
   // Player rank + standing.
   let myRank: number | null = null;
@@ -58,19 +78,8 @@ export default async function WorldCupPage() {
   const playerCount = leaderboard.length;
   const prize = calculatePrizePool(playerCount);
 
-  const stageCountMap = new Map(stageCounts.map((s) => [s.stage, s.n]));
-  const upcomingCount = upcomingRow[0]?.n ?? 0;
-  const totalCount = totalRow[0]?.n ?? 0;
-
-  const next5 = await db
-    .select()
-    .from(wcFixtures)
-    .where(sql`${wcFixtures.kickoffAt} >= ${Math.floor(now.getTime() / 1000)}`)
-    .orderBy(wcFixtures.kickoffAt)
-    .limit(5);
-
-  // Pull only this user's predictions for the upcoming 5 — one extra query
-  // beats N joins. Empty when the user hasn't picked any of them yet.
+  // Per-user predictions for the upcoming 5 fixtures. Indexed by fixture
+  // number for O(1) lookup in the render.
   const next5Predictions = next5.length > 0
     ? await db
         .select()
@@ -99,7 +108,11 @@ export default async function WorldCupPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8 sm:py-10">
-        <PaymentBanner userId={user.id} />
+        {/* Streams in independently — the hero and live widget paint without
+            waiting on the payment-status DB read. */}
+        <Suspense fallback={null}>
+          <PaymentBanner userId={user.id} />
+        </Suspense>
         <section className="relative overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-700" />
           <div className="px-5 pt-6 pb-5 sm:px-7 sm:pt-7 sm:pb-6">

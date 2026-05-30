@@ -3,7 +3,8 @@
 import { db } from "@/db";
 import { users, wcFixtures, wcLiveScores, wcPayments, wcPredictions, wcResults } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { WC_CACHE_TAGS } from "@/lib/world-cup-data";
 import { z } from "zod";
 import { requireWcAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
@@ -171,6 +172,7 @@ export async function setKnockoutTeamsAction(input: { fixtureNumber: number; tea
   const parsed = editTeamsSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   await db.update(wcFixtures).set({ team1: parsed.data.team1 || null, team2: parsed.data.team2 || null }).where(eq(wcFixtures.fixtureNumber, parsed.data.fixtureNumber));
+  updateTag(WC_CACHE_TAGS.fixtures); // bracket + all-fixtures caches depend on this
   revalidatePath("/world-cup");
   revalidatePath("/world-cup/predictions");
   revalidatePath("/world-cup/admin");

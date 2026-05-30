@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import { loadLeaderboard } from "@/lib/world-cup-data";
@@ -46,7 +47,9 @@ export default async function LeaderboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <PaymentBanner userId={user.id} />
+        <Suspense fallback={null}>
+          <PaymentBanner userId={user.id} />
+        </Suspense>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Leaderboard</h1>
         <p className="mt-1 text-sm text-slate-500">
           Updates the instant a result is entered. {ranked.length} player{ranked.length === 1 ? "" : "s"} in the running.

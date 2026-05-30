@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import { listFixturesWithMyPredictions, loadConsensus } from "@/lib/world-cup-data";
@@ -53,7 +54,9 @@ export default async function PredictionsPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <PaymentBanner userId={user.id} />
+        <Suspense fallback={null}>
+          <PaymentBanner userId={user.id} />
+        </Suspense>
         <div className="flex items-baseline justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">My predictions</h1>
           <div className="text-xs text-slate-500">

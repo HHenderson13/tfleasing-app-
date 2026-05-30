@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireWcAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
-import { loadGroupViews, loadKnockoutBracket } from "@/lib/world-cup-data";
+import { loadGroupViewsCached, loadKnockoutBracketCached } from "@/lib/world-cup-data";
 import { PaymentBanner } from "../payment-banner";
 import { Bracket } from "./bracket";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function GroupsPage() {
   const user = await requireWcAccess();
-  const [groups, bracket] = await Promise.all([loadGroupViews(), loadKnockoutBracket()]);
+  const [groups, bracket] = await Promise.all([loadGroupViewsCached(), loadKnockoutBracketCached()]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -30,7 +31,9 @@ export default async function GroupsPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <PaymentBanner userId={user.id} />
+        <Suspense fallback={null}>
+          <PaymentBanner userId={user.id} />
+        </Suspense>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Standings & bracket</h1>
         <p className="mt-1 text-sm text-slate-500">
           Group tables recompute the instant a result is entered. Top two qualify directly;
