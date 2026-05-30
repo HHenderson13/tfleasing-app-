@@ -413,11 +413,22 @@ export interface BracketCell {
 // position in the bracket (fixture_number order matches the tree layout).
 // The page renders them as five columns: R32 → R16 → QF → SF → Final, plus
 // the 3rd-place playoff as a separate card.
-export const loadKnockoutBracketCached = unstable_cache(
+// Same Date-rehydration story as the group views.
+const loadKnockoutBracketRaw = unstable_cache(
   () => loadKnockoutBracket(),
   ["wc-knockout-bracket"],
   { tags: [WC_CACHE_TAGS.results, WC_CACHE_TAGS.fixtures] },
 );
+export async function loadKnockoutBracketCached(): Promise<Record<BracketCell["stage"], BracketCell[]>> {
+  const raw = await loadKnockoutBracketRaw();
+  const out: Record<BracketCell["stage"], BracketCell[]> = {
+    r32: [], r16: [], qf: [], sf: [], third: [], final: [],
+  };
+  for (const stage of Object.keys(raw) as BracketCell["stage"][]) {
+    out[stage] = raw[stage].map((c) => ({ ...c, kickoffAt: new Date(c.kickoffAt) }));
+  }
+  return out;
+}
 
 export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"], BracketCell[]>> {
   const fixtures = await db
@@ -447,12 +458,22 @@ export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"]
 
 // Cached version of loadGroupViews. Group standings + fixtures don't change
 // per-user; one cache fill serves every visitor. Invalidated when a result
-// lands (revalidateTag(WC_CACHE_TAGS.results) from commitFixtureResult).
-export const loadGroupViewsCached = unstable_cache(
+// lands (updateTag(WC_CACHE_TAGS.results) from commitFixtureResult).
+//
+// unstable_cache JSON-roundtrips the payload — `fixtures[].kickoffAt` comes
+// back as an ISO string. Re-hydrate so the UI can call .toLocaleString.
+const loadGroupViewsRaw = unstable_cache(
   () => loadGroupViews(),
   ["wc-group-views"],
   { tags: [WC_CACHE_TAGS.results, WC_CACHE_TAGS.fixtures] },
 );
+export async function loadGroupViewsCached(): Promise<GroupView[]> {
+  const raw = await loadGroupViewsRaw();
+  return raw.map((g) => ({
+    ...g,
+    fixtures: g.fixtures.map((f) => ({ ...f, kickoffAt: new Date(f.kickoffAt) })),
+  }));
+}
 
 export async function loadGroupViews(): Promise<GroupView[]> {
   const fixtures = await db

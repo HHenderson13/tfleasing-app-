@@ -17,12 +17,20 @@ export const dynamic = "force-dynamic";
 // Pull every fixture once and derive counts + the next-5 rail in JS. One DB
 // roundtrip beats three count queries on Turso; the dataset is fixed at 104.
 // Cached globally with a wc-fixtures tag — invalidated when knockout teams
-// advance (via revalidateTag in setKnockoutTeamsAction / commitFixtureResult).
-const loadAllFixturesCached = unstable_cache(
+// advance (via updateTag in setKnockoutTeamsAction / commitFixtureResult).
+//
+// unstable_cache JSON-roundtrips the payload, so Date fields come back as
+// ISO strings. Re-hydrate kickoffAt to a real Date after the cached call so
+// callers can still do >= now comparisons and .toLocaleString on it.
+const loadAllFixturesRaw = unstable_cache(
   async () => db.select().from(wcFixtures).orderBy(wcFixtures.kickoffAt, wcFixtures.fixtureNumber),
   ["wc-all-fixtures"],
   { tags: [WC_CACHE_TAGS.fixtures] },
 );
+async function loadAllFixturesCached() {
+  const rows = await loadAllFixturesRaw();
+  return rows.map((f) => ({ ...f, kickoffAt: new Date(f.kickoffAt) }));
+}
 
 const STAGE_LABELS: Record<string, string> = {
   group: "Group stage",
