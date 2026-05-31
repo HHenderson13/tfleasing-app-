@@ -94,6 +94,7 @@ export default async function ReportsPage({
           />
         )}
 
+        {/* Decision quality row */}
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <HeroTile
             gradient="from-emerald-500 to-teal-600"
@@ -106,18 +107,41 @@ export default async function ReportsPage({
             gradient="from-amber-500 to-orange-600"
             label="Awaiting referral"
             value={`${r.referredRate}%`}
-            sub={`${r.referredDeals} of ${r.acceptedDeals + r.referredDeals + r.declinedDeals} in pipeline`}
+            sub={`${r.referredDeals} of ${r.acceptedDeals + r.referredDeals + r.declinedDeals + r.notEligibleDeals} in pipeline`}
             href={r.referredDeals > 0 ? drillHref(range, source, "referred", "all", "Referred proposals") : undefined}
           />
           <HeroTile
             gradient="from-red-500 to-rose-700"
             label="Decline rate"
             value={`${r.declinedRate}%`}
-            sub={`${r.declinedDeals} of ${r.acceptedDeals + r.declinedDeals} decisions`}
+            sub={`${r.declinedDeals} declined${r.notEligibleDeals > 0 ? ` · ${r.notEligibleDeals} not eligible` : ""}`}
             href={r.declinedDeals > 0 ? drillHref(range, source, "declined", "all", "Declined proposals") : undefined}
           />
         </section>
 
+        {/* Speed + value row — new tiles */}
+        <section className="mt-3 grid gap-3 sm:grid-cols-3">
+          <HeroTile
+            gradient="from-emerald-500 to-lime-600"
+            label="Pull-through"
+            value={`${r.pullThroughRate}%`}
+            sub={`${r.deliveredDeals} of ${r.acceptedDeals} accepted reached delivery`}
+          />
+          <HeroTile
+            gradient="from-sky-500 to-cyan-600"
+            label="Avg days to decision"
+            value={r.avgDaysToDecision > 0 ? `${r.avgDaysToDecision.toFixed(1)}d` : "—"}
+            sub={`across ${r.acceptedDeals + r.declinedDeals} decided customers`}
+          />
+          <HeroTile
+            gradient="from-indigo-500 to-purple-600"
+            label="Pipeline value"
+            value={`£${(r.pipelineValueGbp / 1000).toFixed(1)}k`}
+            sub={`annualised · ${r.acceptedDeals + r.referredDeals} in flight`}
+          />
+        </section>
+
+        {/* Volume + mix row */}
         <section className="mt-3 grid gap-3 sm:grid-cols-3">
           <HeroTile
             gradient="from-sky-500 to-indigo-600"
@@ -192,7 +216,7 @@ export default async function ReportsPage({
             />
           </Card>
 
-          <Card title="Funder acceptance rates" desc="1st-string only · accepted ÷ decided (referred & not-eligible excluded)" gradient="from-emerald-50 to-white" accent="emerald">
+          <Card title="Funder acceptance rates" desc={`1st-string only · accepted ÷ decided · vertical tick = dept avg ${r.deptAcceptanceRate}%`} gradient="from-emerald-50 to-white" accent="emerald">
             <RateList
               rows={r.funderAcceptance.map((f) => ({
                 key: f.funderId,
@@ -202,6 +226,7 @@ export default async function ReportsPage({
                 href: drillHref(range, source, "funder", f.funderId, f.funderName),
               }))}
               empty="No data"
+              benchmark={r.deptAcceptanceRate}
             />
           </Card>
         </div>
@@ -477,8 +502,16 @@ function BarList({
 }
 
 function RateList({
-  rows, empty, invert,
-}: { rows: { key: string; label: string; rate: number; sub: string; href?: string }[]; empty: string; invert?: boolean }) {
+  rows, empty, invert, benchmark,
+}: {
+  rows: { key: string; label: string; rate: number; sub: string; href?: string }[];
+  empty: string;
+  invert?: boolean;
+  // Vertical tick on the bar at this percentage — used to render the dept-
+  // wide acceptance rate on the per-funder card so above-/below-average is
+  // visible at a glance.
+  benchmark?: number;
+}) {
   if (rows.length === 0) return <div className="py-3 text-center text-xs text-slate-400">{empty}</div>;
   return (
     <ul className="space-y-2">
@@ -492,6 +525,13 @@ function RateList({
             <span className="w-32 shrink-0 truncate text-xs font-medium text-slate-700">{r.label}</span>
             <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-slate-100">
               <div className={`absolute inset-y-0 left-0 bg-gradient-to-r ${toneClass}`} style={{ width: `${Math.min(r.rate, 100)}%` }} />
+              {benchmark !== undefined && benchmark > 0 && benchmark < 100 && (
+                <div
+                  className="absolute inset-y-0 w-0.5 bg-slate-700/60"
+                  style={{ left: `${benchmark}%` }}
+                  title={`Dept average ${benchmark}%`}
+                />
+              )}
               <span className="relative z-10 ml-2 text-xs font-semibold leading-7 text-slate-900 tabular-nums">{r.rate}%</span>
             </div>
             <span className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{r.sub}</span>

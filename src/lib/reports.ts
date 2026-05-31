@@ -189,10 +189,17 @@ export async function getProposalsTimeseries(range: RangeKey, source: SourceKey 
 }
 
 const ACCEPTED_STATUSES = new Set(["accepted", "in_order", "awaiting_delivery", "delivered"]);
-const DECLINED_STATUSES = new Set(["declined", "not_eligible"]);
+// Split: a real underwriter decline vs "we never even submitted" (not_eligible).
+// These get different headline treatment because they say different things —
+// "declined" is a funder problem to solve, "not_eligible" is a sales/pricing
+// problem upstream.
+const DECLINED_STATUSES = new Set(["declined"]);
+const NOT_ELIGIBLE_STATUSES = new Set(["not_eligible"]);
 const CANCELLED_STATUSES = new Set(["lost_sale", "cancelled"]);
 const PENDING_STATUSES = new Set(["proposal_received", "referred_to_dealer", "referred_to_underwriter"]);
 const REFERRED_STATUSES = new Set(["referred_to_dealer", "referred_to_underwriter"]);
+// All terminal proposal states the proposal moved through after acceptance.
+const DELIVERED_STATUSES = new Set(["delivered"]);
 
 export interface ReportSummary {
   totalProposals: number;
@@ -206,8 +213,26 @@ export interface ReportSummary {
   referredRate: number;
   declinedDeals: number;
   declinedRate: number;
+  // New: customers where every active proposal came back not_eligible.
+  // Previously folded into declinedDeals — a misleading mix because the two
+  // tell different stories (funder decline vs we-never-submitted).
+  notEligibleDeals: number;
+  notEligibleRate: number;
+  // Pull-through: of accepted deals, what share are actually delivered.
+  // Helps spot accepted-then-vanished deals to chase.
+  deliveredDeals: number;
+  pullThroughRate: number;
+  // Average days from proposal createdAt to first decision (accept OR
+  // decline). Computed at proposal-grain, averaged across customers
+  // that have at least one decided proposal.
+  avgDaysToDecision: number;
+  // Annualised contract value of every customer currently in-flight
+  // (accepted or referred, not yet cancelled). monthlyRental × 12.
+  pipelineValueGbp: number;
   funderSplit: { funderId: string; funderName: string; count: number; pct: number }[];
-  funderAcceptance: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number }[];
+  // funderAcceptance also carries deptAvg so the per-funder card can render
+  // a benchmark tick next to each rate (above-/below-dept colour signal).
+  funderAcceptance: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number; deptAvg: number }[];
   funderReferralRate: { funderId: string; funderName: string; referred: number; submitted: number; rate: number }[];
   secondStringByFunder: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number }[];
   contractSplit: { key: string; count: number; pct: number }[];
@@ -288,27 +313,69 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   }
 
   // Eligible: deal has at least one attempt that isn't not_eligible.
-  // Pending: deal has no decided attempt yet (every attempt is pending or not_eligible).
+  // Pending: deal has no decided attempt yet (every attempt is pending).
   let eligibleDeals = 0;
   let acceptedDeals = 0;
   let cancelledDeals = 0;
   let pendingDeals = 0;
   let decidedDeals = 0;
-  // Bucket each customer by current end-state. A customer is mutually
-  // exclusively one of: accepted > referred > declined (cancelled / pending
-  // / not_eligible-only customers fall into none).
+  // Bucket each customer mutually-exclusively by their best end-state.
+  // Priority: accepted > referred > declined > not_eligible. Cancelled-only
+  // customers go to cancelled; customers with only pending proposals fall
+  // through to pendingDeals.
   let referredDeals = 0;
   let declinedDeals = 0;
+  let notEligibleDeals = 0;
+  let deliveredDeals = 0;
+  // Cumulative pipeline £: annualised value of every customer currently
+  // in-flight (accepted or referred, not yet cancelled) — sums each
+  // customer's best/active monthlyRental.
+  let pipelineValueGbp = 0;
+  // Days-to-decision: per customer with a decided proposal, take the
+  // earliest-decided's createdAt → acceptedAt/updatedAt and average.
+  const daysToDecision: number[] = [];
   for (const arr of dealsByCustomer.values()) {
     const active = arr.filter((r) => !CANCELLED_STATUSES.has(r.status));
     const anyEligible = active.some((r) => r.status !== "not_eligible");
     if (anyEligible) eligibleDeals++;
     if (arr.every((r) => CANCELLED_STATUSES.has(r.status))) { cancelledDeals++; continue; }
-    if (active.some((r) => ACCEPTED_STATUSES.has(r.status))) { acceptedDeals++; decidedDeals++; continue; }
-    if (active.some((r) => REFERRED_STATUSES.has(r.status))) { referredDeals++; continue; }
-    if (active.some((r) => DECLINED_STATUSES.has(r.status))) { declinedDeals++; decidedDeals++; continue; }
+    if (active.some((r) => ACCEPTED_STATUSES.has(r.status))) {
+      acceptedDeals++; decidedDeals++;
+      if (active.some((r) => DELIVERED_STATUSES.has(r.status))) deliveredDeals++;
+      // Pipeline value: take the highest monthlyRental among accepted attempts
+      // (multiple funders can have an accept against the same customer).
+      const accept = active.find((r) => ACCEPTED_STATUSES.has(r.status));
+      if (accept) pipelineValueGbp += accept.monthlyRental * 12;
+      const decisionRow = accept ?? active[0];
+      const decided = decisionRow.acceptedAt ?? decisionRow.updatedAt;
+      const days = (decided.getTime() - decisionRow.createdAt.getTime()) / 86400_000;
+      if (Number.isFinite(days) && days >= 0) daysToDecision.push(days);
+      continue;
+    }
+    if (active.some((r) => REFERRED_STATUSES.has(r.status))) {
+      referredDeals++;
+      const referred = active.find((r) => REFERRED_STATUSES.has(r.status));
+      if (referred) pipelineValueGbp += referred.monthlyRental * 12;
+      continue;
+    }
+    if (active.some((r) => DECLINED_STATUSES.has(r.status))) {
+      declinedDeals++; decidedDeals++;
+      const declined = active.find((r) => DECLINED_STATUSES.has(r.status));
+      if (declined) {
+        const days = (declined.updatedAt.getTime() - declined.createdAt.getTime()) / 86400_000;
+        if (Number.isFinite(days) && days >= 0) daysToDecision.push(days);
+      }
+      continue;
+    }
+    if (active.every((r) => NOT_ELIGIBLE_STATUSES.has(r.status))) {
+      notEligibleDeals++;
+      continue;
+    }
     if (anyEligible) pendingDeals++;
   }
+  const avgDaysToDecision = daysToDecision.length
+    ? Math.round((daysToDecision.reduce((a, b) => a + b, 0) / daysToDecision.length) * 10) / 10
+    : 0;
   // Acceptance / decline are computed against DECIDED customers — those whose
   // funder has actually said yes or no. Referred deals are still in flight and
   // would artificially drag acceptance down if they were in the denominator.
@@ -319,11 +386,20 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
   // Referred rate uses a wider denominator (everything bucketed including
   // referrals) so it answers a different question — "what share of currently
   // in-flight deals are stuck waiting for a referral decision".
+  //
+  // Not-eligible is its own thing: customers we never even submitted because
+  // pricing or product disqualified them. Shown separately so it doesn't get
+  // mixed into the decline rate.
   const decidedCustomers = acceptedDeals + declinedDeals;
-  const bucketedTotal = acceptedDeals + referredDeals + declinedDeals;
+  const bucketedTotal = acceptedDeals + referredDeals + declinedDeals + notEligibleDeals;
   const deptAcceptanceRate = pct(acceptedDeals, decidedCustomers);
   const declinedRate = pct(declinedDeals, decidedCustomers);
   const referredRate = pct(referredDeals, bucketedTotal);
+  const notEligibleRate = pct(notEligibleDeals, bucketedTotal);
+  // Pull-through: of accepted deals, what share are actually delivered.
+  // Indicates the "accepted but stalled mid-order" rate; the inverse hints
+  // at how many accepted deals end up cancelled or never closed.
+  const pullThroughRate = pct(deliveredDeals, acceptedDeals);
 
   const funderTotals = new Map<string, {
     name: string; submitted: number; accepted: number; declined: number;
@@ -379,6 +455,9 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
       accepted: v.firstAccepted,
       pending: v.firstPending,
       rate: pct(v.firstAccepted, v.firstDecided),
+      // Each row carries the dept-wide acceptance rate so the card can render
+      // a benchmark tick — makes "above / below dept" instantly readable.
+      deptAvg: deptAcceptanceRate,
     }))
     .sort((a, b) => b.rate - a.rate);
 
@@ -475,6 +554,12 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     referredRate,
     declinedDeals,
     declinedRate,
+    notEligibleDeals,
+    notEligibleRate,
+    deliveredDeals,
+    pullThroughRate,
+    avgDaysToDecision,
+    pipelineValueGbp,
     funderSplit,
     funderAcceptance,
     funderReferralRate,
