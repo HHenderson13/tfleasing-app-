@@ -32,6 +32,40 @@ function matchesSource(r: { isBroker: boolean; isGroupBq: boolean }, s: SourceKe
   return rowSource(r) === s;
 }
 
+// Returns the equivalent previous-period bounds so the page can compute a
+// like-for-like comparison (this month vs last month, this quarter vs last,
+// etc.). 'all' has no meaningful comparison so returns nulls.
+export function prevRangeBounds(range: RangeKey, now = new Date()): { from: Date | null; to: Date | null } {
+  const cur = rangeBounds(range, now);
+  if (!cur.from) return { from: null, to: null };
+  if (range === "month") {
+    const from = new Date(cur.from); from.setMonth(from.getMonth() - 1);
+    const to = new Date(cur.from);   to.setMilliseconds(-1);
+    return { from, to };
+  }
+  if (range === "quarter") {
+    const from = new Date(cur.from); from.setMonth(from.getMonth() - 3);
+    const to = new Date(cur.from);   to.setMilliseconds(-1);
+    return { from, to };
+  }
+  if (range === "half") {
+    const from = new Date(cur.from); from.setMonth(from.getMonth() - 6);
+    const to = new Date(cur.from);   to.setMilliseconds(-1);
+    return { from, to };
+  }
+  if (range === "ytd") {
+    const from = new Date(cur.from); from.setFullYear(from.getFullYear() - 1);
+    const to = new Date(cur.from);   to.setFullYear(to.getFullYear() - 1);
+    return { from, to };
+  }
+  if (range === "year") {
+    const from = new Date(cur.from); from.setFullYear(from.getFullYear() - 1);
+    const to = new Date(cur.from);   to.setMilliseconds(-1);
+    return { from, to };
+  }
+  return { from: null, to: null };
+}
+
 export function rangeBounds(range: RangeKey, now = new Date()): { from: Date | null; to: Date } {
   const to = now;
   const d = new Date(now);
@@ -229,6 +263,24 @@ export interface ReportSummary {
   // Annualised contract value of every customer currently in-flight
   // (accepted or referred, not yet cancelled). monthlyRental × 12.
   pipelineValueGbp: number;
+  // Of currently-referred proposals, how many have been awaiting a referral
+  // decision for more than 14 days. Operational nudge for who to chase.
+  stuckReferralsCount: number;
+  // For accepted customers, the average number of proposal attempts before
+  // they got an acceptance. >1.0 = funder waterfall order isn't optimal.
+  avgAttemptsToAccept: number;
+  // Source × funder acceptance rates as a small table. cells[source][funderId]
+  // = { accepted, decided, rate }. Used for the strategy heatmap.
+  sourceFunderMatrix: {
+    funders: { funderId: string; funderName: string }[];
+    rows: { source: Exclude<SourceKey, "all">; label: string; cells: { funderId: string; accepted: number; decided: number; rate: number }[] }[];
+  };
+  // Accepted-customers-only splits. Useful for "what do customers actually
+  // take" vs the existing all-proposals view ("what do we quote").
+  acceptedContractSplit: { key: string; count: number; pct: number }[];
+  acceptedTermSplit: { key: string; count: number; pct: number }[];
+  acceptedMileageSplit: { key: string; count: number; pct: number }[];
+  acceptedUpfrontSplit: { key: string; count: number; pct: number }[];
   funderSplit: { funderId: string; funderName: string; count: number; pct: number }[];
   // funderAcceptance also carries deptAvg so the per-funder card can render
   // a benchmark tick next to each rate (above-/below-dept colour signal).
@@ -260,8 +312,8 @@ function bucketCount<K extends string | number>(rows: Row[], pick: (r: Row) => K
     .sort((a, b) => b.count - a.count);
 }
 
-export async function buildReport(range: RangeKey, source: SourceKey = "all"): Promise<ReportSummary> {
-  const { from, to } = rangeBounds(range);
+export async function buildReport(range: RangeKey, source: SourceKey = "all", now: Date = new Date()): Promise<ReportSummary> {
+  const { from, to } = rangeBounds(range, now);
   const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const allRows = await db.select().from(proposals).where(and(...wheres));
@@ -542,6 +594,84 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     .map(([execId, v]) => ({ execId, execName: v.name, submitted: v.submitted, decided: v.decided, accepted: v.accepted, pending: v.pending, rate: pct(v.accepted, v.decided) }))
     .sort((a, b) => b.accepted - a.accepted);
 
+  // Stuck referrals: currently-referred proposals last updated >14 days ago.
+  // Surfaces who to chase for a decision.
+  const fourteenDaysMs = 14 * 86400_000;
+  const stuckReferralsCount = rows.filter((r) =>
+    REFERRED_STATUSES.has(r.status) && (Date.now() - r.updatedAt.getTime()) >= fourteenDaysMs
+  ).length;
+
+  // Average attempts to acceptance: for customers who reached an accept,
+  // how many proposals did it take (counted up to and including the
+  // accepted one). A 1.0 average is perfect funder waterfall ordering.
+  let attemptsSum = 0;
+  let attemptsN = 0;
+  for (const arr of dealsByCustomer.values()) {
+    const acceptedAttempt = arr.find((r) => ACCEPTED_STATUSES.has(r.status));
+    if (!acceptedAttempt) continue;
+    // funderRank is 1-indexed; if missing fall back to ordering by createdAt.
+    const rank = Number.isFinite(acceptedAttempt.funderRank) ? acceptedAttempt.funderRank : null;
+    if (rank && rank >= 1) { attemptsSum += rank; attemptsN++; continue; }
+    const sortedByDate = [...arr].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const idx = sortedByDate.findIndex((r) => r.id === acceptedAttempt.id);
+    if (idx >= 0) { attemptsSum += idx + 1; attemptsN++; }
+  }
+  const avgAttemptsToAccept = attemptsN > 0 ? Math.round((attemptsSum / attemptsN) * 10) / 10 : 0;
+
+  // Source × funder matrix: per-source acceptance rate by funder. Built on
+  // first-string attempts so multi-funder customers don't inflate the
+  // numerator. Uses the unfiltered (allRows) set so the matrix is
+  // comparable across source selections.
+  const sourceFunderTotals = new Map<string, { funderId: string; funderName: string; accepted: number; decided: number }>();
+  for (const r of allRows) {
+    if (r.funderRank !== 1) continue;
+    if (PENDING_STATUSES.has(r.status) || r.status === "not_eligible") continue;
+    const src = rowSource(r);
+    const k = `${src}|${r.funderId}`;
+    const cur = sourceFunderTotals.get(k) ?? { funderId: r.funderId, funderName: r.funderName, accepted: 0, decided: 0 };
+    cur.decided++;
+    if (ACCEPTED_STATUSES.has(r.status)) cur.accepted++;
+    sourceFunderTotals.set(k, cur);
+  }
+  // Stable funder ordering: by total decided across all sources, desc.
+  const funderOrder = new Map<string, { funderId: string; funderName: string; decided: number }>();
+  for (const v of sourceFunderTotals.values()) {
+    const cur = funderOrder.get(v.funderId) ?? { funderId: v.funderId, funderName: v.funderName, decided: 0 };
+    cur.decided += v.decided;
+    funderOrder.set(v.funderId, cur);
+  }
+  const sortedFunders = [...funderOrder.values()].sort((a, b) => b.decided - a.decided).map(({ funderId, funderName }) => ({ funderId, funderName }));
+  const sourceFunderMatrix = {
+    funders: sortedFunders,
+    rows: (["retail", "broker", "bq"] as const).map((src) => ({
+      source: src,
+      label: SOURCE_LABELS[src],
+      cells: sortedFunders.map(({ funderId }) => {
+        const v = sourceFunderTotals.get(`${src}|${funderId}`);
+        return {
+          funderId,
+          accepted: v?.accepted ?? 0,
+          decided: v?.decided ?? 0,
+          rate: pct(v?.accepted ?? 0, v?.decided ?? 0),
+        };
+      }),
+    })),
+  };
+
+  // Accepted-only splits: per accepted customer, take their accepted
+  // proposal (not the proposal we eventually quoted). Tells you what
+  // customers ACTUALLY take vs what we propose.
+  const acceptedProposals: Row[] = [];
+  for (const arr of dealsByCustomer.values()) {
+    const accept = arr.find((r) => ACCEPTED_STATUSES.has(r.status));
+    if (accept) acceptedProposals.push(accept);
+  }
+  const accT = acceptedProposals.length;
+  const acceptedContractSplit = bucketCount(acceptedProposals, (r) => r.contract, accT);
+  const acceptedTermSplit = bucketCount(acceptedProposals, (r) => `${r.termMonths}m`, accT);
+  const acceptedMileageSplit = bucketCount(acceptedProposals, (r) => `${r.annualMileage.toLocaleString()}`, accT);
+  const acceptedUpfrontSplit = bucketCount(acceptedProposals, (r) => `${r.initialRentalMultiplier}×`, accT);
+
   return {
     totalProposals,
     uniqueDeals,
@@ -585,5 +715,12 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     evByModel,
     execLeaderboard,
     sourceSplit,
+    stuckReferralsCount,
+    avgAttemptsToAccept,
+    sourceFunderMatrix,
+    acceptedContractSplit,
+    acceptedTermSplit,
+    acceptedMileageSplit,
+    acceptedUpfrontSplit,
   };
 }

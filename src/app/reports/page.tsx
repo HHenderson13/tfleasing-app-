@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
   buildReport,
+  prevRangeBounds,
   getDrilldown,
   getProposalsTimeseries,
   RANGE_LABELS,
@@ -48,7 +49,7 @@ function clearDrillHref(range: RangeKey, source: SourceKey): string {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; source?: string; drill?: string; id?: string; label?: string }>;
+  searchParams: Promise<{ range?: string; source?: string; drill?: string; id?: string; label?: string; splits?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
@@ -60,13 +61,26 @@ export default async function ReportsPage({
     : "all";
 
   const drillKind = (VALID_DRILLS as readonly string[]).includes(sp.drill ?? "") ? (sp.drill as DrillKind) : null;
+  // Split mode toggle: "proposed" (default, all proposal attempts) vs
+  // "accepted" (only the customer's accepted proposal). Affects the
+  // contract / term / mileage / upfront cards below.
+  const splitMode: "proposed" | "accepted" = sp.splits === "accepted" ? "accepted" : "proposed";
   const drillId = sp.id ?? "";
   const drillLabel = sp.label ?? "";
 
-  const [r, ts, drillRows] = await Promise.all([
+  // Run the current period and the previous comparable period in parallel.
+  // The 'all' range has no meaningful comparison; prevRangeBounds returns
+  // null/null and we skip the second buildReport entirely.
+  // buildReport accepts a 'now' override — passing the previous period's
+  // upper bound makes rangeBounds() resolve to the same-shaped period one
+  // step back (e.g. previous month, previous quarter).
+  const prevBounds = prevRangeBounds(range);
+  const wantPrev = prevBounds.to !== null && range !== "all";
+  const [r, ts, drillRows, prev] = await Promise.all([
     buildReport(range, source),
     getProposalsTimeseries(range, source),
     drillKind && drillId ? getDrilldown(range, drillKind, drillId, source) : Promise.resolve(null),
+    wantPrev ? buildReport(range, source, prevBounds.to!) : Promise.resolve(null),
   ]);
 
   return (
@@ -102,13 +116,17 @@ export default async function ReportsPage({
             value={`${r.deptAcceptanceRate}%`}
             sub={`${r.acceptedDeals} of ${r.acceptedDeals + r.declinedDeals} decisions${r.referredDeals > 0 ? ` · ${r.referredDeals} awaiting referral` : ""}`}
             href={r.acceptedDeals > 0 ? drillHref(range, source, "accepted", "all", "Accepted proposals") : undefined}
+            delta={prev ? { current: r.deptAcceptanceRate, previous: prev.deptAcceptanceRate, unit: "pp" } : undefined}
           />
           <HeroTile
             gradient="from-amber-500 to-orange-600"
             label="Awaiting referral"
             value={`${r.referredRate}%`}
-            sub={`${r.referredDeals} of ${r.acceptedDeals + r.referredDeals + r.declinedDeals + r.notEligibleDeals} in pipeline`}
+            sub={r.stuckReferralsCount > 0
+              ? `${r.referredDeals} in pipeline · ${r.stuckReferralsCount} stuck > 14 days`
+              : `${r.referredDeals} of ${r.acceptedDeals + r.referredDeals + r.declinedDeals + r.notEligibleDeals} in pipeline`}
             href={r.referredDeals > 0 ? drillHref(range, source, "referred", "all", "Referred proposals") : undefined}
+            delta={prev ? { current: r.referredRate, previous: prev.referredRate, unit: "pp", invertGood: true } : undefined}
           />
           <HeroTile
             gradient="from-red-500 to-rose-700"
@@ -116,6 +134,7 @@ export default async function ReportsPage({
             value={`${r.declinedRate}%`}
             sub={`${r.declinedDeals} declined${r.notEligibleDeals > 0 ? ` · ${r.notEligibleDeals} not eligible` : ""}`}
             href={r.declinedDeals > 0 ? drillHref(range, source, "declined", "all", "Declined proposals") : undefined}
+            delta={prev ? { current: r.declinedRate, previous: prev.declinedRate, unit: "pp", invertGood: true } : undefined}
           />
         </section>
 
@@ -126,18 +145,23 @@ export default async function ReportsPage({
             label="Pull-through"
             value={`${r.pullThroughRate}%`}
             sub={`${r.deliveredDeals} of ${r.acceptedDeals} accepted reached delivery`}
+            delta={prev ? { current: r.pullThroughRate, previous: prev.pullThroughRate, unit: "pp" } : undefined}
           />
           <HeroTile
             gradient="from-sky-500 to-cyan-600"
             label="Avg days to decision"
             value={r.avgDaysToDecision > 0 ? `${r.avgDaysToDecision.toFixed(1)}d` : "—"}
-            sub={`across ${r.acceptedDeals + r.declinedDeals} decided customers`}
+            sub={`across ${r.acceptedDeals + r.declinedDeals} decided · avg ${r.avgAttemptsToAccept || 0} attempts to accept`}
+            delta={prev && prev.avgDaysToDecision > 0
+              ? { current: r.avgDaysToDecision, previous: prev.avgDaysToDecision, invertGood: true }
+              : undefined}
           />
           <HeroTile
             gradient="from-indigo-500 to-purple-600"
             label="Pipeline value"
             value={`£${(r.pipelineValueGbp / 1000).toFixed(1)}k`}
             sub={`annualised · ${r.acceptedDeals + r.referredDeals} in flight`}
+            delta={prev ? { current: r.pipelineValueGbp, previous: prev.pipelineValueGbp } : undefined}
           />
         </section>
 
@@ -148,6 +172,7 @@ export default async function ReportsPage({
             label="Proposals submitted"
             value={r.totalProposals.toString()}
             sub={`${r.uniqueDeals} unique deals`}
+            delta={prev ? { current: r.totalProposals, previous: prev.totalProposals } : undefined}
           />
           <HeroTile
             gradient="from-rose-400 to-rose-600"
@@ -155,6 +180,7 @@ export default async function ReportsPage({
             value={`${r.cancellationRate}%`}
             sub={`${r.cancelledDeals} cancelled`}
             href={r.cancelledDeals > 0 ? drillHref(range, source, "cancelled", "all", "Cancelled proposals") : undefined}
+            delta={prev ? { current: r.cancellationRate, previous: prev.cancellationRate, unit: "pp", invertGood: true } : undefined}
           />
           <HeroTile
             gradient="from-violet-500 to-fuchsia-600"
@@ -162,6 +188,7 @@ export default async function ReportsPage({
             value={`${r.evSummary.evMixPct}%`}
             sub={`${r.evSummary.totalEv} of ${r.totalProposals} proposals`}
             href={r.evSummary.totalEv > 0 ? drillHref(range, source, "ev", "all", "All EV proposals") : undefined}
+            delta={prev ? { current: r.evSummary.evMixPct, previous: prev.evSummary.evMixPct, unit: "pp" } : undefined}
           />
         </section>
 
@@ -260,11 +287,22 @@ export default async function ReportsPage({
           </Card>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Card title="PCH vs BCH" gradient="from-violet-50 to-white" accent="violet">
+        {/* Source × funder acceptance matrix — the strategy heatmap */}
+        <Card title="Acceptance by source × funder" desc="1st-string only · accepted ÷ decided" gradient="from-slate-50 to-white" accent="slate">
+          <SourceFunderHeatmap matrix={r.sourceFunderMatrix} />
+        </Card>
+
+        {/* Splits header with the proposed/accepted toggle */}
+        <div className="mt-6 flex items-baseline justify-between gap-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Deal shape</h2>
+          <SplitsToggle range={range} source={source} mode={splitMode} />
+        </div>
+
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card title={splitMode === "accepted" ? "PCH vs BCH (accepted)" : "PCH vs BCH"} gradient="from-violet-50 to-white" accent="violet">
             <DonutSplit
-              rows={r.contractSplit.map((x) => ({
-                label: x.key, count: x.count, pct: x.pct, href: drillHref(range, source, "contract", x.key, x.key),
+              rows={(splitMode === "accepted" ? r.acceptedContractSplit : r.contractSplit).map((x) => ({
+                label: x.key, count: x.count, pct: x.pct, href: splitMode === "accepted" ? undefined : drillHref(range, source, "contract", x.key, x.key),
               }))}
               palette={["violet", "fuchsia"]}
             />
@@ -275,28 +313,28 @@ export default async function ReportsPage({
               palette={["emerald"]}
             />
           </Card>
-          <Card title="Initial rental (months)" gradient="from-orange-50 to-white" accent="orange">
+          <Card title={splitMode === "accepted" ? "Initial rental (accepted)" : "Initial rental (months)"} gradient="from-orange-50 to-white" accent="orange">
             <BarList
-              rows={r.upfrontSplit.map((x) => ({ key: x.key, label: x.key, count: x.count, pct: x.pct, colour: "orange" }))}
+              rows={(splitMode === "accepted" ? r.acceptedUpfrontSplit : r.upfrontSplit).map((x) => ({ key: x.key, label: x.key, count: x.count, pct: x.pct, colour: "orange" }))}
               empty="—"
             />
           </Card>
-          <Card title="Term (months)" gradient="from-sky-50 to-white" accent="sky">
+          <Card title={splitMode === "accepted" ? "Term (accepted)" : "Term (months)"} gradient="from-sky-50 to-white" accent="sky">
             <BarList
-              rows={r.termSplit.map((x) => ({
+              rows={(splitMode === "accepted" ? r.acceptedTermSplit : r.termSplit).map((x) => ({
                 key: x.key,
                 label: x.key,
                 count: x.count,
                 pct: x.pct,
-                href: drillHref(range, source, "term", x.key.replace(/[^0-9]/g, ""), x.key),
+                href: splitMode === "accepted" ? undefined : drillHref(range, source, "term", x.key.replace(/[^0-9]/g, ""), x.key),
                 colour: "sky",
               }))}
               empty="—"
             />
           </Card>
-          <Card title="Annual mileage" gradient="from-amber-50 to-white" accent="amber">
+          <Card title={splitMode === "accepted" ? "Annual mileage (accepted)" : "Annual mileage"} gradient="from-amber-50 to-white" accent="amber">
             <BarList
-              rows={r.mileageSplit.map((x) => ({ key: x.key, label: x.key, count: x.count, pct: x.pct, colour: "amber" }))}
+              rows={(splitMode === "accepted" ? r.acceptedMileageSplit : r.mileageSplit).map((x) => ({ key: x.key, label: x.key, count: x.count, pct: x.pct, colour: "amber" }))}
               empty="—"
             />
           </Card>
@@ -414,7 +452,45 @@ export default async function ReportsPage({
   );
 }
 
-function HeroTile({ gradient, label, value, sub, href }: { gradient: string; label: string; value: string; sub?: string; href?: string }) {
+// Small comparison chip rendered inside HeroTile. Two formats:
+//   - %Δ: change ÷ previous, signed. Useful for absolute counts (proposals,
+//     pipeline £).
+//   - pp: percentage-point change (current% − previous%). Useful for rate
+//     metrics where %Δ on a 67% → 70% jump would be misleadingly small.
+// invertGood flips the colour signal — a lower decline rate is good, etc.
+function DeltaChip({ current, previous, invertGood, unit }: { current: number; previous: number; invertGood?: boolean; unit?: "pp" }) {
+  if (previous === 0 && current === 0) return null;
+  let value: number;
+  let label: string;
+  if (unit === "pp") {
+    value = current - previous;
+    label = `${value >= 0 ? "+" : ""}${value.toFixed(1)}pp`;
+  } else {
+    if (previous === 0) return null; // %Δ undefined when baseline is 0
+    value = ((current - previous) / previous) * 100;
+    label = `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
+  }
+  const positive = invertGood ? value < 0 : value > 0;
+  const negative = invertGood ? value > 0 : value < 0;
+  const cls = positive
+    ? "bg-emerald-500/30 text-emerald-50"
+    : negative
+      ? "bg-rose-500/30 text-rose-50"
+      : "bg-white/20 text-white/80";
+  return <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ring-white/20 ${cls}`}>{label}</span>;
+}
+
+function HeroTile({ gradient, label, value, sub, href, delta }: {
+  gradient: string;
+  label: string;
+  value: string;
+  sub?: string;
+  href?: string;
+  // Optional comparison chip — { current, previous } same metric.
+  // invertGood reverses the colour signal (e.g. lower decline rate = better).
+  // unit chooses the chip format ("pp" for percentage-points, omit for %Δ).
+  delta?: { current: number; previous: number; invertGood?: boolean; unit?: "pp" };
+}) {
   const inner = (
     <div className={`relative h-full overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-5 text-white shadow-lg ${href ? "transition hover:-translate-y-0.5 hover:shadow-xl" : ""}`}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
@@ -423,7 +499,10 @@ function HeroTile({ gradient, label, value, sub, href }: { gradient: string; lab
           <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
           {href && <span className="text-[10px] font-medium text-white/70">Drill in →</span>}
         </div>
-        <div className="mt-1 text-3xl font-bold tabular-nums">{value}</div>
+        <div className="mt-1 flex items-baseline gap-2">
+          <div className="text-3xl font-bold tabular-nums">{value}</div>
+          {delta && <DeltaChip {...delta} />}
+        </div>
         {sub && <div className="mt-0.5 text-xs text-white/80">{sub}</div>}
       </div>
     </div>
@@ -719,5 +798,82 @@ function DrilldownPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+// Small server component — renders the source × funder acceptance matrix as
+// a heatmap. Colour scales from rose (low acceptance) → amber → emerald
+// (high). Cells with no decided proposals stay neutral.
+function SourceFunderHeatmap({ matrix }: { matrix: { funders: { funderId: string; funderName: string }[]; rows: { source: string; label: string; cells: { funderId: string; accepted: number; decided: number; rate: number }[] }[] } }) {
+  if (matrix.funders.length === 0) {
+    return <p className="py-3 text-center text-xs text-slate-400">No 1st-string decided proposals in this period</p>;
+  }
+  function cellClass(rate: number, decided: number): string {
+    if (decided === 0) return "bg-slate-50 text-slate-400";
+    if (rate >= 75) return "bg-emerald-200 text-emerald-900";
+    if (rate >= 50) return "bg-emerald-100 text-emerald-800";
+    if (rate >= 30) return "bg-amber-100 text-amber-800";
+    return "bg-rose-100 text-rose-800";
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr>
+            <th className="px-2 py-1.5 text-left font-semibold text-slate-500"></th>
+            {matrix.funders.map((f) => (
+              <th key={f.funderId} className="px-2 py-1.5 text-center font-semibold text-slate-700">{f.funderName}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {matrix.rows.map((row) => (
+            <tr key={row.source} className="border-t border-slate-100">
+              <td className="px-2 py-2 font-medium text-slate-700">{row.label}</td>
+              {row.cells.map((c) => (
+                <td key={c.funderId} className="px-1 py-1">
+                  <div className={`rounded-md px-2 py-1.5 text-center font-mono ${cellClass(c.rate, c.decided)}`}>
+                    {c.decided > 0 ? (
+                      <>
+                        <div className="font-semibold tabular-nums">{c.rate}%</div>
+                        <div className="text-[10px] opacity-70 tabular-nums">{c.accepted}/{c.decided}</div>
+                      </>
+                    ) : (
+                      <div className="text-[10px]">—</div>
+                    )}
+                  </div>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Toggle between "All proposals quoted" and "Only what customers took"
+// for the splits row below. Persists via the ?splits= URL param.
+function SplitsToggle({ range, source, mode }: { range: string; source: string; mode: "proposed" | "accepted" }) {
+  function href(next: "proposed" | "accepted") {
+    const sp = new URLSearchParams({ range, source });
+    if (next === "accepted") sp.set("splits", "accepted");
+    return `/reports?${sp.toString()}`;
+  }
+  return (
+    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] shadow-sm">
+      <Link
+        href={href("proposed")}
+        className={`rounded-md px-2.5 py-1 font-medium ${mode === "proposed" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+      >
+        All proposals
+      </Link>
+      <Link
+        href={href("accepted")}
+        className={`rounded-md px-2.5 py-1 font-medium ${mode === "accepted" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+      >
+        Accepted only
+      </Link>
+    </div>
   );
 }
