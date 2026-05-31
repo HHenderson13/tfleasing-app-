@@ -282,9 +282,25 @@ export interface ReportSummary {
   acceptedMileageSplit: { key: string; count: number; pct: number }[];
   acceptedUpfrontSplit: { key: string; count: number; pct: number }[];
   funderSplit: { funderId: string; funderName: string; count: number; pct: number }[];
-  // funderAcceptance also carries deptAvg so the per-funder card can render
-  // a benchmark tick next to each rate (above-/below-dept colour signal).
-  funderAcceptance: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number; deptAvg: number }[];
+  // Two acceptance rates per funder so the user can spot selection bias vs
+  // genuine underwriting stance:
+  //   rate      — 1st-string only (what % accepted when we picked them first).
+  //               High rate + low sample = "we only pick Lex when we know
+  //               they'll say yes" — looks good but doesn't reflect Lex's
+  //               actual underwriting stance.
+  //   allRate   — every attempt across 1st / 2nd / 3rd string. Tells you
+  //               how Lex actually behaves on the full mix of customers
+  //               we send their way.
+  // The bar shows allRate (the more honest number); the subtitle exposes
+  // both with raw counts so the gap is visible.
+  // deptAvg is the dept-wide 1st-string acceptance for the benchmark tick.
+  funderAcceptance: {
+    funderId: string;
+    funderName: string;
+    decided: number; accepted: number; pending: number; rate: number;
+    allDecided: number; allAccepted: number; allRate: number;
+    deptAvg: number;
+  }[];
   funderReferralRate: { funderId: string; funderName: string; referred: number; submitted: number; rate: number }[];
   secondStringByFunder: { funderId: string; funderName: string; decided: number; accepted: number; pending: number; rate: number }[];
   contractSplit: { key: string; count: number; pct: number }[];
@@ -499,19 +515,29 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all", no
     .sort((a, b) => b.count - a.count);
 
   const funderAcceptance = [...funderTotals.entries()]
-    .filter(([, v]) => v.firstDecided > 0 || v.firstPending > 0)
-    .map(([funderId, v]) => ({
-      funderId,
-      funderName: v.name,
-      decided: v.firstDecided,
-      accepted: v.firstAccepted,
-      pending: v.firstPending,
-      rate: pct(v.firstAccepted, v.firstDecided),
-      // Each row carries the dept-wide acceptance rate so the card can render
-      // a benchmark tick — makes "above / below dept" instantly readable.
-      deptAvg: deptAcceptanceRate,
-    }))
-    .sort((a, b) => b.rate - a.rate);
+    .filter(([, v]) => v.firstDecided > 0 || v.firstPending > 0 || (v.accepted + v.declined) > 0)
+    .map(([funderId, v]) => {
+      // All-strings denominator = every accepted + declined attempt to this
+      // funder (referrals and not_eligible stay out, same as the per-string
+      // formula). Catches selection bias when 1st-string sample is tiny.
+      const allDecided = v.accepted + v.declined;
+      return {
+        funderId,
+        funderName: v.name,
+        decided: v.firstDecided,
+        accepted: v.firstAccepted,
+        pending: v.firstPending,
+        rate: pct(v.firstAccepted, v.firstDecided),
+        allDecided,
+        allAccepted: v.accepted,
+        allRate: pct(v.accepted, allDecided),
+        // Each row carries the dept-wide 1st-string acceptance so the card
+        // can render a benchmark tick — above / below dept is instantly
+        // readable.
+        deptAvg: deptAcceptanceRate,
+      };
+    })
+    .sort((a, b) => b.allRate - a.allRate);
 
   const funderReferralRate = [...funderTotals.entries()]
     .filter(([, v]) => v.firstSubmitted > 0)

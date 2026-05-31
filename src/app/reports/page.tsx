@@ -243,15 +243,27 @@ export default async function ReportsPage({
             />
           </Card>
 
-          <Card title="Funder acceptance rates" desc={`1st-string only · accepted ÷ decided · vertical tick = dept avg ${r.deptAcceptanceRate}%`} gradient="from-emerald-50 to-white" accent="emerald">
+          <Card title="Funder acceptance rates" desc={`Bar = ALL attempts · subtitle shows 1st-string only · tick = dept avg ${r.deptAcceptanceRate}%`} gradient="from-emerald-50 to-white" accent="emerald">
             <RateList
-              rows={r.funderAcceptance.map((f) => ({
-                key: f.funderId,
-                label: f.funderName,
-                rate: f.rate,
-                sub: f.pending > 0 ? `${f.accepted}/${f.decided} · ${f.pending} pending` : `${f.accepted}/${f.decided}`,
-                href: drillHref(range, source, "funder", f.funderId, f.funderName),
-              }))}
+              rows={r.funderAcceptance.map((f) => {
+                // Bar = all-strings rate (the honest one — captures Lex's
+                // actual underwriting stance regardless of waterfall order).
+                // Sub = compact "X/Y all · 1st Z%" so the gap between the
+                // two surfaces selection bias when 1st-string is high but
+                // all-strings is low.
+                const sub = f.allDecided <= 0
+                  ? `${f.accepted}/${f.decided}`
+                  : f.allDecided === f.decided
+                    ? `${f.allAccepted}/${f.allDecided}`
+                    : `${f.allAccepted}/${f.allDecided} · 1st ${f.rate}%`;
+                return {
+                  key: f.funderId,
+                  label: f.funderName,
+                  rate: f.allRate,
+                  sub,
+                  href: drillHref(range, source, "funder", f.funderId, f.funderName),
+                };
+              })}
               empty="No data"
               benchmark={r.deptAcceptanceRate}
             />
@@ -613,7 +625,7 @@ function RateList({
               )}
               <span className="relative z-10 ml-2 text-xs font-semibold leading-7 text-slate-900 tabular-nums">{r.rate}%</span>
             </div>
-            <span className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{r.sub}</span>
+            <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{r.sub}</span>
           </div>
         );
         return (
