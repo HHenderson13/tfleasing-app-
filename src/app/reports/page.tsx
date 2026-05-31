@@ -99,21 +99,21 @@ export default async function ReportsPage({
             gradient="from-emerald-500 to-teal-600"
             label="Acceptance rate"
             value={`${r.deptAcceptanceRate}%`}
-            sub={r.pendingDeals > 0 ? `${r.acceptedDeals} accepted · ${r.pendingDeals} pending` : `${r.acceptedDeals} accepted`}
+            sub={`${r.acceptedDeals} of ${r.acceptedDeals + r.declinedDeals} decisions${r.referredDeals > 0 ? ` · ${r.referredDeals} awaiting referral` : ""}`}
             href={r.acceptedDeals > 0 ? drillHref(range, source, "accepted", "all", "Accepted proposals") : undefined}
           />
           <HeroTile
             gradient="from-amber-500 to-orange-600"
-            label="Referred rate"
+            label="Awaiting referral"
             value={`${r.referredRate}%`}
-            sub={`${r.referredDeals} referred`}
+            sub={`${r.referredDeals} of ${r.acceptedDeals + r.referredDeals + r.declinedDeals} in pipeline`}
             href={r.referredDeals > 0 ? drillHref(range, source, "referred", "all", "Referred proposals") : undefined}
           />
           <HeroTile
             gradient="from-red-500 to-rose-700"
-            label="Declined rate"
+            label="Decline rate"
             value={`${r.declinedRate}%`}
-            sub={`${r.declinedDeals} declined`}
+            sub={`${r.declinedDeals} of ${r.acceptedDeals + r.declinedDeals} decisions`}
             href={r.declinedDeals > 0 ? drillHref(range, source, "declined", "all", "Declined proposals") : undefined}
           />
         </section>

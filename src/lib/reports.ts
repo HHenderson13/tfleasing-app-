@@ -309,11 +309,21 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all"): P
     if (active.some((r) => DECLINED_STATUSES.has(r.status))) { declinedDeals++; decidedDeals++; continue; }
     if (anyEligible) pendingDeals++;
   }
-  // Bucketed customers all add to ~100%: accepted + referred + declined.
+  // Acceptance / decline are computed against DECIDED customers — those whose
+  // funder has actually said yes or no. Referred deals are still in flight and
+  // would artificially drag acceptance down if they were in the denominator.
+  // This matches the per-funder "Funder acceptance rates" card definition
+  // shown elsewhere on the page (accepted ÷ decided). With this denominator,
+  // acceptance + decline always sums to 100%.
+  //
+  // Referred rate uses a wider denominator (everything bucketed including
+  // referrals) so it answers a different question — "what share of currently
+  // in-flight deals are stuck waiting for a referral decision".
+  const decidedCustomers = acceptedDeals + declinedDeals;
   const bucketedTotal = acceptedDeals + referredDeals + declinedDeals;
-  const deptAcceptanceRate = pct(acceptedDeals, bucketedTotal);
+  const deptAcceptanceRate = pct(acceptedDeals, decidedCustomers);
+  const declinedRate = pct(declinedDeals, decidedCustomers);
   const referredRate = pct(referredDeals, bucketedTotal);
-  const declinedRate = pct(declinedDeals, bucketedTotal);
 
   const funderTotals = new Map<string, {
     name: string; submitted: number; accepted: number; declined: number;
