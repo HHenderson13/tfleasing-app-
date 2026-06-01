@@ -172,6 +172,7 @@ export interface SectionAccess {
   reports: boolean;
   admin: boolean;
   wc: boolean;
+  leaderboard: boolean;
 }
 
 export function sectionAccess(u: CurrentUser | null): SectionAccess {
@@ -183,5 +184,8 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     reports: isAdmin(u),
     admin: isAdmin(u),
     wc: canPlayWc(u),
+    // Leaderboard is visible to anyone in sales — admins manage participation
+    // separately from view access.
+    leaderboard: isAdmin(u) || isExec(u),
   };
 }

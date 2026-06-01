@@ -48,6 +48,12 @@ export async function requireStockAccess(): Promise<CurrentUser> {
   return u;
 }
 
+export async function requireLeaderboardAccess(): Promise<CurrentUser> {
+  const u = await requireUser();
+  if (!isAdmin(u) && !(u.roles.includes("exec"))) redirect("/forbidden");
+  return u;
+}
+
 export async function requireWcAccess(): Promise<CurrentUser> {
   const u = await requireUser();
   if (!canPlayWc(u)) redirect("/forbidden");

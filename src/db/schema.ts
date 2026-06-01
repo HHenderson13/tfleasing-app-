@@ -374,6 +374,69 @@ export const users = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// ─── Sales-exec leaderboard ─────────────────────────────────────────────────
+// Office competition driven by daily-uploaded Dealerweb exports. Admin picks
+// which sales execs participate, maps the report-code (e.g. "GaSh") to a
+// sales_execs row, and uploads three reports a month — order_list,
+// delivered_list, enquiry_log. Stats are stored per (month, exec) so
+// re-uploading the same report replaces the previous figures for that month.
+export const salesLeaderboardParticipants = sqliteTable("sales_leaderboard_participants", {
+  salesExecId: text("sales_exec_id").primaryKey(),
+  // Vercel Blob URL for the exec's headshot. Used on the scorecards.
+  photoUrl: text("photo_url"),
+  // Soft switch — admin can disable a participant without losing their
+  // historic stats (still visible in past months).
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  addedAt: integer("added_at", { mode: "timestamp" }).notNull(),
+});
+
+// Maps the short codes used in the Dealerweb reports ("MiHo", "GaSh") onto
+// the salesExecs.id PK on this system. Admin maintains the mapping; without
+// it the parser can't attribute rows to a specific exec.
+export const salesLeaderboardNameMap = sqliteTable("sales_leaderboard_name_map", {
+  reportCode: text("report_code").primaryKey(),
+  salesExecId: text("sales_exec_id").notNull(),
+});
+
+// One row per (yearMonth, exec) — stores the derived counts from the three
+// reports. Each upload type writes its own subset of columns; absent metrics
+// stay null until that report has been uploaded for the month.
+export const salesLeaderboardMonthly = sqliteTable(
+  "sales_leaderboard_monthly",
+  {
+    yearMonth: text("year_month").notNull(), // "2026-06"
+    salesExecId: text("sales_exec_id").notNull(),
+    orderCount: integer("order_count"),
+    deliveryCount: integer("delivery_count"),
+    insuranceCount: integer("insurance_count"),
+    enquiryCount: integer("enquiry_count"),
+    salesCount: integer("sales_count"), // enquiries that ended Ordered or Delivered
+    // One "interesting fact" per exec per month — picked at upload time from
+    // the order_list to flavour the scorecard. Currently the most recent
+    // vehicle they ordered.
+    latestVehicle: text("latest_vehicle"),
+    ordersUpdatedAt: integer("orders_updated_at", { mode: "timestamp" }),
+    deliveriesUpdatedAt: integer("deliveries_updated_at", { mode: "timestamp" }),
+    enquiriesUpdatedAt: integer("enquiries_updated_at", { mode: "timestamp" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.yearMonth, t.salesExecId] }),
+    byMonth: index("idx_sales_leaderboard_monthly_month").on(t.yearMonth),
+  }),
+);
+
+// Audit log of each admin upload — who uploaded what report for which month
+// and how many rows were parsed. Useful when stats look off ("when was the
+// last delivered_list upload?").
+export const salesLeaderboardUploads = sqliteTable("sales_leaderboard_uploads", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  yearMonth: text("year_month").notNull(),
+  reportType: text("report_type").notNull(), // 'orders' | 'delivered' | 'enquiry'
+  rowCount: integer("row_count").notNull(),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+  uploadedByUserId: text("uploaded_by_user_id").notNull(),
+});
+
 // ─── World Cup prediction game ─────────────────────────────────────────────
 // Live (in-progress) match score. Updated by admin during a match — or by a
 // future feed integration; the table is shape-compatible. Cleared when the

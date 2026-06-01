@@ -49,6 +49,7 @@ async function runEnsureAppSchema() {
   await ensureScraperTables();
   await ensureLoginAttemptsTable();
   await ensureWorldCupTables();
+  await ensureSalesLeaderboardTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
 }
@@ -378,6 +379,54 @@ async function seedWcFixturesIfEmpty() {
       WHERE fixture_number = ${f.fixtureNumber}
     `);
   }
+}
+
+// Sales-exec leaderboard tables — created idempotently per usual.
+async function ensureSalesLeaderboardTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS sales_leaderboard_participants (
+      sales_exec_id TEXT PRIMARY KEY,
+      photo_url TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      added_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS sales_leaderboard_name_map (
+      report_code TEXT PRIMARY KEY,
+      sales_exec_id TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS sales_leaderboard_monthly (
+      year_month TEXT NOT NULL,
+      sales_exec_id TEXT NOT NULL,
+      order_count INTEGER,
+      delivery_count INTEGER,
+      insurance_count INTEGER,
+      enquiry_count INTEGER,
+      sales_count INTEGER,
+      latest_vehicle TEXT,
+      orders_updated_at INTEGER,
+      deliveries_updated_at INTEGER,
+      enquiries_updated_at INTEGER,
+      PRIMARY KEY (year_month, sales_exec_id)
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE INDEX IF NOT EXISTS idx_sales_leaderboard_monthly_month
+      ON sales_leaderboard_monthly(year_month)
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS sales_leaderboard_uploads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      year_month TEXT NOT NULL,
+      report_type TEXT NOT NULL,
+      row_count INTEGER NOT NULL,
+      uploaded_at INTEGER NOT NULL,
+      uploaded_by_user_id TEXT NOT NULL
+    )
+  `));
 }
 
 async function ensureLoginAttemptsTable() {
