@@ -113,24 +113,45 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           </Link>
         </div>
 
-        {/* Month tabs (only on MTD view — YTD ignores the specific month) */}
+        {/* Month tabs + year nav (only on MTD view — YTD ignores the
+            specific month). Year arrows let admins browse historical
+            champions without typing URLs. */}
         {view === "month" && (
-          <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-            {MONTH_LABELS.map((label, i) => {
-              const m = `${year}-${String(i + 1).padStart(2, "0")}`;
-              const active = m === yearMonth;
-              return (
-                <Link
-                  key={m}
-                  href={`/sales-leaderboard?month=${m}&view=${view}`}
-                  className={`flex-none rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
-                    active ? "bg-rose-600 text-white ring-rose-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  {label.slice(0, 3)}
-                </Link>
-              );
-            })}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Link
+                href={`/sales-leaderboard?month=${parseInt(year, 10) - 1}-${yearMonth.slice(5)}&view=${view}`}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                aria-label="Previous year"
+              >
+                ←
+              </Link>
+              <div className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white tabular-nums">{year}</div>
+              <Link
+                href={`/sales-leaderboard?month=${parseInt(year, 10) + 1}-${yearMonth.slice(5)}&view=${view}`}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                aria-label="Next year"
+              >
+                →
+              </Link>
+            </div>
+            <div className="-mx-1 flex flex-1 gap-1 overflow-x-auto px-1 pb-1">
+              {MONTH_LABELS.map((label, i) => {
+                const m = `${year}-${String(i + 1).padStart(2, "0")}`;
+                const active = m === yearMonth;
+                return (
+                  <Link
+                    key={m}
+                    href={`/sales-leaderboard?month=${m}&view=${view}`}
+                    className={`flex-none rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
+                      active ? "bg-rose-600 text-white ring-rose-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {label.slice(0, 3)}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
         <p className="mt-2 text-xs text-slate-500">
@@ -138,21 +159,42 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           {!snapshot.hasAnyData && " No reports uploaded yet."}
         </p>
 
-        {/* Hall of Fame — champion + per-metric winners */}
+        {/* Champion banner — designed to be unmissable. Big uppercase
+            period-aware header, oversized photo with crown overlay,
+            massive name. Stacks vertically on mobile. */}
         {champion && (
-          <div className="mt-6 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-rose-500 to-fuchsia-600 p-4 text-white shadow-lg sm:p-6">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="text-5xl sm:text-6xl">👑</div>
-              <div className="flex-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-white/80">
-                  {view === "ytd" ? "Year-to-date champion" : `${formatMonthLabel(yearMonth)} champion`}
-                </div>
-                <div className="mt-0.5 text-2xl font-bold sm:text-3xl">{champion.name}</div>
-                <div className="text-sm text-white/90">{champion.totalPoints} points across the four metrics</div>
+          <div className="relative mt-6 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-400 via-rose-500 to-fuchsia-600 p-6 text-white shadow-xl sm:p-8">
+            {/* Subtle radial sparkle for depth */}
+            <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/20 blur-3xl" />
+            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-amber-300/30 blur-3xl" />
+            <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:gap-8 sm:text-left">
+              <div className="relative">
+                {champion.photoUrl ? (
+                  <Image
+                    src={champion.photoUrl}
+                    alt={champion.name}
+                    width={160}
+                    height={160}
+                    className="h-28 w-28 rounded-full object-cover ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/20 text-3xl font-bold ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36 sm:text-4xl">
+                    {initials(champion.name)}
+                  </div>
+                )}
+                <div className="absolute -top-3 -right-2 text-5xl drop-shadow-lg sm:-top-4 sm:-right-3 sm:text-6xl">👑</div>
               </div>
-              {champion.photoUrl && (
-                <Image src={champion.photoUrl} alt={champion.name} width={72} height={72} className="h-16 w-16 rounded-full object-cover ring-4 ring-white/80 sm:h-20 sm:w-20" unoptimized />
-              )}
+              <div className="flex-1">
+                <div className="text-2xl font-extrabold uppercase tracking-[0.18em] text-white drop-shadow-sm sm:text-4xl">
+                  {view === "ytd" ? "Year-to-Date Champion" : `${formatMonthLabel(yearMonth)} Champion`}
+                </div>
+                <div className="mt-3 text-3xl font-bold sm:text-5xl">{champion.name}</div>
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-sm font-semibold backdrop-blur-sm sm:text-base">
+                  <span>🏆</span>
+                  <span>{champion.totalPoints} points</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
