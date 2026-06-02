@@ -19,7 +19,7 @@ export default async function SalesLeaderboardAdminPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3 text-sm">
-          <Link href="/sales-leaderboard" className="text-slate-500 hover:text-slate-900">← Leaderboard</Link>
+          <Link href="/sales-leaderboard" className="text-slate-500 hover:text-slate-900">← Pole Position</Link>
           <div className="flex items-center gap-3">
             <span className="text-slate-700">{user.name}</span>
             <form action={signOutAction}>
@@ -32,7 +32,7 @@ export default async function SalesLeaderboardAdminPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Leaderboard admin</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Pole Position admin</h1>
         <p className="mt-1 text-sm text-slate-500">
           Pick which execs compete, map their report short-codes, and upload the Dealerweb reports each day.
         </p>

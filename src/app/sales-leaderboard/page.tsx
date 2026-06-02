@@ -74,11 +74,9 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Sales exec leaderboard</h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              1st in each metric scores <strong>3</strong>, 2nd <strong>2</strong>, 3rd <strong>1</strong>. Four metrics: Order Take, Deliveries, Insurance Products, Conversion %.
-            </p>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl sm:text-4xl">🏁</span>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Pole Position</h1>
           </div>
           <div className="flex items-center gap-2">
             {user.salesExecId && (
@@ -154,10 +152,11 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           </div>
         )}
 
-        {/* Metric leader cards */}
+        {/* Metric leader cards — team total per metric instead of the
+            old scoring-key subtitle. */}
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {METRIC_META.map((m) => (
-            <MetricCard key={m.key} meta={m} leaders={leaders[m.key]} />
+            <MetricCard key={m.key} meta={m} leaders={leaders[m.key]} teamTotal={teamTotalFor(snapshot.rows, m.key)} />
           ))}
         </div>
 
@@ -213,6 +212,9 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-[11px] text-slate-400">
+          Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt — per metric, per period.
+        </p>
 
         {/* Scorecards */}
         <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Scorecards</h2>
@@ -235,12 +237,15 @@ function Cell({ n, pts }: { n: number | string; pts: number }) {
   );
 }
 
-function MetricCard({ meta, leaders }: { meta: { key: LeaderboardMetric; label: string; tone: string; format: (s: ExecMonthStats) => string }; leaders: ExecMonthStats[] }) {
+function MetricCard({ meta, leaders, teamTotal }: { meta: { key: LeaderboardMetric; label: string; tone: string; format: (s: ExecMonthStats) => string }; leaders: ExecMonthStats[]; teamTotal: string }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className={`bg-gradient-to-r ${meta.tone} px-4 py-3 text-white`}>
-        <div className="text-[10px] font-semibold uppercase tracking-wide opacity-90">{meta.label}</div>
-        <div className="mt-0.5 text-lg font-semibold">3 / 2 / 1 pts</div>
+      <div className={`flex items-end justify-between bg-gradient-to-r ${meta.tone} px-4 py-3 text-white`}>
+        <div className="text-sm font-semibold uppercase tracking-wide">{meta.label}</div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-wide opacity-80">Team</div>
+          <div className="text-base font-semibold tabular-nums">{teamTotal}</div>
+        </div>
       </div>
       <div className="divide-y divide-slate-100">
         {leaders.length === 0 && (
@@ -336,4 +341,15 @@ function ScoreLine({ label, n, rank, sub }: { label: string; n: number | string;
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+}
+
+function teamTotalFor(rows: ExecMonthStats[], key: LeaderboardMetric): string {
+  if (key === "conversion") {
+    const enq = rows.reduce((a, r) => a + r.enquiryCount, 0);
+    const sales = rows.reduce((a, r) => a + r.salesCount, 0);
+    return enq > 0 ? `${((sales / enq) * 100).toFixed(1)}%` : "—";
+  }
+  if (key === "orders")     return String(rows.reduce((a, r) => a + r.orderCount, 0));
+  if (key === "deliveries") return String(rows.reduce((a, r) => a + r.deliveryCount, 0));
+  return String(rows.reduce((a, r) => a + r.insuranceCount, 0));
 }

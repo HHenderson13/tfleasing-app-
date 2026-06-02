@@ -262,7 +262,7 @@ function Shell({ userName, title, children }: { userName: string; title: string;
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 text-sm sm:px-6">
-          <Link href="/sales-leaderboard" className="text-slate-500 hover:text-slate-900">← Leaderboard</Link>
+          <Link href="/sales-leaderboard" className="text-slate-500 hover:text-slate-900">← Pole Position</Link>
           <div className="flex items-center gap-3">
             <span className="hidden text-slate-700 sm:inline">{userName}</span>
             <form action={signOutAction}>

@@ -19,7 +19,7 @@ const TILES: Tile[] = [
   { key: "admin",     href: "/broker-ratebooks", title: "Broker Ratebooks", desc: "Export MotorComplete & Manual broker ratebooks across commission tiers.", tone: "from-amber-500 to-orange-700" },
   { key: "admin",     href: "/admin",     title: "Admin",     desc: "Ratebooks, discounts, mappings and data.",       tone: "from-slate-700 to-slate-900" },
   { key: "myScorecard", href: "/sales-leaderboard/me", title: "My Scorecard", desc: "Your rank, your badges, your numbers — month and year to date.", tone: "from-rose-500 to-pink-600" },
-  { key: "leaderboard", href: "/sales-leaderboard", title: "Sales Leaderboard", desc: "Monthly comp across orders, deliveries, insurance and conversion.", tone: "from-pink-500 to-rose-600" },
+  { key: "leaderboard", href: "/sales-leaderboard", title: "Pole Position", desc: "Who's leading the pack — orders, deliveries, insurance and conversion.", tone: "from-pink-500 to-rose-600" },
   { key: "wc",        href: "/world-cup", title: "World Cup",  desc: "Predict scores, climb the leaderboard — the office World Cup game.", tone: "from-emerald-500 to-teal-700" },
 ];
 
