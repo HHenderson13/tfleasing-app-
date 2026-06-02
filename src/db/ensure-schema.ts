@@ -427,6 +427,18 @@ async function ensureSalesLeaderboardTables() {
       uploaded_by_user_id TEXT NOT NULL
     )
   `));
+  // Store the parser output (per report-code aggregates) so we can
+  // re-attribute to execs when the name map or participant list changes.
+  // Without this, an upload that happens BEFORE the map is set would freeze
+  // zero values until the admin re-uploaded — see the rebuild helper in
+  // src/app/sales-leaderboard/admin/actions.ts.
+  await ensureColumns("sales_leaderboard_uploads", [
+    { name: "parsed_data", sqlType: "TEXT" },
+  ]);
+  await db.run(sql.raw(`
+    CREATE INDEX IF NOT EXISTS idx_sales_leaderboard_uploads_slot
+      ON sales_leaderboard_uploads(year_month, report_type, uploaded_at DESC)
+  `));
 }
 
 async function ensureLoginAttemptsTable() {

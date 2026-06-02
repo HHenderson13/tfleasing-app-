@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import {
+  reattributeAction,
   removeNameMappingAction,
   setNameMappingAction,
   setParticipantAction,
@@ -34,6 +35,10 @@ export interface AdminLastUpload {
   reportType: string;
   uploadedAt: string;
   rowCount: number;
+  // false for uploads that pre-date the self-healing schema — those need to
+  // be re-uploaded once if the admin wants future map changes to fix stats
+  // automatically. Surfaced as a warning on the upload card.
+  hasParsedData: boolean;
 }
 
 type Tab = "dashboard" | "participants" | "names" | "uploads";
@@ -493,23 +498,55 @@ function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: strin
 
   return (
     <div className="space-y-4">
-      <label className="flex items-center gap-2 text-sm">
-        <span className="font-medium text-slate-700">Month:</span>
-        <select
-          value={yearMonth}
-          onChange={(e) => setYearMonth(e.target.value)}
-          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-        >
-          {months.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <span className="text-xs text-slate-500">Re-uploading replaces this month&apos;s figures for that report.</span>
-      </label>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-slate-700">Month:</span>
+          <select
+            value={yearMonth}
+            onChange={(e) => setYearMonth(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+          >
+            {months.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <span className="text-xs text-slate-500">Re-uploading replaces this month&apos;s figures for that report.</span>
+        </label>
+        <ReprocessButton />
+      </div>
+
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+        Stats now self-heal: changing the name map or participant list re-runs every stored upload automatically. Just upload each report once per day.
+      </div>
 
       {REPORTS.map((r) => (
         <UploadCard key={r.type} yearMonth={yearMonth} report={r} last={lastByType.get(r.type) ?? null} />
       ))}
+    </div>
+  );
+}
+
+function ReprocessButton() {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div className="flex items-center gap-2">
+      {msg && <span className="text-xs text-slate-500">{msg}</span>}
+      <button
+        onClick={() => start(async () => {
+          setMsg(null);
+          const res = await reattributeAction();
+          if (res.ok) {
+            setMsg(`Re-processed ${res.processed} upload${res.processed === 1 ? "" : "s"}.`);
+            router.refresh();
+          }
+        })}
+        disabled={pending}
+        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+      >
+        {pending ? "Re-processing…" : "Re-process all uploads"}
+      </button>
     </div>
   );
 }
@@ -561,6 +598,11 @@ function UploadCard({
               Last upload:&nbsp;
               <span className="font-medium text-slate-700">{new Date(last.uploadedAt).toLocaleString("en-GB")}</span>
               <div>{last.rowCount} rows</div>
+              {!last.hasParsedData && (
+                <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                  Re-upload once to enable self-healing
+                </div>
+              )}
             </>
           ) : (
             <span>No upload yet for this month</span>

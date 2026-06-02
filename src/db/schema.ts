@@ -435,6 +435,10 @@ export const salesLeaderboardUploads = sqliteTable("sales_leaderboard_uploads", 
   rowCount: integer("row_count").notNull(),
   uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
   uploadedByUserId: text("uploaded_by_user_id").notNull(),
+  // JSON-encoded parser output (per report-code aggregates). Allows the
+  // monthly stats to be re-attributed when the name map or participants
+  // change without the admin having to re-upload the file.
+  parsedData: text("parsed_data"),
 });
 
 // ─── World Cup prediction game ─────────────────────────────────────────────
