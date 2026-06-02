@@ -11,6 +11,7 @@ import {
   type LeaderboardMetric,
 } from "@/lib/sales-leaderboard";
 import { loadLeaderboard } from "@/lib/sales-leaderboard-data";
+import { computeBadgesFor, overallRanks, type Badge } from "@/lib/sales-leaderboard-badges";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ const METRIC_META: { key: LeaderboardMetric; label: string; tone: string; format
   { key: "conversion", label: "Conversion %",      tone: "from-sky-500 to-indigo-500", format: (s) => `${s.conversionPct.toFixed(1)}%` },
 ];
 
+const TROPHIES: Record<1 | 2 | 3, string> = { 1: "🏆", 2: "🥈", 3: "🥉" };
+
 export default async function SalesLeaderboardPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requireLeaderboardAccess();
   const admin = isAdmin(user);
@@ -37,8 +40,6 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
   const snapshot = await loadLeaderboard({ yearMonth, view });
   const year = yearMonth.slice(0, 4);
 
-  // Build the leader-by-metric breakdown — top 3 ranks per metric for the
-  // four scoring cards.
   const leaders: Record<LeaderboardMetric, ExecMonthStats[]> = {
     orders: [], deliveries: [], insurance: [], conversion: [],
   };
@@ -48,10 +49,12 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
       .sort((a, b) => (a.metricRanks[m.key]! - b.metricRanks[m.key]!));
   }
 
-  // "Interesting fact" — pick the row with the most recent latestVehicle.
-  // For monthly view this is simply the participant with the largest
-  // orderCount who has a vehicle attached; if multiple, pick the first.
-  const factRow = snapshot.rows.find((r) => r.latestVehicle && r.orderCount > 0) ?? null;
+  const overallRankMap = overallRanks(snapshot.rows);
+  const badgesByExec = new Map<string, Badge[]>();
+  for (const r of snapshot.rows) {
+    badgesByExec.set(r.salesExecId, computeBadgesFor(r, overallRankMap.get(r.salesExecId) ?? null));
+  }
+  const champion = snapshot.rows.find((r) => overallRankMap.get(r.salesExecId) === 1) ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -77,11 +80,18 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
               1st in each metric scores <strong>3</strong>, 2nd <strong>2</strong>, 3rd <strong>1</strong>. Four metrics: Order Take, Deliveries, Insurance Products, Conversion %.
             </p>
           </div>
-          {admin && (
-            <Link href="/sales-leaderboard/admin" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
-              Manage
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {user.salesExecId && (
+              <Link href="/sales-leaderboard/me" className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700">
+                My scorecard
+              </Link>
+            )}
+            {admin && (
+              <Link href="/sales-leaderboard/admin" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                Manage
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* View switcher */}
@@ -100,28 +110,49 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           </Link>
         </div>
 
-        {/* Month tabs */}
-        <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-          {MONTH_LABELS.map((label, i) => {
-            const m = `${year}-${String(i + 1).padStart(2, "0")}`;
-            const active = m === yearMonth;
-            return (
-              <Link
-                key={m}
-                href={`/sales-leaderboard?month=${m}&view=${view}`}
-                className={`flex-none rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
-                  active ? "bg-rose-600 text-white ring-rose-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {label.slice(0, 3)}
-              </Link>
-            );
-          })}
-        </div>
+        {/* Month tabs (only on MTD view — YTD ignores the specific month) */}
+        {view === "month" && (
+          <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+            {MONTH_LABELS.map((label, i) => {
+              const m = `${year}-${String(i + 1).padStart(2, "0")}`;
+              const active = m === yearMonth;
+              return (
+                <Link
+                  key={m}
+                  href={`/sales-leaderboard?month=${m}&view=${view}`}
+                  className={`flex-none rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
+                    active ? "bg-rose-600 text-white ring-rose-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {label.slice(0, 3)}
+                </Link>
+              );
+            })}
+          </div>
+        )}
         <p className="mt-2 text-xs text-slate-500">
           Showing <strong>{view === "ytd" ? `${year} year to date` : formatMonthLabel(yearMonth)}</strong>.
           {!snapshot.hasAnyData && " No reports uploaded yet."}
         </p>
+
+        {/* Hall of Fame — champion + per-metric winners */}
+        {champion && (
+          <div className="mt-6 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-rose-500 to-fuchsia-600 p-4 text-white shadow-lg sm:p-6">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="text-5xl sm:text-6xl">👑</div>
+              <div className="flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-white/80">
+                  {view === "ytd" ? "Year-to-date champion" : `${formatMonthLabel(yearMonth)} champion`}
+                </div>
+                <div className="mt-0.5 text-2xl font-bold sm:text-3xl">{champion.name}</div>
+                <div className="text-sm text-white/90">{champion.totalPoints} points across the four metrics</div>
+              </div>
+              {champion.photoUrl && (
+                <Image src={champion.photoUrl} alt={champion.name} width={72} height={72} className="h-16 w-16 rounded-full object-cover ring-4 ring-white/80 sm:h-20 sm:w-20" unoptimized />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Metric leader cards */}
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -132,7 +163,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
 
         {/* Total points table */}
         <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Total points</h2>
-        <div className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
@@ -146,28 +177,36 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {snapshot.rows.map((r, idx) => (
-                <tr key={r.salesExecId} className={idx < 3 ? "bg-amber-50/30" : undefined}>
-                  <td className="px-4 py-3 font-semibold text-slate-700">{idx + 1}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {r.photoUrl ? (
-                        <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
-                          {initials(r.name)}
-                        </div>
-                      )}
-                      <span className="font-medium text-slate-900">{r.name}</span>
-                    </div>
-                  </td>
-                  <Cell n={r.orderCount}     pts={r.metricPoints.orders} />
-                  <Cell n={r.deliveryCount}  pts={r.metricPoints.deliveries} />
-                  <Cell n={r.insuranceCount} pts={r.metricPoints.insurance} />
-                  <Cell n={`${r.conversionPct.toFixed(1)}%`} pts={r.metricPoints.conversion} />
-                  <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-slate-900">{r.totalPoints}</td>
-                </tr>
-              ))}
+              {snapshot.rows.map((r, idx) => {
+                const overall = overallRankMap.get(r.salesExecId);
+                return (
+                  <tr key={r.salesExecId} className={idx < 3 ? "bg-amber-50/30" : undefined}>
+                    <td className="px-4 py-3 font-semibold text-slate-700">
+                      <div className="flex items-center gap-1">
+                        <span>{idx + 1}</span>
+                        {overall === 1 || overall === 2 || overall === 3 ? <span className="text-base">{TROPHIES[overall]}</span> : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {r.photoUrl ? (
+                          <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
+                            {initials(r.name)}
+                          </div>
+                        )}
+                        <span className="font-medium text-slate-900">{r.name}</span>
+                      </div>
+                    </td>
+                    <Cell n={r.orderCount}     pts={r.metricPoints.orders} />
+                    <Cell n={r.deliveryCount}  pts={r.metricPoints.deliveries} />
+                    <Cell n={r.insuranceCount} pts={r.metricPoints.insurance} />
+                    <Cell n={`${r.conversionPct.toFixed(1)}%`} pts={r.metricPoints.conversion} />
+                    <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-slate-900">{r.totalPoints}</td>
+                  </tr>
+                );
+              })}
               {snapshot.rows.length === 0 && (
                 <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">No participants yet. Admin can add execs on the Manage page.</td></tr>
               )}
@@ -175,21 +214,11 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           </table>
         </div>
 
-        {/* Interesting fact */}
-        {factRow && (
-          <div className="mt-6 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 p-4 text-white shadow-sm">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-pink-100">Interesting fact</div>
-            <div className="mt-1 text-sm">
-              Most recent vehicle ordered: <strong>{factRow.latestVehicle}</strong> — taken by <strong>{factRow.name}</strong>.
-            </div>
-          </div>
-        )}
-
         {/* Scorecards */}
         <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Scorecards</h2>
         <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {snapshot.rows.map((r, idx) => (
-            <Scorecard key={r.salesExecId} rank={idx + 1} stats={r} />
+            <Scorecard key={r.salesExecId} rank={idx + 1} stats={r} badges={badgesByExec.get(r.salesExecId) ?? []} />
           ))}
         </div>
       </main>
@@ -217,26 +246,29 @@ function MetricCard({ meta, leaders }: { meta: { key: LeaderboardMetric; label: 
         {leaders.length === 0 && (
           <div className="px-4 py-6 text-center text-xs text-slate-500">No data yet</div>
         )}
-        {leaders.map((r) => (
-          <div key={r.salesExecId} className="flex items-center gap-3 px-4 py-2">
-            <span className="w-5 text-sm font-semibold text-slate-500">{r.metricRanks[meta.key]}</span>
-            {r.photoUrl ? (
-              <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
-                {initials(r.name)}
-              </div>
-            )}
-            <div className="flex-1 truncate text-sm text-slate-800">{r.name}</div>
-            <div className="text-sm font-semibold tabular-nums text-slate-900">{meta.format(r)}</div>
-          </div>
-        ))}
+        {leaders.map((r) => {
+          const rank = r.metricRanks[meta.key];
+          return (
+            <div key={r.salesExecId} className="flex items-center gap-3 px-4 py-2">
+              <span className="w-6 text-lg leading-none">{rank === 1 || rank === 2 || rank === 3 ? TROPHIES[rank] : ""}</span>
+              {r.photoUrl ? (
+                <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
+                  {initials(r.name)}
+                </div>
+              )}
+              <div className="flex-1 truncate text-sm text-slate-800">{r.name}</div>
+              <div className="text-sm font-semibold tabular-nums text-slate-900">{meta.format(r)}</div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function Scorecard({ rank, stats }: { rank: number; stats: ExecMonthStats }) {
+function Scorecard({ rank, stats, badges }: { rank: number; stats: ExecMonthStats; badges: Badge[] }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center gap-3 bg-slate-900 px-4 py-3 text-white">
@@ -262,12 +294,28 @@ function Scorecard({ rank, stats }: { rank: number; stats: ExecMonthStats }) {
         <ScoreLine label="Insurance"  n={stats.insuranceCount} rank={stats.metricRanks.insurance} />
         <ScoreLine label="Conv %"     n={`${stats.conversionPct.toFixed(1)}%`} rank={stats.metricRanks.conversion} sub={`${stats.salesCount}/${stats.enquiryCount}`} />
       </div>
-      {stats.latestVehicle && (
-        <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          Latest vehicle: <span className="font-medium text-slate-800">{stats.latestVehicle}</span>
+      {badges.length > 0 && (
+        <div className="flex flex-wrap gap-1 border-t border-slate-100 bg-slate-50 px-4 py-2">
+          {badges.map((b) => (
+            <BadgeChip key={b.key} badge={b} />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+function BadgeChip({ badge }: { badge: Badge }) {
+  const tone = badge.tier === 1
+    ? "bg-amber-100 text-amber-800 ring-amber-200"
+    : badge.tier === 2
+      ? "bg-slate-100 text-slate-700 ring-slate-200"
+      : "bg-orange-100 text-orange-800 ring-orange-200";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${tone}`}>
+      <span className="text-sm leading-none">{badge.emoji}</span>
+      {badge.title}
+    </span>
   );
 }
 
@@ -280,13 +328,7 @@ function ScoreLine({ label, n, rank, sub }: { label: string; n: number | string;
         {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
       </div>
       {rank !== null && rank <= 3 && (
-        <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-          rank === 1 ? "bg-amber-100 text-amber-800" :
-          rank === 2 ? "bg-slate-200 text-slate-800" :
-                       "bg-orange-100 text-orange-800"
-        }`}>
-          {rank === 1 ? "1st" : rank === 2 ? "2nd" : "3rd"}
-        </div>
+        <div className="text-lg leading-none">{TROPHIES[rank as 1 | 2 | 3]}</div>
       )}
     </div>
   );

@@ -173,6 +173,10 @@ export interface SectionAccess {
   admin: boolean;
   wc: boolean;
   leaderboard: boolean;
+  // Personal scorecard tile — only relevant when the user has a sales_exec
+  // record linked to their account, regardless of leaderboard participation
+  // (the /me page handles the "not a participant yet" case itself).
+  myScorecard: boolean;
 }
 
 export function sectionAccess(u: CurrentUser | null): SectionAccess {
@@ -187,5 +191,6 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     // Leaderboard is visible to anyone in sales — admins manage participation
     // separately from view access.
     leaderboard: isAdmin(u) || isExec(u),
+    myScorecard: !!u?.salesExecId,
   };
 }

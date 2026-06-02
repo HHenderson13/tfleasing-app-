@@ -5,12 +5,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import {
+  loadUploadDetailAction,
   reattributeAction,
   removeNameMappingAction,
   setNameMappingAction,
   setParticipantAction,
   setPhotoUrlAction,
   uploadReportAction,
+  type UploadDetail,
   type UploadResult,
 } from "./actions";
 import { formatMonthLabel, MONTH_LABELS } from "@/lib/sales-leaderboard";
@@ -565,6 +567,20 @@ function UploadCard({
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<UploadDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailErr, setDetailErr] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  async function loadDetail() {
+    setDetailErr(null);
+    setDetailLoading(true);
+    const res = await loadUploadDetailAction({ yearMonth, reportType: report.type });
+    setDetailLoading(false);
+    if (!res.ok) { setDetailErr(res.error); return; }
+    setDetail(res.detail);
+    setDetailOpen(true);
+  }
 
   function submit() {
     if (!file) { setError("Pick a file first"); return; }
@@ -641,6 +657,63 @@ function UploadCard({
           )}
         </div>
       )}
+
+      {/* Diagnostic — explicit list of how each report code attributes */}
+      {last && last.hasParsedData && (
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          {!detailOpen ? (
+            <button
+              onClick={loadDetail}
+              disabled={detailLoading}
+              className="text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-50"
+            >
+              {detailLoading ? "Loading…" : "Show what each row attributed to"}
+            </button>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attribution from the latest upload</h4>
+                <button onClick={() => setDetailOpen(false)} className="text-xs text-slate-500 hover:text-slate-800">Hide</button>
+              </div>
+              {detail && <UploadDetailTable detail={detail} />}
+            </div>
+          )}
+          {detailErr && <p className="mt-1 text-xs text-red-600">{detailErr}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UploadDetailTable({ detail }: { detail: UploadDetail }) {
+  return (
+    <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 text-left font-medium uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-3 py-2">Report code</th>
+            <th className="px-3 py-2">Attributed to</th>
+            <th className="px-3 py-2 text-right">{detail.primaryLabel}</th>
+            {detail.secondaryLabel && <th className="px-3 py-2 text-right">{detail.secondaryLabel}</th>}
+            <th className="px-3 py-2">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {detail.rows.map((r) => (
+            <tr key={r.reportCode}>
+              <td className="px-3 py-2 font-mono text-[11px]">{r.reportCode}</td>
+              <td className="px-3 py-2">{r.attributedExecName ?? <span className="text-slate-400">—</span>}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{r.primary}</td>
+              {detail.secondaryLabel && <td className="px-3 py-2 text-right tabular-nums">{r.secondary ?? 0}</td>}
+              <td className="px-3 py-2">
+                {r.status === "attributed" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">Attributed</span>}
+                {r.status === "unmapped" && <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">No mapping</span>}
+                {r.status === "not_participant" && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">Not participating</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

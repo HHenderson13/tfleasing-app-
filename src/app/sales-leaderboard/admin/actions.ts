@@ -337,6 +337,110 @@ async function reattributeAllStoredMonths(): Promise<number> {
   return processed;
 }
 
+// ─── Diagnostic ────────────────────────────────────────────────────────────
+//
+// Show the admin what the latest upload for a (yearMonth, reportType) slot
+// is currently being attributed to. Surfaces three failure modes that look
+// the same on the leaderboard ("zero data") but have very different fixes:
+//   • Report code has no mapping at all  → add to Name map.
+//   • Mapped to an exec who isn't a participant → tick them on.
+//   • Mapped to a participant fine, but the report row had a zero value.
+
+export interface UploadDetailRow {
+  reportCode: string;
+  // Whichever count is relevant to the report type. For orders this is
+  // orderCount, for delivered it's deliveryCount, for enquiry it's
+  // enquiryCount. We surface both raw count and secondary count for
+  // delivered (insurance) and enquiry (sales).
+  primary: number;
+  secondary: number | null;
+  attributedExecName: string | null; // null when there's no mapping
+  attributedExecId: string | null;
+  status: "attributed" | "unmapped" | "not_participant";
+}
+
+export interface UploadDetail {
+  yearMonth: string;
+  reportType: ReportType;
+  uploadedAt: string;
+  primaryLabel: string;
+  secondaryLabel: string | null;
+  rows: UploadDetailRow[];
+}
+
+export async function loadUploadDetailAction(input: { yearMonth: string; reportType: ReportType }): Promise<{ ok: true; detail: UploadDetail } | { ok: false; error: string }> {
+  await requireAdmin();
+  const { yearMonth, reportType } = input;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) return { ok: false, error: "Bad yearMonth" };
+  if (!REPORT_TYPES.includes(reportType)) return { ok: false, error: "Bad reportType" };
+
+  const slot = await db.all<{ id: number; uploaded_at: number; parsed_data: string | null }>(sql`
+    SELECT id, uploaded_at, parsed_data
+    FROM sales_leaderboard_uploads
+    WHERE year_month = ${yearMonth} AND report_type = ${reportType}
+    ORDER BY uploaded_at DESC LIMIT 1
+  `);
+  if (slot.length === 0) return { ok: false, error: "No upload for that month yet" };
+  const top = slot[0];
+  if (!top.parsed_data) return { ok: false, error: "This upload predates self-healing — re-upload once to enable diagnostics" };
+
+  const parsedRows = JSON.parse(top.parsed_data) as ParsedRows;
+  const [mapRows, participantRows, execRows] = await Promise.all([
+    db.select().from(salesLeaderboardNameMap),
+    db.select().from(salesLeaderboardParticipants),
+    db.select().from(salesExecs),
+  ]);
+  const codeToExec = new Map(mapRows.map((m) => [m.reportCode, m.salesExecId]));
+  const activeIds = new Set(participantRows.filter((p) => p.active).map((p) => p.salesExecId));
+  const execNameById = new Map(execRows.map((e) => [e.id, e.name]));
+
+  const labels = reportType === "orders"
+    ? { primary: "Orders", secondary: null }
+    : reportType === "delivered"
+      ? { primary: "Deliveries", secondary: "Insurance" }
+      : { primary: "Enquiries", secondary: "Sales" };
+
+  const rows: UploadDetailRow[] = parsedRows.map((r) => {
+    let primary = 0;
+    let secondary: number | null = null;
+    if (reportType === "orders") {
+      primary = (r as OrderListParseRow).orderCount;
+    } else if (reportType === "delivered") {
+      primary = (r as DeliveredParseRow).deliveryCount;
+      secondary = (r as DeliveredParseRow).insuranceCount;
+    } else {
+      primary = (r as EnquiryParseRow).enquiryCount;
+      secondary = (r as EnquiryParseRow).salesCount;
+    }
+    const execId = codeToExec.get(r.reportCode) ?? null;
+    let status: UploadDetailRow["status"];
+    if (!execId) status = "unmapped";
+    else if (!activeIds.has(execId)) status = "not_participant";
+    else status = "attributed";
+    return {
+      reportCode: r.reportCode,
+      primary,
+      secondary,
+      attributedExecId: execId,
+      attributedExecName: execId ? execNameById.get(execId) ?? null : null,
+      status,
+    };
+  });
+  rows.sort((a, b) => b.primary - a.primary);
+
+  return {
+    ok: true,
+    detail: {
+      yearMonth,
+      reportType,
+      uploadedAt: new Date(Number(top.uploaded_at) * 1000).toISOString(),
+      primaryLabel: labels.primary,
+      secondaryLabel: labels.secondary,
+      rows,
+    },
+  };
+}
+
 // ─── Admin context loader ──────────────────────────────────────────────────
 
 export async function loadAdminContext() {
