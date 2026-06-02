@@ -5,11 +5,14 @@ import { signOutAction } from "../../login/actions";
 import {
   currentYearMonth,
   formatMonthLabel,
+  overtakeTargets,
   type ExecMonthStats,
   type LeaderboardMetric,
+  type OvertakeTarget,
 } from "@/lib/sales-leaderboard";
 import { loadMonthSnapshot, loadYtdSnapshot } from "@/lib/sales-leaderboard-data";
 import { computeBadgesFor, overallRanks, type Badge } from "@/lib/sales-leaderboard-badges";
+import { PodiumConfetti } from "./confetti";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +77,15 @@ export default async function MyScorecardPage() {
   // Department averages — useful context for the personal view.
   const deptAvg = computeDeptAverages(mtd.rows);
 
+  // Overtake targets — who's directly ahead of me on each metric. Drives
+  // the closest-gap callout below the metric breakdown.
+  const overtakes = overtakeTargets(mtd.rows, mine);
+
+  // Confetti fingerprint — anytime any of these badge keys is new since
+  // the last visit we celebrate. Specials (Clean Sweep etc) are included
+  // so big achievements get their own pop.
+  const confettiKeys = badgesMtd.filter((b) => b.tier === 1 || b.isSpecial).map((b) => b.key);
+
   return (
     <Shell userName={user.name} title="My scorecard">
       {/* Hero */}
@@ -117,6 +129,19 @@ export default async function MyScorecardPage() {
         <AchievementsCard title="Year to date" subtitle="Across the whole year so far" badges={badgesYtd} />
       </div>
 
+      {/* Closest gap callout — single biggest motivator: who's just ahead
+          and what would it take to overtake them. */}
+      {overtakes.length > 0 && (
+        <>
+          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Your overtake targets</h2>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {overtakes.slice(0, 4).map((t) => (
+              <OvertakeCard key={t.metric} target={t} closest={t === overtakes[0]} />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Metric breakdown — your score vs dept avg vs top */}
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">This month, metric by metric</h2>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
@@ -133,7 +158,6 @@ export default async function MyScorecardPage() {
               avgValue={avg}
               topValue={top}
               rank={rank}
-              nextRankGap={nextRankGap(mtd.rows, mine, meta.key)}
             />
           );
         })}
@@ -142,24 +166,38 @@ export default async function MyScorecardPage() {
       <p className="mt-6 text-xs text-slate-500">
         Want to see how the whole team stacks up? <Link href="/sales-leaderboard" className="font-medium text-rose-700 hover:text-rose-900">Go to the full leaderboard →</Link>
       </p>
+
+      <PodiumConfetti userId={mine.salesExecId} yearMonth={month} badgeKeys={confettiKeys} />
     </Shell>
   );
 }
 
-function nextRankGap(rows: ExecMonthStats[], me: ExecMonthStats, key: LeaderboardMetric): { gap: number; targetRank: number } | null {
-  const sorted = [...rows].sort((a, b) => metricValue(b, key) - metricValue(a, key));
-  const myIdx = sorted.findIndex((r) => r.salesExecId === me.salesExecId);
-  if (myIdx <= 0) return null; // Already top.
-  // Find the next person above me with a strictly higher value (to avoid
-  // "you need to overtake yourself" in tied groups).
-  const myVal = metricValue(me, key);
-  for (let i = myIdx - 1; i >= 0; i--) {
-    const v = metricValue(sorted[i], key);
-    if (v > myVal) {
-      return { gap: v - myVal, targetRank: i + 1 };
-    }
-  }
-  return null;
+function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: boolean }) {
+  return (
+    <div className={`overflow-hidden rounded-2xl border bg-white p-4 ${closest ? "border-rose-300 ring-2 ring-rose-100" : "border-slate-200"}`}>
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{target.metricLabel}</div>
+        {closest && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Closest</span>}
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        {target.target.photoUrl ? (
+          <Image src={target.target.photoUrl} alt={target.target.name} width={40} height={40} className="h-10 w-10 rounded-full object-cover" unoptimized />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500">
+            {initials(target.target.name)}
+          </div>
+        )}
+        <div className="flex-1">
+          <div className="text-sm text-slate-600">Overtake</div>
+          <div className="text-base font-semibold text-slate-900">{target.target.name}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Need</div>
+          <div className="text-lg font-bold tabular-nums text-rose-700">{target.gapLabel}</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function computeDeptAverages(rows: ExecMonthStats[]): Record<LeaderboardMetric, number> {
@@ -214,14 +252,12 @@ function MetricBreakdownCard({
   avgValue,
   topValue,
   rank,
-  nextRankGap,
 }: {
   meta: { key: LeaderboardMetric; label: string; tone: string; format: (n: number) => string };
   myValue: number;
   avgValue: number;
   topValue: number;
   rank: number | null;
-  nextRankGap: { gap: number; targetRank: number } | null;
 }) {
   const pct = topValue > 0 ? Math.max(2, Math.min(100, (myValue / topValue) * 100)) : 0;
   return (
@@ -247,11 +283,6 @@ function MetricBreakdownCard({
           <span>Dept avg <span className="font-medium text-slate-700 tabular-nums">{meta.format(avgValue)}</span></span>
           <span>Top <span className="font-medium text-slate-700 tabular-nums">{meta.format(topValue)}</span></span>
         </div>
-        {nextRankGap && (
-          <p className="mt-2 text-[11px] text-slate-600">
-            <strong className="font-semibold text-slate-900">{meta.format(nextRankGap.gap)}</strong> behind rank #{nextRankGap.targetRank}.
-          </p>
-        )}
       </div>
     </div>
   );

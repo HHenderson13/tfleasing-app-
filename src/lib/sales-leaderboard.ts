@@ -228,3 +228,92 @@ export function formatMonthLabel(yearMonth: string): string {
   const idx = parseInt(m, 10) - 1;
   return `${MONTH_LABELS[idx] ?? m} ${y}`;
 }
+
+// ─── Engagement helpers ────────────────────────────────────────────────────
+
+export interface ClosestRace {
+  metric: LeaderboardMetric;
+  metricLabel: string;
+  leader: ExecMonthStats;
+  challenger: ExecMonthStats;
+  gap: number;
+  gapLabel: string;
+}
+
+// Across all four metrics, find the metric/pair with the smallest non-zero
+// gap between two execs. Excludes:
+//   • Pairs where both have zero (uninteresting "race to nothing").
+//   • Gaps of zero (they're tied — that's its own story, not a race).
+// Returns null when no race exists yet (early in the month, blank data).
+export function closestRace(rows: ExecMonthStats[]): ClosestRace | null {
+  const candidates: { metric: LeaderboardMetric; label: string; pick: (s: ExecMonthStats) => number; gapLabel: (g: number) => string }[] = [
+    { metric: "orders",     label: "Order Take",          pick: (s) => s.orderCount,     gapLabel: (g) => `${g} order${g === 1 ? "" : "s"} apart` },
+    { metric: "deliveries", label: "Deliveries",          pick: (s) => s.deliveryCount,  gapLabel: (g) => `${g} deliver${g === 1 ? "y" : "ies"} apart` },
+    { metric: "insurance",  label: "Insurance Products",  pick: (s) => s.insuranceCount, gapLabel: (g) => `${g} insurance product${g === 1 ? "" : "s"} apart` },
+    { metric: "conversion", label: "Conversion %",        pick: (s) => s.conversionPct,  gapLabel: (g) => `${g.toFixed(1)} percentage point${g === 1 ? "" : "s"} apart` },
+  ];
+
+  let best: ClosestRace | null = null;
+  for (const c of candidates) {
+    const sorted = [...rows]
+      .filter((r) => c.pick(r) > 0)
+      .sort((a, b) => c.pick(b) - c.pick(a));
+    for (let i = 1; i < sorted.length; i++) {
+      const leader = sorted[i - 1];
+      const challenger = sorted[i];
+      const gap = c.pick(leader) - c.pick(challenger);
+      if (gap <= 0) continue;
+      // Normalise conversion gaps so they compare to count gaps on a
+      // roughly equivalent "tightness" scale. Without this a 0.2pp
+      // conversion gap would always win over a 1-order gap, which isn't
+      // really tighter in context.
+      const normalised = c.metric === "conversion" ? gap * 2 : gap;
+      if (best === null || normalised < (best.metric === "conversion" ? best.gap * 2 : best.gap)) {
+        best = { metric: c.metric, metricLabel: c.label, leader, challenger, gap, gapLabel: c.gapLabel(gap) };
+      }
+    }
+  }
+  return best;
+}
+
+// Per-metric "overtake target" for a single exec — what gap separates them
+// from the next person ahead, and who that person is. Used on /me.
+export interface OvertakeTarget {
+  metric: LeaderboardMetric;
+  metricLabel: string;
+  target: ExecMonthStats;
+  targetRank: number;
+  gap: number;
+  gapLabel: string;
+}
+
+export function overtakeTargets(rows: ExecMonthStats[], me: ExecMonthStats): OvertakeTarget[] {
+  const candidates: { metric: LeaderboardMetric; label: string; pick: (s: ExecMonthStats) => number; gapLabel: (g: number) => string }[] = [
+    { metric: "orders",     label: "Order Take",          pick: (s) => s.orderCount,     gapLabel: (g) => `${Math.ceil(g)} more order${Math.ceil(g) === 1 ? "" : "s"}` },
+    { metric: "deliveries", label: "Deliveries",          pick: (s) => s.deliveryCount,  gapLabel: (g) => `${Math.ceil(g)} more deliver${Math.ceil(g) === 1 ? "y" : "ies"}` },
+    { metric: "insurance",  label: "Insurance Products",  pick: (s) => s.insuranceCount, gapLabel: (g) => `${Math.ceil(g)} more product${Math.ceil(g) === 1 ? "" : "s"}` },
+    { metric: "conversion", label: "Conversion %",        pick: (s) => s.conversionPct,  gapLabel: (g) => `${g.toFixed(1)}pp` },
+  ];
+  const out: OvertakeTarget[] = [];
+  for (const c of candidates) {
+    const sorted = [...rows].sort((a, b) => c.pick(b) - c.pick(a));
+    const myIdx = sorted.findIndex((r) => r.salesExecId === me.salesExecId);
+    if (myIdx <= 0) continue;
+    const myVal = c.pick(me);
+    for (let i = myIdx - 1; i >= 0; i--) {
+      const v = c.pick(sorted[i]);
+      if (v > myVal) {
+        out.push({
+          metric: c.metric,
+          metricLabel: c.label,
+          target: sorted[i],
+          targetRank: i + 1,
+          gap: v - myVal,
+          gapLabel: c.gapLabel(v - myVal),
+        });
+        break;
+      }
+    }
+  }
+  return out.sort((a, b) => a.gap - b.gap);
+}

@@ -4,13 +4,14 @@ import { requireLeaderboardAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
 import { signOutAction } from "../login/actions";
 import {
+  closestRace,
   currentYearMonth,
   formatMonthLabel,
   MONTH_LABELS,
   type ExecMonthStats,
   type LeaderboardMetric,
 } from "@/lib/sales-leaderboard";
-import { loadLeaderboard } from "@/lib/sales-leaderboard-data";
+import { loadChampionArchive, loadLeaderboard, type ChampionEntry } from "@/lib/sales-leaderboard-data";
 import { computeBadgesFor, overallRanks, type Badge } from "@/lib/sales-leaderboard-badges";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,10 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
     badgesByExec.set(r.salesExecId, computeBadgesFor(r, overallRankMap.get(r.salesExecId) ?? null));
   }
   const champion = snapshot.rows.find((r) => overallRankMap.get(r.salesExecId) === 1) ?? null;
+  const race = closestRace(snapshot.rows);
+  // Archive of past champions — last 6 months ending at this one. Cheap
+  // because each monthly snapshot is small.
+  const archive = await loadChampionArchive(yearMonth, 6);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -152,6 +157,21 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           </div>
         )}
 
+        {/* Closest race callout — drives end-of-month hustle by surfacing
+            the tightest gap between any two execs across any metric. */}
+        {race && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm shadow-sm">
+            <span className="text-2xl">🏎️</span>
+            <div className="flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Closest race · {race.metricLabel}</div>
+              <div className="mt-0.5 text-slate-800">
+                <strong>{race.leader.name}</strong> vs <strong>{race.challenger.name}</strong>
+                <span className="ml-2 rounded-full bg-rose-200/70 px-2 py-0.5 text-[11px] font-semibold text-rose-900">{race.gapLabel}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Metric leader cards — team total per metric instead of the
             old scoring-key subtitle. */}
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -215,6 +235,18 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
         <p className="mt-2 text-[11px] text-slate-400">
           Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt — per metric, per period.
         </p>
+
+        {/* Champion archive — Hall of Fame strip of past 6 monthly winners. */}
+        {archive.some((a) => a.champion) && (
+          <>
+            <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Hall of Fame</h2>
+            <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+              {archive.map((entry) => (
+                <ArchiveTile key={entry.yearMonth} entry={entry} isCurrent={entry.yearMonth === yearMonth} />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Scorecards */}
         <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Scorecards</h2>
@@ -341,6 +373,35 @@ function ScoreLine({ label, n, rank, sub }: { label: string; n: number | string;
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+}
+
+function ArchiveTile({ entry, isCurrent }: { entry: ChampionEntry; isCurrent: boolean }) {
+  const label = formatMonthLabel(entry.yearMonth);
+  return (
+    <div className={`flex-none w-44 rounded-2xl border bg-white px-3 py-3 shadow-sm ${isCurrent ? "border-amber-300 ring-2 ring-amber-200" : "border-slate-200"}`}>
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+        <span className="text-base">👑</span>
+      </div>
+      {entry.champion ? (
+        <div className="mt-2 flex items-center gap-2">
+          {entry.champion.photoUrl ? (
+            <Image src={entry.champion.photoUrl} alt={entry.champion.name} width={36} height={36} className="h-9 w-9 rounded-full object-cover" unoptimized />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">
+              {initials(entry.champion.name)}
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-900">{entry.champion.name}</div>
+            <div className="text-[11px] text-slate-500">{entry.champion.points} pts</div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-slate-400">No data yet</div>
+      )}
+    </div>
+  );
 }
 
 function teamTotalFor(rows: ExecMonthStats[], key: LeaderboardMetric): string {

@@ -323,6 +323,38 @@ export async function loadDeptDashboard(yearMonth: string): Promise<DeptDashboar
   return { yearMonth, kpis, coachingFocus, trend };
 }
 
+// ─── Champion archive ──────────────────────────────────────────────────────
+//
+// Past N monthly champions for the Hall of Fame strip. We re-use the same
+// snapshot loader so scoring/tie rules stay consistent — no separate
+// "who was champion" query that could drift from how points are awarded.
+
+export interface ChampionEntry {
+  yearMonth: string;
+  champion: { salesExecId: string; name: string; photoUrl: string | null; points: number } | null;
+}
+
+export async function loadChampionArchive(upToYearMonth: string, count = 6): Promise<ChampionEntry[]> {
+  const months = trailingMonths(upToYearMonth, count);
+  const out: ChampionEntry[] = [];
+  for (const ym of months) {
+    const snap = await loadMonthSnapshot(ym);
+    // Champion = highest totalPoints with > 0; ties collapse to "shared
+    // champion" via first sort order, which is fine for an archive strip.
+    const sorted = [...snap.rows].sort((a, b) => b.totalPoints - a.totalPoints);
+    const top = sorted[0];
+    if (top && top.totalPoints > 0) {
+      out.push({
+        yearMonth: ym,
+        champion: { salesExecId: top.salesExecId, name: top.name, photoUrl: top.photoUrl, points: top.totalPoints },
+      });
+    } else {
+      out.push({ yearMonth: ym, champion: null });
+    }
+  }
+  return out;
+}
+
 // Convenience entry point used by /sales-leaderboard. Picks current month
 // when no month is supplied and routes to the right loader.
 export async function loadLeaderboard(opts: { yearMonth?: string; view: "month" | "ytd" }): Promise<LeaderboardSnapshot> {
