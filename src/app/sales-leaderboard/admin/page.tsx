@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
+import { loadAdminContext } from "./actions";
+import { LeaderboardAdminView } from "./view";
+import { currentYearMonth } from "@/lib/sales-leaderboard";
+import { loadDeptDashboard } from "@/lib/sales-leaderboard-data";
 
 export const dynamic = "force-dynamic";
 
-// Phase 1 stub. Phase 2 wires up participants, photo upload, name mapping,
-// and the three report uploads with parsing.
 export default async function SalesLeaderboardAdminPage() {
   const user = await requireAdmin();
+  const month = currentYearMonth();
+  const [ctx, dashboard] = await Promise.all([
+    loadAdminContext(),
+    loadDeptDashboard(month),
+  ]);
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -26,10 +33,16 @@ export default async function SalesLeaderboardAdminPage() {
 
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Leaderboard admin</h1>
-        <p className="mt-1 text-sm text-slate-500">Participants, name mapping and daily report uploads.</p>
-        <div className="mt-6 rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          Admin tools are being built next.
-        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          Pick which execs compete, map their report short-codes, and upload the Dealerweb reports each day.
+        </p>
+        <LeaderboardAdminView
+          execs={ctx.execs}
+          nameMap={ctx.nameMap}
+          lastUploads={ctx.lastUploads}
+          initialYearMonth={month}
+          dashboard={dashboard}
+        />
       </main>
     </div>
   );
