@@ -20,3 +20,10 @@ export const STAGE_CHECK_DEFS_TAG = "lookup-stage-check-defs";
 // stay constant for the lifetime of the deploy. Keeping the tag here for
 // symmetry; in practice nothing calls updateTag on it.
 export const FUNDERS_TAG = "lookup-funders";
+
+// Admin-only mutation tables — bigger payloads than the user-table
+// lookups, but mutate only via admin pages so a long TTL + targeted
+// updateTag from the matching action is safe.
+export const VEHICLES_TAG = "lookup-vehicles";
+export const FUNDER_COMMISSION_TAG = "lookup-funder-commission";
+export const MODEL_DISCOUNTS_TAG = "lookup-model-discounts";

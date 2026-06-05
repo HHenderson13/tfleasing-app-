@@ -7,7 +7,7 @@ import { parseRatebookBuffer } from "@/lib/ratebook-parse";
 import { del } from "@vercel/blob";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath, updateTag } from "next/cache";
-import { RATEBOOK_CACHE_TAG } from "@/lib/cache-tags";
+import { RATEBOOK_CACHE_TAG, VEHICLES_TAG } from "@/lib/cache-tags";
 
 type RatebookImportInput = {
   funderId: string;
@@ -249,6 +249,9 @@ async function importRatebookBuffer(input: RatebookImportInput) {
   // alongside the per-path render caches so the admin sees fresh slot /
   // funder counts immediately rather than waiting on the 1h TTL.
   updateTag(RATEBOOK_CACHE_TAG);
+  // Ratebook ingest also writes new vehicle rows — bust the vehicles tag
+  // so quote requests see them without waiting on the TTL.
+  updateTag(VEHICLES_TAG);
   revalidatePath("/admin/ratebooks");
   revalidatePath("/admin/vehicles");
   revalidatePath("/admin/discounts");

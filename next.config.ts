@@ -1,4 +1,13 @@
 import type { NextConfig } from "next";
+import withBundleAnalyzer from "@next/bundle-analyzer";
+
+// Toggle with `ANALYZE=true npm run build` — produces HTML reports under
+// .next/analyze/ showing which deps end up in each client chunk. Lets us
+// catch accidental client-bundle bloat (a server-only dep slipping into a
+// client component, a barrel import dragging the whole lib in, etc.).
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -25,4 +34,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default bundleAnalyzer(nextConfig);

@@ -2,7 +2,8 @@
 import { db } from "@/db";
 import { funderCommission } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { FUNDER_COMMISSION_TAG } from "@/lib/cache-tags";
 
 export async function updateCommission(input: {
   funderId: string;
@@ -21,5 +22,8 @@ export async function updateCommission(input: {
   } else {
     await db.insert(funderCommission).values(input);
   }
+  // Cross-request commissions cache → bust so quote requests see the
+  // new commission immediately instead of waiting on the TTL.
+  updateTag(FUNDER_COMMISSION_TAG);
   revalidatePath("/admin/commissions");
 }

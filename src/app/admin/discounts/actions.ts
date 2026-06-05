@@ -2,13 +2,23 @@
 import { db } from "@/db";
 import { modelDiscounts, savedDiscountKeys, vehicles } from "@/db/schema";
 import { eq, inArray, isNull, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { MODEL_DISCOUNTS_TAG, VEHICLES_TAG } from "@/lib/cache-tags";
+
+// Discount edits touch both the modelDiscounts table and frequently update
+// vehicles.discountKey. Bust both lookup caches plus the page render.
+function invalidateDiscounts(includesVehicles = true) {
+  updateTag(MODEL_DISCOUNTS_TAG);
+  if (includesVehicles) updateTag(VEHICLES_TAG);
+  revalidatePath("/admin/discounts");
+  if (includesVehicles) revalidatePath("/admin/vehicles");
+}
 
 export async function updateDiscount(id: string, patch: Partial<{
   label: string; termsPct: number; dealerPct: number; additionalDiscountsGbp: number; novunaChip3Yr: number | null; novunaChip4Yr: number | null; grantText: string | null; customerSavingGbp: number | null; notes: string | null;
 }>) {
   await db.update(modelDiscounts).set(patch).where(eq(modelDiscounts.id, id));
-  revalidatePath("/admin/discounts");
+  invalidateDiscounts(false);
 }
 
 function slugify(s: string) {
@@ -25,14 +35,13 @@ export async function createDiscount(input: { label: string }) {
   await db.insert(modelDiscounts).values({
     id, label: input.label, termsPct: 0, dealerPct: 0, sortOrder: next[0]?.m ?? 0,
   });
-  revalidatePath("/admin/discounts");
+  invalidateDiscounts(false);
 }
 
 export async function deleteDiscount(id: string) {
   await db.update(vehicles).set({ discountKey: null }).where(eq(vehicles.discountKey, id));
   await db.delete(modelDiscounts).where(eq(modelDiscounts.id, id));
-  revalidatePath("/admin/discounts");
-  revalidatePath("/admin/vehicles");
+  invalidateDiscounts();
 }
 
 export async function assignVehiclesToDiscount(discountId: string, capCodes: string[]) {
@@ -58,8 +67,7 @@ export async function assignVehiclesToDiscount(discountId: string, capCodes: str
   if (toAssign.length) {
     await db.update(vehicles).set({ discountKey: discountId }).where(inArray(vehicles.capCode, toAssign));
   }
-  revalidatePath("/admin/discounts");
-  revalidatePath("/admin/vehicles");
+  invalidateDiscounts();
   return { ok: true as const, assigned: toAssign.length };
 }
 
@@ -67,8 +75,7 @@ export async function unassignVehicleFromDiscount(capCode: string) {
   await db.update(vehicles).set({ discountKey: null }).where(eq(vehicles.capCode, capCode));
   // Clear any saved mapping so this explicit removal isn't undone by a future upload.
   await db.delete(savedDiscountKeys).where(eq(savedDiscountKeys.capCode, capCode));
-  revalidatePath("/admin/discounts");
-  revalidatePath("/admin/vehicles");
+  invalidateDiscounts();
 }
 
 export async function listAssignableVehicles(discountId: string) {

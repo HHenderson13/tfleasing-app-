@@ -1,7 +1,8 @@
 import { db } from "@/db";
 import { and, eq, sql } from "drizzle-orm";
-import { ratebook, vehicles, modelDiscounts, funderCommission } from "@/db/schema";
+import { ratebook, vehicles } from "@/db/schema";
 import { cachedFunders } from "./funder-lookup";
+import { cachedFunderCommissions, cachedModelDiscounts } from "./lookups";
 import { defaultDiscountKey } from "./discount-map";
 
 export type Contract = "PCH" | "BCH";
@@ -76,10 +77,11 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
   const vehicle = v[0];
 
   // Resolve discount: stored key on vehicle, else fall back to heuristic map.
+  // Cached modelDiscounts lookup — the whole table is tiny (~30 rows) so a
+  // map-keyed lookup beats a per-quote SELECT.
   const discountId = vehicle.discountKey ?? defaultDiscountKey(vehicle.model);
-  const md = discountId
-    ? (await db.select().from(modelDiscounts).where(eq(modelDiscounts.id, discountId)).limit(1))[0]
-    : undefined;
+  const allDiscounts = await cachedModelDiscounts();
+  const md = discountId ? allDiscounts.find((d) => d.id === discountId) : undefined;
   const baseDiscount = md ? md.termsPct + md.dealerPct : null;
   const additionalDiscountsGbp = md?.additionalDiscountsGbp ?? 0;
   const novunaChip = input.termMonths === 36
@@ -102,21 +104,25 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
     ? md.customerSavingGbp / vehicle.listPriceNet
     : 0;
 
-  const allFunders = await cachedFunders();
+  // Pre-fetch all funders + commissions once (both cached). Index commissions
+  // by (funderId|contract|maintenance) so the per-funder lookup inside the
+  // loop is a Map.get instead of an N+1 SELECT. Was 4-5 Turso round-trips
+  // per quote (one per funder); now zero on a warm cache.
+  const [allFunders, allCommissions] = await Promise.all([
+    cachedFunders(),
+    cachedFunderCommissions(),
+  ]);
+  const commissionKey = (funderId: string) => `${funderId}|${input.contract}|${input.maintenance}`;
+  const commissionByKey = new Map(
+    allCommissions
+      .filter((c) => c.contract === input.contract && c.maintenance === input.maintenance)
+      .map((c) => [commissionKey(c.funderId), c]),
+  );
   const results: FunderQuote[] = [];
   const missing: MissingFunder[] = [];
 
   for (const f of allFunders) {
-    const comm = await db
-      .select()
-      .from(funderCommission)
-      .where(and(
-        eq(funderCommission.funderId, f.id),
-        eq(funderCommission.contract, input.contract),
-        eq(funderCommission.maintenance, input.maintenance),
-      ))
-      .limit(1);
-    const commissionGbp = comm[0]?.commissionGbp ?? 0;
+    const commissionGbp = commissionByKey.get(commissionKey(f.id))?.commissionGbp ?? 0;
     // Per-funder effective discount: base Terms+Dealer % plus (commission + additional £) / BLP.
     // BLP may be null; if so £ terms cannot be converted to % so we omit them.
     let discountPct: number | null = null;
