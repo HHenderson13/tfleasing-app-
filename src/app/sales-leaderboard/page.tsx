@@ -38,7 +38,12 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
   const params = await searchParams;
   const yearMonth = normaliseMonth(params.month);
   const view: "month" | "ytd" = params.view === "ytd" ? "ytd" : "month";
-  const snapshot = await loadLeaderboard({ yearMonth, view });
+  // Run snapshot + archive in parallel — both hit the DB but are
+  // independent. Was sequential, doubling the request-path latency.
+  const [snapshot, archive] = await Promise.all([
+    loadLeaderboard({ yearMonth, view }),
+    loadChampionArchive(yearMonth, 6),
+  ]);
   const year = yearMonth.slice(0, 4);
 
   const leaders: Record<LeaderboardMetric, ExecMonthStats[]> = {
@@ -57,9 +62,6 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
   }
   const champion = snapshot.rows.find((r) => overallRankMap.get(r.salesExecId) === 1) ?? null;
   const race = closestRace(snapshot.rows);
-  // Archive of past champions — last 6 months ending at this one. Cheap
-  // because each monthly snapshot is small.
-  const archive = await loadChampionArchive(yearMonth, 6);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -176,7 +178,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     width={160}
                     height={160}
                     className="h-28 w-28 rounded-full object-cover ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36"
-                    unoptimized
+
                   />
                 ) : (
                   <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/20 text-3xl font-bold ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36 sm:text-4xl">
@@ -251,7 +253,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {r.photoUrl ? (
-                          <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                          <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
                         ) : (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
                             {initials(r.name)}
@@ -331,7 +333,7 @@ function MetricCard({ meta, leaders, teamTotal }: { meta: { key: LeaderboardMetr
             <div key={r.salesExecId} className="flex items-center gap-3 px-4 py-2">
               <span className="w-6 text-lg leading-none">{rank === 1 || rank === 2 || rank === 3 ? TROPHIES[rank] : ""}</span>
               {r.photoUrl ? (
-                <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized />
+                <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
                   {initials(r.name)}
@@ -352,7 +354,7 @@ function Scorecard({ rank, stats, badges }: { rank: number; stats: ExecMonthStat
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center gap-3 bg-slate-900 px-4 py-3 text-white">
         {stats.photoUrl ? (
-          <Image src={stats.photoUrl} alt={stats.name} width={56} height={56} className="h-14 w-14 rounded-full object-cover ring-2 ring-white" unoptimized />
+          <Image src={stats.photoUrl} alt={stats.name} width={56} height={56} className="h-14 w-14 rounded-full object-cover ring-2 ring-white" />
         ) : (
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-700 text-sm font-semibold text-slate-200 ring-2 ring-white">
             {initials(stats.name)}
@@ -428,7 +430,7 @@ function ArchiveTile({ entry, isCurrent }: { entry: ChampionEntry; isCurrent: bo
       {entry.champion ? (
         <div className="mt-2 flex items-center gap-2">
           {entry.champion.photoUrl ? (
-            <Image src={entry.champion.photoUrl} alt={entry.champion.name} width={36} height={36} className="h-9 w-9 rounded-full object-cover" unoptimized />
+            <Image src={entry.champion.photoUrl} alt={entry.champion.name} width={36} height={36} className="h-9 w-9 rounded-full object-cover" />
           ) : (
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">
               {initials(entry.champion.name)}

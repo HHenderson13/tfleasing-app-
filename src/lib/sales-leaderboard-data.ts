@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { db } from "@/db";
 import {
   salesExecs,
@@ -30,7 +31,12 @@ interface ParticipantRow {
   photoUrl: string | null;
 }
 
-async function loadParticipants(): Promise<ParticipantRow[]> {
+// React `cache` dedupes within a single request. The leaderboard page
+// renders MTD + YTD + Archive snapshots and Dept dashboard pulls two
+// snapshots — without this cache, the same participants query would run
+// 4+ times per page. Each Turso round-trip is ~50-150ms over the network,
+// so deduping saves a noticeable chunk of TTFB.
+const loadParticipants = cache(async (): Promise<ParticipantRow[]> => {
   const rows = await db
     .select({
       id: salesExecs.id,
@@ -47,7 +53,7 @@ async function loadParticipants(): Promise<ParticipantRow[]> {
   return rows
     .filter((r) => r.active)
     .map((r) => ({ salesExecId: r.id, name: r.name, photoUrl: r.photoUrl ?? null }));
-}
+});
 
 function emptyStats(p: ParticipantRow): ExecMonthStats {
   return {
@@ -336,23 +342,52 @@ export interface ChampionEntry {
 
 export async function loadChampionArchive(upToYearMonth: string, count = 6): Promise<ChampionEntry[]> {
   const months = trailingMonths(upToYearMonth, count);
-  const out: ChampionEntry[] = [];
-  for (const ym of months) {
-    const snap = await loadMonthSnapshot(ym);
-    // Champion = highest totalPoints with > 0; ties collapse to "shared
-    // champion" via first sort order, which is fine for an archive strip.
-    const sorted = [...snap.rows].sort((a, b) => b.totalPoints - a.totalPoints);
-    const top = sorted[0];
+  if (months.length === 0) return [];
+  // ONE participants query + ONE monthly query for all 6 months. Previously
+  // each archive entry triggered its own loadMonthSnapshot — 6 sequential
+  // Turso round-trips that blocked the entire page render.
+  const [participants, allMonthly] = await Promise.all([
+    loadParticipants(),
+    db
+      .select()
+      .from(salesLeaderboardMonthly)
+      .where(inArray(salesLeaderboardMonthly.yearMonth, months)),
+  ]);
+
+  // Group monthly rows by yearMonth so we score each month independently.
+  const byMonth = new Map<string, typeof allMonthly>();
+  for (const m of allMonthly) {
+    const arr = byMonth.get(m.yearMonth) ?? [];
+    arr.push(m);
+    byMonth.set(m.yearMonth, arr);
+  }
+
+  return months.map((ym) => {
+    const monthRows = byMonth.get(ym) ?? [];
+    const byExec = new Map(monthRows.map((m) => [m.salesExecId, m]));
+    const rows = participants.map((p) => {
+      const base = emptyStats(p);
+      const m = byExec.get(p.salesExecId);
+      if (!m) return base;
+      base.orderCount = m.orderCount ?? 0;
+      base.deliveryCount = m.deliveryCount ?? 0;
+      base.insuranceCount = m.insuranceCount ?? 0;
+      base.enquiryCount = m.enquiryCount ?? 0;
+      base.salesCount = m.salesCount ?? 0;
+      base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
+      return base;
+    });
+    applyPoints(rows);
+    rows.sort((a, b) => b.totalPoints - a.totalPoints);
+    const top = rows[0];
     if (top && top.totalPoints > 0) {
-      out.push({
+      return {
         yearMonth: ym,
         champion: { salesExecId: top.salesExecId, name: top.name, photoUrl: top.photoUrl, points: top.totalPoints },
-      });
-    } else {
-      out.push({ yearMonth: ym, champion: null });
+      };
     }
-  }
-  return out;
+    return { yearMonth: ym, champion: null };
+  });
 }
 
 // Convenience entry point used by /sales-leaderboard. Picks current month

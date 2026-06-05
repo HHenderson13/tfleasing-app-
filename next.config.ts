@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "50mb",
     },
   },
+  // Allow Next/Image to optimise our Vercel Blob-hosted headshots — without
+  // this, src must be local. Wildcard covers all tenant blob hostnames
+  // (randomised per project).
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+    ],
+    formats: ["image/avif", "image/webp"],
+  },
 };
 
 export default nextConfig;

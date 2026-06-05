@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getAlerts, getRecentlyDelivered } from "@/lib/proposals";
 import { requireUser } from "@/lib/auth-guard";
-import { canSeeOrders, canSeeProposals, isAdmin, isExec, sectionAccess } from "@/lib/auth";
+import { canSeeOrders, canSeeProposals, isAdmin, isExec, sectionAccess, type CurrentUser } from "@/lib/auth";
 import { signOutAction } from "./login/actions";
 
 type Tile = { href: string; title: string; desc: string; tone: string; key: keyof ReturnType<typeof sectionAccess> };
@@ -26,23 +27,13 @@ const TILES: Tile[] = [
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  // Only the user check blocks the shell. The alerts / delivered queries
+  // run inside <Suspense> so the tile grid paints the moment auth resolves
+  // — perceived load time drops from "waiting on the slowest query" to
+  // "waiting on the cookie lookup".
   const user = await requireUser();
   const access = sectionAccess(user);
   const visibleTiles = TILES.filter((t) => access[t.key]);
-
-  const execScope = isExec(user) && !isAdmin(user) ? user.salesExecId ?? null : null;
-
-  const [alerts, recentlyDeliveredAll] = await Promise.all([
-    canSeeProposals(user) ? getAlerts(execScope) : Promise.resolve([] as Awaited<ReturnType<typeof getAlerts>>),
-    canSeeOrders(user) ? getRecentlyDelivered(20) : Promise.resolve([] as Awaited<ReturnType<typeof getRecentlyDelivered>>),
-  ]);
-
-  const recentlyDelivered = execScope
-    ? recentlyDeliveredAll.filter((d) => d.execName && user.name && d.execName === user.name).slice(0, 8)
-    : recentlyDeliveredAll.slice(0, 8);
-
-  const danger = alerts.filter((a) => a.severity === "danger");
-  const warn = alerts.filter((a) => a.severity === "warn");
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -80,6 +71,7 @@ export default async function Home() {
             <Link
               key={t.href}
               href={t.href}
+              prefetch={true}
               className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
             >
               <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${t.tone}`} />
@@ -90,74 +82,103 @@ export default async function Home() {
           ))}
         </div>
 
-        {recentlyDelivered.length > 0 && (
-          <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Just delivered (last 7 days)</h2>
-            <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
-              {recentlyDelivered.map((d) => (
-                <li key={d.proposalId}>
+        <Suspense fallback={<DashboardSkeleton />}>
+          <DashboardData user={user} />
+        </Suspense>
+      </main>
+    </div>
+  );
+}
+
+async function DashboardData({ user }: { user: CurrentUser }) {
+  const execScope = isExec(user) && !isAdmin(user) ? user.salesExecId ?? null : null;
+  const [alerts, recentlyDeliveredAll] = await Promise.all([
+    canSeeProposals(user) ? getAlerts(execScope) : Promise.resolve([] as Awaited<ReturnType<typeof getAlerts>>),
+    canSeeOrders(user) ? getRecentlyDelivered(20) : Promise.resolve([] as Awaited<ReturnType<typeof getRecentlyDelivered>>),
+  ]);
+  const recentlyDelivered = execScope
+    ? recentlyDeliveredAll.filter((d) => d.execName && user.name && d.execName === user.name).slice(0, 8)
+    : recentlyDeliveredAll.slice(0, 8);
+  const danger = alerts.filter((a) => a.severity === "danger");
+  const warn = alerts.filter((a) => a.severity === "warn");
+  return (
+    <>
+      {recentlyDelivered.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Just delivered (last 7 days)</h2>
+          <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+            {recentlyDelivered.map((d) => (
+              <li key={d.proposalId}>
+                <Link
+                  href={`/orders/${d.proposalId}`}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-emerald-50/40"
+                >
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200">
+                    Delivered
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium text-slate-900">{d.customerName}</span>
+                    <span className="text-slate-400"> · {d.model} {d.derivative}</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {new Date(d.deliveredAt).toLocaleDateString("en-GB")} · {d.execName ?? "—"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {alerts.length > 0 && (
+        <section className="mt-10">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Needs attention</h2>
+            <div className="text-xs text-slate-400">
+              {danger.length > 0 && <span className="mr-3 text-red-600">{danger.length} urgent</span>}
+              {warn.length > 0 && <span className="text-amber-600">{warn.length} warning</span>}
+            </div>
+          </div>
+          <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {alerts.slice(0, 20).map((a) => {
+              const tone =
+                a.severity === "danger"
+                  ? "bg-red-50 text-red-700 ring-red-200"
+                  : "bg-amber-50 text-amber-700 ring-amber-200";
+              return (
+                <li key={`${a.kind}-${a.proposalId}`}>
                   <Link
-                    href={`/orders/${d.proposalId}`}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-emerald-50/40"
+                    href={`/customers/${a.customerId}`}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50"
                   >
-                    <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200">
-                      Delivered
+                    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${tone}`}>
+                      {a.severity === "danger" ? "Urgent" : "Warn"}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="font-medium text-slate-900">{d.customerName}</span>
-                      <span className="text-slate-400"> · {d.model} {d.derivative}</span>
+                      <span className="font-medium text-slate-900">{a.customerName}</span>
+                      <span className="text-slate-400"> · {a.model} {a.derivative}</span>
+                      <div className="text-xs text-slate-600">{a.message}</div>
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      {new Date(d.deliveredAt).toLocaleDateString("en-GB")} · {d.execName ?? "—"}
-                    </span>
+                    <span className="text-[11px] text-slate-400">{a.execName ?? "—"}</span>
                   </Link>
                 </li>
-              ))}
-            </ul>
-          </section>
-        )}
+              );
+            })}
+          </ul>
+          {alerts.length > 20 && (
+            <div className="mt-2 text-right text-xs text-slate-400">+{alerts.length - 20} more</div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
 
-        {alerts.length > 0 && (
-          <section className="mt-10">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Needs attention</h2>
-              <div className="text-xs text-slate-400">
-                {danger.length > 0 && <span className="mr-3 text-red-600">{danger.length} urgent</span>}
-                {warn.length > 0 && <span className="text-amber-600">{warn.length} warning</span>}
-              </div>
-            </div>
-            <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              {alerts.slice(0, 20).map((a) => {
-                const tone =
-                  a.severity === "danger"
-                    ? "bg-red-50 text-red-700 ring-red-200"
-                    : "bg-amber-50 text-amber-700 ring-amber-200";
-                return (
-                  <li key={`${a.kind}-${a.proposalId}`}>
-                    <Link
-                      href={`/customers/${a.customerId}`}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50"
-                    >
-                      <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${tone}`}>
-                        {a.severity === "danger" ? "Urgent" : "Warn"}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="font-medium text-slate-900">{a.customerName}</span>
-                        <span className="text-slate-400"> · {a.model} {a.derivative}</span>
-                        <div className="text-xs text-slate-600">{a.message}</div>
-                      </span>
-                      <span className="text-[11px] text-slate-400">{a.execName ?? "—"}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            {alerts.length > 20 && (
-              <div className="mt-2 text-right text-xs text-slate-400">+{alerts.length - 20} more</div>
-            )}
-          </section>
-        )}
-      </main>
+function DashboardSkeleton() {
+  return (
+    <div className="mt-10 animate-pulse">
+      <div className="h-4 w-40 rounded bg-slate-200" />
+      <div className="mt-3 h-32 rounded-2xl bg-slate-100" />
     </div>
   );
 }

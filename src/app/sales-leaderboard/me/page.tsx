@@ -92,7 +92,7 @@ export default async function MyScorecardPage() {
       <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 text-white shadow-lg sm:p-6">
         <div className="flex flex-wrap items-center gap-4">
           {mine.photoUrl ? (
-            <Image src={mine.photoUrl} alt={mine.name} width={88} height={88} className="h-20 w-20 rounded-full object-cover ring-4 ring-white/20 sm:h-24 sm:w-24" unoptimized />
+            <Image src={mine.photoUrl} alt={mine.name} width={88} height={88} className="h-20 w-20 rounded-full object-cover ring-4 ring-white/20 sm:h-24 sm:w-24" />
           ) : (
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-700 text-2xl font-semibold ring-4 ring-white/20 sm:h-24 sm:w-24">
               {initials(mine.name)}
@@ -181,7 +181,7 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
       </div>
       <div className="mt-2 flex items-center gap-3">
         {target.target.photoUrl ? (
-          <Image src={target.target.photoUrl} alt={target.target.name} width={40} height={40} className="h-10 w-10 rounded-full object-cover" unoptimized />
+          <Image src={target.target.photoUrl} alt={target.target.name} width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
         ) : (
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500">
             {initials(target.target.name)}

@@ -192,7 +192,7 @@ function PersonChip({ name, photoUrl }: { name: string; photoUrl: string | null 
   return (
     <span className="flex items-center gap-1.5">
       {photoUrl ? (
-        <Image src={photoUrl} alt={name} width={20} height={20} className="h-5 w-5 rounded-full object-cover" unoptimized />
+        <Image src={photoUrl} alt={name} width={20} height={20} className="h-5 w-5 rounded-full object-cover" />
       ) : (
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-semibold text-slate-500">
           {name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}
@@ -303,7 +303,7 @@ function ParticipantRow({ exec }: { exec: AdminExec }) {
               width={48}
               height={48}
               className="h-12 w-12 rounded-full object-cover ring-2 ring-white"
-              unoptimized
+
             />
           ) : (
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500">
