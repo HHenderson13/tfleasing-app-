@@ -15,3 +15,8 @@ export const SALES_EXECS_TAG = "lookup-sales-execs";
 export const CUSTOMERS_TAG = "lookup-customers";
 export const GROUP_SITES_TAG = "lookup-group-sites";
 export const STAGE_CHECK_DEFS_TAG = "lookup-stage-check-defs";
+
+// Funders never mutate at runtime — they're seeded from settings.json and
+// stay constant for the lifetime of the deploy. Keeping the tag here for
+// symmetry; in practice nothing calls updateTag on it.
+export const FUNDERS_TAG = "lookup-funders";

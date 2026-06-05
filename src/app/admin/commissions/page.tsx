@@ -1,12 +1,13 @@
 import { db } from "@/db";
-import { funders, funderCommission } from "@/db/schema";
+import { funderCommission } from "@/db/schema";
 import { CommissionsGrid } from "./grid";
+import { cachedFundersOrdered } from "@/lib/funder-lookup";
 
 export const dynamic = "force-dynamic";
 
 export default async function CommissionsPage() {
   const [fs, cs] = await Promise.all([
-    db.select().from(funders).orderBy(funders.name),
+    cachedFundersOrdered(),
     db.select().from(funderCommission),
   ]);
   return (

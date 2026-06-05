@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { ratebook, vehicles, funders } from "@/db/schema";
+import { ratebook, vehicles } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { and, eq, sql } from "drizzle-orm";
+import { cachedFunders } from "@/lib/funder-lookup";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
     const vatMultiplier = contract === "PCH" ? 1.2 : 1;
 
     const [allFunders, rows, irmOptions] = await Promise.all([
-      db.select().from(funders),
+      cachedFunders(),
       db
         .select({
           funderId: ratebook.funderId,

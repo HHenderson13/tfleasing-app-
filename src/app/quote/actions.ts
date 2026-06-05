@@ -2,9 +2,10 @@
 import { getQuote, listDerivatives, listModels, type QuoteInput, type QuoteResult } from "@/lib/quote";
 import { createProposal, type CreateProposalInput } from "@/lib/proposals";
 import { db } from "@/db";
-import { funders, groupSites, salesExecs } from "@/db/schema";
+import { groupSites, salesExecs } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { cachedFundersOrdered } from "@/lib/funder-lookup";
 
 export async function getModelsAction() {
   return listModels();
@@ -23,7 +24,7 @@ export async function listSalesExecsAction() {
 }
 
 export async function listFundersAction() {
-  const rows = await db.select().from(funders).orderBy(asc(funders.name));
+  const rows = await cachedFundersOrdered();
   return rows.map((r) => ({ id: r.id, name: r.name }));
 }
 

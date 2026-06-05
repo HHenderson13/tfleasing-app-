@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { and, eq, sql } from "drizzle-orm";
-import { ratebook, vehicles, modelDiscounts, funders, funderCommission } from "@/db/schema";
+import { ratebook, vehicles, modelDiscounts, funderCommission } from "@/db/schema";
+import { cachedFunders } from "./funder-lookup";
 import { defaultDiscountKey } from "./discount-map";
 
 export type Contract = "PCH" | "BCH";
@@ -101,7 +102,7 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
     ? md.customerSavingGbp / vehicle.listPriceNet
     : 0;
 
-  const allFunders = await db.select().from(funders);
+  const allFunders = await cachedFunders();
   const results: FunderQuote[] = [];
   const missing: MissingFunder[] = [];
 

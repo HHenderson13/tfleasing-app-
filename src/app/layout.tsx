@@ -4,14 +4,22 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
+// Only ship the weights the codebase actually uses (audited with grep for
+// font-{bold,extrabold,medium,semibold}) plus 400 for body text — every
+// extra weight is a separate WOFF2 download.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
+// Mono is used sparingly — chips, code-like tokens. 400 + 600 covers it.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  weight: ["400", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

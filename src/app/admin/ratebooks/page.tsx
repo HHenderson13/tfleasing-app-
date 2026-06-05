@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { funders, ratebookRemoteSettings, ratebookUploads } from "@/db/schema";
+import { ratebookRemoteSettings, ratebookUploads } from "@/db/schema";
 import { ensureRatebookRemoteSettingsTable } from "@/lib/ratebook-remote";
 import { desc, eq, sql } from "drizzle-orm";
 import { UploadForm } from "./upload-form";
+import { cachedFundersOrdered } from "@/lib/funder-lookup";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export default async function RatebooksPage() {
   // Four independent reads — was sequential, ~4× Turso round-trip latency.
   // Parallel cuts it to a single round-trip's worth (Turso pipelines them).
   const [fs, summary, recent, remoteRows] = await Promise.all([
-    db.select().from(funders).orderBy(funders.name),
+    cachedFundersOrdered(),
     db.all<{ funder_id: string; is_maintained: number; rows: number }>(sql`
       SELECT funder_id, is_maintained, COUNT(*) as rows FROM ratebook GROUP BY funder_id, is_maintained
     `),

@@ -177,8 +177,14 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     alt={champion.name}
                     width={160}
                     height={160}
+                    // priority + fetchPriority hint to the browser that this
+                    // is the LCP element. sizes tells Next/Image to render
+                    // the right resolution for each breakpoint instead of
+                    // sending the largest variant to everyone.
+                    priority
+                    fetchPriority="high"
+                    sizes="(max-width: 640px) 112px, 144px"
                     className="h-28 w-28 rounded-full object-cover ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36"
-
                   />
                 ) : (
                   <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/20 text-3xl font-bold ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36 sm:text-4xl">
