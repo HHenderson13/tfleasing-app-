@@ -9,7 +9,9 @@ import {
   salesLeaderboardUploads,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { LEADERBOARD_CACHE_TAG } from "@/lib/sales-leaderboard-data";
+
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
@@ -25,6 +27,19 @@ import {
 
 type ReportType = "orders" | "delivered" | "enquiry";
 const REPORT_TYPES: ReportType[] = ["orders", "delivered", "enquiry"];
+
+// Single helper — every admin mutation invalidates both the cross-request
+// cache tag (so loadMonthSnapshot/Ytd/Archive/Dashboard rebuild on the next
+// read) and the per-path render caches.
+function invalidateLeaderboard() {
+  // Next 16's updateTag is the server-action-friendly cache-bust — it
+  // signals read-your-own-writes so the next read on the same request
+  // sees fresh data, not the previous cached value.
+  updateTag(LEADERBOARD_CACHE_TAG);
+  revalidatePath("/sales-leaderboard");
+  revalidatePath("/sales-leaderboard/admin");
+  revalidatePath("/sales-leaderboard/me");
+}
 
 // ─── Participants ──────────────────────────────────────────────────────────
 
@@ -48,8 +63,7 @@ export async function setParticipantAction(input: { salesExecId: string; active:
   // A new participant joining (or an old one being switched off) changes
   // attribution — re-process every month we have stored uploads for.
   await reattributeAllStoredMonths();
-  revalidatePath("/sales-leaderboard/admin");
-  revalidatePath("/sales-leaderboard");
+  invalidateLeaderboard();
   return { ok: true as const };
 }
 
@@ -78,8 +92,7 @@ export async function setPhotoUrlAction(input: { salesExecId: string; photoUrl: 
       target: salesLeaderboardParticipants.salesExecId,
       set: { photoUrl: parsed.data.photoUrl },
     });
-  revalidatePath("/sales-leaderboard/admin");
-  revalidatePath("/sales-leaderboard");
+  invalidateLeaderboard();
   return { ok: true as const };
 }
 
@@ -105,8 +118,7 @@ export async function setNameMappingAction(input: { reportCode: string; salesExe
   // stats catch up to the new mapping. Without this, an upload that landed
   // before the map was set would stay zeroed out.
   await reattributeAllStoredMonths();
-  revalidatePath("/sales-leaderboard/admin");
-  revalidatePath("/sales-leaderboard");
+  invalidateLeaderboard();
   return { ok: true as const };
 }
 
@@ -115,8 +127,7 @@ export async function removeNameMappingAction(reportCode: string) {
   if (!reportCode || typeof reportCode !== "string") return { ok: false as const, error: "Missing reportCode" };
   await db.delete(salesLeaderboardNameMap).where(eq(salesLeaderboardNameMap.reportCode, reportCode));
   await reattributeAllStoredMonths();
-  revalidatePath("/sales-leaderboard/admin");
-  revalidatePath("/sales-leaderboard");
+  invalidateLeaderboard();
   return { ok: true as const };
 }
 
@@ -168,8 +179,7 @@ export async function uploadReportAction(formData: FormData): Promise<UploadResu
 
     const attribution = await attributeUpload(parsed.data.yearMonth, parsed.data.reportType, parsedRows.rows, now);
 
-    revalidatePath("/sales-leaderboard");
-    revalidatePath("/sales-leaderboard/admin");
+  invalidateLeaderboard();
 
     return {
       ok: true,
@@ -191,8 +201,7 @@ export async function uploadReportAction(formData: FormData): Promise<UploadResu
 export async function reattributeAction() {
   await requireAdmin();
   const count = await reattributeAllStoredMonths();
-  revalidatePath("/sales-leaderboard");
-  revalidatePath("/sales-leaderboard/admin");
+  invalidateLeaderboard();
   return { ok: true as const, processed: count };
 }
 

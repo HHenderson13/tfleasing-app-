@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import {
   salesExecs,
@@ -13,6 +14,12 @@ import {
   currentYearMonth,
   type ExecMonthStats,
 } from "./sales-leaderboard";
+
+// Single tag that admin actions revalidate when leaderboard data changes —
+// uploads, participants, name map, photos. Exported so the action layer
+// uses the same constant and there's no string typo risk.
+export const LEADERBOARD_CACHE_TAG = "sales-leaderboard";
+const ONE_HOUR = 3600;
 
 // Months from January of the same year up to (and including) yearMonth, in
 // chronological order. Used to roll the monthly rows into YTD.
@@ -86,42 +93,51 @@ export interface LeaderboardSnapshot {
 // Load a single month, applying scoring across the active participants.
 // Missing participants get a zeroed row (they still show on the leaderboard
 // — just with no points until they appear in a report).
-export async function loadMonthSnapshot(yearMonth: string): Promise<LeaderboardSnapshot> {
-  const participants = await loadParticipants();
-  const monthly = await db
-    .select()
-    .from(salesLeaderboardMonthly)
-    .where(eq(salesLeaderboardMonthly.yearMonth, yearMonth));
-  const byExec = new Map(monthly.map((m) => [m.salesExecId, m]));
-  const rows = participants.map((p) => {
-    const base = emptyStats(p);
-    const m = byExec.get(p.salesExecId);
-    if (!m) return base;
-    base.orderCount = m.orderCount ?? 0;
-    base.deliveryCount = m.deliveryCount ?? 0;
-    base.insuranceCount = m.insuranceCount ?? 0;
-    base.enquiryCount = m.enquiryCount ?? 0;
-    base.salesCount = m.salesCount ?? 0;
-    base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
-    base.latestVehicle = m.latestVehicle ?? null;
-    return base;
-  });
-  applyPoints(rows);
-  rows.sort((a, b) => b.totalPoints - a.totalPoints || b.orderCount - a.orderCount);
-  return {
-    yearMonth,
-    view: "month",
-    rows,
-    hasAnyData: monthly.length > 0,
-  };
-}
+//
+// Wrapped in unstable_cache + LEADERBOARD_CACHE_TAG so repeat page views
+// skip the DB entirely. Admin actions (upload, name map, participants,
+// photo) revalidate the tag on every write.
+export const loadMonthSnapshot = unstable_cache(
+  async (yearMonth: string): Promise<LeaderboardSnapshot> => {
+    const participants = await loadParticipants();
+    const monthly = await db
+      .select()
+      .from(salesLeaderboardMonthly)
+      .where(eq(salesLeaderboardMonthly.yearMonth, yearMonth));
+    const byExec = new Map(monthly.map((m) => [m.salesExecId, m]));
+    const rows = participants.map((p) => {
+      const base = emptyStats(p);
+      const m = byExec.get(p.salesExecId);
+      if (!m) return base;
+      base.orderCount = m.orderCount ?? 0;
+      base.deliveryCount = m.deliveryCount ?? 0;
+      base.insuranceCount = m.insuranceCount ?? 0;
+      base.enquiryCount = m.enquiryCount ?? 0;
+      base.salesCount = m.salesCount ?? 0;
+      base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
+      base.latestVehicle = m.latestVehicle ?? null;
+      return base;
+    });
+    applyPoints(rows);
+    rows.sort((a, b) => b.totalPoints - a.totalPoints || b.orderCount - a.orderCount);
+    return {
+      yearMonth,
+      view: "month",
+      rows,
+      hasAnyData: monthly.length > 0,
+    };
+  },
+  ["sales-leaderboard-month"],
+  { tags: [LEADERBOARD_CACHE_TAG], revalidate: ONE_HOUR },
+);
 
 // YTD across the calendar year of `upToYearMonth`. We sum the per-month
 // counts (orders, deliveries, insurance, enquiries, sales) and recompute
 // conversion from the YTD enquiry/sales totals — points are awarded against
-// the YTD aggregates.
-export async function loadYtdSnapshot(upToYearMonth: string): Promise<LeaderboardSnapshot> {
-  const participants = await loadParticipants();
+// the YTD aggregates. Cached with the leaderboard tag.
+export const loadYtdSnapshot = unstable_cache(
+  async (upToYearMonth: string): Promise<LeaderboardSnapshot> => {
+    const participants = await loadParticipants();
   const months = ytdMonths(upToYearMonth);
   if (months.length === 0) {
     return { yearMonth: upToYearMonth, view: "ytd", rows: [], hasAnyData: false };
@@ -177,7 +193,10 @@ export async function loadYtdSnapshot(upToYearMonth: string): Promise<Leaderboar
     rows,
     hasAnyData: filtered.length > 0,
   };
-}
+  },
+  ["sales-leaderboard-ytd"],
+  { tags: [LEADERBOARD_CACHE_TAG], revalidate: ONE_HOUR },
+);
 
 // ─── Department dashboard ──────────────────────────────────────────────────
 //
@@ -251,7 +270,8 @@ function trailingMonths(yearMonth: string, count: number): string[] {
   return out;
 }
 
-export async function loadDeptDashboard(yearMonth: string): Promise<DeptDashboard> {
+export const loadDeptDashboard = unstable_cache(
+  async (yearMonth: string): Promise<DeptDashboard> => {
   const [current, previous] = await Promise.all([
     loadMonthSnapshot(yearMonth),
     loadMonthSnapshot(prevYearMonth(yearMonth)),
@@ -327,7 +347,10 @@ export async function loadDeptDashboard(yearMonth: string): Promise<DeptDashboar
   });
 
   return { yearMonth, kpis, coachingFocus, trend };
-}
+  },
+  ["sales-leaderboard-dept-dashboard"],
+  { tags: [LEADERBOARD_CACHE_TAG], revalidate: ONE_HOUR },
+);
 
 // ─── Champion archive ──────────────────────────────────────────────────────
 //
@@ -340,7 +363,8 @@ export interface ChampionEntry {
   champion: { salesExecId: string; name: string; photoUrl: string | null; points: number } | null;
 }
 
-export async function loadChampionArchive(upToYearMonth: string, count = 6): Promise<ChampionEntry[]> {
+export const loadChampionArchive = unstable_cache(
+  async (upToYearMonth: string, count = 6): Promise<ChampionEntry[]> => {
   const months = trailingMonths(upToYearMonth, count);
   if (months.length === 0) return [];
   // ONE participants query + ONE monthly query for all 6 months. Previously
@@ -388,7 +412,10 @@ export async function loadChampionArchive(upToYearMonth: string, count = 6): Pro
     }
     return { yearMonth: ym, champion: null };
   });
-}
+  },
+  ["sales-leaderboard-champion-archive"],
+  { tags: [LEADERBOARD_CACHE_TAG], revalidate: ONE_HOUR },
+);
 
 // Convenience entry point used by /sales-leaderboard. Picks current month
 // when no month is supplied and routes to the right loader.

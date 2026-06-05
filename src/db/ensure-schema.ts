@@ -52,6 +52,26 @@ async function runEnsureAppSchema() {
   await ensureSalesLeaderboardTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
+  await ensureHotPathIndexes();
+}
+
+// Indexes for the hottest WHERE / ORDER BY clauses on the request path.
+// Idempotent — IF NOT EXISTS means re-running is a no-op.
+//
+// Why each one:
+//   • proposals.delivered_detected_at — getRecentlyDelivered filters on
+//     this with a 7-day cutoff. Without an index it scans every row.
+//   • proposals.updated_at DESC      — listProposals orders by this; an
+//     index lets SQLite skip the sort entirely.
+//   • sessions.expires_at            — cookie lookups join on id, but
+//     pruning expired sessions reads this regularly.
+//   • users.sales_exec_id            — getCurrentUser → user record lookup
+//     also resolves the exec link; indexed lookups stay O(log n).
+async function ensureHotPathIndexes() {
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_proposals_delivered_detected_at ON proposals(delivered_detected_at)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_proposals_updated_at ON proposals(updated_at DESC)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_users_sales_exec_id ON users(sales_exec_id)`));
 }
 
 // Auto-creates the scraper tables on first request so deploys don't need a
