@@ -11,10 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const data = await getCustomerTimeline(id);
+  // Three independent queries in parallel — was sequential round-trips.
+  const [data, declinedCount, execs] = await Promise.all([
+    getCustomerTimeline(id),
+    countDeclinedForCustomer(id),
+    db.select().from(salesExecs).orderBy(asc(salesExecs.name)),
+  ]);
   if (!data) notFound();
-  const declinedCount = await countDeclinedForCustomer(id);
-  const execs = await db.select().from(salesExecs).orderBy(asc(salesExecs.name));
 
   return (
     <div className="min-h-screen bg-slate-50">

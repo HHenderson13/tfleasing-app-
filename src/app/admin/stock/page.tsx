@@ -8,13 +8,18 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export default async function StockUploadPage() {
-  const [latest] = await db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1);
-  const countRow = await db.select({ n: sql<number>`count(*)` }).from(stockVehicles);
-  const bySheet = await db
-    .select({ sheet: stockVehicles.sourceSheet, n: sql<number>`count(*)` })
-    .from(stockVehicles)
-    .groupBy(stockVehicles.sourceSheet);
-  const [settings] = await db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1);
+  // Four independent reads in parallel — was sequential.
+  const [latestRows, countRow, bySheet, settingsRows] = await Promise.all([
+    db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
+    db.select({ n: sql<number>`count(*)` }).from(stockVehicles),
+    db
+      .select({ sheet: stockVehicles.sourceSheet, n: sql<number>`count(*)` })
+      .from(stockVehicles)
+      .groupBy(stockVehicles.sourceSheet),
+    db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1),
+  ]);
+  const [latest] = latestRows;
+  const [settings] = settingsRows;
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">Stock upload</h1>

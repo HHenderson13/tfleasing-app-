@@ -11,12 +11,17 @@ export const dynamic = "force-dynamic";
 export default async function WcAdminPage() {
   const user = await requireWcAdmin();
 
-  const [fixtures, results, allUsers, paid, feedRows] = await Promise.all([
+  // Six independent queries in parallel — the totalPoints aggregate used
+  // to run sequentially AFTER the others, blocking render needlessly.
+  const [fixtures, results, allUsers, paid, feedRows, totalPointsRow] = await Promise.all([
     db.select().from(wcFixtures).orderBy(wcFixtures.kickoffAt, wcFixtures.fixtureNumber),
     db.select().from(wcResults),
     db.select({ id: users.id, name: users.name, email: users.email, roles: users.roles }).from(users).orderBy(users.name),
     db.select({ userId: wcPayments.userId }).from(wcPayments),
     db.select().from(wcLiveScores),
+    db.all<{ total: number }>(sql`
+      SELECT COALESCE(SUM(points), 0) AS total FROM wc_predictions
+    `),
   ]);
   const paidSet = new Set(paid.map((p) => p.userId));
   // ESPN-feed snapshot per fixture — used to hint the admin on knockouts that
@@ -77,11 +82,8 @@ export default async function WcAdminPage() {
   const settledCount = results.length;
   const playerCount = usersWithLevel.filter((u) => u.level !== "none").length;
 
-  // Cheap aggregate of total points distributed — helps admin verify the
-  // scoring engine is wired up correctly.
-  const totalPointsRow = await db.all<{ total: number }>(sql`
-    SELECT COALESCE(SUM(points), 0) AS total FROM wc_predictions
-  `);
+  // Total points distributed — aggregate ran in the parallel batch above so
+  // we just read it here. Helps admin verify scoring is wired up correctly.
   const totalPoints = Number(totalPointsRow[0]?.total ?? 0);
 
   return (

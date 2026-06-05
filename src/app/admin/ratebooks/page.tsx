@@ -10,12 +10,17 @@ export const maxDuration = 300;
 
 export default async function RatebooksPage() {
   await ensureRatebookRemoteSettingsTable();
-  const fs = await db.select().from(funders).orderBy(funders.name);
-  const summary = await db.all<{ funder_id: string; is_maintained: number; rows: number }>(sql`
-    SELECT funder_id, is_maintained, COUNT(*) as rows FROM ratebook GROUP BY funder_id, is_maintained
-  `);
-  const recent = await db.select().from(ratebookUploads).orderBy(desc(ratebookUploads.uploadedAt)).limit(20);
-  const [remote] = await db.select().from(ratebookRemoteSettings).where(eq(ratebookRemoteSettings.id, "default")).limit(1);
+  // Four independent reads — was sequential, ~4× Turso round-trip latency.
+  // Parallel cuts it to a single round-trip's worth (Turso pipelines them).
+  const [fs, summary, recent, remoteRows] = await Promise.all([
+    db.select().from(funders).orderBy(funders.name),
+    db.all<{ funder_id: string; is_maintained: number; rows: number }>(sql`
+      SELECT funder_id, is_maintained, COUNT(*) as rows FROM ratebook GROUP BY funder_id, is_maintained
+    `),
+    db.select().from(ratebookUploads).orderBy(desc(ratebookUploads.uploadedAt)).limit(20),
+    db.select().from(ratebookRemoteSettings).where(eq(ratebookRemoteSettings.id, "default")).limit(1),
+  ]);
+  const [remote] = remoteRows;
 
   const byKey = new Map(summary.map((s) => [`${s.funder_id}|${s.is_maintained}`, s.rows]));
 

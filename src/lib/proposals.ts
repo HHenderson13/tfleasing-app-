@@ -1,10 +1,19 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "@/db";
 import { customers, groupSites, proposalEvents, proposalStageChecks, proposals, salesExecs, stageCheckDefs } from "@/db/schema";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { ORDER_STATUSES, PROPOSAL_SECTION_STATUSES, type ProposalStatus } from "./proposal-constants";
 import { sendStatusChangeEmail } from "./email";
+
+// Request-scoped caches for the small lookup tables. Several loaders on a
+// single page (e.g. /, /proposals) all need salesExecs + customers; without
+// these caches the same SELECT runs 3-4× per render.
+const cachedSalesExecs = cache(() => db.select().from(salesExecs));
+const cachedCustomers = cache(() => db.select().from(customers));
+const cachedGroupSites = cache(() => db.select().from(groupSites));
+const cachedStageCheckDefs = cache(() => db.select().from(stageCheckDefs));
 
 export interface CreateProposalInput {
   customerName: string;
@@ -301,40 +310,56 @@ export async function countDeclinedForCustomer(customerId: string) {
 }
 
 export async function getCustomerTimeline(customerId: string) {
-  const [customer] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+  // Parallel: customer + proposals + lookup tables. Was sequential — five
+  // round-trips reduced to one batched fan-out. Plus the events fetch
+  // below used to be N+1 (one query per proposal); now a single inArray.
+  const [customerRows, ps, execs, sites] = await Promise.all([
+    db.select().from(customers).where(eq(customers.id, customerId)).limit(1),
+    db.select().from(proposals).where(eq(proposals.customerId, customerId)).orderBy(asc(proposals.createdAt)),
+    cachedSalesExecs(),
+    cachedGroupSites(),
+  ]);
+  const customer = customerRows[0];
   if (!customer) return null;
-  const ps = await db.select().from(proposals).where(eq(proposals.customerId, customerId)).orderBy(asc(proposals.createdAt));
-  const execs = await db.select().from(salesExecs);
-  const sites = await db.select().from(groupSites);
   const execMap = new Map(execs.map((e) => [e.id, e]));
   const siteMap = new Map(sites.map((s) => [s.id, s]));
-  const withEvents = await Promise.all(
-    ps.map(async (p) => {
-      const events = await db.select().from(proposalEvents).where(eq(proposalEvents.proposalId, p.id)).orderBy(asc(proposalEvents.createdAt));
-      return {
-        proposal: p,
-        exec: p.salesExecId ? execMap.get(p.salesExecId) ?? null : null,
-        groupSite: p.groupSiteId ? siteMap.get(p.groupSiteId) ?? null : null,
-        events,
-      };
-    })
-  );
+
+  const proposalIds = ps.map((p) => p.id);
+  const allEvents = proposalIds.length > 0
+    ? await db.select().from(proposalEvents).where(inArray(proposalEvents.proposalId, proposalIds)).orderBy(asc(proposalEvents.createdAt))
+    : [];
+  const eventsByProposal = new Map<string, typeof allEvents>();
+  for (const ev of allEvents) {
+    const arr = eventsByProposal.get(ev.proposalId) ?? [];
+    arr.push(ev);
+    eventsByProposal.set(ev.proposalId, arr);
+  }
+  const withEvents = ps.map((p) => ({
+    proposal: p,
+    exec: p.salesExecId ? execMap.get(p.salesExecId) ?? null : null,
+    groupSite: p.groupSiteId ? siteMap.get(p.groupSiteId) ?? null : null,
+    events: eventsByProposal.get(p.id) ?? [],
+  }));
   return { customer, items: withEvents };
 }
 
 export type Section = "proposals" | "orders";
 export async function listProposals(section?: Section) {
+  // Two waves: proposals first (so the ticks query can use their IDs), then
+  // four lookups + ticks in parallel. Was six sequential round-trips → two.
   const statuses = section === "orders" ? ORDER_STATUSES : section === "proposals" ? PROPOSAL_SECTION_STATUSES : null;
   const ps = statuses
     ? await db.select().from(proposals).where(inArray(proposals.status, statuses)).orderBy(desc(proposals.updatedAt))
     : await db.select().from(proposals).orderBy(desc(proposals.updatedAt));
-  const execs = await db.select().from(salesExecs);
-  const custs = await db.select().from(customers);
-  const sites = await db.select().from(groupSites);
-  const defs = await db.select().from(stageCheckDefs);
-  const ticks = ps.length
-    ? await db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, ps.map((p) => p.id)))
-    : [];
+  const [execs, custs, sites, defs, ticks] = await Promise.all([
+    cachedSalesExecs(),
+    cachedCustomers(),
+    cachedGroupSites(),
+    cachedStageCheckDefs(),
+    ps.length
+      ? db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, ps.map((p) => p.id)))
+      : [],
+  ]);
   const execMap = new Map(execs.map((e) => [e.id, e]));
   const custMap = new Map(custs.map((c) => [c.id, c]));
   const siteMap = new Map(sites.map((s) => [s.id, s]));
@@ -385,9 +410,14 @@ export interface Alert {
 }
 
 export async function getAlerts(execIdFilter: string | null = null): Promise<Alert[]> {
-  const ps = await db.select().from(proposals);
-  const execs = await db.select().from(salesExecs);
-  const custs = await db.select().from(customers);
+  // Three independent reads — execs/customers shared via React cache so a
+  // page that calls both getAlerts and getRecentlyDelivered (the home page)
+  // only fetches each lookup table once.
+  const [ps, execs, custs] = await Promise.all([
+    db.select().from(proposals),
+    cachedSalesExecs(),
+    cachedCustomers(),
+  ]);
   const execMap = new Map(execs.map((e) => [e.id, e]));
   const custMap = new Map(custs.map((c) => [c.id, c]));
   const now = Date.now();
@@ -447,13 +477,21 @@ export async function getAlerts(execIdFilter: string | null = null): Promise<Ale
 
 export async function getRecentlyDelivered(limit = 10) {
   const cutoff = new Date(Date.now() - 7 * 86_400_000);
-  const ps = await db.select().from(proposals);
-  const custs = await db.select().from(customers);
-  const execs = await db.select().from(salesExecs);
+  // Was three sequential SELECTs + scanning every proposal in JS. Now the
+  // proposals scan filters to delivered-in-cutoff in SQL, and the lookup
+  // tables run in parallel.
+  // Push the cutoff into SQL — was scanning every proposal in JS, now
+  // the DB only returns recently-delivered rows. NULL `deliveredDetectedAt`
+  // values don't satisfy the predicate so they're filtered out for free.
+  const [ps, custs, execs] = await Promise.all([
+    db.select().from(proposals).where(gte(proposals.deliveredDetectedAt, cutoff)),
+    cachedCustomers(),
+    cachedSalesExecs(),
+  ]);
   const custMap = new Map(custs.map((c) => [c.id, c]));
   const execMap = new Map(execs.map((e) => [e.id, e]));
+  // Predicate already applied in SQL — just sort + limit here.
   return ps
-    .filter((p) => p.deliveredDetectedAt && p.deliveredDetectedAt >= cutoff)
     .sort((a, b) => (b.deliveredDetectedAt!.getTime()) - (a.deliveredDetectedAt!.getTime()))
     .slice(0, limit)
     .map((p) => ({
@@ -468,18 +506,26 @@ export async function getRecentlyDelivered(limit = 10) {
 }
 
 export async function getProposalWithContext(proposalId: string) {
+  // Two waves: proposal lookup, then everything that depends on it in
+  // parallel (six round-trips collapsed into one). Was seven sequential
+  // queries, ~7× the latency for the order detail page.
   const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
   if (!p) return null;
-  const [cust] = await db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1);
-  const [exec] = p.salesExecId
-    ? await db.select().from(salesExecs).where(eq(salesExecs.id, p.salesExecId)).limit(1)
-    : [undefined];
-  const [site] = p.groupSiteId
-    ? await db.select().from(groupSites).where(eq(groupSites.id, p.groupSiteId)).limit(1)
-    : [undefined];
-  const events = await db.select().from(proposalEvents).where(eq(proposalEvents.proposalId, p.id)).orderBy(asc(proposalEvents.createdAt));
-  const defs = await db.select().from(stageCheckDefs).orderBy(asc(stageCheckDefs.sortOrder), asc(stageCheckDefs.label));
-  const ticks = await db.select().from(proposalStageChecks).where(eq(proposalStageChecks.proposalId, p.id));
+  const [custRows, execRows, siteRows, events, defs, ticks] = await Promise.all([
+    db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1),
+    p.salesExecId
+      ? db.select().from(salesExecs).where(eq(salesExecs.id, p.salesExecId)).limit(1)
+      : Promise.resolve([]),
+    p.groupSiteId
+      ? db.select().from(groupSites).where(eq(groupSites.id, p.groupSiteId)).limit(1)
+      : Promise.resolve([]),
+    db.select().from(proposalEvents).where(eq(proposalEvents.proposalId, p.id)).orderBy(asc(proposalEvents.createdAt)),
+    db.select().from(stageCheckDefs).orderBy(asc(stageCheckDefs.sortOrder), asc(stageCheckDefs.label)),
+    db.select().from(proposalStageChecks).where(eq(proposalStageChecks.proposalId, p.id)),
+  ]);
+  const cust = custRows[0];
+  const exec = execRows[0];
+  const site = siteRows[0];
   const tickedIds = new Set(ticks.map((t) => t.checkId));
   const customChecks = defs
     .filter((d) => d.stage === "order" && (p.isGroupBq ? d.appliesToBq : true))

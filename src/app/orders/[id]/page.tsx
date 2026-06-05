@@ -12,10 +12,13 @@ export const dynamic = "force-dynamic";
 
 export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const ctx = await getProposalWithContext(id);
+  // Both queries are independent — fetch in parallel instead of sequentially.
+  const [ctx, execs] = await Promise.all([
+    getProposalWithContext(id),
+    db.select().from(salesExecs).orderBy(asc(salesExecs.name)),
+  ]);
   if (!ctx) notFound();
   const p = ctx.proposal;
-  const execs = await db.select().from(salesExecs).orderBy(asc(salesExecs.name));
 
   return (
     <div className="min-h-screen bg-slate-50">
