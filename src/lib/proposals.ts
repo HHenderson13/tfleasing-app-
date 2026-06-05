@@ -1,19 +1,41 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_cache, updateTag } from "next/cache";
 import { db } from "@/db";
 import { customers, groupSites, proposalEvents, proposalStageChecks, proposals, salesExecs, stageCheckDefs } from "@/db/schema";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { ORDER_STATUSES, PROPOSAL_SECTION_STATUSES, type ProposalStatus } from "./proposal-constants";
 import { sendStatusChangeEmail } from "./email";
+import {
+  CUSTOMERS_TAG,
+  GROUP_SITES_TAG,
+  SALES_EXECS_TAG,
+  STAGE_CHECK_DEFS_TAG,
+} from "./cache-tags";
 
-// Request-scoped caches for the small lookup tables. Several loaders on a
-// single page (e.g. /, /proposals) all need salesExecs + customers; without
-// these caches the same SELECT runs 3-4× per render.
-const cachedSalesExecs = cache(() => db.select().from(salesExecs));
-const cachedCustomers = cache(() => db.select().from(customers));
-const cachedGroupSites = cache(() => db.select().from(groupSites));
-const cachedStageCheckDefs = cache(() => db.select().from(stageCheckDefs));
+// Two-tier cache for the small lookup tables every page reads.
+//
+//   • outer: unstable_cache survives across requests until the tag is
+//     invalidated. Cuts a Turso round-trip off every authenticated page
+//     load — these lookups happen 5-7× per render across most pages.
+//   • inner: React cache() still dedupes within a single render so we
+//     don't re-deserialise the cached payload N times.
+//
+// Invalidation happens in the admin actions that mutate each table — see
+// updateTag calls in src/app/admin/{sales-execs,users,group-sites,
+// order-checks}/actions.ts.
+const ONE_DAY = 86_400;
+
+const fetchSalesExecs       = unstable_cache(async () => db.select().from(salesExecs),       ["lookup-sales-execs"],       { tags: [SALES_EXECS_TAG],       revalidate: ONE_DAY });
+const fetchCustomers        = unstable_cache(async () => db.select().from(customers),        ["lookup-customers"],         { tags: [CUSTOMERS_TAG],         revalidate: ONE_DAY });
+const fetchGroupSites       = unstable_cache(async () => db.select().from(groupSites),       ["lookup-group-sites"],       { tags: [GROUP_SITES_TAG],       revalidate: ONE_DAY });
+const fetchStageCheckDefs   = unstable_cache(async () => db.select().from(stageCheckDefs),   ["lookup-stage-check-defs"],  { tags: [STAGE_CHECK_DEFS_TAG],  revalidate: ONE_DAY });
+
+const cachedSalesExecs      = cache(() => fetchSalesExecs());
+const cachedCustomers       = cache(() => fetchCustomers());
+const cachedGroupSites      = cache(() => fetchGroupSites());
+const cachedStageCheckDefs  = cache(() => fetchStageCheckDefs());
 
 export interface CreateProposalInput {
   customerName: string;
@@ -72,6 +94,9 @@ export async function createProposal(input: CreateProposalInput) {
     if (!name) throw new Error("Customer name required");
     customerId = randomUUID();
     await db.insert(customers).values({ id: customerId, name, createdAt: new Date() });
+    // New customer — bust the cross-request customers lookup tag so all
+    // pages that read it see the fresh row immediately.
+    updateTag(CUSTOMERS_TAG);
   }
 
   const id = randomUUID();

@@ -6,3 +6,12 @@
 // so the next read sees fresh data without waiting for the revalidate TTL.
 
 export const RATEBOOK_CACHE_TAG = "ratebook-aggregates";
+
+// Lookup tables read by almost every page. Mutated only via admin pages.
+// We cache them cross-request — the per-request React cache() saves
+// duplicate reads inside a render, but only this tag survives across
+// the whole app.
+export const SALES_EXECS_TAG = "lookup-sales-execs";
+export const CUSTOMERS_TAG = "lookup-customers";
+export const GROUP_SITES_TAG = "lookup-group-sites";
+export const STAGE_CHECK_DEFS_TAG = "lookup-stage-check-defs";

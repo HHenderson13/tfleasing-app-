@@ -2,17 +2,25 @@
 import { db } from "@/db";
 import { groupSites } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { randomUUID } from "node:crypto";
+import { GROUP_SITES_TAG } from "@/lib/cache-tags";
 
 export type SiteKind = "car" | "cv";
+
+// Bust both the page render cache and the cross-request groupSites tag so
+// proposals / orders / customer pages see new sites without waiting on TTL.
+function invalidate() {
+  updateTag(GROUP_SITES_TAG);
+  revalidatePath("/admin/group-sites");
+}
 
 export async function createGroupSite(input: { name: string; kind: SiteKind }) {
   const name = input.name.trim();
   if (!name) return { ok: false as const, error: "Name is required." };
   const kind: SiteKind = input.kind === "cv" ? "cv" : "car";
   await db.insert(groupSites).values({ id: randomUUID(), name, kind, createdAt: new Date() });
-  revalidatePath("/admin/group-sites");
+  invalidate();
   return { ok: true as const };
 }
 
@@ -22,10 +30,10 @@ export async function updateGroupSite(id: string, patch: Partial<{ name: string;
   if (patch.kind === "car" || patch.kind === "cv") clean.kind = patch.kind;
   if (!Object.keys(clean).length) return;
   await db.update(groupSites).set(clean).where(eq(groupSites.id, id));
-  revalidatePath("/admin/group-sites");
+  invalidate();
 }
 
 export async function deleteGroupSite(id: string) {
   await db.delete(groupSites).where(eq(groupSites.id, id));
-  revalidatePath("/admin/group-sites");
+  invalidate();
 }

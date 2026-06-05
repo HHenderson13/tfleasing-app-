@@ -2,8 +2,17 @@
 import { db } from "@/db";
 import { salesExecs } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { randomUUID } from "node:crypto";
+import { SALES_EXECS_TAG } from "@/lib/cache-tags";
+
+// Centralised invalidation — every mutation here busts both the page
+// render cache and the cross-request salesExecs lookup tag so /orders,
+// /proposals, /reports etc. immediately see the new exec list.
+function invalidate() {
+  updateTag(SALES_EXECS_TAG);
+  revalidatePath("/admin/sales-execs");
+}
 
 export async function createSalesExec(input: { name: string; email: string }) {
   const name = input.name.trim();
@@ -15,7 +24,7 @@ export async function createSalesExec(input: { name: string; email: string }) {
     email,
     createdAt: new Date(),
   });
-  revalidatePath("/admin/sales-execs");
+  invalidate();
   return { ok: true as const };
 }
 
@@ -25,10 +34,10 @@ export async function updateSalesExec(id: string, patch: Partial<{ name: string;
   if (typeof patch.email === "string" && patch.email.trim()) clean.email = patch.email.trim();
   if (!Object.keys(clean).length) return;
   await db.update(salesExecs).set(clean).where(eq(salesExecs.id, id));
-  revalidatePath("/admin/sales-execs");
+  invalidate();
 }
 
 export async function deleteSalesExec(id: string) {
   await db.delete(salesExecs).where(eq(salesExecs.id, id));
-  revalidatePath("/admin/sales-execs");
+  invalidate();
 }

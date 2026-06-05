@@ -28,6 +28,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* DNS + TLS warm-up to the Vercel Blob host for headshot images.
+            Saves ~100-300ms of connection-setup on the first <Image> load. */}
+        <link rel="preconnect" href="https://public.blob.vercel-storage.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://public.blob.vercel-storage.com" />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <SpeedInsights />

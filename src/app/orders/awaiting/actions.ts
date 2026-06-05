@@ -2,7 +2,8 @@
 import { db } from "@/db";
 import { customers, funders, proposalEvents, proposals, salesExecs } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { CUSTOMERS_TAG } from "@/lib/cache-tags";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-guard";
 import { z } from "zod";
@@ -106,6 +107,9 @@ export async function createAwaitingDealAction(input: {
       businessName: businessName ?? null,
       createdAt: now,
     });
+    // Bust the cross-request customers cache so any page that reads the
+    // lookup sees this new row on the next render.
+    updateTag(CUSTOMERS_TAG);
 
     const id = randomUUID();
     await db.insert(proposals).values({
