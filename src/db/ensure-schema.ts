@@ -5,6 +5,13 @@ type TableInfoRow = {
   name: string;
 };
 
+// Bump this every time runEnsureAppSchema() gains a new ensureColumns /
+// ensureXTable / seedY call. The cold-start gate below checks this against
+// the schema_version table — match means we skip ~30 DB round-trips.
+//
+// Keep it monotonically increasing; never reuse a number.
+const SCHEMA_VERSION = 7;
+
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
 // re-run on every authenticated page load (getCurrentUser awaits it).
@@ -13,12 +20,40 @@ let ensurePromise: Promise<void> | null = null;
 
 export async function ensureAppSchema() {
   if (!ensurePromise) {
-    ensurePromise = runEnsureAppSchema().catch((error) => {
+    ensurePromise = runWithVersionCheck().catch((error) => {
       ensurePromise = null; // retry on next request rather than stay stuck
       throw error;
     });
   }
   return ensurePromise;
+}
+
+// Single SELECT to skip the full PRAGMA/ALTER cycle. When the live version
+// row matches SCHEMA_VERSION, we know the schema is current — no point
+// firing 30 idempotent operations every Lambda cold-start.
+//
+// We still ensure schema_version itself exists before reading it (cheap
+// CREATE IF NOT EXISTS), so first-ever boot still works.
+async function runWithVersionCheck() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS schema_version (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      version INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  const rows = await db.all<{ version: number }>(sql.raw(
+    `SELECT version FROM schema_version WHERE id = 1`,
+  ));
+  if (rows.length > 0 && Number(rows[0].version) === SCHEMA_VERSION) {
+    return; // Schema is current — skip the full ensure pipeline.
+  }
+  await runEnsureAppSchema();
+  const now = Math.floor(Date.now() / 1000);
+  await db.run(sql.raw(`
+    INSERT INTO schema_version (id, version, updated_at) VALUES (1, ${SCHEMA_VERSION}, ${now})
+    ON CONFLICT(id) DO UPDATE SET version = ${SCHEMA_VERSION}, updated_at = ${now}
+  `));
 }
 
 async function runEnsureAppSchema() {

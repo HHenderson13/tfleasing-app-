@@ -10,7 +10,8 @@ import {
   type RateFunderId,
   type TermFollowOns,
 } from "@/lib/interest-rate-solver";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { RATEBOOK_CACHE_TAG } from "@/lib/cache-tags";
 import { z } from "zod";
 
 // Validates rental quotes coming from the Interest Rates section. Inputs are
@@ -138,6 +139,9 @@ export async function solveAndSaveRatesAction(input: SolveAndSaveInput): Promise
       });
   }
 
+  // Interest rate changed — bust the aggregate cache so the next page
+  // visit sees the new rate snapshots without waiting on the TTL.
+  updateTag(RATEBOOK_CACHE_TAG);
   revalidatePath("/broker-ratebooks");
 
   return {

@@ -1,11 +1,17 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { signOutAction } from "../login/actions";
 import { Overview } from "./views/Overview";
-import { ModelDrilldown } from "./views/ModelDrilldown";
-import { FunderCompare } from "./views/FunderCompare";
-import { Coverage } from "./views/Coverage";
+
+// Overview ships up-front since it's the default view. The other three
+// views together are ~1800 lines of client JS — dynamic() defers them
+// until the user actually picks the matching tab, trimming the initial
+// /funders bundle by roughly 70%.
+const ModelDrilldown = dynamic(() => import("./views/ModelDrilldown").then((m) => ({ default: m.ModelDrilldown })));
+const FunderCompare  = dynamic(() => import("./views/FunderCompare").then((m)  => ({ default: m.FunderCompare })));
+const Coverage       = dynamic(() => import("./views/Coverage").then((m)       => ({ default: m.Coverage })));
 
 export interface Funder {
   id: string;

@@ -14,6 +14,8 @@ export function LiveWidget() {
 
   useEffect(() => {
     let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
     async function poll() {
       try {
         const res = await fetch("/api/world-cup/live", { cache: "no-store" });
@@ -27,9 +29,26 @@ export function LiveWidget() {
         if (!cancelled) setError(e instanceof Error ? e.message : "fetch failed");
       }
     }
+
+    // Only poll while the tab is actually visible. Background tabs and
+    // mobile devices with the app in the background were re-firing every
+    // 15s for no benefit — wastes function invocations + the user's
+    // battery on mobile.
+    function start() { if (!interval) interval = setInterval(poll, 15_000); }
+    function stop() { if (interval) { clearInterval(interval); interval = null; } }
+    function onVisibility() {
+      if (document.hidden) { stop(); }
+      else { poll(); start(); }
+    }
+
     poll();
-    const interval = setInterval(poll, 15_000);
-    return () => { cancelled = true; clearInterval(interval); };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   if (!data || data.matches.length === 0) return null;

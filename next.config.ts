@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "50mb",
     },
+    // Aggressively tree-shake these libs in client bundles. drizzle-orm
+    // and zod each ship a lot of barrel exports we don't use; without
+    // this flag every chunk that imports them drags in the whole API.
+    optimizePackageImports: ["drizzle-orm", "zod", "@vercel/blob", "date-fns"],
   },
   // Allow Next/Image to optimise our Vercel Blob-hosted headshots — without
   // this, src must be local. Wildcard covers all tenant blob hostnames

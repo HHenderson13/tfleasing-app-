@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { ratebook, vehicles, funders } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -11,37 +12,56 @@ import { loadFunderRateSnapshots } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// Ratebook data only changes when an admin uploads a new ratebook file or
+// edits interest rates — neither happens on the request path. Cache the
+// expensive aggregate queries with a tag, and invalidate from the action
+// handlers (tag is defined in src/lib/cache-tags.ts so server actions can
+// import it without pulling in this page file).
+import { RATEBOOK_CACHE_TAG } from "@/lib/cache-tags";
+
+const loadSlotsAggregate = unstable_cache(
+  async () => db.all<{ slots: number; capCodes: number; rentals: number }>(sql`
+    SELECT
+      COUNT(DISTINCT r.cap_code || '|' || r.term_months || '|' || r.annual_mileage || '|' || r.is_maintained) AS slots,
+      COUNT(DISTINCT r.cap_code) AS capCodes,
+      COUNT(*) AS rentals
+    FROM ratebook r
+    INNER JOIN vehicles v ON v.cap_code = r.cap_code
+    WHERE r.initial_rental_multiplier = 6
+      AND r.is_business = 1
+      AND v.model != 'Unknown'
+  `),
+  ["broker-ratebooks-slots"],
+  { tags: [RATEBOOK_CACHE_TAG], revalidate: 3600 },
+);
+
+const loadFunderCounts = unstable_cache(
+  async () => db
+    .select({
+      id: funders.id,
+      name: funders.name,
+      rentals: sql<number>`COUNT(${ratebook.funderId})`.as("rentals"),
+    })
+    .from(funders)
+    .leftJoin(
+      ratebook,
+      sql`${ratebook.funderId} = ${funders.id}
+        AND ${ratebook.initialRentalMultiplier} = 6
+        AND ${ratebook.isBusiness} = 1`
+    )
+    .leftJoin(vehicles, eq(vehicles.capCode, ratebook.capCode))
+    .where(sql`${vehicles.model} IS NULL OR ${vehicles.model} != 'Unknown'`)
+    .groupBy(funders.id),
+  ["broker-ratebooks-funder-counts"],
+  { tags: [RATEBOOK_CACHE_TAG], revalidate: 3600 },
+);
+
 export default async function BrokerRatebooksPage() {
   const user = await requireAdmin();
 
   const [slotsRow, funderCounts, rateSnapshots] = await Promise.all([
-    db.all<{ slots: number; capCodes: number; rentals: number }>(sql`
-      SELECT
-        COUNT(DISTINCT r.cap_code || '|' || r.term_months || '|' || r.annual_mileage || '|' || r.is_maintained) AS slots,
-        COUNT(DISTINCT r.cap_code) AS capCodes,
-        COUNT(*) AS rentals
-      FROM ratebook r
-      INNER JOIN vehicles v ON v.cap_code = r.cap_code
-      WHERE r.initial_rental_multiplier = 6
-        AND r.is_business = 1
-        AND v.model != 'Unknown'
-    `),
-    db
-      .select({
-        id: funders.id,
-        name: funders.name,
-        rentals: sql<number>`COUNT(${ratebook.funderId})`.as("rentals"),
-      })
-      .from(funders)
-      .leftJoin(
-        ratebook,
-        sql`${ratebook.funderId} = ${funders.id}
-          AND ${ratebook.initialRentalMultiplier} = 6
-          AND ${ratebook.isBusiness} = 1`
-      )
-      .leftJoin(vehicles, eq(vehicles.capCode, ratebook.capCode))
-      .where(sql`${vehicles.model} IS NULL OR ${vehicles.model} != 'Unknown'`)
-      .groupBy(funders.id),
+    loadSlotsAggregate(),
+    loadFunderCounts(),
     loadFunderRateSnapshots(),
   ]);
 

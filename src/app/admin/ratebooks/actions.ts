@@ -6,7 +6,8 @@ import { downloadRatebookRemoteFile, ensureRatebookRemoteSettingsTable, parseRat
 import { parseRatebookBuffer } from "@/lib/ratebook-parse";
 import { del } from "@vercel/blob";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { RATEBOOK_CACHE_TAG } from "@/lib/cache-tags";
 
 type RatebookImportInput = {
   funderId: string;
@@ -244,9 +245,14 @@ async function importRatebookBuffer(input: RatebookImportInput) {
     uploadedAt: new Date(),
   });
 
+  // Ratebook just changed — bust the broker-ratebooks aggregate cache
+  // alongside the per-path render caches so the admin sees fresh slot /
+  // funder counts immediately rather than waiting on the 1h TTL.
+  updateTag(RATEBOOK_CACHE_TAG);
   revalidatePath("/admin/ratebooks");
   revalidatePath("/admin/vehicles");
   revalidatePath("/admin/discounts");
+  revalidatePath("/broker-ratebooks");
 
   return {
     ok: true as const,

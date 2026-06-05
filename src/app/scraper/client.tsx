@@ -1,10 +1,16 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { IntelligencePanel } from "./panels/IntelligencePanel";
-import { ResultsPanel } from "./panels/ResultsPanel";
-import { HistoryPanel } from "./panels/HistoryPanel";
+import dynamic from "next/dynamic";
 import { signOutAction } from "../login/actions";
+
+// Each panel is a sibling tab — only one is rendered at any time. Lazy-load
+// them so the initial JS download only ships what's needed for the default
+// tab. IntelligencePanel alone is ~800 lines; deferring Results + History
+// trims roughly 60% off the scraper page's initial bundle.
+const IntelligencePanel = dynamic(() => import("./panels/IntelligencePanel").then((m) => ({ default: m.IntelligencePanel })));
+const ResultsPanel      = dynamic(() => import("./panels/ResultsPanel").then((m) => ({ default: m.ResultsPanel })));
+const HistoryPanel      = dynamic(() => import("./panels/HistoryPanel").then((m) => ({ default: m.HistoryPanel })));
 
 type TabName = "intelligence" | "results" | "history";
 
