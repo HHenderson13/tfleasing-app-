@@ -10,9 +10,18 @@ import { sendStatusChangeEmail } from "./email";
 import {
   CUSTOMERS_TAG,
   GROUP_SITES_TAG,
+  PROPOSALS_TAG,
   SALES_EXECS_TAG,
   STAGE_CHECK_DEFS_TAG,
 } from "./cache-tags";
+
+// Shared invalidation hook for proposal mutations. The /reports loaders
+// (buildReport, getProposalsTimeseries, getDrilldown) live behind a 5-min
+// cache tagged PROPOSALS_TAG — every write that affects them must bust it
+// so admins immediately see status-change effects.
+export function invalidateProposals() {
+  updateTag(PROPOSALS_TAG);
+}
 
 // Two-tier cache for the small lookup tables every page reads.
 //
@@ -138,6 +147,7 @@ export async function createProposal(input: CreateProposalInput) {
     note: `Proposal logged with ${input.funderName} (rank #${input.funderRank}), finance proposal #${financeProposalNumber}, at £${input.monthlyRental.toFixed(2)}/mo.${isGroupBq ? " Group BQ deal." : ""}${isBroker ? ` Broker: ${brokerName} <${brokerEmail}>.` : ""}`,
     createdAt: now,
   });
+  invalidateProposals();
   return { id, customerId };
 }
 
@@ -208,6 +218,7 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     note: note?.trim() || null,
     createdAt: now,
   });
+  invalidateProposals();
   const [cust] = await db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1);
   void sendStatusChangeEmail({
     id: p.id,
@@ -308,6 +319,7 @@ export async function updateOrderFields(
       createdAt: now,
     });
   }
+  invalidateProposals();
 }
 
 export async function setStageCheck(proposalId: string, checkId: string, value: boolean) {

@@ -4,6 +4,7 @@ import { customers, funders, proposalEvents, proposals, salesExecs } from "@/db/
 import { asc, eq } from "drizzle-orm";
 import { revalidatePath, updateTag } from "next/cache";
 import { CUSTOMERS_TAG } from "@/lib/cache-tags";
+import { invalidateProposals } from "@/lib/proposals";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-guard";
 import { z } from "zod";
@@ -64,6 +65,7 @@ export async function updateManualEtaAction(
         createdAt: now,
       });
     }
+    invalidateProposals();
     revalidatePath("/orders/awaiting");
     revalidatePath(`/customers/${p.customerId}`);
     return { ok: true as const };
@@ -148,6 +150,7 @@ export async function createAwaitingDealAction(input: {
       note: `Back-loaded into awaiting delivery by admin (allocated to ${exec.name}).`,
       createdAt: now,
     });
+    invalidateProposals();
     revalidatePath("/orders/awaiting");
     return { ok: true as const, proposalId: id, customerId };
   } catch (e) {

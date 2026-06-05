@@ -1,7 +1,19 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { customers, proposals, salesExecs } from "@/db/schema";
 import { and, eq, gte, lte } from "drizzle-orm";
+import { PROPOSALS_TAG } from "./cache-tags";
+
+// Snap to a 5-minute boundary so successive page renders within the
+// same window share a cache entry. Caller passes nowMs in — the
+// page-level helper buckets Date.now() once and reuses it across all
+// three loader calls so they all hit the same bucket.
+const FIVE_MIN_MS = 300_000;
+const REPORT_TTL = 300;
+export function reportNowBucket(now = Date.now()): number {
+  return Math.floor(now / FIVE_MIN_MS) * FIVE_MIN_MS;
+}
 
 export type RangeKey = "month" | "quarter" | "half" | "ytd" | "year" | "all";
 export const RANGE_LABELS: Record<RangeKey, string> = {
@@ -102,13 +114,14 @@ export interface DrillRow {
   createdAt: string;
 }
 
-export async function getDrilldown(
+async function getDrilldownImpl(
   range: RangeKey,
   kind: DrillKind,
   value: string,
-  source: SourceKey = "all",
+  source: SourceKey,
+  nowMs: number,
 ): Promise<DrillRow[]> {
-  const { from, to } = rangeBounds(range);
+  const { from, to } = rangeBounds(range, new Date(nowMs));
   const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const all = await db.select().from(proposals).where(and(...wheres));
@@ -176,8 +189,8 @@ export async function getDrilldown(
     }));
 }
 
-export async function getProposalsTimeseries(range: RangeKey, source: SourceKey = "all"): Promise<{ label: string; submitted: number; accepted: number }[]> {
-  const { from, to } = rangeBounds(range);
+async function getProposalsTimeseriesImpl(range: RangeKey, source: SourceKey, nowMs: number): Promise<{ label: string; submitted: number; accepted: number }[]> {
+  const { from, to } = rangeBounds(range, new Date(nowMs));
   const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
   const all = await db.select().from(proposals).where(and(...wheres));
@@ -328,7 +341,10 @@ function bucketCount<K extends string | number>(rows: Row[], pick: (r: Row) => K
     .sort((a, b) => b.count - a.count);
 }
 
-export async function buildReport(range: RangeKey, source: SourceKey = "all", now: Date = new Date()): Promise<ReportSummary> {
+// Internal: takes an explicit nowMs so the cache key is deterministic and
+// the public buildReport() can route through unstable_cache.
+async function buildReportImpl(range: RangeKey, source: SourceKey, nowMs: number): Promise<ReportSummary> {
+  const now = new Date(nowMs);
   const { from, to } = rangeBounds(range, now);
   const wheres = [lte(proposals.createdAt, to), eq(proposals.backLoaded, false)];
   if (from) wheres.push(gte(proposals.createdAt, from));
@@ -749,4 +765,36 @@ export async function buildReport(range: RangeKey, source: SourceKey = "all", no
     acceptedMileageSplit,
     acceptedUpfrontSplit,
   };
+}
+
+// Public buildReport — wraps the impl in unstable_cache so successive page
+// renders within REPORT_TTL share results. nowMs is the explicit time bucket
+// (page should pass reportNowBucket() for the current period, prevBounds.to
+// for the prior period — both deterministic).
+const buildReportCached = unstable_cache(
+  (range: RangeKey, source: SourceKey, nowMs: number) => buildReportImpl(range, source, nowMs),
+  ["build-report"],
+  { tags: [PROPOSALS_TAG], revalidate: REPORT_TTL },
+);
+export function buildReport(range: RangeKey, source: SourceKey = "all", now?: Date): Promise<ReportSummary> {
+  return buildReportCached(range, source, now ? now.getTime() : reportNowBucket());
+}
+
+const getDrilldownCached = unstable_cache(
+  (range: RangeKey, kind: DrillKind, value: string, source: SourceKey, nowMs: number) =>
+    getDrilldownImpl(range, kind, value, source, nowMs),
+  ["build-report-drilldown"],
+  { tags: [PROPOSALS_TAG], revalidate: REPORT_TTL },
+);
+export function getDrilldown(range: RangeKey, kind: DrillKind, value: string, source: SourceKey = "all"): Promise<DrillRow[]> {
+  return getDrilldownCached(range, kind, value, source, reportNowBucket());
+}
+
+const getProposalsTimeseriesCached = unstable_cache(
+  (range: RangeKey, source: SourceKey, nowMs: number) => getProposalsTimeseriesImpl(range, source, nowMs),
+  ["build-report-timeseries"],
+  { tags: [PROPOSALS_TAG], revalidate: REPORT_TTL },
+);
+export function getProposalsTimeseries(range: RangeKey, source: SourceKey = "all"): Promise<{ label: string; submitted: number; accepted: number }[]> {
+  return getProposalsTimeseriesCached(range, source, reportNowBucket());
 }

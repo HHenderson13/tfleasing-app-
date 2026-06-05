@@ -27,3 +27,8 @@ export const FUNDERS_TAG = "lookup-funders";
 export const VEHICLES_TAG = "lookup-vehicles";
 export const FUNDER_COMMISSION_TAG = "lookup-funder-commission";
 export const MODEL_DISCOUNTS_TAG = "lookup-model-discounts";
+
+// Reports aggregates over the proposals table. Mutates whenever a
+// proposal changes state (frequent), so the cache has a short TTL and
+// every proposal mutation calls updateTag(PROPOSALS_TAG).
+export const PROPOSALS_TAG = "proposals-aggregate";

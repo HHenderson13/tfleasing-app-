@@ -1,5 +1,5 @@
 "use server";
-import { changeStatus, createProposal, setStageCheck, updateOrderFields } from "@/lib/proposals";
+import { changeStatus, createProposal, invalidateProposals, setStageCheck, updateOrderFields } from "@/lib/proposals";
 import type { ProposalStatus } from "@/lib/proposal-constants";
 import { db } from "@/db";
 import { funders, proposalEvents, proposals, salesExecs } from "@/db/schema";
@@ -8,6 +8,9 @@ import { revalidatePath } from "next/cache";
 import { getQuote } from "@/lib/quote";
 
 function revalidateForProposal(customerId: string) {
+  // Bust the cross-request proposals aggregate cache (reports loaders) as
+  // well as the per-path render caches.
+  invalidateProposals();
   revalidatePath("/proposals");
   revalidatePath("/orders");
   revalidatePath("/orders/awaiting");
