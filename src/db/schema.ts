@@ -606,6 +606,56 @@ export const brokerSessions = sqliteTable("broker_sessions", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+// Quotes saved by broker users. Visible to every user in the same
+// broker (filter on broker_id, never on broker_user_id). Vehicle snapshot
+// is stored as JSON so the quote keeps a record of what the broker saw
+// even if the underlying stockVehicles row is dropped on the next upload.
+export const brokerQuotes = sqliteTable("broker_quotes", {
+  id: text("id").primaryKey(),
+  brokerId: text("broker_id").notNull(),
+  createdByBrokerUserId: text("created_by_broker_user_id").notNull(),
+  // TF-XXXXXXXX reference + raw VIN at quote time. The reference is what
+  // brokers see and pass back to us; VIN lets the admin resolve it
+  // unambiguously to a real vehicle in our stock list.
+  vehicleRef: text("vehicle_ref").notNull(),
+  vehicleVin: text("vehicle_vin").notNull(),
+  // Cached at save time so the saved quote keeps reading correctly
+  // after the vehicle leaves stock. Shape mirrors MappedStockRow.
+  vehicleSnapshot: text("vehicle_snapshot").notNull(),
+  // 'outright' | 'pcp' | 'hp' | 'hp_balloon' | 'contract_hire'
+  fundingRoute: text("funding_route").notNull(),
+  // 'retail' | 'business'. Drives which rate sheet / discount rules apply
+  // in Phase 5; for Outright Purchase it's recorded but doesn't change
+  // the calc.
+  customerType: text("customer_type").notNull(),
+  customerIsVatBusiness: integer("customer_is_vat_business", { mode: "boolean" }).notNull().default(false),
+  // Broker's commission (entered ex-VAT in the form). VAT calculated at
+  // 20% in the save action so the saved quote captures the gross figure
+  // used in the totals.
+  commissionExVatGbp: real("commission_ex_vat_gbp").notNull(),
+  commissionVatGbp: real("commission_vat_gbp").notNull(),
+  // Vehicle pricing inputs — entered manually in Phase 3 (until the
+  // admin cash-value table arrives in Phase 4). Stored as real GBP.
+  vehicleCashGbp: real("vehicle_cash_gbp").notNull(),
+  // Total customer pays. customer_total = vehicle_cash + commission_ex
+  //                                       + commission_vat.
+  customerTotalGbp: real("customer_total_gbp").notNull(),
+  // Finance fields (filled in for non-cash routes in Phase 5).
+  termMonths: integer("term_months"),
+  annualMileage: integer("annual_mileage"),
+  upfrontGbp: real("upfront_gbp"),
+  monthlyRentalGbp: real("monthly_rental_gbp"),
+  notes: text("notes"),
+  // 'draft' | 'sent' | 'archived'. Phase 3 only sets 'draft'; later
+  // phases may track when the broker has shared the quote with us.
+  status: text("status").notNull().default("draft"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byBroker: index("idx_broker_quotes_broker").on(t.brokerId),
+  byBrokerUpdated: index("idx_broker_quotes_broker_updated").on(t.brokerId, t.updatedAt),
+}));
+
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {
   id: text("id").primaryKey(), // stable slug e.g. "puma-ice", "explorer-new-my-std"

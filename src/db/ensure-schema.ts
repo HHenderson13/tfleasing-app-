@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -130,6 +130,37 @@ async function ensureBrokerPortalTables() {
       created_at INTEGER NOT NULL
     )
   `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_quotes (
+      id TEXT PRIMARY KEY,
+      broker_id TEXT NOT NULL,
+      created_by_broker_user_id TEXT NOT NULL,
+      vehicle_ref TEXT NOT NULL,
+      vehicle_vin TEXT NOT NULL,
+      vehicle_snapshot TEXT NOT NULL,
+      funding_route TEXT NOT NULL,
+      customer_type TEXT NOT NULL,
+      customer_is_vat_business INTEGER NOT NULL DEFAULT 0,
+      commission_ex_vat_gbp REAL NOT NULL,
+      commission_vat_gbp REAL NOT NULL,
+      vehicle_cash_gbp REAL NOT NULL,
+      customer_total_gbp REAL NOT NULL,
+      term_months INTEGER,
+      annual_mileage INTEGER,
+      upfront_gbp REAL,
+      monthly_rental_gbp REAL,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_broker_quotes_broker ON broker_quotes(broker_id)`,
+  ));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_broker_quotes_broker_updated ON broker_quotes(broker_id, updated_at)`,
+  ));
 }
 
 // Indexes for the hottest WHERE / ORDER BY clauses on the request path.
