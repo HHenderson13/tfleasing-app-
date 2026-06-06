@@ -656,6 +656,34 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
   byBrokerUpdated: index("idx_broker_quotes_broker_updated").on(t.brokerId, t.updatedAt),
 }));
 
+// Per-vehicle cash value + margin. Admin-managed. Keyed on the broker-
+// visible display attributes (bucket / variant / derivative / model year)
+// so the lookup mirrors what the broker sees on the search list — no need
+// to expose VIN or cap-code to the admin grid. cap_code / cap_id are
+// captured optionally for Phase 5 (finance routes need them for ratebook
+// lookups).
+export const brokerVehicleCashValues = sqliteTable("broker_vehicle_cash_values", {
+  id: text("id").primaryKey(),
+  bucket: text("bucket").notNull(),           // sourceSheet, e.g. "Focus" / "Transit"
+  variant: text("variant").notNull(),          // mapped variant name
+  derivative: text("derivative"),              // mapped derivative; nullable for vans where it lives in variant
+  modelYear: text("model_year"),               // nullable when manufacturer doesn't differentiate
+  capCode: text("cap_code"),                   // optional cross-reference to ratebook
+  capId: text("cap_id"),                       // optional; Ford CAP-ID
+  cashGbp: real("cash_gbp").notNull(),         // cash price TF charges the customer
+  // Margin TF retains. Admin can express as either £ or % per vehicle —
+  // Phase 5 uses whichever is set. Both nullable so an unconfigured row
+  // still represents a usable cash price for Phase 3 outright quoting.
+  marginGbp: real("margin_gbp"),
+  marginPct: real("margin_pct"),
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  // Compound lookup index — quote form queries by all four columns.
+  byKey: index("idx_broker_cash_values_key").on(t.bucket, t.variant, t.derivative, t.modelYear),
+}));
+
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {
   id: text("id").primaryKey(), // stable slug e.g. "puma-ice", "explorer-new-my-std"

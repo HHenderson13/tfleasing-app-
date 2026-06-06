@@ -9,13 +9,14 @@ const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 t
 interface Props {
   ref: string;
   snapshotJson: string;
+  defaultCashGbp: number | null;
 }
 
-export function OutrightQuoteForm({ ref, snapshotJson }: Props) {
+export function OutrightQuoteForm({ ref, snapshotJson, defaultCashGbp }: Props) {
   const router = useRouter();
   const [customerType, setCustomerType] = useState<"retail" | "business">("retail");
   const [vatBusiness, setVatBusiness] = useState(false);
-  const [vehicleCash, setVehicleCash] = useState("");
+  const [vehicleCash, setVehicleCash] = useState(defaultCashGbp === null ? "" : String(defaultCashGbp));
   const [commission, setCommission] = useState("");
   const [notes, setNotes] = useState("");
   const [pending, start] = useTransition();
@@ -71,8 +72,9 @@ export function OutrightQuoteForm({ ref, snapshotJson }: Props) {
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-900">Pricing</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Phase 4 will pre-fill the vehicle cash price from the admin-managed cash-value table. For now,
-          enter the cash price you&apos;ve agreed with TrustFord.
+          {defaultCashGbp !== null
+            ? "Cash price pre-filled from TrustFord's vehicle table — override if you've agreed something different."
+            : "TrustFord hasn't set a cash price for this exact vehicle yet — enter the price you've agreed."}
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block text-xs font-medium text-slate-700">

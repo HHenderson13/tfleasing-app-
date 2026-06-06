@@ -4,6 +4,7 @@ import { requireBrokerUser } from "@/lib/auth-guard";
 import { findVehicleByReference } from "@/lib/broker-vehicle";
 import { loadMappedStock } from "@/lib/stock-list";
 import { vehicleSnapshotFromMapped } from "@/lib/broker-quotes";
+import { findCashValue } from "@/lib/broker-cash-values";
 import { BrokerHeader } from "../../../header";
 import { OutrightQuoteForm } from "./form";
 
@@ -18,6 +19,15 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
   const mapped = rows.find((r) => r.vin === vehicle.vin);
   if (!mapped) notFound();
   const snapshot = vehicleSnapshotFromMapped(mapped);
+  // Cash-value lookup is server-side — the broker doesn't get to peek
+  // at the table. We just expose the matched cash price as a pre-fill.
+  const cashValue = await findCashValue({
+    bucket: mapped.bucket,
+    variant: mapped.variant,
+    derivative: mapped.derivative,
+    modelYear: mapped.modelYear,
+  });
+  const defaultCashGbp = cashValue?.cashGbp ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -45,7 +55,11 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
           </div>
         </section>
 
-        <OutrightQuoteForm ref={ref} snapshotJson={JSON.stringify(snapshot)} />
+        <OutrightQuoteForm
+          ref={ref}
+          snapshotJson={JSON.stringify(snapshot)}
+          defaultCashGbp={defaultCashGbp}
+        />
       </main>
     </div>
   );

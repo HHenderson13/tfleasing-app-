@@ -15,6 +15,7 @@ const NAV = [
   { href: "/admin/stock", label: "Stock upload" },
   { href: "/admin/stock-mappings", label: "Stock mappings" },
   { href: "/admin/brokers", label: "Brokers" },
+  { href: "/admin/broker-data", label: "Broker data" },
 ];
 
 export function AdminNav() {
