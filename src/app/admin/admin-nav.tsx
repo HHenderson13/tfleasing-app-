@@ -14,6 +14,7 @@ const NAV = [
   { href: "/admin/ratebooks", label: "Ratebooks" },
   { href: "/admin/stock", label: "Stock upload" },
   { href: "/admin/stock-mappings", label: "Stock mappings" },
+  { href: "/admin/brokers", label: "Brokers" },
 ];
 
 export function AdminNav() {

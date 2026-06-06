@@ -560,6 +560,52 @@ export const sessions = sqliteTable("sessions", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+// ─── Broker portal ─────────────────────────────────────────────────────────
+//
+// Completely separate from the TF leasing-app auth. brokers row groups a
+// company; broker_users belong to exactly one broker and never to the TF
+// users table. broker_sessions uses its own cookie ('tf_broker_session')
+// so middleware can route requests to the correct portal based on which
+// cookie is present.
+
+export const brokers = sqliteTable("brokers", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  // Soft toggle — disables every user under this broker without deleting
+  // their historical quotes.
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const brokerUsers = sqliteTable("broker_users", {
+  id: text("id").primaryKey(),
+  brokerId: text("broker_id").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  // 'owner' can manage other broker_users under the same broker;
+  // 'user' can only quote.
+  role: text("role").notNull().default("user"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  // Mirror of the TF user setup-token flow — admin (or broker owner)
+  // creates a row, we email a setup URL, user lands on /broker/setup/[token]
+  // and chooses their password.
+  setupToken: text("setup_token"),
+  setupTokenExpiresAt: integer("setup_token_expires_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byBroker: index("idx_broker_users_broker").on(t.brokerId),
+}));
+
+export const brokerSessions = sqliteTable("broker_sessions", {
+  id: text("id").primaryKey(),
+  brokerUserId: text("broker_user_id").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {
   id: text("id").primaryKey(), // stable slug e.g. "puma-ice", "explorer-new-my-std"

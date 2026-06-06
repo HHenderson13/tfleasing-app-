@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -85,9 +85,51 @@ async function runEnsureAppSchema() {
   await ensureLoginAttemptsTable();
   await ensureWorldCupTables();
   await ensureSalesLeaderboardTables();
+  await ensureBrokerPortalTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await ensureHotPathIndexes();
+}
+
+// Broker portal — completely separate auth from the TF leasing app. See
+// src/db/schema.ts for the Drizzle definitions and src/lib/broker-auth.ts
+// for the parallel session/cookie helpers.
+async function ensureBrokerPortalTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS brokers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_users (
+      id TEXT PRIMARY KEY,
+      broker_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      active INTEGER NOT NULL DEFAULT 1,
+      setup_token TEXT,
+      setup_token_expires_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_broker_users_broker ON broker_users(broker_id)`,
+  ));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_sessions (
+      id TEXT PRIMARY KEY,
+      broker_user_id TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `));
 }
 
 // Indexes for the hottest WHERE / ORDER BY clauses on the request path.

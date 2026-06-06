@@ -65,3 +65,24 @@ export async function requireWcAdmin(): Promise<CurrentUser> {
   if (!isWcAdmin(u)) redirect("/forbidden");
   return u;
 }
+
+// ─── Broker portal guards ──────────────────────────────────────────────────
+//
+// Separate functions so the redirect destinations (/broker/login,
+// /broker/forbidden) stay distinct from the TF guards above. Importing
+// these from lib/broker-auth would create a cycle, so we deliberately
+// keep them here next to the TF guards.
+
+import { getCurrentBrokerUser, isBrokerOwner, type CurrentBrokerUser } from "./broker-auth";
+
+export async function requireBrokerUser(): Promise<CurrentBrokerUser> {
+  const u = await getCurrentBrokerUser();
+  if (!u) redirect("/broker/login");
+  return u;
+}
+
+export async function requireBrokerOwner(): Promise<CurrentBrokerUser> {
+  const u = await requireBrokerUser();
+  if (!isBrokerOwner(u)) redirect("/broker");
+  return u;
+}
