@@ -6,26 +6,41 @@ import { saveOutrightQuoteAction } from "./actions";
 
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums";
 
+export interface StockTurnOption {
+  id: string;
+  label: string;
+  bonusGbp: number;
+  mustRegisterBy: string;
+  notes: string | null;
+}
+
 interface Props {
   ref: string;
   snapshotJson: string;
   defaultCashGbp: number | null;
+  stockTurnRules: StockTurnOption[];
 }
 
-export function OutrightQuoteForm({ ref, snapshotJson, defaultCashGbp }: Props) {
+export function OutrightQuoteForm({ ref, snapshotJson, defaultCashGbp, stockTurnRules }: Props) {
   const router = useRouter();
   const [customerType, setCustomerType] = useState<"retail" | "business">("retail");
   const [vatBusiness, setVatBusiness] = useState(false);
   const [vehicleCash, setVehicleCash] = useState(defaultCashGbp === null ? "" : String(defaultCashGbp));
   const [commission, setCommission] = useState("");
+  const [stockTurnId, setStockTurnId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const chosenStockTurn = useMemo(
+    () => stockTurnRules.find((r) => r.id === stockTurnId) ?? null,
+    [stockTurnRules, stockTurnId],
+  );
   const totals = useMemo(() => computeOutright({
     vehicleCashGbp: parseFloat(vehicleCash) || 0,
     commissionExVatGbp: parseFloat(commission) || 0,
-  }), [vehicleCash, commission]);
+    stockTurnBonusGbp: chosenStockTurn?.bonusGbp ?? 0,
+  }), [vehicleCash, commission, chosenStockTurn]);
 
   const canSave = parseFloat(vehicleCash) > 0;
 
@@ -40,6 +55,7 @@ export function OutrightQuoteForm({ ref, snapshotJson, defaultCashGbp }: Props) 
         customerIsVatBusiness: customerType === "business" ? vatBusiness : false,
         vehicleCashGbp: parseFloat(vehicleCash) || 0,
         commissionExVatGbp: parseFloat(commission) || 0,
+        stockTurnRuleId: chosenStockTurn?.id ?? null,
         notes: notes.trim() || null,
       });
       if (!res.ok) { setError(res.error); return; }
@@ -106,12 +122,46 @@ export function OutrightQuoteForm({ ref, snapshotJson, defaultCashGbp }: Props) 
 
         <div className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm">
           <Row label="Vehicle cash" value={formatGbp(totals.vehicleCashGbp)} />
+          {totals.stockTurnBonusGbp > 0 && (
+            <Row label="Stock turn bonus" value={<span className="text-emerald-700">− {formatGbp(totals.stockTurnBonusGbp)}</span>} />
+          )}
           <Row label="Your commission" value={formatGbp(totals.commissionExVatGbp)} />
           <Row label="VAT on commission (20%)" value={formatGbp(totals.commissionVatGbp)} />
           <div className="my-1 border-t border-slate-200" />
           <Row label={<strong>Customer pays</strong>} value={<strong className="text-slate-900">{formatGbp(totals.customerTotalGbp)}</strong>} />
         </div>
       </section>
+
+      {stockTurnRules.length > 0 && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-amber-900">Stock turn bonus available</h2>
+          <p className="mt-1 text-xs text-amber-900/80">
+            This vehicle qualifies for the programme(s) below. Pick one to pass the bonus to the customer as a discount.
+          </p>
+          <div className="mt-3 space-y-2">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm">
+              <input type="radio" checked={stockTurnId === ""} onChange={() => setStockTurnId("")} className="mt-0.5 h-4 w-4" />
+              <span className="flex-1">
+                <span className="font-medium text-slate-900">Don&apos;t apply a bonus</span>
+                <span className="block text-xs text-slate-500">Quote at cash price without the stock-turn discount.</span>
+              </span>
+            </label>
+            {stockTurnRules.map((r) => {
+              const deadline = new Date(r.mustRegisterBy).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+              return (
+                <label key={r.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm">
+                  <input type="radio" checked={stockTurnId === r.id} onChange={() => setStockTurnId(r.id)} className="mt-0.5 h-4 w-4" />
+                  <span className="flex-1">
+                    <span className="font-medium text-slate-900">{r.label}</span>
+                    <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{formatGbp(r.bonusGbp)}</span>
+                    <span className="block text-xs text-slate-500">Customer must register by <strong>{deadline}</strong>{r.notes ? ` · ${r.notes}` : ""}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-900">Notes <span className="text-xs font-normal text-slate-400">(optional)</span></h2>

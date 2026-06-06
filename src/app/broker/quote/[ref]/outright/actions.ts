@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireBrokerUser } from "@/lib/auth-guard";
 import { findVinByReference } from "@/lib/broker-vehicle";
 import { computeOutright } from "@/lib/broker-quote-pricing";
+import { findRuleById } from "@/lib/broker-stock-turn";
 import { logError } from "@/lib/logger";
 
 interface SaveInput {
@@ -15,6 +16,10 @@ interface SaveInput {
   customerIsVatBusiness: boolean;
   vehicleCashGbp: number;
   commissionExVatGbp: number;
+  // Stock-turn programme the broker picked, or null for none. Re-validated
+  // server-side — a crafted id silently degrades to no-bonus rather than
+  // letting the broker spend a bonus that doesn't exist.
+  stockTurnRuleId: string | null;
   notes: string | null;
 }
 
@@ -40,9 +45,15 @@ export async function saveOutrightQuoteAction(input: SaveInput) {
       return { ok: false as const, error: "Vehicle snapshot was malformed. Refresh the page and try again." };
     }
 
+    // Resolve the chosen stock-turn rule server-side so the broker can't
+    // claim a bonus value that wasn't actually offered.
+    const stockTurn = input.stockTurnRuleId ? await findRuleById(input.stockTurnRuleId) : null;
+    const stockTurnBonus = stockTurn?.bonusGbp ?? 0;
+
     const totals = computeOutright({
       vehicleCashGbp: input.vehicleCashGbp,
       commissionExVatGbp: input.commissionExVatGbp,
+      stockTurnBonusGbp: stockTurnBonus,
     });
 
     const id = randomUUID();
@@ -60,6 +71,8 @@ export async function saveOutrightQuoteAction(input: SaveInput) {
       commissionExVatGbp: totals.commissionExVatGbp,
       commissionVatGbp: totals.commissionVatGbp,
       vehicleCashGbp: totals.vehicleCashGbp,
+      stockTurnRuleId: stockTurn?.id ?? null,
+      stockTurnBonusGbp: stockTurn ? totals.stockTurnBonusGbp : null,
       customerTotalGbp: totals.customerTotalGbp,
       termMonths: null,
       annualMileage: null,

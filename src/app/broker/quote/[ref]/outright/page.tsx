@@ -5,6 +5,7 @@ import { findVehicleByReference } from "@/lib/broker-vehicle";
 import { loadMappedStock } from "@/lib/stock-list";
 import { vehicleSnapshotFromMapped } from "@/lib/broker-quotes";
 import { findCashValue } from "@/lib/broker-cash-values";
+import { findApplicableStockTurnRules } from "@/lib/broker-stock-turn";
 import { BrokerHeader } from "../../../header";
 import { OutrightQuoteForm } from "./form";
 
@@ -21,12 +22,19 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
   const snapshot = vehicleSnapshotFromMapped(mapped);
   // Cash-value lookup is server-side — the broker doesn't get to peek
   // at the table. We just expose the matched cash price as a pre-fill.
-  const cashValue = await findCashValue({
-    bucket: mapped.bucket,
-    variant: mapped.variant,
-    derivative: mapped.derivative,
-    modelYear: mapped.modelYear,
-  });
+  const [cashValue, stockTurnRules] = await Promise.all([
+    findCashValue({
+      bucket: mapped.bucket,
+      variant: mapped.variant,
+      derivative: mapped.derivative,
+      modelYear: mapped.modelYear,
+    }),
+    findApplicableStockTurnRules({
+      bucket: mapped.bucket,
+      modelYear: mapped.modelYear,
+      gateRelease: mapped.gateRelease,
+    }),
+  ]);
   const defaultCashGbp = cashValue?.cashGbp ?? null;
 
   return (
@@ -59,6 +67,13 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
           ref={ref}
           snapshotJson={JSON.stringify(snapshot)}
           defaultCashGbp={defaultCashGbp}
+          stockTurnRules={stockTurnRules.map((r) => ({
+            id: r.id,
+            label: r.label,
+            bonusGbp: r.bonusGbp,
+            mustRegisterBy: r.mustRegisterBy,
+            notes: r.notes,
+          }))}
         />
       </main>
     </div>

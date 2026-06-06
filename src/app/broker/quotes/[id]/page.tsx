@@ -83,6 +83,9 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pricing</h2>
           <dl className="mt-3 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm">
             <Row label="Vehicle cash" value={formatGbp(quote.vehicleCashGbp)} />
+            {quote.stockTurnBonusGbp && quote.stockTurnBonusGbp > 0 && (
+              <Row label="Stock turn bonus" value={<span className="text-emerald-700">− {formatGbp(quote.stockTurnBonusGbp)}</span>} />
+            )}
             <Row label="Your commission" value={formatGbp(quote.commissionExVatGbp)} />
             <Row label="VAT on commission (20%)" value={formatGbp(quote.commissionVatGbp)} />
             <div className="my-1 border-t border-slate-200" />

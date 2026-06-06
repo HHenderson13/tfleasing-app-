@@ -637,8 +637,13 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
   // Vehicle pricing inputs — entered manually in Phase 3 (until the
   // admin cash-value table arrives in Phase 4). Stored as real GBP.
   vehicleCashGbp: real("vehicle_cash_gbp").notNull(),
-  // Total customer pays. customer_total = vehicle_cash + commission_ex
-  //                                       + commission_vat.
+  // Stock-turn bonus applied at quote time (Phase 4b onwards).
+  // bonus_gbp reduces vehicle_cash in the customer total. The rule_id
+  // is for audit so admin can see which programme the broker used.
+  stockTurnRuleId: text("stock_turn_rule_id"),
+  stockTurnBonusGbp: real("stock_turn_bonus_gbp"),
+  // Total customer pays. customer_total = (vehicle_cash - stock_turn_bonus)
+  //                                       + commission_ex + commission_vat.
   customerTotalGbp: real("customer_total_gbp").notNull(),
   // Finance fields (filled in for non-cash routes in Phase 5).
   termMonths: integer("term_months"),
@@ -662,6 +667,30 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
 // to expose VIN or cap-code to the admin grid. cap_code / cap_id are
 // captured optionally for Phase 5 (finance routes need them for ratebook
 // lookups).
+// Manufacturer stock-turn bonuses. Admin enters one row per active
+// programme (e.g. "Q2 2026 Focus stock turn"). Quote form computes
+// which rules apply to a given vehicle based on bucket / model year /
+// gate-release window, and lets the broker pick one (or none).
+//
+// Bonus is treated as a customer-facing discount in Phase 4 outright
+// quotes — applied bonus reduces the vehicle cash. Phase 5 will branch
+// the finance routes off whether the bonus is taken as customer saving
+// vs. retained margin.
+export const brokerStockTurnRules = sqliteTable("broker_stock_turn_rules", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  bucket: text("bucket"),                                                       // null = any bucket
+  modelYear: text("model_year"),                                                // null = any model year
+  gateReleaseFrom: integer("gate_release_from", { mode: "timestamp" }),         // null = no lower bound
+  gateReleaseTo: integer("gate_release_to", { mode: "timestamp" }),             // null = no upper bound
+  mustRegisterBy: integer("must_register_by", { mode: "timestamp" }).notNull(), // hard registration deadline
+  bonusGbp: real("bonus_gbp").notNull(),
+  notes: text("notes"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export const brokerVehicleCashValues = sqliteTable("broker_vehicle_cash_values", {
   id: text("id").primaryKey(),
   bucket: text("bucket").notNull(),           // sourceSheet, e.g. "Focus" / "Transit"
