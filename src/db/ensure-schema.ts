@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -204,6 +204,28 @@ async function ensureBrokerPortalTables() {
     { name: "stock_turn_rule_id", sqlType: "TEXT" },
     { name: "stock_turn_bonus_gbp", sqlType: "REAL" },
   ]);
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_interest_rates (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      vehicle_class TEXT NOT NULL,
+      bucket TEXT,
+      customer_type TEXT NOT NULL,
+      funding_route TEXT NOT NULL,
+      term_months INTEGER NOT NULL,
+      annual_apr_pct REAL NOT NULL,
+      deposit_allowance_gbp REAL,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      notes TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_broker_interest_rates_key ON broker_interest_rates(vehicle_class, customer_type, funding_route, term_months)`,
+  ));
 }
 
 // Indexes for the hottest WHERE / ORDER BY clauses on the request path.

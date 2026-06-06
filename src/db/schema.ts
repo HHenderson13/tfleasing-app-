@@ -691,6 +691,37 @@ export const brokerStockTurnRules = sqliteTable("broker_stock_turn_rules", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// One row per (route × customer type × term × vehicle scope) tariff entry.
+// Drives the Phase 5 finance route quotes. Both APR and deposit allowance
+// share the exact same lookup key, so they live on the same row instead of
+// in two separate tables — saves the admin having to keep them in sync.
+//
+// Vehicle scope is a coarse class ('car' / 'van' / 'all') plus an optional
+// specific bucket — most of the Ford marketing programmes are split that
+// way (e.g. "all passenger cars on PCP at 36m" vs "Focus only").
+//
+// Quote-time lookups prefer the most specific match: exact bucket beats
+// class match beats 'all' scope. See lib/broker-interest-rates.ts.
+export const brokerInterestRates = sqliteTable("broker_interest_rates", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  vehicleClass: text("vehicle_class").notNull(),                              // 'car' | 'van' | 'all'
+  bucket: text("bucket"),                                                     // null = any bucket within class
+  customerType: text("customer_type").notNull(),                              // 'retail' | 'business'
+  fundingRoute: text("funding_route").notNull(),                              // 'pcp' | 'hp' | 'hp_balloon'
+  termMonths: integer("term_months").notNull(),
+  annualAprPct: real("annual_apr_pct").notNull(),
+  depositAllowanceGbp: real("deposit_allowance_gbp"),                         // nullable — programmes don't always offer one
+  validFrom: integer("valid_from", { mode: "timestamp" }),
+  validUntil: integer("valid_until", { mode: "timestamp" }),
+  notes: text("notes"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byKey: index("idx_broker_interest_rates_key").on(t.vehicleClass, t.customerType, t.fundingRoute, t.termMonths),
+}));
+
 export const brokerVehicleCashValues = sqliteTable("broker_vehicle_cash_values", {
   id: text("id").primaryKey(),
   bucket: text("bucket").notNull(),           // sourceSheet, e.g. "Focus" / "Transit"
