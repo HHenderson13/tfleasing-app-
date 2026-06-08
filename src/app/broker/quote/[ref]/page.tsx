@@ -12,9 +12,9 @@ export const dynamic = "force-dynamic";
 // in Phase 5 with the proper rate / OFP / deposit-allowance grids.
 const ROUTES: { key: string; href: (ref: string) => string; title: string; desc: string; tone: string; live: boolean }[] = [
   { key: "outright",      title: "Outright Purchase", desc: "Customer pays cash in full.",                                                  tone: "from-emerald-500 to-teal-700",    live: true,  href: (r) => `/broker/quote/${r}/outright` },
-  { key: "pcp",           title: "PCP",               desc: "Personal Contract Purchase with optional final payment.",                       tone: "from-sky-500 to-indigo-700",      live: false, href: (r) => `/broker/quote/${r}/pcp` },
-  { key: "hp",            title: "Hire Purchase",     desc: "Equal monthly payments, customer owns at the end.",                             tone: "from-violet-500 to-fuchsia-700",  live: false, href: (r) => `/broker/quote/${r}/hp` },
-  { key: "hp_balloon",    title: "HP with Balloon",   desc: "Lower monthly payments with a balloon at the end.",                             tone: "from-amber-500 to-orange-700",    live: false, href: (r) => `/broker/quote/${r}/hp-balloon` },
+  { key: "pcp",           title: "PCP",               desc: "Personal Contract Purchase with optional final payment.",                       tone: "from-sky-500 to-indigo-700",      live: true,  href: (r) => `/broker/quote/${r}/pcp` },
+  { key: "hp",            title: "Hire Purchase",     desc: "Equal monthly payments, customer owns at the end.",                             tone: "from-violet-500 to-fuchsia-700",  live: true,  href: (r) => `/broker/quote/${r}/hp` },
+  { key: "hp_balloon",    title: "HP with Balloon",   desc: "Lower monthly payments with a balloon at the end.",                             tone: "from-amber-500 to-orange-700",    live: true,  href: (r) => `/broker/quote/${r}/hp-balloon` },
   { key: "contract_hire", title: "Contract Hire",     desc: "Long-term rental — customer hands the vehicle back at the end.",                tone: "from-rose-500 to-pink-700",       live: false, href: (r) => `/broker/quote/${r}/contract-hire` },
 ];
 
@@ -61,7 +61,7 @@ export default async function FundingRoutePickerPage({ params }: { params: Promi
                 <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${r.tone}`} />
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-semibold text-slate-900">{r.title}</div>
-                  {!r.live && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">Phase 5</span>}
+                  {!r.live && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">Soon</span>}
                 </div>
                 <p className="mt-1 text-sm text-slate-500">{r.desc}</p>
                 {r.live && <div className="mt-3 text-xs font-medium text-slate-400 group-hover:text-slate-700">Start quote →</div>}

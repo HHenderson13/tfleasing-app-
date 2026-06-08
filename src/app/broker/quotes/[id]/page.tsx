@@ -98,10 +98,35 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
             {quote.testDriveGbp && quote.testDriveGbp > 0 && (
               <Row label="Test-drive incentive" value={<span className="text-emerald-700">− {formatGbp(quote.testDriveGbp)}</span>} />
             )}
-            <Row label="Your commission" value={formatGbp(quote.commissionExVatGbp)} />
-            <Row label="VAT on commission (20%)" value={formatGbp(quote.commissionVatGbp)} />
+            {quote.fundingRoute !== "outright" && (
+              <>
+                <div className="my-1 border-t border-slate-200" />
+                <Row label="Cash deposit" value={<span className="text-slate-700">− {formatGbp(quote.upfrontGbp ?? 0)}</span>} />
+                {quote.depositAllowanceGbp && quote.depositAllowanceGbp > 0 && (
+                  <Row label="Deposit allowance" value={<span className="text-emerald-700">− {formatGbp(quote.depositAllowanceGbp)}</span>} />
+                )}
+                {quote.balloonGbp !== null && quote.balloonGbp !== undefined && (
+                  <Row label="Optional Final Payment (balloon)" value={formatGbp(quote.balloonGbp)} />
+                )}
+                <Row label="Amount of credit" value={<strong>{formatGbp(quote.amountOfCreditGbp ?? 0)}</strong>} />
+                <Row label={`Monthly × ${quote.termMonths ?? 0}`} value={<strong className="text-slate-900">{formatGbp(quote.monthlyRentalGbp ?? 0)}</strong>} />
+                <Row label="Total payable" value={formatGbp(quote.totalPayableGbp ?? 0)} />
+                <Row label="Total charge for credit" value={formatGbp(quote.totalChargeForCreditGbp ?? 0)} />
+                <Row label="APR (representative)" value={`${(quote.annualAprPct ?? 0).toFixed(2)}%`} />
+                {quote.annualMileage !== null && quote.annualMileage !== undefined && (
+                  <Row label="Annual mileage" value={`${quote.annualMileage.toLocaleString()} miles`} />
+                )}
+              </>
+            )}
+            {(quote.commissionExVatGbp > 0 || quote.fundingRoute === "outright") && (
+              <>
+                <div className="my-1 border-t border-slate-200" />
+                <Row label="Your commission" value={formatGbp(quote.commissionExVatGbp)} />
+                <Row label="VAT on commission (20%)" value={formatGbp(quote.commissionVatGbp)} />
+              </>
+            )}
             <div className="my-1 border-t border-slate-200" />
-            <Row label={<strong>Customer pays</strong>} value={<strong className="text-slate-900">{formatGbp(quote.customerTotalGbp)}</strong>} />
+            <Row label={<strong>{quote.fundingRoute === "outright" ? "Customer pays" : "Customer total over term"}</strong>} value={<strong className="text-slate-900">{formatGbp(quote.customerTotalGbp)}</strong>} />
           </dl>
           {quote.evOfferId && quote.evChoice === "wallbox" && (
             <p className="mt-3 text-xs text-emerald-700">EV Power Promise: customer chose the wallbox option.</p>

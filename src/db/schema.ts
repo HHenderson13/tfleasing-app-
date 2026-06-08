@@ -661,11 +661,22 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
   // Total customer pays. customer_total = (vehicle_cash - stock_turn_bonus)
   //                                       + commission_ex + commission_vat.
   customerTotalGbp: real("customer_total_gbp").notNull(),
-  // Finance fields (filled in for non-cash routes in Phase 5).
+  // Finance fields (Phase 5 onwards).
   termMonths: integer("term_months"),
   annualMileage: integer("annual_mileage"),
-  upfrontGbp: real("upfront_gbp"),
-  monthlyRentalGbp: real("monthly_rental_gbp"),
+  upfrontGbp: real("upfront_gbp"),                  // customer's cash deposit
+  monthlyRentalGbp: real("monthly_rental_gbp"),     // monthly payment
+  balloonGbp: real("balloon_gbp"),                  // optional final payment (PCP / HP-Balloon)
+  depositAllowanceGbp: real("deposit_allowance_gbp"),
+  annualAprPct: real("annual_apr_pct"),
+  amountOfCreditGbp: real("amount_of_credit_gbp"),
+  totalChargeForCreditGbp: real("total_charge_for_credit_gbp"),
+  totalPayableGbp: real("total_payable_gbp"),
+  // Interest-rate rule used for audit. Same pattern as the other rule
+  // ids captured on this row — admins can see exactly which programme
+  // priced the deal.
+  interestRateRuleId: text("interest_rate_rule_id"),
+  ofpRowId: integer("ofp_row_id"),                  // null for HP (no balloon)
   notes: text("notes"),
   // 'draft' | 'sent' | 'archived'. Phase 3 only sets 'draft'; later
   // phases may track when the broker has shared the quote with us.
