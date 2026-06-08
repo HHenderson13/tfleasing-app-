@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -337,6 +337,12 @@ async function ensureBrokerPortalTables() {
     { name: "total_payable_gbp", sqlType: "REAL" },
     { name: "interest_rate_rule_id", sqlType: "TEXT" },
     { name: "ofp_row_id", sqlType: "INTEGER" },
+    // Phase 5d Contract Hire columns. Null on every other route.
+    { name: "monthly_maintenance_gbp", sqlType: "REAL" },
+    { name: "initial_rental_multiplier", sqlType: "INTEGER" },
+    { name: "is_maintained", sqlType: "INTEGER" },
+    { name: "funder_id", sqlType: "TEXT" },
+    { name: "funder_name", sqlType: "TEXT" },
   ]);
 }
 

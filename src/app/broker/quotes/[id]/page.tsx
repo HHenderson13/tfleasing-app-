@@ -113,7 +113,20 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
             {quote.testDriveGbp && quote.testDriveGbp > 0 && (
               <Row label="Test-drive incentive" value={<span className="text-emerald-700">− {formatGbp(quote.testDriveGbp)}</span>} />
             )}
-            {quote.fundingRoute !== "outright" && (
+            {quote.fundingRoute === "contract_hire" ? (
+              <>
+                <div className="my-1 border-t border-slate-200" />
+                <Row label={`Initial rental (${quote.initialRentalMultiplier ?? "?"} × monthly)`} value={<strong>{formatGbp(quote.upfrontGbp ?? 0)}</strong>} />
+                <Row label="Monthly rental" value={<strong className="text-slate-900">{formatGbp(quote.monthlyRentalGbp ?? 0)}</strong>} />
+                {quote.isMaintained && quote.monthlyMaintenanceGbp && quote.monthlyMaintenanceGbp > 0 && (
+                  <Row label="Monthly maintenance" value={formatGbp(quote.monthlyMaintenanceGbp)} />
+                )}
+                <Row label={`Term`} value={`${quote.termMonths ?? 0} months · ${(quote.annualMileage ?? 0).toLocaleString()} mi/yr`} />
+                <Row label="Spec" value={`${quote.customerType === "business" ? "BCH" : "PCH"} · ${quote.isMaintained ? "Maintained" : "Customer maintained"}`} />
+                {quote.funderName && <Row label="Funder" value={quote.funderName} />}
+                <Row label="Total over term" value={formatGbp(quote.totalPayableGbp ?? 0)} />
+              </>
+            ) : quote.fundingRoute !== "outright" && (
               <>
                 <div className="my-1 border-t border-slate-200" />
                 <Row label="Cash deposit" value={<span className="text-slate-700">− {formatGbp(quote.upfrontGbp ?? 0)}</span>} />

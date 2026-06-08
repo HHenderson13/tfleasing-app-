@@ -15,7 +15,7 @@ const ROUTES: { key: string; href: (ref: string) => string; title: string; desc:
   { key: "pcp",           title: "PCP",               desc: "Personal Contract Purchase with optional final payment.",                       tone: "from-sky-500 to-indigo-700",      live: true,  href: (r) => `/broker/quote/${r}/pcp` },
   { key: "hp",            title: "Hire Purchase",     desc: "Equal monthly payments, customer owns at the end.",                             tone: "from-violet-500 to-fuchsia-700",  live: true,  href: (r) => `/broker/quote/${r}/hp` },
   { key: "hp_balloon",    title: "HP with Balloon",   desc: "Lower monthly payments with a balloon at the end.",                             tone: "from-amber-500 to-orange-700",    live: true,  href: (r) => `/broker/quote/${r}/hp-balloon` },
-  { key: "contract_hire", title: "Contract Hire",     desc: "Long-term rental — customer hands the vehicle back at the end.",                tone: "from-rose-500 to-pink-700",       live: false, href: (r) => `/broker/quote/${r}/contract-hire` },
+  { key: "contract_hire", title: "Contract Hire",     desc: "Long-term rental — customer hands the vehicle back at the end.",                tone: "from-rose-500 to-pink-700",       live: true,  href: (r) => `/broker/quote/${r}/contract-hire` },
 ];
 
 export default async function FundingRoutePickerPage({ params }: { params: Promise<{ ref: string }> }) {

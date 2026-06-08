@@ -664,8 +664,14 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
   // Finance fields (Phase 5 onwards).
   termMonths: integer("term_months"),
   annualMileage: integer("annual_mileage"),
-  upfrontGbp: real("upfront_gbp"),                  // customer's cash deposit
-  monthlyRentalGbp: real("monthly_rental_gbp"),     // monthly payment
+  upfrontGbp: real("upfront_gbp"),                  // customer's cash deposit / initial rental
+  monthlyRentalGbp: real("monthly_rental_gbp"),     // monthly payment / monthly rental
+  // Contract Hire-specific (Phase 5d) — left null on PCP/HP/HP-Bal.
+  monthlyMaintenanceGbp: real("monthly_maintenance_gbp"),
+  initialRentalMultiplier: integer("initial_rental_multiplier"),
+  isMaintained: integer("is_maintained", { mode: "boolean" }),
+  funderId: text("funder_id"),
+  funderName: text("funder_name"),
   balloonGbp: real("balloon_gbp"),                  // optional final payment (PCP / HP-Balloon)
   depositAllowanceGbp: real("deposit_allowance_gbp"),
   annualAprPct: real("annual_apr_pct"),
