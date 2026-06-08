@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -225,6 +225,35 @@ async function ensureBrokerPortalTables() {
   `));
   await db.run(sql.raw(
     `CREATE INDEX IF NOT EXISTS idx_broker_interest_rates_key ON broker_interest_rates(vehicle_class, customer_type, funding_route, term_months)`,
+  ));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_ofp_uploads (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      vehicle_class TEXT NOT NULL,
+      row_count INTEGER NOT NULL,
+      uploaded_at INTEGER NOT NULL,
+      uploaded_by_user_id TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_ofp_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      upload_id TEXT NOT NULL,
+      vehicle_class TEXT NOT NULL,
+      funding_route TEXT NOT NULL,
+      vehicle TEXT NOT NULL,
+      model_year TEXT,
+      term_months INTEGER NOT NULL,
+      annual_mileage INTEGER NOT NULL,
+      balloon_gbp REAL NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_broker_ofp_lookup ON broker_ofp_data(vehicle_class, funding_route, vehicle, model_year, term_months, annual_mileage)`,
+  ));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_broker_ofp_upload ON broker_ofp_data(upload_id)`,
   ));
 }
 

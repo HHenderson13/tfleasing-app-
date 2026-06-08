@@ -11,7 +11,7 @@ const TILES = [
   { key: "cash-values",    title: "Cash values + margins", desc: "What TF charges the customer per vehicle, and what we retain.", href: "/admin/broker-data/cash-values", tone: "from-emerald-500 to-teal-700",   live: true },
   { key: "stock-turn",     title: "Stock turn bonuses",    desc: "Bonus paid in return for registering by a deadline.",            href: "/admin/broker-data/stock-turn",  tone: "from-amber-500 to-orange-700",  live: true },
   { key: "interest-grids", title: "Interest + deposit grids", desc: "Per-term, per-customer-type rates for PCP / HP / HPB.",       href: "/admin/broker-data/interest",    tone: "from-sky-500 to-indigo-700",    live: true },
-  { key: "ofp",            title: "OFP data import",       desc: "Optional Final Payment data from the quarterly Ford XLSX.",     href: "/admin/broker-data/ofp",         tone: "from-violet-500 to-fuchsia-700",live: false },
+  { key: "ofp",            title: "OFP data import",       desc: "Optional Final Payment data from the quarterly Ford XLSX.",     href: "/admin/broker-data/ofp",         tone: "from-violet-500 to-fuchsia-700",live: true },
   { key: "incentives",     title: "EV bonus, trade-in, test drive", desc: "Power Promise wallbox/£500, trade-in £, test-drive £.", href: "/admin/broker-data/incentives", tone: "from-rose-500 to-pink-700",     live: false },
   { key: "business",       title: "Business discount",     desc: "Higher cash discount paired with the higher APR tier.",         href: "/admin/broker-data/business",   tone: "from-slate-700 to-slate-900",   live: false },
 ] as const;

@@ -667,6 +667,39 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
 // to expose VIN or cap-code to the admin grid. cap_code / cap_id are
 // captured optionally for Phase 5 (finance routes need them for ratebook
 // lookups).
+// Optional Final Payment (OFP) data from Ford's quarterly OFP workbooks.
+// One workbook per vehicle class (CV / PV), each containing two sheets —
+// PCP terminals and HP-with-Balloon terminals. Re-uploading wipes prior
+// rows of the same vehicle class and inserts the new set, so the cache
+// always reflects the live quarter.
+export const brokerOfpUploads = sqliteTable("broker_ofp_uploads", {
+  id: text("id").primaryKey(),
+  filename: text("filename").notNull(),
+  vehicleClass: text("vehicle_class").notNull(),  // 'cv' | 'pv'
+  rowCount: integer("row_count").notNull(),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+  uploadedByUserId: text("uploaded_by_user_id").notNull(),
+});
+
+export const brokerOfpData = sqliteTable("broker_ofp_data", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  uploadId: text("upload_id").notNull(),
+  vehicleClass: text("vehicle_class").notNull(),                              // 'cv' | 'pv'
+  fundingRoute: text("funding_route").notNull(),                              // 'pcp' | 'hp_balloon'
+  // Vehicle description from column B of the source sheet. Stored verbatim;
+  // Phase 5 fuzzy-matches against stockVehicles when running a quote.
+  vehicle: text("vehicle").notNull(),
+  modelYear: text("model_year"),                                              // column C
+  termMonths: integer("term_months").notNull(),
+  annualMileage: integer("annual_mileage").notNull(),
+  balloonGbp: real("balloon_gbp").notNull(),
+}, (t) => ({
+  byLookup: index("idx_broker_ofp_lookup").on(
+    t.vehicleClass, t.fundingRoute, t.vehicle, t.modelYear, t.termMonths, t.annualMileage,
+  ),
+  byUpload: index("idx_broker_ofp_upload").on(t.uploadId),
+}));
+
 // Manufacturer stock-turn bonuses. Admin enters one row per active
 // programme (e.g. "Q2 2026 Focus stock turn"). Quote form computes
 // which rules apply to a given vehicle based on bucket / model year /
