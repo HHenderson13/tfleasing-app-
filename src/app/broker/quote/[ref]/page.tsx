@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireBrokerUser } from "@/lib/auth-guard";
 import { findVehicleByReference } from "@/lib/broker-vehicle";
-import { loadMappedStock } from "@/lib/stock-list";
+import { isEvBucket, loadMappedStock } from "@/lib/stock-list";
 import { BrokerHeader } from "../../header";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,11 @@ export default async function FundingRoutePickerPage({ params }: { params: Promi
   if (!vehicle) notFound();
   const { rows } = await loadMappedStock();
   const mapped = rows.find((r) => r.vin === vehicle.vin);
+  // Light EV detection here so we can prompt the broker before they
+  // commit to a route — the active offer details get shown on the
+  // form itself once they pick. Keeps the route picker informative
+  // without duplicating the wallbox/cash messaging too early.
+  const isEv = !!mapped && isEvBucket(mapped.bucket);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -43,6 +48,9 @@ export default async function FundingRoutePickerPage({ params }: { params: Promi
               <span className="text-base text-slate-700">{mapped.variant}</span>
               {mapped.derivative && <span className="text-xs text-slate-500">· {mapped.derivative}</span>}
               {mapped.modelYear && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{mapped.modelYear}</span>}
+              {isEv && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">⚡ Electric</span>
+              )}
             </div>
             <div className="mt-1 text-[11px] text-slate-500 space-x-2">
               {mapped.bodyStyle && <span>{mapped.bodyStyle}</span>}
@@ -52,6 +60,21 @@ export default async function FundingRoutePickerPage({ params }: { params: Promi
               <span>· {mapped.colour}</span>
             </div>
           </section>
+        )}
+
+        {isEv && (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl leading-none">⚡</span>
+              <div>
+                <div className="text-sm font-semibold text-emerald-900">Ford Power Promise</div>
+                <p className="mt-1 text-xs text-emerald-900/80">
+                  Electric vehicle — your customer can choose a free home wallbox <em>or</em> take the
+                  cash alternative as a price reduction. Pick the offer on the route&apos;s form below.
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">

@@ -24,18 +24,33 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
     <div className="min-h-screen bg-slate-50">
       <BrokerHeader me={me} pathname="/broker/quotes" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <Link href="/broker/quotes" className="text-xs text-slate-500 hover:text-slate-900">← All saved quotes</Link>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{route} quote</h1>
-            <div className="mt-1 text-xs text-slate-400">
-              Reference <span className="font-mono font-semibold text-slate-700">{quote.vehicleRef}</span>
-              <span className="mx-2">·</span>
-              Saved {new Date(quote.updatedAt).toLocaleString("en-GB")} by {creator?.name ?? "Unknown"}
+        <Link href="/broker/quotes" className="text-xs text-slate-500 hover:text-slate-900 print-hide">← All saved quotes</Link>
+        {/* .printable wraps the whole quote — on screen it looks normal,
+            on print the body collapses to just this region. The Print
+            and Delete buttons sit inside but are .print-hide so they
+            don't appear on paper. */}
+        <div className="printable">
+          {/* Print-only header — only shows when the browser is rendering
+              for print. Gives the printout an obvious "what is this?"
+              banner without polluting the screen layout. */}
+          <div className="mb-6 hidden print:block">
+            <div className="text-[9pt] uppercase tracking-widest text-slate-500">TrustFord Broker Quote</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{me.brokerName}</div>
+            <div className="text-xs text-slate-500">Reference {quote.vehicleRef} · Saved {new Date(quote.updatedAt).toLocaleString("en-GB")}</div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-3 print:mt-0">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{route} quote</h1>
+              <div className="mt-1 text-xs text-slate-400 print:hidden">
+                Reference <span className="font-mono font-semibold text-slate-700">{quote.vehicleRef}</span>
+                <span className="mx-2">·</span>
+                Saved {new Date(quote.updatedAt).toLocaleString("en-GB")} by {creator?.name ?? "Unknown"}
+              </div>
+            </div>
+            <div className="print-hide">
+              <QuoteActions quoteId={quote.id} />
             </div>
           </div>
-          <QuoteActions quoteId={quote.id} />
-        </div>
 
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Vehicle</h2>
@@ -79,7 +94,7 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
           </div>
         </section>
 
-        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print-keep-together">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pricing</h2>
           <dl className="mt-3 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm">
             <Row label="Vehicle cash" value={formatGbp(quote.vehicleCashGbp)} />
@@ -143,6 +158,14 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
         <p className="mt-6 text-[11px] text-slate-400">
           Send this quote to your TrustFord contact and quote the reference <span className="font-mono font-semibold text-slate-700">{quote.vehicleRef}</span> — they&apos;ll match it back to the right vehicle.
         </p>
+
+        {/* Print-only footer with disclaimers a customer/broker needs to
+            see on paper but that would clutter the on-screen layout. */}
+        <div className="mt-6 hidden text-[9pt] leading-tight text-slate-600 print:block">
+          <p className="mt-2">This quote is indicative and subject to credit approval, vehicle availability and stock-turn registration deadlines where applicable. Figures include 20% VAT on broker commission only. All other figures shown as agreed with TrustFord.</p>
+          <p className="mt-2">Saved by <strong>{creator?.name ?? "Unknown"}</strong> at <strong>{me.brokerName}</strong> on <strong>{new Date(quote.updatedAt).toLocaleString("en-GB")}</strong>.</p>
+        </div>
+        </div> {/* /.printable */}
       </main>
     </div>
   );

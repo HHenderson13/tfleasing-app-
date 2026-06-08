@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { db } from "@/db";
 import { stockMappings, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
@@ -41,7 +42,14 @@ export interface MappedStockRow {
 type MapEntry = { name: string; hidden: boolean; promoteToVariant: boolean };
 type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "option" | "body" | "transmission" | "drive" | "status" | "derivative";
 
-export async function loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploadedAt: Date | null }> {
+// React-cache wrapped: every page on the broker quote flow loads the
+// mapped stock (search → route picker → outright/PCP/HP/HP-Balloon →
+// /broker/quotes/[id] detail). Without this cache the same heavy
+// SELECT + mapping work runs 2-4× per render of a single quote page.
+// Cache scope is per-request, so it never leaks across users.
+export const loadMappedStock = cache(_loadMappedStock);
+
+async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploadedAt: Date | null }> {
   const [rows, mappings, latestUploadRows] = await Promise.all([
     db.select().from(stockVehicles).where(and(eq(stockVehicles.customerAssigned, false), isNotNull(stockVehicles.vin))),
     db.select().from(stockMappings),

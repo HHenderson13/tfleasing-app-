@@ -124,3 +124,55 @@ body {
 .font-mono {
   font-family: var(--font-mono);
 }
+
+/* ── Print stylesheet ──────────────────────────────────────────────────────
+   The broker portal's saved-quote detail uses .printable on the surface
+   that should appear on paper. Everything else collapses so a print dialog
+   gives a clean deal sheet without the broker having to fiddle with page
+   settings. Tested in Safari/Chrome/Firefox print preview.
+   ─────────────────────────────────────────────────────────────────────── */
+@media print {
+  /* Hide every element that isn't explicitly marked printable or its
+     ancestor. Done by hiding the body, then re-showing the .printable
+     subtree. More reliable than per-component class fiddling. */
+  body * {
+    visibility: hidden;
+  }
+  .printable, .printable * {
+    visibility: visible;
+  }
+  .printable {
+    position: absolute;
+    inset: 0;
+    background: white;
+    color: black;
+    padding: 24px 32px;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+  /* Anything tagged .print-hide stays gone — useful for action buttons
+     inside the printable region. */
+  .print-hide,
+  .printable .print-hide,
+  .printable .print-hide * {
+    display: none !important;
+  }
+  /* Keep the totals card from breaking across pages. */
+  .print-keep-together {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Strip soft surfaces so dark backgrounds don't waste toner. */
+  .printable .bg-slate-50, .printable .bg-slate-100 {
+    background: transparent !important;
+  }
+  .printable .rounded-2xl, .printable .rounded-xl, .printable .rounded-lg {
+    border-radius: 0 !important;
+  }
+  .printable .shadow-sm, .printable .shadow-md, .printable .shadow-lg, .printable .shadow-xl {
+    box-shadow: none !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
