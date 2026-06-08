@@ -6,6 +6,13 @@ import { loadMappedStock } from "@/lib/stock-list";
 import { vehicleSnapshotFromMapped } from "@/lib/broker-quotes";
 import { findCashValue } from "@/lib/broker-cash-values";
 import { findApplicableStockTurnRules } from "@/lib/broker-stock-turn";
+import {
+  findBusinessDiscount,
+  findEvOffer,
+  findTestDriveOffers,
+  findTradeInOffers,
+} from "@/lib/broker-incentives";
+import { isEvBucket, isVanBucket } from "@/lib/stock-list";
 import { BrokerHeader } from "../../../header";
 import { OutrightQuoteForm } from "./form";
 
@@ -22,7 +29,15 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
   const snapshot = vehicleSnapshotFromMapped(mapped);
   // Cash-value lookup is server-side — the broker doesn't get to peek
   // at the table. We just expose the matched cash price as a pre-fill.
-  const [cashValue, stockTurnRules] = await Promise.all([
+  const vehicleClass = isVanBucket(mapped.bucket) ? "van" : "car";
+  const isEv = isEvBucket(mapped.bucket);
+  // We surface ALL eligible business discounts; the form filters by the
+  // customer's VAT-business flag at render time so flipping the toggle
+  // doesn't require a round-trip.
+  const [
+    cashValue, stockTurnRules, evOffer, tradeInOffers, testDriveOffers,
+    businessDiscountRetail, businessDiscountBusinessVat,
+  ] = await Promise.all([
     findCashValue({
       bucket: mapped.bucket,
       variant: mapped.variant,
@@ -34,7 +49,16 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
       modelYear: mapped.modelYear,
       gateRelease: mapped.gateRelease,
     }),
+    findEvOffer({ vehicleClass, bucket: mapped.bucket, customerType: "retail", customerIsVatBusiness: false, fundingRoute: "outright", isEv }),
+    findTradeInOffers({ vehicleClass, bucket: mapped.bucket, customerType: "retail", customerIsVatBusiness: false, fundingRoute: "outright", isEv }),
+    findTestDriveOffers({ vehicleClass, bucket: mapped.bucket, customerType: "retail", customerIsVatBusiness: false, fundingRoute: "outright", isEv }),
+    // Retail variant always returns null — we just need to invoke it
+    // once for type consistency. The real business lookup follows.
+    Promise.resolve(null),
+    findBusinessDiscount({ vehicleClass, bucket: mapped.bucket, customerType: "business", customerIsVatBusiness: true, fundingRoute: "outright", isEv }),
   ]);
+  // Suppress the unused-var warning while keeping the symmetry above.
+  void businessDiscountRetail;
   const defaultCashGbp = cashValue?.cashGbp ?? null;
 
   return (
@@ -74,6 +98,10 @@ export default async function OutrightQuotePage({ params }: { params: Promise<{ 
             mustRegisterBy: r.mustRegisterBy,
             notes: r.notes,
           }))}
+          evOffer={evOffer}
+          tradeInOffers={tradeInOffers}
+          testDriveOffers={testDriveOffers}
+          businessDiscount={businessDiscountBusinessVat}
         />
       </main>
     </div>

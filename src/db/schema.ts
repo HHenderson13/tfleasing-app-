@@ -642,6 +642,22 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
   // is for audit so admin can see which programme the broker used.
   stockTurnRuleId: text("stock_turn_rule_id"),
   stockTurnBonusGbp: real("stock_turn_bonus_gbp"),
+  // Phase 4e incentives — each id is for audit; each *_gbp is the
+  // value applied at the moment of saving so the quote re-displays the
+  // same numbers even if admin later edits the source rule.
+  evOfferId: text("ev_offer_id"),
+  evChoice: text("ev_choice"),                      // 'wallbox' | 'cash' | null when not EV
+  evCashGbp: real("ev_cash_gbp"),                   // populated when evChoice = 'cash'
+  tradeInOfferId: text("trade_in_offer_id"),
+  tradeInGbp: real("trade_in_gbp"),
+  testDriveOfferId: text("test_drive_offer_id"),
+  testDriveGbp: real("test_drive_gbp"),
+  businessDiscountOfferId: text("business_discount_offer_id"),
+  businessDiscountGbp: real("business_discount_gbp"),
+  // APR uplift only matters on finance routes (Phase 5) — captured here
+  // for audit so the saved quote keeps a record of the trade-off the
+  // broker chose. Outright quotes leave this null.
+  businessAprUpliftPct: real("business_apr_uplift_pct"),
   // Total customer pays. customer_total = (vehicle_cash - stock_turn_bonus)
   //                                       + commission_ex + commission_vat.
   customerTotalGbp: real("customer_total_gbp").notNull(),
@@ -667,6 +683,74 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
 // to expose VIN or cap-code to the admin grid. cap_code / cap_id are
 // captured optionally for Phase 5 (finance routes need them for ratebook
 // lookups).
+// EV Power Promise — wallbox OR cash-alternative discount. The customer
+// picks one when the vehicle is electric. Admin maintains one or more
+// active offers (different cash levels for different periods).
+export const brokerEvOffers = sqliteTable("broker_ev_offers", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  cashAlternativeGbp: real("cash_alternative_gbp").notNull(),
+  wallboxLabel: text("wallbox_label").notNull(),
+  validFrom: integer("valid_from", { mode: "timestamp" }),
+  validUntil: integer("valid_until", { mode: "timestamp" }),
+  notes: text("notes"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Trade-in allowance — fixed £ off when the customer is part-exchanging.
+// Carries T&Cs text that gets displayed on the quote.
+export const brokerTradeInOffers = sqliteTable("broker_trade_in_offers", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  amountGbp: real("amount_gbp").notNull(),
+  termsText: text("terms_text").notNull(),
+  vehicleClass: text("vehicle_class"),    // null = any class
+  bucket: text("bucket"),                 // null = any bucket
+  validFrom: integer("valid_from", { mode: "timestamp" }),
+  validUntil: integer("valid_until", { mode: "timestamp" }),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Test-drive incentive — £ credit for booking a test drive on the vehicle.
+export const brokerTestDriveOffers = sqliteTable("broker_test_drive_offers", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  amountGbp: real("amount_gbp").notNull(),
+  termsText: text("terms_text"),
+  vehicleClass: text("vehicle_class"),
+  bucket: text("bucket"),
+  validFrom: integer("valid_from", { mode: "timestamp" }),
+  validUntil: integer("valid_until", { mode: "timestamp" }),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Business discount — extra discount % for VAT-registered businesses, with
+// a paired APR uplift % that applies on finance routes. Per spec: "cash
+// purchase no brainer, but if on a finance, then it's worth comparing low
+// rate finance less discount vs higher discount higher APR".
+// funding_route nullable so a row can apply to any route the broker picks.
+export const brokerBusinessDiscounts = sqliteTable("broker_business_discounts", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  vehicleClass: text("vehicle_class"),    // null = any class
+  bucket: text("bucket"),                 // null = any bucket
+  fundingRoute: text("funding_route"),    // null = any route
+  extraDiscountPct: real("extra_discount_pct").notNull(),
+  aprUpliftPct: real("apr_uplift_pct").notNull().default(0),
+  notes: text("notes"),
+  validFrom: integer("valid_from", { mode: "timestamp" }),
+  validUntil: integer("valid_until", { mode: "timestamp" }),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Optional Final Payment (OFP) data from Ford's quarterly OFP workbooks.
 // One workbook per vehicle class (CV / PV), each containing two sheets —
 // PCP terminals and HP-with-Balloon terminals. Re-uploading wipes prior

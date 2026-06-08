@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -255,6 +255,79 @@ async function ensureBrokerPortalTables() {
   await db.run(sql.raw(
     `CREATE INDEX IF NOT EXISTS idx_broker_ofp_upload ON broker_ofp_data(upload_id)`,
   ));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_ev_offers (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      cash_alternative_gbp REAL NOT NULL,
+      wallbox_label TEXT NOT NULL,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      notes TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_trade_in_offers (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      amount_gbp REAL NOT NULL,
+      terms_text TEXT NOT NULL,
+      vehicle_class TEXT,
+      bucket TEXT,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_test_drive_offers (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      amount_gbp REAL NOT NULL,
+      terms_text TEXT,
+      vehicle_class TEXT,
+      bucket TEXT,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_business_discounts (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      vehicle_class TEXT,
+      bucket TEXT,
+      funding_route TEXT,
+      extra_discount_pct REAL NOT NULL,
+      apr_uplift_pct REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      valid_from INTEGER,
+      valid_until INTEGER,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await ensureColumns("broker_quotes", [
+    { name: "ev_offer_id", sqlType: "TEXT" },
+    { name: "ev_choice", sqlType: "TEXT" },
+    { name: "ev_cash_gbp", sqlType: "REAL" },
+    { name: "trade_in_offer_id", sqlType: "TEXT" },
+    { name: "trade_in_gbp", sqlType: "REAL" },
+    { name: "test_drive_offer_id", sqlType: "TEXT" },
+    { name: "test_drive_gbp", sqlType: "REAL" },
+    { name: "business_discount_offer_id", sqlType: "TEXT" },
+    { name: "business_discount_gbp", sqlType: "REAL" },
+    { name: "business_apr_uplift_pct", sqlType: "REAL" },
+  ]);
 }
 
 // Indexes for the hottest WHERE / ORDER BY clauses on the request path.

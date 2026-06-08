@@ -4,10 +4,20 @@ import { brokerQuotes } from "@/db/schema";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireBrokerUser } from "@/lib/auth-guard";
-import { findVinByReference } from "@/lib/broker-vehicle";
+import { findVehicleByReference, findVinByReference } from "@/lib/broker-vehicle";
 import { computeOutright } from "@/lib/broker-quote-pricing";
 import { findRuleById } from "@/lib/broker-stock-turn";
+import {
+  findBusinessDiscountById,
+  findEvOfferById,
+  findTestDriveOfferById,
+  findTradeInOfferById,
+} from "@/lib/broker-incentives";
 import { logError } from "@/lib/logger";
+
+// Note: findVehicleByReference is imported but not currently used in this
+// file — kept for the next phase (5) that needs the full vehicle row.
+void findVehicleByReference;
 
 interface SaveInput {
   ref: string;
@@ -16,10 +26,15 @@ interface SaveInput {
   customerIsVatBusiness: boolean;
   vehicleCashGbp: number;
   commissionExVatGbp: number;
-  // Stock-turn programme the broker picked, or null for none. Re-validated
-  // server-side — a crafted id silently degrades to no-bonus rather than
-  // letting the broker spend a bonus that doesn't exist.
   stockTurnRuleId: string | null;
+  // Phase 4e incentive selections. Server resolves each one to its
+  // canonical amount so a crafted id can't claim a discount that
+  // doesn't exist or use stale numbers.
+  evOfferId: string | null;
+  evChoice: "wallbox" | "cash" | null;
+  tradeInOfferId: string | null;
+  testDriveOfferId: string | null;
+  businessDiscountOfferId: string | null;
   notes: string | null;
 }
 
@@ -32,28 +47,43 @@ export async function saveOutrightQuoteAction(input: SaveInput) {
     if (input.customerType !== "retail" && input.customerType !== "business") {
       return { ok: false as const, error: "Pick a customer type." };
     }
-    // Validate the vehicle reference resolves before we save — stops a
-    // crafted ref persisting a meaningless quote row.
     const vin = await findVinByReference(input.ref);
     if (!vin) return { ok: false as const, error: "We can't find that vehicle anymore — it may have been removed." };
-
-    // Snapshot is opaque JSON from the form. We don't trust the structure
-    // beyond "valid JSON". It's stored as text and only re-parsed for
-    // display, so a malformed string here is the broker's mistake to
-    // notice on the saved-quote page.
     try { JSON.parse(input.snapshotJson); } catch {
       return { ok: false as const, error: "Vehicle snapshot was malformed. Refresh the page and try again." };
     }
 
-    // Resolve the chosen stock-turn rule server-side so the broker can't
-    // claim a bonus value that wasn't actually offered.
-    const stockTurn = input.stockTurnRuleId ? await findRuleById(input.stockTurnRuleId) : null;
+    // Resolve every chosen offer server-side. Each falls back to "none"
+    // if the id is missing or invalid rather than failing the whole save.
+    const businessEligible = input.customerType === "business" && input.customerIsVatBusiness;
+    const [stockTurn, ev, tradeIn, testDrive, businessDiscount] = await Promise.all([
+      input.stockTurnRuleId ? findRuleById(input.stockTurnRuleId) : Promise.resolve(null),
+      input.evOfferId && input.evChoice ? findEvOfferById(input.evOfferId) : Promise.resolve(null),
+      input.tradeInOfferId ? findTradeInOfferById(input.tradeInOfferId) : Promise.resolve(null),
+      input.testDriveOfferId ? findTestDriveOfferById(input.testDriveOfferId) : Promise.resolve(null),
+      // Business discount only resolves when the customer is actually a
+      // VAT-registered business — guards against a crafted id arriving
+      // from a retail customer.
+      input.businessDiscountOfferId && businessEligible
+        ? findBusinessDiscountById(input.businessDiscountOfferId)
+        : Promise.resolve(null),
+    ]);
+
     const stockTurnBonus = stockTurn?.bonusGbp ?? 0;
+    const evCash = (ev && input.evChoice === "cash") ? ev.cashAlternativeGbp : 0;
+    const tradeInAmount = tradeIn?.amountGbp ?? 0;
+    const testDriveAmount = testDrive?.amountGbp ?? 0;
+    const businessDiscountPct = businessDiscount?.extraDiscountPct ?? 0;
+    const aprUplift = businessDiscount?.aprUpliftPct ?? 0;
 
     const totals = computeOutright({
       vehicleCashGbp: input.vehicleCashGbp,
       commissionExVatGbp: input.commissionExVatGbp,
       stockTurnBonusGbp: stockTurnBonus,
+      evCashGbp: evCash,
+      tradeInGbp: tradeInAmount,
+      testDriveGbp: testDriveAmount,
+      businessDiscountPct,
     });
 
     const id = randomUUID();
@@ -73,6 +103,16 @@ export async function saveOutrightQuoteAction(input: SaveInput) {
       vehicleCashGbp: totals.vehicleCashGbp,
       stockTurnRuleId: stockTurn?.id ?? null,
       stockTurnBonusGbp: stockTurn ? totals.stockTurnBonusGbp : null,
+      evOfferId: ev?.id ?? null,
+      evChoice: input.evChoice,
+      evCashGbp: ev && input.evChoice === "cash" ? totals.evCashGbp : null,
+      tradeInOfferId: tradeIn?.id ?? null,
+      tradeInGbp: tradeIn ? totals.tradeInGbp : null,
+      testDriveOfferId: testDrive?.id ?? null,
+      testDriveGbp: testDrive ? totals.testDriveGbp : null,
+      businessDiscountOfferId: businessDiscount?.id ?? null,
+      businessDiscountGbp: businessDiscount ? totals.businessDiscountGbp : null,
+      businessAprUpliftPct: businessDiscount ? aprUplift : null,
       customerTotalGbp: totals.customerTotalGbp,
       termMonths: null,
       annualMileage: null,

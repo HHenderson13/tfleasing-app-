@@ -83,14 +83,29 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pricing</h2>
           <dl className="mt-3 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm">
             <Row label="Vehicle cash" value={formatGbp(quote.vehicleCashGbp)} />
+            {quote.businessDiscountGbp && quote.businessDiscountGbp > 0 && (
+              <Row label="Business discount" value={<span className="text-emerald-700">− {formatGbp(quote.businessDiscountGbp)}</span>} />
+            )}
             {quote.stockTurnBonusGbp && quote.stockTurnBonusGbp > 0 && (
               <Row label="Stock turn bonus" value={<span className="text-emerald-700">− {formatGbp(quote.stockTurnBonusGbp)}</span>} />
+            )}
+            {quote.evCashGbp && quote.evCashGbp > 0 && (
+              <Row label="EV cash alternative" value={<span className="text-emerald-700">− {formatGbp(quote.evCashGbp)}</span>} />
+            )}
+            {quote.tradeInGbp && quote.tradeInGbp > 0 && (
+              <Row label="Trade-in allowance" value={<span className="text-emerald-700">− {formatGbp(quote.tradeInGbp)}</span>} />
+            )}
+            {quote.testDriveGbp && quote.testDriveGbp > 0 && (
+              <Row label="Test-drive incentive" value={<span className="text-emerald-700">− {formatGbp(quote.testDriveGbp)}</span>} />
             )}
             <Row label="Your commission" value={formatGbp(quote.commissionExVatGbp)} />
             <Row label="VAT on commission (20%)" value={formatGbp(quote.commissionVatGbp)} />
             <div className="my-1 border-t border-slate-200" />
             <Row label={<strong>Customer pays</strong>} value={<strong className="text-slate-900">{formatGbp(quote.customerTotalGbp)}</strong>} />
           </dl>
+          {quote.evOfferId && quote.evChoice === "wallbox" && (
+            <p className="mt-3 text-xs text-emerald-700">EV Power Promise: customer chose the wallbox option.</p>
+          )}
         </section>
 
         {quote.notes && (

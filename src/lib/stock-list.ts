@@ -153,6 +153,31 @@ const VAN_BUCKETS = new Set([
 
 // Some uploads use sourceSheet labels like "Transit (FT)" — startsWith
 // catches that without being too aggressive.
+// Ford's electric-only buckets — drives the EV Power Promise prompt
+// on the quote form. Hybrids aren't included; the offer is reserved
+// for full-EVs only. New EV launches just need adding here.
+const EV_BUCKETS = new Set([
+  "Mustang Mach-E",
+  "Mach-E",
+  "Explorer EV",
+  "Explorer",      // when sold as EV — admins can refine the bucket name later
+  "Capri",
+  "Puma Gen-E",
+  "E-Transit",
+  "E-Transit Custom",
+  "E-Transit Courier",
+]);
+export function isEvBucket(bucket: string): boolean {
+  const b = bucket.trim();
+  if (!b) return false;
+  if (EV_BUCKETS.has(b)) return true;
+  // Catch model-year suffixed variants the source uses, e.g. "E-Transit MY26".
+  for (const v of EV_BUCKETS) {
+    if (b.startsWith(v + " ") || b.startsWith(v + "(")) return true;
+  }
+  return false;
+}
+
 export function isVanBucket(bucket: string): boolean {
   const b = bucket.trim();
   if (!b) return false;
