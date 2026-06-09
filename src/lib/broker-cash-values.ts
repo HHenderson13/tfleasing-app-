@@ -2,6 +2,13 @@ import "server-only";
 import { db } from "@/db";
 import { brokerVehicleCashValues } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import {
+  computePricing,
+  hasFullPricing,
+  type FinanceProgramme,
+  type MaybePricingComponents,
+  type PricingBreakdown,
+} from "./broker-pricing";
 
 export interface VehicleKey {
   bucket: string;
@@ -11,12 +18,18 @@ export interface VehicleKey {
 }
 
 export interface CashValueLookup {
+  // Legacy fields — populated for rows that haven't been migrated to the
+  // component-driven pricing yet. cashGbp is the flat customer OTR.
   cashGbp: number;
   marginGbp: number | null;
   marginPct: number | null;
   capCode: string | null;
   capId: string | null;
   notes: string | null;
+  // Phase 7 — pricing components. All null on legacy rows. When all are
+  // set, the quote engine computes per-programme OTRs from them; otherwise
+  // it falls back to cashGbp above.
+  pricing: MaybePricingComponents;
 }
 
 // Strict-match lookup. The cash-value row is keyed exactly on the broker-
@@ -32,15 +45,8 @@ export async function findCashValue(key: VehicleKey): Promise<CashValueLookup | 
   const whereClauses = [
     eq(brokerVehicleCashValues.bucket, key.bucket),
     eq(brokerVehicleCashValues.variant, key.variant),
-    key.derivative === null
-      ? // SQLite IS NULL — drizzle's eq() doesn't generate IS NULL, so
-        // we re-load all rows for this bucket/variant and match in JS
-        // for the null-derivative case. Tiny payload.
-        undefined
-      : eq(brokerVehicleCashValues.derivative, key.derivative),
-    key.modelYear === null
-      ? undefined
-      : eq(brokerVehicleCashValues.modelYear, key.modelYear),
+    key.derivative === null ? undefined : eq(brokerVehicleCashValues.derivative, key.derivative),
+    key.modelYear === null ? undefined : eq(brokerVehicleCashValues.modelYear, key.modelYear),
   ].filter((c): c is NonNullable<typeof c> => !!c);
 
   const rows = await db
@@ -59,5 +65,35 @@ export async function findCashValue(key: VehicleKey): Promise<CashValueLookup | 
     capCode: exact.capCode,
     capId: exact.capId,
     notes: exact.notes,
+    pricing: {
+      retailPriceGbp: exact.retailPriceGbp,
+      deliveryGbp: exact.deliveryGbp,
+      pdiPlatesGbp: exact.pdiPlatesGbp,
+      firstRegFeeGbp: exact.firstRegFeeGbp,
+      rflGbp: exact.rflGbp,
+      tradingMarginPct: exact.tradingMarginPct,
+      standardsPct: exact.standardsPct,
+      vetsPct: exact.vetsPct,
+      oneFDiscountPct: exact.oneFDiscountPct,
+      dealerProfitGbp: exact.dealerProfitGbp,
+    },
   };
+}
+
+// Resolves the cash OTR a quote should use. When the row has full pricing
+// components set, the breakdown is the source of truth and the legacy
+// cashGbp is ignored. Otherwise we fall back to cashGbp (which is the
+// same for both programmes).
+export interface ResolvedProgrammePrice {
+  programme: FinanceProgramme;
+  cashGbp: number;
+  breakdown: PricingBreakdown | null;   // null when fallback was used
+}
+
+export function resolveProgrammePrice(value: CashValueLookup, programme: FinanceProgramme): ResolvedProgrammePrice {
+  if (hasFullPricing(value.pricing)) {
+    const breakdown = computePricing(value.pricing, programme);
+    return { programme, cashGbp: breakdown.otrGbp, breakdown };
+  }
+  return { programme, cashGbp: value.cashGbp, breakdown: null };
 }

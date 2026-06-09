@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/db";
 import { brokerOfpData } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { findCashValue } from "./broker-cash-values";
+import { findCashValue, resolveProgrammePrice, type CashValueLookup } from "./broker-cash-values";
 import { findApplicableStockTurnRules } from "./broker-stock-turn";
 import {
   findBusinessDiscount,
@@ -13,29 +13,39 @@ import {
 import { findBestInterestRate } from "./broker-interest-rates";
 import type { CustomerTypeRate, FinanceRoute } from "./broker-interest-rates";
 import { findOfpCandidates, type OfpCandidate } from "./broker-ofp-lookup";
+import type { FinanceProgramme, PricingBreakdown } from "./broker-pricing";
 
 // Vehicle class on the broker portal is always concrete — 'car' or 'van'.
 // The interest-rates lookup also accepts 'all' as a scope label, but a
 // real quote can never be against an 'all' vehicle, so we narrow here.
 type ConcreteVehicleClass = "car" | "van";
 
-// Loads every piece of data the finance form needs in parallel.
-// Shared by /broker/quote/[ref]/pcp|hp|hp-balloon so all three routes
-// open with identical context — only the form's prompts + balloon
-// behaviour differ.
+export interface InterestRateMatchUi {
+  id: string;
+  label: string;
+  annualAprPct: number;
+  depositAllowanceGbp: number | null;
+  specificity: number;
+}
+
+// Per-programme data so the form can show 1N and 1F side-by-side.
+export interface ProgrammeContext {
+  programme: FinanceProgramme;
+  // OTR the customer pays for the vehicle on this programme. Null when
+  // neither pricing components nor a legacy cash value exist.
+  cashGbp: number | null;
+  // Full pricing breakdown when components are set; null otherwise.
+  pricingBreakdown: PricingBreakdown | null;
+  // Best-matching interest rate for this programme + term + customer.
+  interestRate: InterestRateMatchUi | null;
+}
 
 export interface FinanceQuoteContext {
-  // From cash-values table (admin-set). Form pre-fills the cash field.
-  defaultCashGbp: number | null;
-  // Interest rate + deposit allowance for the chosen term, ranked
-  // exact-bucket → class → 'all'. Null if no row matches.
-  interestRate: {
-    id: string;
-    label: string;
-    annualAprPct: number;
-    depositAllowanceGbp: number | null;
-    specificity: 3 | 2 | 1;
-  } | null;
+  programmes: Record<FinanceProgramme, ProgrammeContext>;
+  // True when the cash-values row drives prices via the Ford component
+  // model. Used by the form to label things "Computed from pricing" vs
+  // "Manual cash price" and to enable side-by-side comparison.
+  hasComponentPricing: boolean;
   // OFP balloon candidates — single best match preferred, but always
   // return the top few so the form can show a chooser if needed.
   ofpCandidates: OfpCandidate[];
@@ -67,13 +77,41 @@ export interface LoadContextInput {
   customerIsVatBusiness: boolean;
 }
 
+function buildProgrammeContext(
+  cashValue: CashValueLookup | null,
+  rate: InterestRateMatchUi | null,
+  programme: FinanceProgramme,
+): ProgrammeContext {
+  if (!cashValue) {
+    return { programme, cashGbp: null, pricingBreakdown: null, interestRate: rate };
+  }
+  const resolved = resolveProgrammePrice(cashValue, programme);
+  return {
+    programme,
+    cashGbp: resolved.cashGbp,
+    pricingBreakdown: resolved.breakdown,
+    interestRate: rate,
+  };
+}
+
 export async function loadFinanceContext(input: LoadContextInput): Promise<FinanceQuoteContext> {
   const ofpClass = input.vehicleClass === "van" ? "cv" : "pv";
   const ofpRoute = input.fundingRoute === "pcp" ? "pcp" : input.fundingRoute === "hp_balloon" ? "hp_balloon" : null;
 
+  // Look up both programme rates in parallel so the form can compare.
+  const rateLookup = (programme: FinanceProgramme) => findBestInterestRate({
+    vehicleClass: input.vehicleClass,
+    bucket: input.bucket,
+    customerType: input.customerType,
+    financeProgramme: programme,
+    fundingRoute: input.fundingRoute,
+    termMonths: input.termMonths,
+  });
+
   const [
     cashValue,
-    rate,
+    rate1n,
+    rate1f,
     stockTurn,
     evOffer,
     tradeIn,
@@ -87,13 +125,8 @@ export async function loadFinanceContext(input: LoadContextInput): Promise<Finan
       derivative: input.derivative,
       modelYear: input.modelYear,
     }),
-    findBestInterestRate({
-      vehicleClass: input.vehicleClass,
-      bucket: input.bucket,
-      customerType: input.customerType,
-      fundingRoute: input.fundingRoute,
-      termMonths: input.termMonths,
-    }),
+    rateLookup("1n"),
+    rateLookup("1f"),
     findApplicableStockTurnRules({
       bucket: input.bucket,
       modelYear: input.modelYear,
@@ -146,8 +179,11 @@ export async function loadFinanceContext(input: LoadContextInput): Promise<Finan
   ]);
 
   return {
-    defaultCashGbp: cashValue?.cashGbp ?? null,
-    interestRate: rate,
+    programmes: {
+      "1n": buildProgrammeContext(cashValue, rate1n, "1n"),
+      "1f": buildProgrammeContext(cashValue, rate1f, "1f"),
+    },
+    hasComponentPricing: !!cashValue?.pricing.retailPriceGbp,
     ofpCandidates,
     stockTurnRules: stockTurn.map((r) => ({
       id: r.id, label: r.label, bonusGbp: r.bonusGbp, mustRegisterBy: r.mustRegisterBy, notes: r.notes,

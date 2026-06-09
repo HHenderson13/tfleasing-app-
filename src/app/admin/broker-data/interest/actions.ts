@@ -9,12 +9,14 @@ import { requireAdmin } from "@/lib/auth-guard";
 type VehicleClass = "car" | "van" | "all";
 type CustomerType = "retail" | "business";
 type Route = "pcp" | "hp" | "hp_balloon";
+type FinanceProgramme = "1n" | "1f";
 
 interface CreateInput {
   label: string;
   vehicleClass: VehicleClass;
   bucket: string | null;
   customerType: CustomerType;
+  financeProgramme: FinanceProgramme | null;     // null = applies to both
   fundingRoute: Route;
   termMonths: number;
   annualAprPct: number;
@@ -42,6 +44,7 @@ export async function createInterestRateAction(input: CreateInput) {
   if (!label) return { ok: false as const, error: "Label is required." };
   if (!["car", "van", "all"].includes(input.vehicleClass)) return { ok: false as const, error: "Pick a vehicle class." };
   if (!["retail", "business"].includes(input.customerType)) return { ok: false as const, error: "Pick a customer type." };
+  if (input.financeProgramme !== null && !["1n", "1f"].includes(input.financeProgramme)) return { ok: false as const, error: "Pick a finance programme or leave it as Both." };
   if (!["pcp", "hp", "hp_balloon"].includes(input.fundingRoute)) return { ok: false as const, error: "Pick a funding route." };
   if (!Number.isFinite(input.termMonths) || input.termMonths <= 0) return { ok: false as const, error: "Term must be a positive number of months." };
   if (!Number.isFinite(input.annualAprPct) || input.annualAprPct < 0) return { ok: false as const, error: "APR must be a non-negative number." };
@@ -54,6 +57,7 @@ export async function createInterestRateAction(input: CreateInput) {
     vehicleClass: input.vehicleClass,
     bucket: trim(input.bucket),
     customerType: input.customerType,
+    financeProgramme: input.financeProgramme,
     fundingRoute: input.fundingRoute,
     termMonths: input.termMonths,
     annualAprPct: input.annualAprPct,

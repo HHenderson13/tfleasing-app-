@@ -683,6 +683,14 @@ export const brokerQuotes = sqliteTable("broker_quotes", {
   // priced the deal.
   interestRateRuleId: text("interest_rate_rule_id"),
   ofpRowId: integer("ofp_row_id"),                  // null for HP (no balloon)
+  // Phase 7 — Ford 1N / 1F finance programme + pricing breakdown that
+  // drove the saved quote. All null for legacy / Contract Hire / outright
+  // rows where the programme split doesn't apply.
+  financeProgramme: text("finance_programme"),       // '1n' | '1f' | null
+  retailPriceGbp: real("retail_price_gbp"),
+  customerDiscountGbp: real("customer_discount_gbp"),
+  deliveryCostsGbp: real("delivery_costs_gbp"),
+  dealerProfitGbp: real("dealer_profit_gbp"),
   notes: text("notes"),
   // 'draft' | 'sent' | 'archived'. Phase 3 only sets 'draft'; later
   // phases may track when the broker has shared the quote with us.
@@ -842,6 +850,11 @@ export const brokerInterestRates = sqliteTable("broker_interest_rates", {
   vehicleClass: text("vehicle_class").notNull(),                              // 'car' | 'van' | 'all'
   bucket: text("bucket"),                                                     // null = any bucket within class
   customerType: text("customer_type").notNull(),                              // 'retail' | 'business'
+  // Ford's two finance programmes. '1n' = Retail (lower APR, smaller
+  // discount); '1f' = Business VAT Registered (higher APR, unlocks the
+  // 1F discount % on the pricing row). Null = applies to both — used by
+  // legacy rows entered before the programme split.
+  financeProgramme: text("finance_programme"),                                // '1n' | '1f' | null
   fundingRoute: text("funding_route").notNull(),                              // 'pcp' | 'hp' | 'hp_balloon'
   termMonths: integer("term_months").notNull(),
   annualAprPct: real("annual_apr_pct").notNull(),
@@ -856,6 +869,16 @@ export const brokerInterestRates = sqliteTable("broker_interest_rates", {
   byKey: index("idx_broker_interest_rates_key").on(t.vehicleClass, t.customerType, t.fundingRoute, t.termMonths),
 }));
 
+// One row per (model year × bucket × variant × derivative) pricing entry.
+// Captures Ford's full structure: retail RRP + costs (delivery / PDI / 1st
+// reg / RFL) + the discount % stack (trading margin + standards + VETS +
+// 1F discount) + the minimum dealer profit TF retains. The quote engine
+// computes the customer's cash OTR from these for both 1N and 1F.
+// See lib/broker-pricing.ts for the formula.
+//
+// cashGbp is kept for back-compat: rows that haven't been migrated to the
+// new component model still use it as a flat fallback. Once retailPriceGbp
+// is set, the components take over.
 export const brokerVehicleCashValues = sqliteTable("broker_vehicle_cash_values", {
   id: text("id").primaryKey(),
   bucket: text("bucket").notNull(),           // sourceSheet, e.g. "Focus" / "Transit"
@@ -864,12 +887,20 @@ export const brokerVehicleCashValues = sqliteTable("broker_vehicle_cash_values",
   modelYear: text("model_year"),               // nullable when manufacturer doesn't differentiate
   capCode: text("cap_code"),                   // optional cross-reference to ratebook
   capId: text("cap_id"),                       // optional; Ford CAP-ID
-  cashGbp: real("cash_gbp").notNull(),         // cash price TF charges the customer
-  // Margin TF retains. Admin can express as either £ or % per vehicle —
-  // Phase 5 uses whichever is set. Both nullable so an unconfigured row
-  // still represents a usable cash price for Phase 3 outright quoting.
-  marginGbp: real("margin_gbp"),
-  marginPct: real("margin_pct"),
+  cashGbp: real("cash_gbp").notNull(),         // legacy: flat cash price (used when components below are null)
+  marginGbp: real("margin_gbp"),               // legacy
+  marginPct: real("margin_pct"),               // legacy
+  // Ford pricing components. All nullable so older rows still work.
+  retailPriceGbp: real("retail_price_gbp"),    // manufacturer RRP
+  deliveryGbp: real("delivery_gbp"),
+  pdiPlatesGbp: real("pdi_plates_gbp"),
+  firstRegFeeGbp: real("first_reg_fee_gbp"),
+  rflGbp: real("rfl_gbp"),
+  tradingMarginPct: real("trading_margin_pct"),
+  standardsPct: real("standards_pct"),
+  vetsPct: real("vets_pct"),
+  oneFDiscountPct: real("one_f_discount_pct"), // extra % the 1F programme unlocks (0 if none)
+  dealerProfitGbp: real("dealer_profit_gbp"),  // minimum profit TF retains; remainder of margin pool passes to customer
   notes: text("notes"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
@@ -877,6 +908,126 @@ export const brokerVehicleCashValues = sqliteTable("broker_vehicle_cash_values",
   // Compound lookup index — quote form queries by all four columns.
   byKey: index("idx_broker_cash_values_key").on(t.bucket, t.variant, t.derivative, t.modelYear),
 }));
+
+// ─── Phase 8: universal pricing model ──────────────────────────────────────
+//
+// One row per real Ford spec — keyed by the full WERS identifier stack
+// (model year × model × bodystyle × derivative × engine × drive × transmission).
+// Mirrors the granularity Ford uses in their pricing sheets (Stock List
+// Generator Broker.xlsm cols A:F → list price in I).
+//
+// This is the SOURCE OF TRUTH going forward — the broker_vehicle_cash_values
+// table from earlier phases is being deprecated and will be migrated away
+// from once every consumer reads from vehicleMaster.
+export const vehicleMaster = sqliteTable("vehicle_master", {
+  id: text("id").primaryKey(),
+  modelYear: text("model_year").notNull(),
+  model: text("model").notNull(),                  // RANGER / TRANSIT CUSTOM / KUGA
+  bodystyle: text("bodystyle").notNull(),          // DOUBLE CAB / REGULAR CARGO VAN
+  derivative: text("derivative").notNull(),        // PLATINUM / WILDTRAK
+  engine: text("engine").notNull(),                // 3.0L ECOBLUE V6 240PS
+  drive: text("drive").notNull(),                  // 4WD / FWD / RWD
+  transmission: text("transmission").notNull(),    // 10 SPEED AUTOMATIC
+  // CAP identifiers for ratebook bridge
+  capCode: text("cap_code"),
+  capId: text("cap_id"),
+  // Manually-entered basic list price (manufacturer RRP)
+  basicListPriceGbp: real("basic_list_price_gbp").notNull(),
+  // Per-vehicle delivery (varies — admin enters individually)
+  manufacturerDeliveryGbp: real("manufacturer_delivery_gbp").notNull().default(0),
+  // Drives RFL on commercial vehicles + grant eligibility on cars
+  fuelType: text("fuel_type").notNull(),           // 'ice' | 'phev' | 'bev'
+  isVan: integer("is_van", { mode: "boolean" }).notNull(),
+  // CO2 (g/km) — required for cars, drives the car RFL band lookup. Null for vans.
+  co2GKm: integer("co2_g_km"),
+  // Grants. Admin enters as £ paid by government — these are NO VAT and
+  // come off the customer-facing price after the discount stack.
+  pivgGrantGbp: real("pivg_grant_gbp").notNull().default(0),
+  olevGrantGbp: real("olev_grant_gbp").notNull().default(0),
+  // Ford 1F programme bonus discount, per derivative (Stock List
+  // Generator col "1F"). Only applied when customer takes 1F finance.
+  oneFDiscountPct: real("one_f_discount_pct").notNull().default(0),
+  // Which margin bucket's rules apply. Null = no margins (admin hasn't
+  // assigned yet).
+  marginBucketId: text("margin_bucket_id"),
+  // Minimum profit TF retains. Mode toggles between flat £ and % of
+  // basic_list_price; whichever is set wins at calc time.
+  profitMode: text("profit_mode").notNull().default("gbp"),  // 'gbp' | 'pct'
+  profitValue: real("profit_value").notNull().default(0),
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byLookup: index("idx_vehicle_master_lookup").on(
+    t.modelYear, t.model, t.bodystyle, t.derivative, t.engine, t.transmission,
+  ),
+  byModel: index("idx_vehicle_master_model").on(t.model, t.modelYear),
+}));
+
+// One row per available option on a vehicle. Customer-selected options
+// get added on top of the base OTR.
+export const vehicleOptions = sqliteTable("vehicle_options", {
+  id: text("id").primaryKey(),
+  vehicleId: text("vehicle_id").notNull(),
+  optionCode: text("option_code"),                 // optional manufacturer code
+  label: text("label").notNull(),                  // human-readable name
+  priceGbp: real("price_gbp").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byVehicle: index("idx_vehicle_options_vehicle").on(t.vehicleId),
+}));
+
+// A margin bucket groups vehicles that share the same set of discount
+// rules — e.g. "Ranger", "Transit Custom", "Kuga PHEV". Each bucket
+// owns a list of margin rules (trading margin %, franchise bonus %,
+// etc) which are summed at quote time. Vehicles point at one bucket
+// via vehicle_master.margin_bucket_id.
+export const marginBuckets = sqliteTable("margin_buckets", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const marginBucketRules = sqliteTable("margin_bucket_rules", {
+  id: text("id").primaryKey(),
+  bucketId: text("bucket_id").notNull(),
+  label: text("label").notNull(),                  // e.g. "Base Trading Margin"
+  pct: real("pct").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byBucket: index("idx_margin_bucket_rules_bucket").on(t.bucketId),
+}));
+
+// Singleton row of global settings. Admin updates these once and they
+// apply across every vehicle in the new model.
+export const brokerSettings = sqliteTable("broker_settings", {
+  id: integer("id").primaryKey(),                  // always 1
+  firstRegFeeGbp: real("first_reg_fee_gbp").notNull().default(55),
+  pdiPlatesGbp: real("pdi_plates_gbp").notNull().default(135),
+  // CV RFL is a flat amount per fuel type. ICE + PHEV share one bracket;
+  // BEV has its own (often £0).
+  cvRflIcePhevGbp: real("cv_rfl_ice_phev_gbp").notNull().default(335),
+  cvRflBevGbp: real("cv_rfl_bev_gbp").notNull().default(0),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Car RFL bands keyed on CO2 g/km. Customer-facing RFL for a car is the
+// row whose [co2From, co2To] range contains the car's CO2.
+export const carRflBands = sqliteTable("car_rfl_bands", {
+  id: text("id").primaryKey(),
+  co2From: integer("co2_from").notNull(),
+  co2To: integer("co2_to").notNull(),
+  rflGbp: real("rfl_gbp").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
 
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {

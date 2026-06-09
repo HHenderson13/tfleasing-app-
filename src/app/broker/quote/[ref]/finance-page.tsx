@@ -122,8 +122,8 @@ export async function renderFinanceQuotePage({ params, searchParams, route }: Pa
           ref={ref}
           route={route}
           snapshotJson={JSON.stringify(snapshot)}
-          defaultCashGbp={context.defaultCashGbp}
-          interestRate={context.interestRate}
+          programmes={context.programmes}
+          hasComponentPricing={context.hasComponentPricing}
           ofpCandidates={context.ofpCandidates}
           stockTurnRules={context.stockTurnRules}
           evOffer={context.evOffer}

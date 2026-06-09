@@ -9,6 +9,7 @@ import { findVinByReference } from "@/lib/broker-vehicle";
 import { computeFinance } from "@/lib/broker-finance-calc";
 import { computeOutright } from "@/lib/broker-quote-pricing";
 import { findOfpRowById } from "@/lib/broker-finance-context";
+import { findCashValue, resolveProgrammePrice } from "@/lib/broker-cash-values";
 import { findRuleById } from "@/lib/broker-stock-turn";
 import {
   findBusinessDiscountById,
@@ -17,6 +18,7 @@ import {
   findTradeInOfferById,
 } from "@/lib/broker-incentives";
 import { logError } from "@/lib/logger";
+import type { FinanceProgramme } from "@/lib/broker-pricing";
 
 type Route = "pcp" | "hp" | "hp_balloon";
 
@@ -24,9 +26,10 @@ interface SaveInput {
   ref: string;
   snapshotJson: string;
   route: Route;
+  financeProgramme: FinanceProgramme;
   customerType: "retail" | "business";
   customerIsVatBusiness: boolean;
-  vehicleCashGbp: number;
+  vehicleCashGbp: number;                    // 0 when component pricing — server re-derives
   commissionExVatGbp: number;
   depositGbp: number;
   termMonths: number;
@@ -45,19 +48,25 @@ interface SaveInput {
 export async function saveFinanceQuoteAction(input: SaveInput) {
   const me = await requireBrokerUser();
   try {
-    if (input.vehicleCashGbp <= 0) return { ok: false as const, error: "Vehicle cash price required." };
     if (!input.interestRateRuleId) return { ok: false as const, error: "No interest rate selected — add a matching grid row first." };
     if ((input.route === "pcp" || input.route === "hp_balloon") && !input.ofpRowId) {
       return { ok: false as const, error: "Pick an OFP balloon row for this term + mileage." };
     }
+    if (!["1n", "1f"].includes(input.financeProgramme)) {
+      return { ok: false as const, error: "Pick a finance programme." };
+    }
     const vin = await findVinByReference(input.ref);
     if (!vin) return { ok: false as const, error: "Vehicle reference doesn't resolve." };
-    try { JSON.parse(input.snapshotJson); } catch {
+    let snap: { bucket?: unknown; variant?: unknown; derivative?: unknown; modelYear?: unknown };
+    try { snap = JSON.parse(input.snapshotJson); } catch {
       return { ok: false as const, error: "Vehicle snapshot was malformed. Refresh and try again." };
+    }
+    if (typeof snap.bucket !== "string" || typeof snap.variant !== "string") {
+      return { ok: false as const, error: "Vehicle snapshot is missing bucket / variant." };
     }
 
     const businessEligible = input.customerType === "business" && input.customerIsVatBusiness;
-    const [stockTurn, ev, tradeIn, testDrive, businessDiscount, interestRow, ofp] = await Promise.all([
+    const [stockTurn, ev, tradeIn, testDrive, businessDiscount, interestRow, ofp, cashValue] = await Promise.all([
       input.stockTurnRuleId ? findRuleById(input.stockTurnRuleId) : Promise.resolve(null),
       input.evOfferId && input.evChoice ? findEvOfferById(input.evOfferId) : Promise.resolve(null),
       input.tradeInOfferId ? findTradeInOfferById(input.tradeInOfferId) : Promise.resolve(null),
@@ -67,18 +76,44 @@ export async function saveFinanceQuoteAction(input: SaveInput) {
         : Promise.resolve(null),
       db.select().from(brokerInterestRates).where(eq(brokerInterestRates.id, input.interestRateRuleId)).limit(1).then((rs) => rs[0] ?? null),
       input.ofpRowId ? findOfpRowById(input.ofpRowId) : Promise.resolve(null),
+      findCashValue({
+        bucket: snap.bucket as string,
+        variant: snap.variant as string,
+        derivative: (snap.derivative as string | null) ?? null,
+        modelYear: (snap.modelYear as string | null) ?? null,
+      }),
     ]);
 
     if (!interestRow) return { ok: false as const, error: "Interest rate rule has been removed by admin — pick again." };
+    // Guard the rate against programme spoofing — if the rule is keyed
+    // to a specific programme, it must match what the broker submitted.
+    if (interestRow.financeProgramme !== null && interestRow.financeProgramme !== input.financeProgramme) {
+      return { ok: false as const, error: "That interest rate belongs to a different finance programme — pick again." };
+    }
     if ((input.route === "pcp" || input.route === "hp_balloon") && !ofp) {
       return { ok: false as const, error: "OFP row has been replaced by admin — pick again." };
     }
 
+    // Authoritative cash price. When the pricing row has components,
+    // we compute from them — the broker's input is ignored, preventing
+    // a tampered cash value from creeping into a quote. When the row is
+    // legacy / flat, we use the broker's value but require it > 0.
+    let vehicleCashGbp: number;
+    let pricingBreakdown: ReturnType<typeof resolveProgrammePrice>["breakdown"] = null;
+    if (cashValue) {
+      const resolved = resolveProgrammePrice(cashValue, input.financeProgramme);
+      vehicleCashGbp = resolved.cashGbp;
+      pricingBreakdown = resolved.breakdown;
+    } else {
+      vehicleCashGbp = input.vehicleCashGbp;
+    }
+    if (vehicleCashGbp <= 0) return { ok: false as const, error: "Vehicle cash price required." };
+
     // Apply the same cash-deduction stack outright uses, then run the
     // finance calc against the effective cash price.
     const outright = computeOutright({
-      vehicleCashGbp: input.vehicleCashGbp,
-      commissionExVatGbp: 0,           // commission sits outside finance — re-added below
+      vehicleCashGbp,
+      commissionExVatGbp: 0,
       stockTurnBonusGbp: stockTurn?.bonusGbp ?? 0,
       evCashGbp: ev && input.evChoice === "cash" ? ev.cashAlternativeGbp : 0,
       tradeInGbp: tradeIn?.amountGbp ?? 0,
@@ -98,9 +133,6 @@ export async function saveFinanceQuoteAction(input: SaveInput) {
       balloonGbp: input.route === "hp" ? 0 : (ofp?.balloonGbp ?? 0),
     });
 
-    // Commission flows on top of finance — broker invoices customer
-    // separately at signing. Total customer outlay over the term:
-    //   totalPayable (deposit + monthlies + balloon) + commission + VAT
     const commissionEx = Math.max(0, input.commissionExVatGbp);
     const commissionVat = Math.round(commissionEx * 0.2 * 100) / 100;
     const customerTotal = Math.round(
@@ -147,6 +179,12 @@ export async function saveFinanceQuoteAction(input: SaveInput) {
       totalPayableGbp: finance.totalPayableGbp,
       interestRateRuleId: interestRow.id,
       ofpRowId: ofp ? input.ofpRowId : null,
+      // Phase 7 — programme + pricing breakdown for the quote detail page
+      financeProgramme: input.financeProgramme,
+      retailPriceGbp: pricingBreakdown?.retailPriceGbp ?? null,
+      customerDiscountGbp: pricingBreakdown?.customerDiscountGbp ?? null,
+      deliveryCostsGbp: pricingBreakdown?.deliveryCostsGbp ?? null,
+      dealerProfitGbp: pricingBreakdown?.dealerProfitGbp ?? null,
       notes: input.notes,
       status: "draft",
       createdAt: now,

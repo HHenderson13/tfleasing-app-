@@ -6,17 +6,29 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 
-interface CashValueInput {
+interface PricingInput {
   bucket: string;
   variant: string;
   derivative: string | null;
   modelYear: string | null;
-  cashGbp: number;
-  marginGbp: number | null;
-  marginPct: number | null;
   capCode: string | null;
   capId: string | null;
   notes: string | null;
+  // Either flat or component-driven; both can be present (components take
+  // priority at quote time once retailPriceGbp is set).
+  cashGbp: number;
+  marginGbp: number | null;
+  marginPct: number | null;
+  retailPriceGbp: number | null;
+  deliveryGbp: number | null;
+  pdiPlatesGbp: number | null;
+  firstRegFeeGbp: number | null;
+  rflGbp: number | null;
+  tradingMarginPct: number | null;
+  standardsPct: number | null;
+  vetsPct: number | null;
+  oneFDiscountPct: number | null;
+  dealerProfitGbp: number | null;
 }
 
 function normaliseString(value: string | null): string | null {
@@ -25,7 +37,7 @@ function normaliseString(value: string | null): string | null {
   return t.length > 0 ? t : null;
 }
 
-export async function createCashValueAction(input: CashValueInput) {
+export async function createPricingAction(input: PricingInput) {
   await requireAdmin();
   const bucket = input.bucket.trim();
   const variant = input.variant.trim();
@@ -46,6 +58,16 @@ export async function createCashValueAction(input: CashValueInput) {
     capCode: normaliseString(input.capCode),
     capId: normaliseString(input.capId),
     notes: normaliseString(input.notes),
+    retailPriceGbp: input.retailPriceGbp,
+    deliveryGbp: input.deliveryGbp,
+    pdiPlatesGbp: input.pdiPlatesGbp,
+    firstRegFeeGbp: input.firstRegFeeGbp,
+    rflGbp: input.rflGbp,
+    tradingMarginPct: input.tradingMarginPct,
+    standardsPct: input.standardsPct,
+    vetsPct: input.vetsPct,
+    oneFDiscountPct: input.oneFDiscountPct,
+    dealerProfitGbp: input.dealerProfitGbp,
     createdAt: now,
     updatedAt: now,
   });
@@ -53,14 +75,21 @@ export async function createCashValueAction(input: CashValueInput) {
   return { ok: true as const, id };
 }
 
-export async function updateCashValueAction(id: string, patch: Partial<CashValueInput>) {
+const NUMERIC_FIELDS: (keyof PricingInput)[] = [
+  "cashGbp", "marginGbp", "marginPct",
+  "retailPriceGbp", "deliveryGbp", "pdiPlatesGbp", "firstRegFeeGbp", "rflGbp",
+  "tradingMarginPct", "standardsPct", "vetsPct", "oneFDiscountPct", "dealerProfitGbp",
+];
+
+export async function updatePricingAction(id: string, patch: Partial<PricingInput>) {
   await requireAdmin();
   const clean: Record<string, unknown> = { updatedAt: new Date() };
-  if (typeof patch.cashGbp === "number" && Number.isFinite(patch.cashGbp) && patch.cashGbp > 0) clean.cashGbp = patch.cashGbp;
-  if (typeof patch.marginGbp === "number" && Number.isFinite(patch.marginGbp)) clean.marginGbp = patch.marginGbp;
-  if (patch.marginGbp === null) clean.marginGbp = null;
-  if (typeof patch.marginPct === "number" && Number.isFinite(patch.marginPct)) clean.marginPct = patch.marginPct;
-  if (patch.marginPct === null) clean.marginPct = null;
+  for (const k of NUMERIC_FIELDS) {
+    if (!(k in patch)) continue;
+    const v = patch[k];
+    if (v === null) clean[k] = null;
+    else if (typeof v === "number" && Number.isFinite(v)) clean[k] = v;
+  }
   if (patch.capCode !== undefined) clean.capCode = normaliseString(patch.capCode);
   if (patch.capId !== undefined) clean.capId = normaliseString(patch.capId);
   if (patch.notes !== undefined) clean.notes = normaliseString(patch.notes);
@@ -70,9 +99,14 @@ export async function updateCashValueAction(id: string, patch: Partial<CashValue
   return { ok: true as const };
 }
 
-export async function deleteCashValueAction(id: string) {
+export async function deletePricingAction(id: string) {
   await requireAdmin();
   await db.delete(brokerVehicleCashValues).where(eq(brokerVehicleCashValues.id, id));
   revalidatePath("/admin/broker-data/cash-values");
   return { ok: true as const };
 }
+
+// Back-compat aliases — existing form file imported the old names.
+export const createCashValueAction = createPricingAction;
+export const updateCashValueAction = updatePricingAction;
+export const deleteCashValueAction = deletePricingAction;

@@ -12,6 +12,7 @@ const inp = "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm";
 
 type VehicleClass = "car" | "van" | "all";
 type CustomerType = "retail" | "business";
+type FinanceProgramme = "1n" | "1f";
 type Route = "pcp" | "hp" | "hp_balloon";
 
 const ROUTE_LABEL: Record<Route, string> = {
@@ -26,12 +27,18 @@ const CLASS_LABEL: Record<VehicleClass, string> = {
   all: "Any vehicle",
 };
 
+const PROGRAMME_LABEL: Record<FinanceProgramme, string> = {
+  "1n": "Retail (1N)",
+  "1f": "Business VAT Registered (1F)",
+};
+
 interface RateRow {
   id: string;
   label: string;
   vehicleClass: VehicleClass;
   bucket: string | null;
   customerType: CustomerType;
+  financeProgramme: FinanceProgramme | null;
   fundingRoute: Route;
   termMonths: number;
   annualAprPct: number;
@@ -61,6 +68,7 @@ export function AddInterestRateForm() {
   const [vehicleClass, setVehicleClass] = useState<VehicleClass>("car");
   const [bucket, setBucket] = useState("");
   const [customerType, setCustomerType] = useState<CustomerType>("retail");
+  const [financeProgramme, setFinanceProgramme] = useState<FinanceProgramme | "both">("1n");
   const [fundingRoute, setFundingRoute] = useState<Route>("pcp");
   const [termMonths, setTermMonths] = useState("36");
   const [apr, setApr] = useState("");
@@ -78,6 +86,7 @@ export function AddInterestRateForm() {
         vehicleClass,
         bucket: bucket.trim() || null,
         customerType,
+        financeProgramme: financeProgramme === "both" ? null : financeProgramme,
         fundingRoute,
         termMonths: parseInt(termMonths, 10) || 0,
         annualAprPct: parseFloat(apr) || 0,
@@ -122,6 +131,14 @@ export function AddInterestRateForm() {
           <select value={customerType} onChange={(e) => setCustomerType(e.target.value as CustomerType)} className={`${inp} mt-1 w-full`}>
             <option value="retail">Retail</option>
             <option value="business">Business</option>
+          </select>
+        </label>
+        <label className="block text-xs font-medium text-slate-700">
+          Finance programme
+          <select value={financeProgramme} onChange={(e) => setFinanceProgramme(e.target.value as FinanceProgramme | "both")} className={`${inp} mt-1 w-full`}>
+            <option value="1n">Retail (1N)</option>
+            <option value="1f">Business VAT Registered (1F)</option>
+            <option value="both">Both (no programme split)</option>
           </select>
         </label>
         <label className="block text-xs font-medium text-slate-700">
@@ -231,7 +248,9 @@ export function InterestRatesTable({ rows }: { rows: RateRow[] }) {
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">
                     {CLASS_LABEL[r.vehicleClass]}{r.bucket && <> · {r.bucket}</>}
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">{r.customerType}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                      {r.customerType} · {r.financeProgramme ? PROGRAMME_LABEL[r.financeProgramme] : "Both programmes"}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-slate-700">{ROUTE_LABEL[r.fundingRoute]}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{r.termMonths}m</td>

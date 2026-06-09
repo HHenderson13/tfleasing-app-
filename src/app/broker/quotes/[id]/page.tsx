@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { requireBrokerUser } from "@/lib/auth-guard";
 import { loadBrokerQuote, parseVehicleSnapshot } from "@/lib/broker-quotes";
 import { FUNDING_ROUTES, formatGbp, type FundingRoute } from "@/lib/broker-quote-pricing";
+import { FINANCE_PROGRAMME_LABELS, type FinanceProgramme } from "@/lib/broker-pricing";
 import { BrokerHeader } from "../../header";
 import { QuoteActions } from "./actions-ui";
 
@@ -96,6 +97,27 @@ export default async function BrokerQuoteDetailPage({ params }: { params: Promis
 
         <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print-keep-together">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Pricing</h2>
+          {quote.financeProgramme && (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+              <span className="text-[10px] uppercase tracking-wide text-slate-500">Programme</span>
+              <span className="text-slate-900">{FINANCE_PROGRAMME_LABELS[quote.financeProgramme as FinanceProgramme]}</span>
+            </div>
+          )}
+          {quote.retailPriceGbp !== null && quote.retailPriceGbp !== undefined && (
+            <dl className="mt-3 grid gap-2 rounded-xl bg-emerald-50/40 p-3 text-xs ring-1 ring-emerald-100 print-keep-together">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">Pricing breakdown</div>
+              <Row label="Retail price" value={formatGbp(quote.retailPriceGbp)} />
+              {quote.customerDiscountGbp !== null && quote.customerDiscountGbp !== undefined && (
+                <Row label="Customer discount" value={<span className="text-emerald-700">− {formatGbp(quote.customerDiscountGbp)}</span>} />
+              )}
+              {quote.deliveryCostsGbp !== null && quote.deliveryCostsGbp !== undefined && (
+                <Row label="Delivery + PDI + 1st reg + RFL" value={`+ ${formatGbp(quote.deliveryCostsGbp)}`} />
+              )}
+              {quote.dealerProfitGbp !== null && quote.dealerProfitGbp !== undefined && (
+                <Row label="TF dealer profit (retained)" value={formatGbp(quote.dealerProfitGbp)} />
+              )}
+            </dl>
+          )}
           <dl className="mt-3 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm">
             <Row label="Vehicle cash" value={formatGbp(quote.vehicleCashGbp)} />
             {quote.businessDiscountGbp && quote.businessDiscountGbp > 0 && (

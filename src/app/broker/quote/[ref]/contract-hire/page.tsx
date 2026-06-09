@@ -133,7 +133,7 @@ export default async function ContractHireQuotePage({
             <h2 className="mt-2 text-sm font-semibold text-amber-900">No cap code mapped for this vehicle yet</h2>
             <p className="mx-auto mt-1 max-w-md text-xs text-amber-900/80">
               Contract Hire pricing comes from the funder ratebook keyed on Ford&apos;s cap code.
-              Ask your TrustFord contact to set a cap code on this vehicle in <strong>Broker data → Cash values</strong>, then refresh this page.
+              Ask your TrustFord contact to set a cap code on this vehicle in <strong>Broker data → Pricing</strong>, then refresh this page.
             </p>
           </div>
         ) : availability.terms.length === 0 ? (

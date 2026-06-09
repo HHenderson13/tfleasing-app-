@@ -63,6 +63,11 @@ export default async function BrokerSavedQuotesPage() {
                       </div>
                       <div className="mt-1 text-[11px] text-slate-500 space-x-2">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{route}</span>
+                        {q.financeProgramme && (
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${q.financeProgramme === "1n" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>
+                            {q.financeProgramme === "1n" ? "Retail (1N)" : "Business (1F)"}
+                          </span>
+                        )}
                         <span>· Ref <span className="font-mono">{q.vehicleRef}</span></span>
                         <span>· Saved {new Date(q.updatedAt).toLocaleDateString("en-GB")}</span>
                         <span>· by {userName.get(q.createdByBrokerUserId) ?? "Unknown"}</span>

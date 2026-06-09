@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 18;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -343,7 +343,133 @@ async function ensureBrokerPortalTables() {
     { name: "is_maintained", sqlType: "INTEGER" },
     { name: "funder_id", sqlType: "TEXT" },
     { name: "funder_name", sqlType: "TEXT" },
+    // Phase 7 — Ford 1N/1F finance programme + computed pricing
+    // breakdown that drove the quote. Null on legacy rows.
+    { name: "finance_programme", sqlType: "TEXT" },
+    { name: "retail_price_gbp", sqlType: "REAL" },
+    { name: "customer_discount_gbp", sqlType: "REAL" },
+    { name: "delivery_costs_gbp", sqlType: "REAL" },
+    { name: "dealer_profit_gbp", sqlType: "REAL" },
   ]);
+  // Phase 7 pricing components on cash-values, finance programme on rates.
+  await ensureColumns("broker_vehicle_cash_values", [
+    { name: "retail_price_gbp", sqlType: "REAL" },
+    { name: "delivery_gbp", sqlType: "REAL" },
+    { name: "pdi_plates_gbp", sqlType: "REAL" },
+    { name: "first_reg_fee_gbp", sqlType: "REAL" },
+    { name: "rfl_gbp", sqlType: "REAL" },
+    { name: "trading_margin_pct", sqlType: "REAL" },
+    { name: "standards_pct", sqlType: "REAL" },
+    { name: "vets_pct", sqlType: "REAL" },
+    { name: "one_f_discount_pct", sqlType: "REAL" },
+    { name: "dealer_profit_gbp", sqlType: "REAL" },
+  ]);
+  await ensureColumns("broker_interest_rates", [
+    { name: "finance_programme", sqlType: "TEXT" },
+  ]);
+
+  // Phase 8 — universal pricing model. New tables that supersede
+  // broker_vehicle_cash_values. Quote engine still reads the legacy table
+  // until everything is migrated; admin builds the new model in parallel.
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS vehicle_master (
+      id TEXT PRIMARY KEY,
+      model_year TEXT NOT NULL,
+      model TEXT NOT NULL,
+      bodystyle TEXT NOT NULL,
+      derivative TEXT NOT NULL,
+      engine TEXT NOT NULL,
+      drive TEXT NOT NULL,
+      transmission TEXT NOT NULL,
+      cap_code TEXT,
+      cap_id TEXT,
+      basic_list_price_gbp REAL NOT NULL,
+      manufacturer_delivery_gbp REAL NOT NULL DEFAULT 0,
+      fuel_type TEXT NOT NULL,
+      is_van INTEGER NOT NULL,
+      co2_g_km INTEGER,
+      pivg_grant_gbp REAL NOT NULL DEFAULT 0,
+      olev_grant_gbp REAL NOT NULL DEFAULT 0,
+      one_f_discount_pct REAL NOT NULL DEFAULT 0,
+      margin_bucket_id TEXT,
+      profit_mode TEXT NOT NULL DEFAULT 'gbp',
+      profit_value REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_vehicle_master_lookup ON vehicle_master(model_year, model, bodystyle, derivative, engine, transmission)`,
+  ));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_vehicle_master_model ON vehicle_master(model, model_year)`,
+  ));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS vehicle_options (
+      id TEXT PRIMARY KEY,
+      vehicle_id TEXT NOT NULL,
+      option_code TEXT,
+      label TEXT NOT NULL,
+      price_gbp REAL NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_vehicle_options_vehicle ON vehicle_options(vehicle_id)`,
+  ));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS margin_buckets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      notes TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS margin_bucket_rules (
+      id TEXT PRIMARY KEY,
+      bucket_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      pct REAL NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_margin_bucket_rules_bucket ON margin_bucket_rules(bucket_id)`,
+  ));
+  // Singleton settings — INSERT OR IGNORE seeds row id = 1 with the
+  // standard defaults from the Stock List Generator. Admin edits in-place.
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      first_reg_fee_gbp REAL NOT NULL DEFAULT 55,
+      pdi_plates_gbp REAL NOT NULL DEFAULT 135,
+      cv_rfl_ice_phev_gbp REAL NOT NULL DEFAULT 335,
+      cv_rfl_bev_gbp REAL NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  const nowSec = Math.floor(Date.now() / 1000);
+  await db.run(sql.raw(
+    `INSERT OR IGNORE INTO broker_settings (id, first_reg_fee_gbp, pdi_plates_gbp, cv_rfl_ice_phev_gbp, cv_rfl_bev_gbp, updated_at) VALUES (1, 55, 135, 335, 0, ${nowSec})`,
+  ));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS car_rfl_bands (
+      id TEXT PRIMARY KEY,
+      co2_from INTEGER NOT NULL,
+      co2_to INTEGER NOT NULL,
+      rfl_gbp REAL NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
 }
 
 // Indexes for the hottest WHERE / ORDER BY clauses on the request path.

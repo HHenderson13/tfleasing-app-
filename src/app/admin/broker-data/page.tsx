@@ -8,12 +8,15 @@ export const dynamic = "force-dynamic";
 // trade-in, business discount lookup.
 
 const TILES = [
-  { key: "cash-values",    title: "Cash values + margins", desc: "What TF charges the customer per vehicle, and what we retain.", href: "/admin/broker-data/cash-values", tone: "from-emerald-500 to-teal-700",   live: true },
+  { key: "settings",       title: "Settings",              desc: "First reg fee, PDI, CV RFL, and the car CO2 → RFL matrix.",     href: "/admin/broker-data/settings",   tone: "from-slate-500 to-slate-800",   live: true },
+  { key: "margin-buckets", title: "Margin buckets",        desc: "Groups of margin rules (% trading margin, franchise bonus…) assigned to vehicles.", href: "/admin/broker-data/margin-buckets", tone: "from-teal-500 to-emerald-700", live: true },
+  { key: "vehicles",       title: "Vehicle pricing",       desc: "Universal vehicle pricing — list price, delivery, CO2, grants, options, profit.", href: "/admin/broker-data/vehicles",   tone: "from-emerald-500 to-teal-700",  live: true },
   { key: "stock-turn",     title: "Stock turn bonuses",    desc: "Bonus paid in return for registering by a deadline.",            href: "/admin/broker-data/stock-turn",  tone: "from-amber-500 to-orange-700",  live: true },
-  { key: "interest-grids", title: "Interest + deposit grids", desc: "Per-term, per-customer-type rates for PCP / HP / HPB.",       href: "/admin/broker-data/interest",    tone: "from-sky-500 to-indigo-700",    live: true },
+  { key: "interest-grids", title: "Interest + deposit grids", desc: "Per-term, per-programme (1N / 1F) rates for PCP / HP / HPB.",  href: "/admin/broker-data/interest",    tone: "from-sky-500 to-indigo-700",    live: true },
   { key: "ofp",            title: "OFP data import",       desc: "Optional Final Payment data from the quarterly Ford XLSX.",     href: "/admin/broker-data/ofp",         tone: "from-violet-500 to-fuchsia-700",live: true },
   { key: "incentives",     title: "EV bonus, trade-in, test drive", desc: "Power Promise wallbox/£500, trade-in £, test-drive £.", href: "/admin/broker-data/incentives", tone: "from-rose-500 to-pink-700",     live: true  },
   { key: "business",       title: "Business discount",     desc: "Higher cash discount paired with the higher APR tier.",         href: "/admin/broker-data/business",   tone: "from-slate-700 to-slate-900",   live: true  },
+  { key: "cash-values",    title: "Pricing (legacy)",      desc: "Old per-bucket cash-value table. Being deprecated — use Vehicle pricing.", href: "/admin/broker-data/cash-values", tone: "from-slate-300 to-slate-500",   live: true },
 ] as const;
 
 export default function BrokerDataHubPage() {
@@ -22,8 +25,7 @@ export default function BrokerDataHubPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Broker data</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Background data that drives the broker portal quoting engine. Cash values are live now;
-          the other tiles activate as Phase 4 rolls out.
+          Background data that drives the broker portal quoting engine.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

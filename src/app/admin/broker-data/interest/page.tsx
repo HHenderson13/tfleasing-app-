@@ -12,9 +12,10 @@ export default async function InterestRatesPage() {
         <Link href="/admin/broker-data" className="text-xs text-slate-500 hover:text-slate-900">← Broker data</Link>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">Interest + deposit grids</h1>
         <p className="mt-1 text-sm text-slate-500">
-          One row per tariff cell — vehicle scope × customer type × funding route × term. The Phase 5
-          quote engine looks up the best match by specificity (exact bucket beats class match beats
-          &lsquo;all&rsquo;), so you can layer narrow programmes on top of a baseline.
+          One row per tariff cell — vehicle scope × customer type × <strong>finance programme</strong>{" "}
+          (Retail 1N vs Business VAT Registered 1F) × funding route × term. The quote engine looks up the
+          best match by specificity (programme-exact + bucket beats programme-exact + class beats legacy
+          &lsquo;Both&rsquo; rows), so narrow programmes layer on top of a baseline.
         </p>
       </div>
 
@@ -34,6 +35,7 @@ export default async function InterestRatesPage() {
             vehicleClass: r.vehicleClass as "car" | "van" | "all",
             bucket: r.bucket,
             customerType: r.customerType as "retail" | "business",
+            financeProgramme: (r.financeProgramme as "1n" | "1f" | null) ?? null,
             fundingRoute: r.fundingRoute as "pcp" | "hp" | "hp_balloon",
             termMonths: r.termMonths,
             annualAprPct: r.annualAprPct,
