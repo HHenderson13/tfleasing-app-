@@ -64,10 +64,53 @@ async function handleProbe(): Promise<NextResponse> {
   const liveSnapshots = await db.select().from(wcLiveScores);
   const liveByFx = new Map(liveSnapshots.map((r) => [r.fixtureNumber, r]));
 
-  const mapped = feed.length === 0 ? [] : mapToFixtures(feed, fixtures);
-  const matched = mapped.length;
-  const unmapped = feed.length - matched;
+  // Per-match diagnosis so the admin can tell at a glance whether each ESPN
+  // entry: (a) is scheduled (no live data yet — fine before kick-off),
+  // (b) maps cleanly to a fixture, or (c) is an unrelated game / a name
+  // mismatch we need to alias.
+  const mapped = mapToFixtures(feed, fixtures);
+  const mappedByEspnId = new Map(mapped.map((m) => [m.espnId, m]));
   const now = Date.now();
+  const matches = feed.map((m) => {
+    const fx = mappedByEspnId.get(m.espnId);
+    let reason: "mapped" | "scheduled" | "no_fixture_match" = "mapped";
+    if (!fx) reason = m.status === "scheduled" ? "scheduled" : "no_fixture_match";
+    // When unmapped + not scheduled, surface the closest fixture in time
+    // so admin can eyeball whether it's an alias problem ("ESPN says
+    // Korea Republic, our DB has South Korea") vs a non-WC game.
+    let nearestFixture: { fixtureNumber: number; team1: string | null; team2: string | null; kickoffDeltaMs: number } | null = null;
+    if (reason === "no_fixture_match") {
+      const sorted = [...fixtures].sort((a, b) =>
+        Math.abs(a.kickoffAt.getTime() - m.kickoffAt.getTime()) -
+        Math.abs(b.kickoffAt.getTime() - m.kickoffAt.getTime()),
+      );
+      const closest = sorted[0];
+      if (closest) {
+        nearestFixture = {
+          fixtureNumber: closest.fixtureNumber,
+          team1: closest.team1,
+          team2: closest.team2,
+          kickoffDeltaMs: closest.kickoffAt.getTime() - m.kickoffAt.getTime(),
+        };
+      }
+    }
+    return {
+      espnId: m.espnId,
+      team1: m.team1,
+      team2: m.team2,
+      kickoffAt: m.kickoffAt.toISOString(),
+      status: m.status,
+      score: `${m.team1Goals}-${m.team2Goals}`,
+      reason,
+      mappedToFixtureNumber: fx?.fixtureNumber ?? null,
+      nearestFixture,
+    };
+  });
+
+  const matched = matches.filter((m) => m.reason === "mapped").length;
+  const scheduledUnmapped = matches.filter((m) => m.reason === "scheduled").length;
+  const reallyUnmapped = matches.filter((m) => m.reason === "no_fixture_match").length;
+
   const wouldAutoRecord = mapped
     .filter((m) => m.stage === "group" && m.status === "final" && !settled.has(m.fixtureNumber))
     .map((m) => {
@@ -96,10 +139,12 @@ async function handleProbe(): Promise<NextResponse> {
     },
     mapping: {
       mappedToFixture: matched,
-      unmappedFromEspn: unmapped,
+      scheduledUnmapped,       // ESPN sees them but they're not live yet — expected pre-kick-off
+      reallyUnmapped,          // live / final but team names don't match — needs investigation
       currentlyLiveInDb: liveSnapshots.length,
       alreadySettled: settled.size,
     },
+    matches,
     autoRecord: {
       stabilityWindowMs: FT_STABILITY_WINDOW_MS,
       candidates: wouldAutoRecord,
