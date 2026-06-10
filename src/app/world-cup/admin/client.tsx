@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
+  clearResultAction,
   createWcUserAction,
   recomputeAllPointsAction,
   recordResultAction,
@@ -240,7 +241,7 @@ function ResultRow({ fixture: f }: { fixture: AdminFixture }) {
                 aria-label={`${f.team2} goals`}
               />
             </div>
-            <div className="mt-3 flex justify-center">
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
                 onClick={save}
@@ -249,6 +250,26 @@ function ResultRow({ fixture: f }: { fixture: AdminFixture }) {
               >
                 {pending ? "Saving…" : settled ? "Update result" : "Save result"}
               </button>
+              {settled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!confirm(`Clear the recorded result for ${f.team1} vs ${f.team2}? Predictions stay saved; cached points and any bracket advance from this match will be reversed.`)) return;
+                    setErr(null); setMsg(null);
+                    start(async () => {
+                      const res = await clearResultAction({ fixtureNumber: f.fixtureNumber });
+                      if (!res.ok) { setErr(res.error ?? "Clear failed"); return; }
+                      // Reset the local form so the row goes back to "unsettled" look on next render.
+                      setT1(""); setT2(""); setET1(""); setET2(""); setPen1(""); setPen2(""); setShowET(false);
+                      setMsg("Result cleared — predictions kept, points reset.");
+                    });
+                  }}
+                  disabled={pending}
+                  className="rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear result
+                </button>
+              )}
             </div>
           </>
         ) : (

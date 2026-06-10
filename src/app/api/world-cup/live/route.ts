@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { wcFixtures, wcLiveScores, wcPredictions, users as usersTable, wcResults } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
-import { requireWcAccess } from "@/lib/auth-guard";
+import { requireWcAccess, requireWcAdmin } from "@/lib/auth-guard";
 import { fetchEspnLive, mapToFixtures, type MappedLiveMatch } from "@/lib/world-cup-live-feed";
 import { scorePrediction, winnerForGroup } from "@/lib/world-cup-scoring";
 import { commitFixtureResult, SYSTEM_USER_ID } from "@/lib/world-cup-settle";
@@ -40,7 +40,90 @@ export interface LiveApiResponse {
   }>;
 }
 
-export async function GET() {
+// Read-only health check. Calls ESPN, maps matches to our fixtures, reports
+// what would be auto-recorded — but writes nothing. Use before kick-off to
+// confirm the feed + mapping are wired correctly.
+//
+//   GET /api/world-cup/live?probe=1
+//
+// Admin only.
+async function handleProbe(): Promise<NextResponse> {
+  await requireWcAdmin();
+  const startedAt = Date.now();
+  let feed: Awaited<ReturnType<typeof fetchEspnLive>> = [];
+  let feedError: string | null = null;
+  try {
+    feed = await fetchEspnLive();
+  } catch (e) {
+    feedError = e instanceof Error ? e.message : "Unknown error";
+  }
+  const fetchMs = Date.now() - startedAt;
+
+  const fixtures = await db.select().from(wcFixtures);
+  const settled = new Set((await db.select({ fixtureNumber: wcResults.fixtureNumber }).from(wcResults)).map((r) => r.fixtureNumber));
+  const liveSnapshots = await db.select().from(wcLiveScores);
+  const liveByFx = new Map(liveSnapshots.map((r) => [r.fixtureNumber, r]));
+
+  const mapped = feed.length === 0 ? [] : mapToFixtures(feed, fixtures);
+  const matched = mapped.length;
+  const unmapped = feed.length - matched;
+  const now = Date.now();
+  const wouldAutoRecord = mapped
+    .filter((m) => m.stage === "group" && m.status === "final" && !settled.has(m.fixtureNumber))
+    .map((m) => {
+      const snap = liveByFx.get(m.fixtureNumber);
+      const firstFinalAt = snap?.firstFinalAt?.getTime() ?? null;
+      const stableForMs = firstFinalAt === null ? 0 : now - firstFinalAt;
+      return {
+        fixtureNumber: m.fixtureNumber,
+        team1: m.team1, team2: m.team2,
+        score: `${m.team1Goals}-${m.team2Goals}`,
+        stableForMs,
+        wouldRecord: stableForMs >= FT_STABILITY_WINDOW_MS,
+      };
+    });
+  const nextKickoff = fixtures
+    .filter((f) => f.kickoffAt.getTime() > now)
+    .sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime())[0];
+
+  return NextResponse.json({
+    ok: feedError === null,
+    espn: {
+      ok: feedError === null,
+      error: feedError,
+      fetchMs,
+      matchesReturned: feed.length,
+    },
+    mapping: {
+      mappedToFixture: matched,
+      unmappedFromEspn: unmapped,
+      currentlyLiveInDb: liveSnapshots.length,
+      alreadySettled: settled.size,
+    },
+    autoRecord: {
+      stabilityWindowMs: FT_STABILITY_WINDOW_MS,
+      candidates: wouldAutoRecord,
+    },
+    next: nextKickoff ? {
+      fixtureNumber: nextKickoff.fixtureNumber,
+      stage: nextKickoff.stage,
+      team1: nextKickoff.team1, team2: nextKickoff.team2,
+      kickoffAt: nextKickoff.kickoffAt.toISOString(),
+      msUntilKickoff: nextKickoff.kickoffAt.getTime() - now,
+    } : null,
+    fetchedAt: new Date().toISOString(),
+  });
+}
+
+export async function GET(req: NextRequest) {
+  if (req.nextUrl.searchParams.get("probe") === "1") {
+    try {
+      return await handleProbe();
+    } catch (e) {
+      logError("api/world-cup/live/probe", e);
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
+    }
+  }
   try {
     const me = await requireWcAccess();
     const feed = await fetchEspnLive();

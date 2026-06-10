@@ -115,6 +115,77 @@ export async function recordResultAction(input: {
   }
 }
 
+// Reverses a settled result without touching the saved predictions. Use when
+// admin entered a score by mistake (e.g. test data before kick-off). Steps,
+// roughly the inverse of commitFixtureResult:
+//   • delete the wc_results row
+//   • clear cached points on every wc_predictions row for the fixture
+//   • for knockouts, un-advance the winner from the next fixture's slot
+//     (and from the 3rd-place playoff if this was a SF)
+//   • clear the wc_live_scores snapshot so the live API repopulates from
+//     ESPN on the next poll instead of treating the cleared score as live
+const clearSchema = z.object({ fixtureNumber: z.number().int().min(1).max(104) });
+
+export async function clearResultAction(input: { fixtureNumber: number }): Promise<{ ok: boolean; error?: string }> {
+  await requireWcAdmin();
+  const parsed = clearSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  try {
+    const [fx] = await db.select().from(wcFixtures).where(eq(wcFixtures.fixtureNumber, parsed.data.fixtureNumber)).limit(1);
+    if (!fx) return { ok: false, error: "Fixture not found" };
+    const [existing] = await db.select().from(wcResults).where(eq(wcResults.fixtureNumber, parsed.data.fixtureNumber)).limit(1);
+    if (!existing) return { ok: false, error: "No result on this fixture to clear." };
+
+    await db.delete(wcResults).where(eq(wcResults.fixtureNumber, parsed.data.fixtureNumber));
+    await db
+      .update(wcPredictions)
+      .set({ points: null, updatedAt: new Date() })
+      .where(eq(wcPredictions.fixtureNumber, parsed.data.fixtureNumber));
+
+    // Un-advance the winner from the downstream fixture. Only touch the slot
+    // if it currently holds *this* winner — guards against stomping a team
+    // a later result might have re-filled the slot with.
+    if (fx.nextFixtureNumber && fx.nextSlot && existing.winnerTeam !== "Draw") {
+      const slot = fx.nextSlot === "t1" ? "team1" : "team2";
+      const [next] = await db.select().from(wcFixtures).where(eq(wcFixtures.fixtureNumber, fx.nextFixtureNumber)).limit(1);
+      if (next && (slot === "team1" ? next.team1 : next.team2) === existing.winnerTeam) {
+        await db
+          .update(wcFixtures)
+          .set({ [slot]: null } as Record<string, string | null>)
+          .where(eq(wcFixtures.fixtureNumber, fx.nextFixtureNumber));
+      }
+      // SF → 3rd-place: also clear the loser slot if we wrote it there.
+      if (fx.stage === "sf" && fx.team1 && fx.team2) {
+        const sfLoser = existing.winnerTeam === fx.team1 ? fx.team2 : fx.team1;
+        const thirdSlot = fx.fixtureNumber === 101 ? "team1" : "team2";
+        const [third] = await db.select().from(wcFixtures).where(eq(wcFixtures.fixtureNumber, 103)).limit(1);
+        if (third && (thirdSlot === "team1" ? third.team1 : third.team2) === sfLoser) {
+          await db
+            .update(wcFixtures)
+            .set({ [thirdSlot]: null } as Record<string, string | null>)
+            .where(eq(wcFixtures.fixtureNumber, 103));
+        }
+      }
+    }
+
+    await db.delete(wcLiveScores).where(eq(wcLiveScores.fixtureNumber, parsed.data.fixtureNumber));
+
+    updateTag(WC_CACHE_TAGS.results);
+    if (fx.nextFixtureNumber) updateTag(WC_CACHE_TAGS.fixtures);
+    revalidatePath("/world-cup");
+    revalidatePath("/world-cup/predictions");
+    revalidatePath("/world-cup/leaderboard");
+    revalidatePath("/world-cup/groups");
+    revalidatePath("/world-cup/admin");
+
+    return { ok: true };
+  } catch (e) {
+    logError("world-cup/admin/clearResultAction", e, { input });
+    return { ok: false, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
 function resolveWinner(
   r: {
     team1Goals: number; team2Goals: number;
