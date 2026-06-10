@@ -19,8 +19,26 @@ export const dynamic = "force-dynamic";
 // canonicalise the score into wc_results.
 const FT_STABILITY_WINDOW_MS = 30 * 60 * 1000;
 
+export interface LivePlayerEntry {
+  name: string;
+  pickT1: number;
+  pickT2: number;
+  points: number;
+  isMe: boolean;
+}
+
 export interface LiveApiResponse {
   fetchedAt: string;
+  // Viewer's standing on the OVERALL leaderboard right now vs if every
+  // currently-live match locked in at its present score. Null when the
+  // viewer has no predictions on any active or live match.
+  viewer: {
+    currentTotalPoints: number;
+    projectedTotalPoints: number;
+    currentRank: number;          // 1-indexed; 0 = unranked
+    projectedRank: number;
+    totalPlayers: number;
+  } | null;
   matches: Array<{
     fixtureNumber: number;
     stage: string;
@@ -31,8 +49,7 @@ export interface LiveApiResponse {
     team2Goals: number;
     minute: number | null;
     status: "live" | "halftime" | "final";
-    projected: Array<{ name: string; pickT1: number; pickT2: number; points: number }>;
-    me: { pickT1: number; pickT2: number; points: number } | null;
+    players: LivePlayerEntry[];   // every player with a pick on this fixture, sorted by points desc
     // For knockouts that ESPN has been reporting as final but we haven't
     // confirmed (ET/pens require admin entry), set to the duration since
     // ESPN first reported FT. Surfaced to the admin Results tab as a hint.
@@ -173,7 +190,7 @@ export async function GET(req: NextRequest) {
     const me = await requireWcAccess();
     const feed = await fetchEspnLive();
     if (feed.length === 0) {
-      return NextResponse.json<LiveApiResponse>({ fetchedAt: new Date().toISOString(), matches: [] });
+      return NextResponse.json<LiveApiResponse>({ fetchedAt: new Date().toISOString(), viewer: null, matches: [] });
     }
 
     // Map feed to our fixtures. Skip matches that are already settled in our
@@ -280,7 +297,7 @@ export async function GET(req: NextRequest) {
     for (const n of autoRecorded) settledSet.add(n);
     const stillLive = mapped.filter((m) => !settledSet.has(m.fixtureNumber));
     if (stillLive.length === 0) {
-      return NextResponse.json<LiveApiResponse>({ fetchedAt: now.toISOString(), matches: [] });
+      return NextResponse.json<LiveApiResponse>({ fetchedAt: now.toISOString(), viewer: null, matches: [] });
     }
 
     // Batch-fetch all predictions for the live fixtures so the projection
@@ -298,19 +315,72 @@ export async function GET(req: NextRequest) {
       .innerJoin(usersTable, sql`${usersTable.id} = ${wcPredictions.userId}`)
       .where(inArray(wcPredictions.fixtureNumber, fixtureNumbers));
 
+    // Pre-score every prediction once so we can reuse the numbers in both the
+    // per-match player list and the overall leaderboard delta calculation.
+    interface ScoredPred { fixtureNumber: number; userId: string; name: string; pickT1: number; pickT2: number; points: number; }
+    const scored: ScoredPred[] = preds.map((p) => {
+      const m = stillLive.find((sl) => sl.fixtureNumber === p.fixtureNumber)!;
+      const pts = scorePrediction(
+        { team1Goals: p.team1Goals, team2Goals: p.team2Goals },
+        { team1Goals: m.team1Goals, team2Goals: m.team2Goals },
+        m.stage,
+      );
+      return { fixtureNumber: p.fixtureNumber, userId: p.userId, name: p.name, pickT1: p.team1Goals, pickT2: p.team2Goals, points: pts.total };
+    });
+
+    // Leaderboard delta — viewer's current rank vs projected rank if every
+    // live match locked in at its present score. Computed across ALL users
+    // who've ever predicted anything (settled or otherwise), so the rank
+    // reflects the real cohort, not just live-match participants.
+    const totalsRows = await db
+      .select({
+        userId: wcPredictions.userId,
+        name: usersTable.name,
+        total: sql<number>`COALESCE(SUM(${wcPredictions.points}), 0)`,
+      })
+      .from(wcPredictions)
+      .innerJoin(usersTable, sql`${usersTable.id} = ${wcPredictions.userId}`)
+      .where(sql`${wcPredictions.points} IS NOT NULL`)
+      .groupBy(wcPredictions.userId, usersTable.name);
+
+    const currentByUser = new Map<string, { name: string; total: number }>();
+    for (const r of totalsRows) currentByUser.set(r.userId, { name: r.name, total: Number(r.total) });
+    // Include players who haven't settled any predictions yet but DO have a
+    // pick on a live match — they should be on the projected ranking.
+    for (const s of scored) {
+      if (!currentByUser.has(s.userId)) currentByUser.set(s.userId, { name: s.name, total: 0 });
+    }
+
+    const projectedByUser = new Map<string, { name: string; total: number }>();
+    for (const [uid, v] of currentByUser) projectedByUser.set(uid, { name: v.name, total: v.total });
+    for (const s of scored) {
+      const cur = projectedByUser.get(s.userId);
+      if (cur) cur.total += s.points;
+    }
+
+    const rankOf = (map: Map<string, { name: string; total: number }>, uid: string) => {
+      const arr = Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
+      arr.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      const idx = arr.findIndex((x) => x.id === uid);
+      return idx === -1 ? 0 : idx + 1;
+    };
+    const viewerCurrent = currentByUser.get(me.id)?.total ?? 0;
+    const viewerProjected = projectedByUser.get(me.id)?.total ?? viewerCurrent;
+    const viewer: LiveApiResponse["viewer"] = currentByUser.has(me.id)
+      ? {
+          currentTotalPoints: viewerCurrent,
+          projectedTotalPoints: viewerProjected,
+          currentRank: rankOf(currentByUser, me.id),
+          projectedRank: rankOf(projectedByUser, me.id),
+          totalPlayers: currentByUser.size,
+        }
+      : null;
+
     const out: LiveApiResponse["matches"] = stillLive.map((m: MappedLiveMatch) => {
-      const fixturePreds = preds.filter((p) => p.fixtureNumber === m.fixtureNumber);
-      const scored = fixturePreds.map((p) => {
-        const pts = scorePrediction(
-          { team1Goals: p.team1Goals, team2Goals: p.team2Goals },
-          { team1Goals: m.team1Goals, team2Goals: m.team2Goals },
-          m.stage,
-        );
-        return { userId: p.userId, name: p.name, pickT1: p.team1Goals, pickT2: p.team2Goals, points: pts.total };
-      });
-      const sorted = [...scored].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
-      const top5 = sorted.slice(0, 5).map(({ name, pickT1, pickT2, points }) => ({ name, pickT1, pickT2, points }));
-      const mine = scored.find((p) => p.userId === me.id);
+      const players: LivePlayerEntry[] = scored
+        .filter((p) => p.fixtureNumber === m.fixtureNumber)
+        .map(({ name, pickT1, pickT2, points, userId }) => ({ name, pickT1, pickT2, points, isMe: userId === me.id }))
+        .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
       // For knockouts that ESPN says are final but we haven't auto-recorded,
       // expose how long they've been pending so the admin UI can hint
@@ -331,8 +401,7 @@ export async function GET(req: NextRequest) {
         team2Goals: m.team2Goals,
         minute: m.minute,
         status: m.status as "live" | "halftime" | "final",
-        projected: top5,
-        me: mine ? { pickT1: mine.pickT1, pickT2: mine.pickT2, points: mine.points } : null,
+        players,
         pendingAdminMs,
       };
     });
@@ -355,6 +424,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json<LiveApiResponse>({
       fetchedAt: now.toISOString(),
+      viewer,
       matches: out,
     });
   } catch (e) {
