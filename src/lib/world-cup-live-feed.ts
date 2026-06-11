@@ -119,15 +119,24 @@ function parseScore(v: unknown): number {
   return 0;
 }
 
-function parseStatus(s: unknown): FeedMatch["status"] {
+export function parseStatus(s: unknown): FeedMatch["status"] {
   if (!s || typeof s !== "object") return "scheduled";
   const st = s as Record<string, unknown>;
   const t = st.type as Record<string, unknown> | undefined;
   const state = String(t?.state ?? "").toLowerCase();
   if (state === "post") return "final";
   if (state === "in") {
-    const desc = String(t?.description ?? "").toLowerCase();
-    if (desc.includes("half")) return "halftime";
+    // Prefer the structured type.name flag — ESPN uses STATUS_HALFTIME
+    // specifically for the interval. Description-based fallback below
+    // matches only the literal "halftime" / "ht" — NOT "1st Half" or
+    // "2nd Half", both of which used to be miscategorised as halftime
+    // because the old code did a substring match on "half".
+    const typeName = String(t?.name ?? "").toLowerCase();
+    if (typeName === "status_halftime") return "halftime";
+    const desc = String(t?.description ?? "").toLowerCase().trim();
+    if (desc === "halftime" || desc === "half time" || desc === "half-time" || desc === "ht") {
+      return "halftime";
+    }
     return "live";
   }
   return "scheduled";
