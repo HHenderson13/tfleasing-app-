@@ -30,6 +30,15 @@ export default async function LeaderboardPage() {
   const prize = calculatePrizePool(rows.length);
   const prizeByRank: Record<number, number> = { 1: prize.first, 2: prize.second, 3: prize.third };
 
+  // Relegation zone — bottom 3, only when there's a meaningful field to be
+  // "at the bottom" of (6+ players). Tracked separately from the table so
+  // both the row renderer and the footer card can flag the same set.
+  const relegationActive = ranked.length >= 6;
+  const relegationIds = new Set(
+    relegationActive ? ranked.slice(-3).map((r) => r.userId) : [],
+  );
+  const meInRelegation = relegationActive && relegationIds.has(user.id);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -52,8 +61,24 @@ export default async function LeaderboardPage() {
         </Suspense>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Leaderboard</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Updates the instant a result is entered. {ranked.length} player{ranked.length === 1 ? "" : "s"} in the running.
+          Updates the instant a result is entered. {ranked.length} player{ranked.length === 1 ? "" : "s"} in the running
+          {relegationActive && <> — top 3 win the prize money, bottom 3 face relegation 🪦</>}.
         </p>
+
+        {meInRelegation && (
+          <div className="mt-4 rounded-2xl border-2 border-rose-300 bg-gradient-to-r from-rose-50 to-red-50 p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">😬</span>
+              <div>
+                <div className="text-sm font-bold text-rose-900">You&apos;re in the drop zone.</div>
+                <p className="mt-1 text-xs text-rose-900/80">
+                  Currently sitting in the bottom 3. Time to start nailing some predictions before this turns into a real
+                  story you&apos;ll be telling at Christmas. There&apos;s no actual relegation — just the shame.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {top.length > 0 && (
           <section className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -106,8 +131,10 @@ export default async function LeaderboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  ranked.map((r) => (
-                    <tr key={r.userId} className={`group transition hover:bg-emerald-50/60 ${r.isMe ? "bg-emerald-50/50" : ""}`}>
+                  ranked.map((r) => {
+                    const inRelegation = relegationIds.has(r.userId);
+                    return (
+                    <tr key={r.userId} className={`group transition hover:bg-emerald-50/60 ${r.isMe ? "bg-emerald-50/50" : ""} ${inRelegation ? "bg-rose-50/60" : ""}`}>
                       <td className="px-3 py-0 font-mono text-slate-500 sm:px-4">
                         <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5 group-hover:text-slate-700">{r.rank}</Link>
                       </td>
@@ -115,6 +142,14 @@ export default async function LeaderboardPage() {
                         <Link href={`/world-cup/leaderboard/${r.userId}`} className="flex items-center gap-1.5 py-2.5 group-hover:underline">
                           <span className="truncate">{r.name}</span>
                           {r.isMe && <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-900">you</span>}
+                          {inRelegation && (
+                            <span
+                              className="inline-flex items-center gap-0.5 rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-900"
+                              title="In the relegation zone — bottom 3"
+                            >
+                              ⚠ Drop
+                            </span>
+                          )}
                           {r.streak >= 2 && (
                             <span
                               className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 tabular-nums"
@@ -138,14 +173,61 @@ export default async function LeaderboardPage() {
                         <Link href={`/world-cup/leaderboard/${r.userId}`} className="block py-2.5">{r.totalPoints}</Link>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </section>
+
+        {relegationActive && (
+          <RelegationCard
+            bottom3={ranked.slice(-3).map((r) => ({ name: r.name, points: r.totalPoints, isMe: r.isMe }))}
+          />
+        )}
       </main>
     </div>
+  );
+}
+
+function RelegationCard({ bottom3 }: { bottom3: { name: string; points: number; isMe: boolean }[] }) {
+  // bottom3 arrives in leaderboard order — so last entry is dead last. Render
+  // dead-last first so the eye lands on the saddest case immediately.
+  const ordered = [...bottom3].reverse();
+  return (
+    <section className="mt-8 overflow-hidden rounded-2xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-5 shadow-sm">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">🪦 Relegation zone</div>
+          <h2 className="mt-0.5 text-lg font-bold text-rose-900">The bottom 3</h2>
+        </div>
+        <span className="text-[11px] italic text-rose-700/80">no actual relegation, just public humiliation</span>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {ordered.map((p, i) => {
+          // i=0 is dead last, i=1 is second-last, i=2 is third-from-last
+          const place = ["💀 Dead last", "🪤 Second from bottom", "🩹 Third from bottom"][i];
+          return (
+            <div
+              key={p.name}
+              className={`rounded-xl border bg-white/70 p-3 shadow-sm ${p.isMe ? "border-rose-400 ring-2 ring-rose-200" : "border-rose-200"}`}
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">{place}</div>
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <span className="truncate text-base font-bold text-slate-900">
+                  {p.name}{p.isMe && " (you)"}
+                </span>
+                <span className="shrink-0 font-mono text-base font-semibold tabular-nums text-rose-700">{p.points} pts</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[11px] italic text-rose-800/80">
+        Climb out before the group stage ends or risk becoming this office&apos;s ongoing punchline.
+      </p>
+    </section>
   );
 }
 

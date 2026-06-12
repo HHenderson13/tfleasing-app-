@@ -153,6 +153,7 @@ export function LiveWidget() {
           key={m.fixtureNumber}
           match={m}
           viewer={data.viewer}
+          relegation={data.relegation}
           flash={flashes[m.fixtureNumber] ?? null}
           previousPoints={previousPointsByFx.get(m.fixtureNumber) ?? null}
           goalEvents={goalEvents[m.fixtureNumber] ?? []}
@@ -170,6 +171,7 @@ export function LiveWidget() {
 function MatchCard({
   match: m,
   viewer,
+  relegation,
   flash,
   previousPoints,
   goalEvents,
@@ -177,6 +179,7 @@ function MatchCard({
 }: {
   match: MatchData;
   viewer: LiveApiResponse["viewer"];
+  relegation: LiveApiResponse["relegation"];
   flash: { team: 1 | 2; key: number } | null;
   previousPoints: Map<string, number> | null;
   goalEvents: GoalEvent[];
@@ -206,7 +209,27 @@ function MatchCard({
       </div>
 
       {/* Banter ribbon — rotating one-liner across the top */}
-      <BanterRibbon match={m} viewer={viewer} />
+      <BanterRibbon match={m} viewer={viewer} relegation={relegation} />
+
+      {/* Relegation movement alert — only fires when this match's score
+          actually shuffles the drop zone. More attention-grabbing than the
+          rotating banter ribbon since it persists rather than rotating. */}
+      {relegation && (relegation.droppingIn.length > 0 || relegation.climbingOut.length > 0) && (
+        <div className="border-b border-rose-200 bg-gradient-to-r from-rose-50 via-red-50 to-rose-50 px-4 py-2 text-xs">
+          {relegation.droppingIn.length > 0 && (
+            <div className="flex flex-wrap items-baseline gap-1">
+              <span className="font-bold text-rose-800">🪦 Heading for the drop:</span>
+              <span className="font-medium text-rose-900">{relegation.droppingIn.join(", ")}</span>
+            </div>
+          )}
+          {relegation.climbingOut.length > 0 && (
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+              <span className="font-bold text-emerald-800">🪂 Escaping the drop zone:</span>
+              <span className="font-medium text-emerald-900">{relegation.climbingOut.join(", ")}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Big score with goal-flash animations */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-4">
@@ -252,8 +275,8 @@ function MatchCard({
 }
 
 // ── Banter ribbon ───────────────────────────────────────────────────────
-function BanterRibbon({ match, viewer }: { match: MatchData; viewer: LiveApiResponse["viewer"] }) {
-  const phrases = useMemo(() => buildBanter(match, viewer), [match, viewer]);
+function BanterRibbon({ match, viewer, relegation }: { match: MatchData; viewer: LiveApiResponse["viewer"]; relegation: LiveApiResponse["relegation"] }) {
+  const phrases = useMemo(() => buildBanter(match, viewer, relegation), [match, viewer, relegation]);
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     if (phrases.length <= 1) return;
@@ -268,8 +291,32 @@ function BanterRibbon({ match, viewer }: { match: MatchData; viewer: LiveApiResp
   );
 }
 
-function buildBanter(m: MatchData, viewer: LiveApiResponse["viewer"]): string[] {
+function buildBanter(m: MatchData, viewer: LiveApiResponse["viewer"], relegation: LiveApiResponse["relegation"]): string[] {
   const phrases: string[] = [];
+
+  // Relegation-zone movement banter — only fires when the live match actually
+  // changes the bottom 3. Most engaging when someone drops in or climbs out
+  // because of a specific scoreline.
+  if (relegation) {
+    if (relegation.droppingIn.length === 1) {
+      phrases.push(`🪦 ${relegation.droppingIn[0]} would drop into the relegation zone if this finishes like this`);
+    } else if (relegation.droppingIn.length > 1) {
+      phrases.push(`🪦 ${relegation.droppingIn.join(" + ")} both heading for the drop zone if this score holds`);
+    }
+    if (relegation.climbingOut.length === 1) {
+      phrases.push(`🪂 ${relegation.climbingOut[0]} escaping the relegation zone — for now`);
+    } else if (relegation.climbingOut.length > 1) {
+      phrases.push(`🪂 ${relegation.climbingOut.join(" + ")} both climbing out of the drop zone`);
+    }
+    const meName = m.players.find((p) => p.isMe)?.name;
+    if (meName) {
+      const wasInDrop = relegation.current.includes(meName);
+      const wouldBeInDrop = relegation.projected.includes(meName);
+      if (!wasInDrop && wouldBeInDrop) phrases.push(`⚠ You'd drop into the relegation zone if this ends here. Yikes.`);
+      if (wasInDrop && !wouldBeInDrop) phrases.push(`✨ You'd escape the drop zone — keep this score and live to fight another day`);
+    }
+  }
+
   const goals = m.team1Goals + m.team2Goals;
   const leader = m.players[0] ?? null;
   const perfect = m.players.filter((p) => p.pickT1 === m.team1Goals && p.pickT2 === m.team2Goals);

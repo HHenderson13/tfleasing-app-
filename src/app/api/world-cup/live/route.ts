@@ -39,6 +39,17 @@ export interface LiveApiResponse {
     projectedRank: number;
     totalPlayers: number;
   } | null;
+  // The bottom 3 of the leaderboard — both current and projected if every
+  // live match locked in now. Live widget compares the two lists to call
+  // out who's dropping in / climbing out of the drop zone. Null when
+  // there are fewer than 6 total players (relegation is meaningless when
+  // the entire field would be in it).
+  relegation: {
+    current: string[];            // names of bottom 3 right now
+    projected: string[];          // names of bottom 3 if FT now
+    droppingIn: string[];         // in projected but not current
+    climbingOut: string[];        // in current but not projected
+  } | null;
   matches: Array<{
     fixtureNumber: number;
     stage: string;
@@ -190,7 +201,7 @@ export async function GET(req: NextRequest) {
     const me = await requireWcAccess();
     const feed = await fetchEspnLive();
     if (feed.length === 0) {
-      return NextResponse.json<LiveApiResponse>({ fetchedAt: new Date().toISOString(), viewer: null, matches: [] });
+      return NextResponse.json<LiveApiResponse>({ fetchedAt: new Date().toISOString(), viewer: null, relegation: null, matches: [] });
     }
 
     // Map feed to our fixtures. Skip matches that are already settled in our
@@ -297,7 +308,7 @@ export async function GET(req: NextRequest) {
     for (const n of autoRecorded) settledSet.add(n);
     const stillLive = mapped.filter((m) => !settledSet.has(m.fixtureNumber));
     if (stillLive.length === 0) {
-      return NextResponse.json<LiveApiResponse>({ fetchedAt: now.toISOString(), viewer: null, matches: [] });
+      return NextResponse.json<LiveApiResponse>({ fetchedAt: now.toISOString(), viewer: null, relegation: null, matches: [] });
     }
 
     // Batch-fetch all predictions for the live fixtures so the projection
@@ -358,9 +369,15 @@ export async function GET(req: NextRequest) {
       if (cur) cur.total += s.points;
     }
 
-    const rankOf = (map: Map<string, { name: string; total: number }>, uid: string) => {
+    const sortedByPoints = (map: Map<string, { name: string; total: number }>) => {
       const arr = Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
       arr.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      return arr;
+    };
+    const currentSorted = sortedByPoints(currentByUser);
+    const projectedSorted = sortedByPoints(projectedByUser);
+
+    const rankOf = (arr: { id: string }[], uid: string) => {
       const idx = arr.findIndex((x) => x.id === uid);
       return idx === -1 ? 0 : idx + 1;
     };
@@ -370,10 +387,28 @@ export async function GET(req: NextRequest) {
       ? {
           currentTotalPoints: viewerCurrent,
           projectedTotalPoints: viewerProjected,
-          currentRank: rankOf(currentByUser, me.id),
-          projectedRank: rankOf(projectedByUser, me.id),
+          currentRank: rankOf(currentSorted, me.id),
+          projectedRank: rankOf(projectedSorted, me.id),
           totalPlayers: currentByUser.size,
         }
+      : null;
+
+    // Relegation zone — only meaningful with 6+ players. Bottom 3 by points
+    // (ties broken alphabetically — same sort as the leaderboard page so the
+    // names line up exactly with what users see there).
+    const relegation: LiveApiResponse["relegation"] = currentSorted.length >= 6
+      ? (() => {
+          const current = currentSorted.slice(-3).map((x) => x.name);
+          const projected = projectedSorted.slice(-3).map((x) => x.name);
+          const currentSet = new Set(current);
+          const projectedSet = new Set(projected);
+          return {
+            current,
+            projected,
+            droppingIn: projected.filter((n) => !currentSet.has(n)),
+            climbingOut: current.filter((n) => !projectedSet.has(n)),
+          };
+        })()
       : null;
 
     const out: LiveApiResponse["matches"] = stillLive.map((m: MappedLiveMatch) => {
@@ -425,6 +460,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json<LiveApiResponse>({
       fetchedAt: now.toISOString(),
       viewer,
+      relegation,
       matches: out,
     });
   } catch (e) {
