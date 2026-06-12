@@ -173,8 +173,12 @@ export async function POST(req: NextRequest) {
       scrapedAt: toDate(row.scraped_at, now),
     }));
 
-    for (let i = 0; i < resultsToInsert.length; i += 100) {
-      await db.insert(scraperResults).values(resultsToInsert.slice(i, i + 100));
+    // 500-row batches strike the balance between Turso round-trip latency
+    // (each network call is ~150-300ms regardless of batch size) and SQLite
+    // statement-size limits. At 4000 rows per chunk, this is 8 round-trips
+    // per chunk vs the previous 40 — typically ~5× faster.
+    for (let i = 0; i < resultsToInsert.length; i += 500) {
+      await db.insert(scraperResults).values(resultsToInsert.slice(i, i + 500));
     }
 
     // Update totalResults counter (increment for chunks, set for new)
