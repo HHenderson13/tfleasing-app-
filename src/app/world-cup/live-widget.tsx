@@ -202,7 +202,9 @@ function MatchCard({
             {m.status === "halftime" ? "Half-time" : m.status === "final" ? "Full-time" : "Live"}
           </span>
           {m.minute !== null && m.status === "live" && (
-            <span className="font-mono text-red-700">{m.minute}&apos;</span>
+            <span className="font-mono text-red-700">
+              {m.minute}{m.stoppage !== null && <span className="text-red-500">+{m.stoppage}</span>}&apos;
+            </span>
           )}
         </div>
         <span className="text-[10px] text-red-700/60">via ESPN · refreshes every 15s</span>

@@ -58,7 +58,11 @@ export interface LiveApiResponse {
     team2: string;
     team1Goals: number;
     team2Goals: number;
+    // Base minute played; stoppage = added time (e.g. minute=45 stoppage=2
+    // when ESPN reports "45+2'"). Render as `${minute}${stoppage !== null
+    // ? `+${stoppage}` : ""}'` on the widget.
     minute: number | null;
+    stoppage: number | null;
     status: "live" | "halftime" | "final";
     players: LivePlayerEntry[];   // every player with a pick on this fixture, sorted by points desc
     // For knockouts that ESPN has been reporting as final but we haven't
@@ -435,6 +439,7 @@ export async function GET(req: NextRequest) {
         team1Goals: m.team1Goals,
         team2Goals: m.team2Goals,
         minute: m.minute,
+        stoppage: m.stoppage,
         status: m.status as "live" | "halftime" | "final",
         players,
         pendingAdminMs,

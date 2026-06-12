@@ -20,7 +20,12 @@ export interface FeedMatch {
   team1Goals: number;
   team2Goals: number;
   status: "scheduled" | "live" | "halftime" | "final";
+  // Base minute played (1-45 in 1st half, 46-90 in 2nd, 90-105/120 in ET).
   minute: number | null;
+  // Added/stoppage time in minutes (e.g. 2 when ESPN reports "45+2"). Null
+  // when the match is in normal time. Rendered alongside minute as e.g.
+  // "45+2'" on the live widget.
+  stoppage: number | null;
   kickoffAt: Date;
 }
 
@@ -90,7 +95,7 @@ export function parseEspnScoreboard(json: unknown): FeedMatch[] {
       const awayGoals = parseScore(a.score);
 
       const status = parseStatus(comp.status);
-      const minute = status === "live" ? parseMinute(comp.status) : null;
+      const { minute, stoppage } = status === "live" ? parseMinute(comp.status) : { minute: null, stoppage: null };
 
       if (!homeName || !awayName) continue;
       out.push({
@@ -101,6 +106,7 @@ export function parseEspnScoreboard(json: unknown): FeedMatch[] {
         team2Goals: awayGoals,
         status,
         minute,
+        stoppage,
         kickoffAt: date ?? new Date(0),
       });
     } catch (e) {
@@ -142,15 +148,27 @@ export function parseStatus(s: unknown): FeedMatch["status"] {
   return "scheduled";
 }
 
-function parseMinute(s: unknown): number | null {
-  if (!s || typeof s !== "object") return null;
+export function parseMinute(s: unknown): { minute: number | null; stoppage: number | null } {
+  if (!s || typeof s !== "object") return { minute: null, stoppage: null };
   const clock = (s as Record<string, unknown>).displayClock;
-  if (typeof clock === "string") {
-    // ESPN uses "32'" or "32:15" depending on sport — strip the apostrophe.
-    const n = parseInt(clock.replace(/[^0-9]/g, ""), 10);
-    return Number.isFinite(n) ? n : null;
+  if (typeof clock !== "string") return { minute: null, stoppage: null };
+  // Stoppage time format first — ESPN reports "45+2'", "90+5'" etc during
+  // injury time. Old code did a blanket strip of non-digits which
+  // concatenated 45 and 2 into 452. Capture the two numbers separately
+  // and return them as a structured pair.
+  const stoppageMatch = clock.match(/(\d+)\s*\+\s*(\d+)/);
+  if (stoppageMatch) {
+    return {
+      minute: parseInt(stoppageMatch[1], 10),
+      stoppage: parseInt(stoppageMatch[2], 10),
+    };
   }
-  return null;
+  // Normal time — match the first run of digits ("32'", "32:15" → 32).
+  const minuteMatch = clock.match(/(\d+)/);
+  if (minuteMatch) {
+    return { minute: parseInt(minuteMatch[1], 10), stoppage: null };
+  }
+  return { minute: null, stoppage: null };
 }
 
 export async function fetchEspnLive(): Promise<FeedMatch[]> {
