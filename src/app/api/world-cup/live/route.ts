@@ -50,6 +50,20 @@ export interface LiveApiResponse {
     droppingIn: string[];         // in projected but not current
     climbingOut: string[];        // in current but not projected
   } | null;
+  // Full live overall standings — every player who's ever predicted,
+  // sorted by projected total (settled past results + current live
+  // projection). Drives the in-widget "live overall table" that lets
+  // users see the whole leaderboard moving in real time instead of
+  // just their own rank delta. Sorted highest-to-lowest by projected.
+  overall: Array<{
+    name: string;
+    currentRank: number;
+    projectedRank: number;
+    currentTotalPoints: number;
+    projectedTotalPoints: number;
+    isMe: boolean;
+    inRelegationProjected: boolean;
+  }>;
   matches: Array<{
     fixtureNumber: number;
     stage: string;
@@ -205,7 +219,7 @@ export async function GET(req: NextRequest) {
     const me = await requireWcAccess();
     const feed = await fetchEspnLive();
     if (feed.length === 0) {
-      return NextResponse.json<LiveApiResponse>({ fetchedAt: new Date().toISOString(), viewer: null, relegation: null, matches: [] });
+      return NextResponse.json<LiveApiResponse>({ fetchedAt: new Date().toISOString(), viewer: null, relegation: null, overall: [], matches: [] });
     }
 
     // Map feed to our fixtures. Skip matches that are already settled in our
@@ -312,7 +326,7 @@ export async function GET(req: NextRequest) {
     for (const n of autoRecorded) settledSet.add(n);
     const stillLive = mapped.filter((m) => !settledSet.has(m.fixtureNumber));
     if (stillLive.length === 0) {
-      return NextResponse.json<LiveApiResponse>({ fetchedAt: now.toISOString(), viewer: null, relegation: null, matches: [] });
+      return NextResponse.json<LiveApiResponse>({ fetchedAt: now.toISOString(), viewer: null, relegation: null, overall: [], matches: [] });
     }
 
     // Batch-fetch all predictions for the live fixtures so the projection
@@ -415,6 +429,23 @@ export async function GET(req: NextRequest) {
         })()
       : null;
 
+    // Full live overall standings — every player on the leaderboard ranked
+    // by projected total. Each row carries current + projected rank and
+    // points so the widget can render the ranks side-by-side with the
+    // movement arrow.
+    const currentRankById = new Map<string, number>();
+    currentSorted.forEach((r, i) => currentRankById.set(r.id, i + 1));
+    const projectedBottom3Names = new Set(relegation?.projected ?? []);
+    const overall: LiveApiResponse["overall"] = projectedSorted.map((r, i) => ({
+      name: r.name,
+      currentRank: currentRankById.get(r.id) ?? 0,
+      projectedRank: i + 1,
+      currentTotalPoints: currentByUser.get(r.id)?.total ?? 0,
+      projectedTotalPoints: r.total,
+      isMe: r.id === me.id,
+      inRelegationProjected: projectedBottom3Names.has(r.name),
+    }));
+
     const out: LiveApiResponse["matches"] = stillLive.map((m: MappedLiveMatch) => {
       const players: LivePlayerEntry[] = scored
         .filter((p) => p.fixtureNumber === m.fixtureNumber)
@@ -466,6 +497,7 @@ export async function GET(req: NextRequest) {
       fetchedAt: now.toISOString(),
       viewer,
       relegation,
+      overall,
       matches: out,
     });
   } catch (e) {

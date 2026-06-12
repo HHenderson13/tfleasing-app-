@@ -160,6 +160,7 @@ export function LiveWidget() {
           confettiBursts={confettiBursts.filter((b) => b.fixtureNumber === m.fixtureNumber)}
         />
       ))}
+      {data.overall.length > 0 && <LiveOverallTable overall={data.overall} />}
       {error && (
         <p className="px-2 text-[10px] text-slate-400">Feed hiccup — retrying. {error}</p>
       )}
@@ -469,6 +470,88 @@ function PlayerList({
       </ol>
     </div>
   );
+}
+
+// ── Live overall table ──────────────────────────────────────────────────
+// Full leaderboard with live updates folded in. Each row carries:
+//   • projected rank (left)
+//   • rank movement vs the pre-live current rank (↑2 / ↓1 / =)
+//   • name + you / drop-zone badges
+//   • points gained from currently-live games + projected total
+//
+// Sorted highest-to-lowest by projected total — matches the rest of the
+// app's leaderboard sort. Mobile-first: 3-column grid (rank cluster, name,
+// points cluster) wraps naturally on phones; max-height scroller keeps it
+// from dominating the viewport when there are 20+ players.
+function LiveOverallTable({ overall }: { overall: LiveApiResponse["overall"] }) {
+  // Try to scroll the viewer's row into view on first render so they don't
+  // have to hunt for themselves on a long leaderboard. Best-effort.
+  const meRef = useRef<HTMLLIElement | null>(null);
+  const [hasScrolled, setHasScrolled] = useState(false);
+  useEffect(() => {
+    if (hasScrolled || !meRef.current) return;
+    meRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setHasScrolled(true);
+  }, [hasScrolled]);
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+      <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Live overall table</div>
+        <div className="mt-0.5 text-sm font-semibold text-slate-900">
+          Past results + this live game folded in
+        </div>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          Ranks update on every poll. Arrows show movement vs the leaderboard pre-kick-off.
+        </p>
+      </header>
+      <ol className="max-h-[28rem] overflow-y-auto divide-y divide-slate-100">
+        {overall.map((p, i) => {
+          const delta = p.projectedTotalPoints - p.currentTotalPoints;
+          const rankShift = p.currentRank === 0 ? 0 : p.currentRank - p.projectedRank;
+          // Positive rankShift = climbed up (currentRank=5 → projectedRank=3 → shift=+2)
+          return (
+            <li
+              key={`${p.name}-${i}`}
+              ref={p.isMe ? meRef : undefined}
+              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 text-sm transition ${
+                p.isMe ? "bg-amber-50 ring-1 ring-inset ring-amber-200" : p.inRelegationProjected ? "bg-rose-50/60" : ""
+              }`}
+            >
+              {/* Rank + movement */}
+              <div className="flex shrink-0 items-baseline gap-1.5 tabular-nums">
+                <span className="font-mono text-base font-bold text-slate-900">
+                  {p.projectedRank === 1 ? "🥇" : p.projectedRank === 2 ? "🥈" : p.projectedRank === 3 ? "🥉" : p.projectedRank}
+                </span>
+                <RankShift shift={rankShift} />
+              </div>
+              {/* Name + badges */}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-baseline gap-1.5">
+                  <span className={`truncate font-medium ${p.isMe ? "text-amber-900" : "text-slate-900"}`}>{p.name}</span>
+                  {p.isMe && <span className="rounded bg-amber-200 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900">you</span>}
+                  {p.inRelegationProjected && <span className="rounded bg-rose-200 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-900" title="Bottom 3 if game ends like this">⚠ Drop</span>}
+                </div>
+              </div>
+              {/* Points: delta from live + projected total */}
+              <div className="flex shrink-0 items-baseline gap-1.5 tabular-nums">
+                {delta > 0 && (
+                  <span className="text-[11px] font-bold text-emerald-700">+{delta}</span>
+                )}
+                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-bold text-slate-800">{p.projectedTotalPoints}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </article>
+  );
+}
+
+function RankShift({ shift }: { shift: number }) {
+  if (shift === 0) return <span className="font-mono text-[10px] text-slate-400">=</span>;
+  if (shift > 0) return <span className="font-mono text-[10px] font-bold text-emerald-700">↑{shift}</span>;
+  return <span className="font-mono text-[10px] font-bold text-rose-700">↓{-shift}</span>;
 }
 
 // ── Confetti layer ──────────────────────────────────────────────────────
