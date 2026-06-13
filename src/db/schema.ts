@@ -183,6 +183,22 @@ export const proposals = sqliteTable(
     isEv: integer("is_ev", { mode: "boolean" }).notNull().default(false),
     wallboxIncluded: integer("wallbox_included", { mode: "boolean" }).notNull().default(false),
     customerSavingGbp: real("customer_saving_gbp"),
+    // Delivery tracker fields (mirror Lou's Excel "2026" tab columns G-U).
+    // Most are optional — only execs who use them will fill them in.
+    vehicleColour: text("vehicle_colour"),
+    factoryOptions: text("factory_options"),
+    pdiDone: integer("pdi_done", { mode: "boolean" }).notNull().default(false),
+    invoiced: integer("invoiced", { mode: "boolean" }).notNull().default(false),
+    itcComplete: integer("itc_complete", { mode: "boolean" }).notNull().default(false),
+    // GAP / TF Protect — tri-state because customers either don't have one,
+    // have one pending setup, or have one fully paid + activated.
+    gapPolicyStatus: text("gap_policy_status").notNull().default("none"),    // 'none' | 'pending' | 'complete'
+    tfpPolicyStatus: text("tfp_policy_status").notNull().default("none"),    // 'none' | 'pending' | 'complete'
+    deliveryNotes: text("delivery_notes"),
+    // Gate the delivered transition — both must be ticked before status
+    // can flip from awaiting_delivery to delivered.
+    deliveryPackSubmitted: integer("delivery_pack_submitted", { mode: "boolean" }).notNull().default(false),
+    deliveryDetailsChecked: integer("delivery_details_checked", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },

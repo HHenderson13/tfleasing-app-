@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -79,6 +79,18 @@ async function runEnsureAppSchema() {
     // Back-loaded deals are admin-only entries with incomplete fields, kept
     // out of reports/KPIs. Existing rows default to 0 (false).
     { name: "back_loaded", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+    // Delivery tracker columns — mirror Lou's Excel "2026" tab. All
+    // optional except the final pack-submission gate.
+    { name: "vehicle_colour", sqlType: "TEXT" },
+    { name: "factory_options", sqlType: "TEXT" },
+    { name: "pdi_done", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "invoiced", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "itc_complete", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "gap_policy_status", sqlType: "TEXT NOT NULL DEFAULT 'none'" },
+    { name: "tfp_policy_status", sqlType: "TEXT NOT NULL DEFAULT 'none'" },
+    { name: "delivery_notes", sqlType: "TEXT" },
+    { name: "delivery_pack_submitted", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "delivery_details_checked", sqlType: "INTEGER NOT NULL DEFAULT 0" },
   ]);
   await ensureFunderInterestRatesTable();
   await ensureScraperTables();

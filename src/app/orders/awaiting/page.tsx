@@ -1,19 +1,17 @@
 import Link from "next/link";
 import { listProposals } from "@/lib/proposals";
-import { STATUS_LABELS } from "@/lib/proposal-constants";
 import { TopNav } from "@/components/top-nav";
 import { db } from "@/db";
 import { proposals, proposalStageChecks, salesExecs, stageCheckDefs, stockVehicles } from "@/db/schema";
 import { asc, eq, inArray, isNull, and } from "drizzle-orm";
 import { ExecFilter } from "../exec-filter";
-import { OrderRow, Section } from "../order-row";
-import { ManualEtaEditor } from "./manual-row";
-import { DeliveryEditor } from "./delivery-row";
-import { ExpandableDelivery } from "./expandable-delivery";
 import { matchProposalAgainstStock, type StockHit } from "@/lib/stock-match";
 import { requireOrdersAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
 import { StatTile } from "@/components/stat-tile";
+import { TrackerCard, type TrackerCardData } from "./tracker-card";
+import { DeliveryCalendar, type CalendarEntry } from "./delivery-calendar";
+import { ViewTabs, type AwaitingView } from "./view-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -110,12 +108,22 @@ function bucketSortValue(key: string): number {
 export default async function OrdersAwaitingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ exec?: string }>;
+  searchParams: Promise<{ exec?: string; view?: string }>;
 }) {
   const sp = await searchParams;
   const execFilter = sp.exec && sp.exec !== "all" ? sp.exec : null;
+  const view: AwaitingView = sp.view === "calendar" ? "calendar" : "tracker";
   const me = await requireOrdersAccess();
   const admin = isAdmin(me);
+
+  // Default exec filter: own deals for sales execs, all-department for admins
+  // (and anyone else with orders access who isn't a sales exec themselves).
+  // Honour the explicit ?exec= override either way so the existing ExecFilter
+  // UI still works.
+  const myExecId = me.salesExecId ?? null;
+  const effectiveExec = execFilter !== null
+    ? execFilter
+    : (admin ? null : myExecId);
 
   const [rows, execs, stockRaw, deliveryDefs] = await Promise.all([
     listProposals("orders"),
@@ -136,7 +144,7 @@ export default async function OrdersAwaitingPage({
 
   const stock: StockRow[] = stockRaw;
 
-  const filtered = execFilter ? rows.filter((r) => r.salesExecId === execFilter) : rows;
+  const filtered = effectiveExec ? rows.filter((r) => r.salesExecId === effectiveExec) : rows;
   const awaiting = filtered.filter((r) => r.status === "awaiting_delivery");
 
   const ticksRaw = awaiting.length
@@ -238,73 +246,144 @@ export default async function OrdersAwaitingPage({
         </section>
         <div className="mt-2 text-right text-[11px] text-slate-400">Total monthly rental in pipeline: £{monthlySum.toFixed(2)}</div>
 
-        {sortedKeys.length === 0 ? (
-          <Section title="Awaiting delivery" empty="No deals waiting on delivery yet.">{[]}</Section>
+        <div className="mt-6">
+          <ViewTabs active={view} />
+        </div>
+
+        {view === "tracker" ? (
+          <TrackerView
+            items={items}
+            ticksByProposal={ticksByProposal}
+            deliveryDefs={deliveryDefs}
+            sortedKeys={sortedKeys}
+            groups={groups}
+          />
         ) : (
-          sortedKeys.map((key) => (
-            <Section key={key} title={bucketLabel(key)} empty="">
-              {groups.get(key)!.map(({ p, match }) => {
-                const business = p.customer?.businessName ? ` · ${p.customer.businessName}` : "";
-                const meta = `${p.funderName} · £${p.monthlyRental.toFixed(2)}/mo${business}${p.vin ? " · VIN " + p.vin : ""}${p.orderNumber ? " · Order " + p.orderNumber : ""}${p.isGroupBq ? " · Group BQ" + (p.groupSite ? " " + p.groupSite.name : "") : p.exec ? " · " + p.exec.name : ""}${p.isBroker && p.brokerName ? " · Broker: " + p.brokerName : ""}`;
-                const expandable = p.isGroupBq || match.delivered;
-                const rowEl = (
-                  <OrderRow
-                    id={p.id}
-                    customerId={p.customer?.id ?? ""}
-                    customer={p.customer?.name ?? "—"}
-                    title={`${p.model} ${p.derivative}`}
-                    meta={meta}
-                    status={p.status as keyof typeof STATUS_LABELS}
-                    href={expandable ? null : undefined}
-                    right={
-                      <div className="space-y-1 text-right">
-                        {match.delivered && <IbAdoptedBadge match={match} />}
-                        {!p.isGroupBq && <MatchBadge match={match} />}
-                      </div>
-                    }
-                  />
-                );
-                const manualEditor =
-                  !p.isGroupBq && (match.source === "none" || match.source === "manual") ? (
-                    <ManualEtaEditor
-                      proposalId={p.id}
-                      initialEta={p.manualEtaAt ? p.manualEtaAt.toISOString().slice(0, 10) : null}
-                      initialLocation={p.manualLocation}
-                      lastUpdatedAt={p.manualEtaUpdatedAt ? p.manualEtaUpdatedAt.toISOString() : null}
-                    />
-                  ) : null;
-                const deliveryEditor = expandable ? (
-                  <DeliveryEditor
-                    proposalId={p.id}
-                    initialBookedAt={p.deliveryBookedAt ? p.deliveryBookedAt.toISOString().slice(0, 10) : null}
-                    initialRegNumber={p.regNumber}
-                    isGroupBq={p.isGroupBq}
-                    checks={deliveryDefs
-                      .filter((d) => p.isGroupBq ? d.appliesToBq : true)
-                      .map((d) => ({ id: d.id, label: d.label, checked: ticksByProposal.get(p.id)?.has(d.id) ?? false }))}
-                  />
-                ) : null;
-                return (
-                  <div key={p.id}>
-                    {expandable ? (
-                      <ExpandableDelivery
-                        orderId={p.id}
-                        rowContent={rowEl}
-                        deliveryContent={deliveryEditor}
-                      />
-                    ) : (
-                      <>
-                        {rowEl}
-                        {manualEditor}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </Section>
-          ))
+          <CalendarView items={items} />
         )}
       </main>
+    </div>
+  );
+}
+
+// One row from listProposals with the join data attached. Keeps the
+// child component signatures tight without restating the whole shape.
+type ListedProposal = Awaited<ReturnType<typeof listProposals>>[number];
+
+// ── Tracker view — bucketed tracker cards ──────────────────────────────────
+//
+// Inputs come pre-computed by the page render (buckets + ticks already
+// joined). This wrapper handles two things:
+//   1. Flattens proposals into the TrackerCardData shape the card needs
+//   2. Renders bucket headers above each month group
+function TrackerView({
+  items,
+  ticksByProposal,
+  deliveryDefs,
+  sortedKeys,
+  groups,
+}: {
+  items: { p: ListedProposal; match: Match }[];
+  ticksByProposal: Map<string, Set<string>>;
+  deliveryDefs: { id: string; label: string; appliesToBq: boolean }[];
+  sortedKeys: string[];
+  groups: Map<string, { p: ListedProposal; match: Match }[]>;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+        No deals waiting on delivery yet.
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 space-y-6">
+      {sortedKeys.map((key) => (
+        <section key={key}>
+          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            {bucketLabel(key)}
+            <span className="ml-2 text-slate-400">({groups.get(key)!.length})</span>
+          </h2>
+          <div className="space-y-2">
+            {groups.get(key)!.map(({ p, match }) => {
+              const checks = deliveryDefs
+                .filter((d) => p.isGroupBq ? d.appliesToBq : true)
+                .map((d) => ({ id: d.id, label: d.label, checked: ticksByProposal.get(p.id)?.has(d.id) ?? false }));
+              const locationLabel =
+                match.location ??
+                (match.delivered ? "Arrived" : match.source === "none" ? null : "Pending");
+              const etaLabel = match.etaAt
+                ? match.etaAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                : null;
+              const data: TrackerCardData = {
+                id: p.id,
+                customerName: p.customer?.name ?? "—",
+                customerId: p.customer?.id ?? "",
+                businessName: p.customer?.businessName ?? null,
+                model: p.model,
+                derivative: p.derivative,
+                funderName: p.funderName,
+                isGroupBq: p.isGroupBq,
+                execName: p.exec?.name ?? (p.isGroupBq ? "Group BQ" : null),
+                isEv: p.isEv,
+                wallboxIncluded: p.wallboxIncluded,
+                customerSavingGbp: p.customerSavingGbp,
+                monthlyRental: p.monthlyRental,
+                financeProposalNumber: p.financeProposalNumber,
+                locationLabel,
+                etaLabel,
+                orderNumber: p.orderNumber,
+                vin: p.vin,
+                vehicleColour: p.vehicleColour ?? null,
+                factoryOptions: p.factoryOptions ?? null,
+                regNumber: p.regNumber,
+                pdiDone: p.pdiDone ?? false,
+                financeAgreementSigned: p.financeAgreementSigned,
+                invoiced: p.invoiced ?? false,
+                itcComplete: p.itcComplete ?? false,
+                deliveryBookedAt: p.deliveryBookedAt ? p.deliveryBookedAt.toISOString().slice(0, 10) : null,
+                gapPolicyStatus: (p.gapPolicyStatus as "none" | "pending" | "complete") ?? "none",
+                tfpPolicyStatus: (p.tfpPolicyStatus as "none" | "pending" | "complete") ?? "none",
+                deliveryNotes: p.deliveryNotes ?? null,
+                deliveryPackSubmitted: p.deliveryPackSubmitted ?? false,
+                deliveryDetailsChecked: p.deliveryDetailsChecked ?? false,
+                checks,
+              };
+              return <TrackerCard key={p.id} data={data} />;
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+// ── Calendar view — month grid built from confirmed delivery dates ─────────
+function CalendarView({ items }: { items: { p: ListedProposal; match: Match }[] }) {
+  const entries: CalendarEntry[] = items
+    .filter(({ p }) => !!p.deliveryBookedAt)
+    .map(({ p }) => ({
+      proposalId: p.id,
+      customerName: p.customer?.name ?? "—",
+      customerId: p.customer?.id ?? "",
+      model: `${p.model} ${p.derivative}`,
+      funderName: p.funderName,
+      execName: p.exec?.name ?? null,
+      isEv: p.isEv,
+      isGroupBq: p.isGroupBq,
+      deliveryBookedAt: p.deliveryBookedAt!.toISOString().slice(0, 10),
+    }));
+
+  const withoutDate = items.filter(({ p }) => !p.deliveryBookedAt).length;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <DeliveryCalendar entries={entries} />
+      {withoutDate > 0 && (
+        <p className="text-[11px] italic text-slate-500">
+          {withoutDate} deal{withoutDate === 1 ? "" : "s"} on the tracker without a confirmed delivery date — set one on the Tracker tab to surface them here.
+        </p>
+      )}
     </div>
   );
 }

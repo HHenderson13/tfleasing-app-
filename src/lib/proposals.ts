@@ -191,6 +191,11 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
   if (toStatus === "delivered") {
     if (p.status !== "awaiting_delivery") throw new Error("Move to awaiting delivery first.");
     if (!p.deliveryBookedAt) throw new Error("Set the delivery date first.");
+    // Mandatory pre-delivery confirmations — set by the exec via the
+    // tracker modal. Both must be true before the deal can move out of
+    // awaiting_delivery.
+    if (!p.deliveryPackSubmitted) throw new Error("Confirm the delivery pack has been submitted to the funder.");
+    if (!p.deliveryDetailsChecked) throw new Error("Confirm all delivery details were checked before submission.");
     const isBq = p.isGroupBq;
     const defs = await db.select().from(stageCheckDefs).where(eq(stageCheckDefs.stage, "delivery"));
     const applicable = defs.filter((d) => isBq ? d.appliesToBq : true);
@@ -247,6 +252,18 @@ export async function updateOrderFields(
     derivative: string;
     deliveryBookedAt: Date | null;
     regNumber: string | null;
+    // Delivery tracker patch fields. Optional — only set the ones you're
+    // editing. Each field gets its own audit event in proposalEvents.
+    vehicleColour: string | null;
+    factoryOptions: string | null;
+    pdiDone: boolean;
+    invoiced: boolean;
+    itcComplete: boolean;
+    gapPolicyStatus: "none" | "pending" | "complete";
+    tfpPolicyStatus: "none" | "pending" | "complete";
+    deliveryNotes: string | null;
+    deliveryPackSubmitted: boolean;
+    deliveryDetailsChecked: boolean;
   }>
 ) {
   const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
@@ -308,6 +325,44 @@ export async function updateOrderFields(
       clean.regNumber = v;
       events.push({ field: "Reg number", value: v ?? "cleared" });
     }
+  }
+  if (patch.vehicleColour !== undefined) {
+    const v = patch.vehicleColour?.trim() || null;
+    if (v !== (p.vehicleColour ?? null)) { clean.vehicleColour = v; events.push({ field: "Vehicle colour", value: v ?? "cleared" }); }
+  }
+  if (patch.factoryOptions !== undefined) {
+    const v = patch.factoryOptions?.trim() || null;
+    if (v !== (p.factoryOptions ?? null)) { clean.factoryOptions = v; events.push({ field: "Factory options", value: v ?? "cleared" }); }
+  }
+  if (typeof patch.pdiDone === "boolean" && patch.pdiDone !== p.pdiDone) {
+    clean.pdiDone = patch.pdiDone;
+    events.push({ field: "PDI", value: patch.pdiDone ? "done" : "cleared" });
+  }
+  if (typeof patch.invoiced === "boolean" && patch.invoiced !== p.invoiced) {
+    clean.invoiced = patch.invoiced;
+    events.push({ field: "Invoiced", value: patch.invoiced ? "yes" : "cleared" });
+  }
+  if (typeof patch.itcComplete === "boolean" && patch.itcComplete !== p.itcComplete) {
+    clean.itcComplete = patch.itcComplete;
+    events.push({ field: "ITC", value: patch.itcComplete ? "complete" : "cleared" });
+  }
+  if (patch.gapPolicyStatus && ["none", "pending", "complete"].includes(patch.gapPolicyStatus)) {
+    if (patch.gapPolicyStatus !== p.gapPolicyStatus) { clean.gapPolicyStatus = patch.gapPolicyStatus; events.push({ field: "GAP policy", value: patch.gapPolicyStatus }); }
+  }
+  if (patch.tfpPolicyStatus && ["none", "pending", "complete"].includes(patch.tfpPolicyStatus)) {
+    if (patch.tfpPolicyStatus !== p.tfpPolicyStatus) { clean.tfpPolicyStatus = patch.tfpPolicyStatus; events.push({ field: "TFP policy", value: patch.tfpPolicyStatus }); }
+  }
+  if (patch.deliveryNotes !== undefined) {
+    const v = patch.deliveryNotes?.trim() || null;
+    if (v !== (p.deliveryNotes ?? null)) { clean.deliveryNotes = v; events.push({ field: "Delivery notes", value: v ? "updated" : "cleared" }); }
+  }
+  if (typeof patch.deliveryPackSubmitted === "boolean" && patch.deliveryPackSubmitted !== p.deliveryPackSubmitted) {
+    clean.deliveryPackSubmitted = patch.deliveryPackSubmitted;
+    events.push({ field: "Delivery pack to funder", value: patch.deliveryPackSubmitted ? "submitted" : "cleared" });
+  }
+  if (typeof patch.deliveryDetailsChecked === "boolean" && patch.deliveryDetailsChecked !== p.deliveryDetailsChecked) {
+    clean.deliveryDetailsChecked = patch.deliveryDetailsChecked;
+    events.push({ field: "Delivery details", value: patch.deliveryDetailsChecked ? "checked" : "cleared" });
   }
   if (Object.keys(clean).length === 1) return; // only updatedAt
   await db.update(proposals).set(clean).where(eq(proposals.id, proposalId));
