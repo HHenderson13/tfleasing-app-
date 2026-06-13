@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache, updateTag } from "next/cache";
 import { db } from "@/db";
-import { customers, groupSites, proposalEvents, proposalStageChecks, proposals, salesExecs, stageCheckDefs } from "@/db/schema";
+import { customers, dealerFitOptions, groupSites, proposalEvents, proposalStageChecks, proposals, salesExecs, stageCheckDefs } from "@/db/schema";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { ORDER_STATUSES, PROPOSAL_SECTION_STATUSES, type ProposalStatus } from "./proposal-constants";
@@ -451,6 +451,75 @@ export async function getCustomerTimeline(customerId: string) {
 }
 
 export type Section = "proposals" | "orders";
+// Fast path for the awaiting-delivery tracker page. Skips the big
+// listProposals fan-out by querying just the awaiting_delivery slice
+// directly. Returns the same shape per row (customer / exec / group site
+// joined) plus the dealer-fit options and delivery-stage check ticks
+// pre-grouped, so the page handler is a thin orchestrator and the
+// expensive joins-against-all-statuses path isn't touched.
+export async function listAwaitingForTracker() {
+  // SELECT only the awaiting_delivery rows — the byStatus index makes this
+  // O(log n) instead of "scan ORDER_STATUSES then JS-filter to awaiting".
+  const ps = await db
+    .select()
+    .from(proposals)
+    .where(eq(proposals.status, "awaiting_delivery"))
+    .orderBy(desc(proposals.updatedAt));
+
+  if (ps.length === 0) {
+    return {
+      items: [] as Array<Awaited<ReturnType<typeof listProposals>>[number]>,
+      ticksByProposal: new Map<string, Set<string>>(),
+      dealerFitByProposal: new Map<string, { id: string; label: string; fitted: boolean }[]>(),
+      deliveryDefs: [] as Array<{ id: string; label: string; appliesToBq: boolean; sortOrder: number; stage: string; createdAt: Date }>,
+    };
+  }
+
+  const ids = ps.map((p) => p.id);
+
+  const [execs, custs, sites, defs, ticks, dealerFit] = await Promise.all([
+    cachedSalesExecs(),
+    cachedCustomers(),
+    cachedGroupSites(),
+    cachedStageCheckDefs(),
+    db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, ids)),
+    db.select().from(dealerFitOptions).where(inArray(dealerFitOptions.proposalId, ids)).orderBy(asc(dealerFitOptions.sortOrder)),
+  ]);
+
+  const execMap = new Map(execs.map((e) => [e.id, e]));
+  const custMap = new Map(custs.map((c) => [c.id, c]));
+  const siteMap = new Map(sites.map((s) => [s.id, s]));
+
+  const ticksByProposal = new Map<string, Set<string>>();
+  for (const t of ticks) {
+    if (!ticksByProposal.has(t.proposalId)) ticksByProposal.set(t.proposalId, new Set());
+    ticksByProposal.get(t.proposalId)!.add(t.checkId);
+  }
+
+  const dealerFitByProposal = new Map<string, { id: string; label: string; fitted: boolean }[]>();
+  for (const o of dealerFit) {
+    const list = dealerFitByProposal.get(o.proposalId) ?? [];
+    list.push({ id: o.id, label: o.label, fitted: o.fitted });
+    dealerFitByProposal.set(o.proposalId, list);
+  }
+
+  const items = ps.map((p) => {
+    const ticked = ticksByProposal.get(p.id) ?? new Set<string>();
+    const applicable = defs.filter((d) => d.stage === "delivery" && (p.isGroupBq ? d.appliesToBq : true));
+    const customRemaining = applicable.filter((d) => !ticked.has(d.id)).length;
+    return {
+      ...p,
+      exec: p.salesExecId ? execMap.get(p.salesExecId) ?? null : null,
+      customer: custMap.get(p.customerId) ?? null,
+      groupSite: p.groupSiteId ? siteMap.get(p.groupSiteId) ?? null : null,
+      customRemaining,
+    };
+  });
+
+  const deliveryDefs = defs.filter((d) => d.stage === "delivery");
+  return { items, ticksByProposal, dealerFitByProposal, deliveryDefs };
+}
+
 export async function listProposals(section?: Section) {
   // Two waves: proposals first (so the ticks query can use their IDs), then
   // four lookups + ticks in parallel. Was six sequential round-trips → two.
