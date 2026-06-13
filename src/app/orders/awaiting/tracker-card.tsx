@@ -2,7 +2,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { changeStatusAction, setStageCheckAction, updateOrderFieldsAction } from "../../proposals/actions";
+import {
+  addDealerFitOptionAction,
+  changeStatusAction,
+  deleteDealerFitOptionAction,
+  setDealerFitOptionFittedAction,
+  setStageCheckAction,
+  updateOrderFieldsAction,
+} from "../../proposals/actions";
 
 // All editable fields on the tracker card. Each one commits on blur (text/
 // date) or on change (booleans/selects) so the user never has to hit "save".
@@ -34,25 +41,47 @@ export interface TrackerCardData {
   financeAgreementSigned: boolean;
   invoiced: boolean;
   itcComplete: boolean;
+  taxed: boolean;
   deliveryBookedAt: string | null;  // ISO yyyy-mm-dd
   gapPolicyStatus: "none" | "pending" | "complete";
+  gapPolicyNumber: string | null;
   tfpPolicyStatus: "none" | "pending" | "complete";
+  tfpPolicyNumber: string | null;
   deliveryNotes: string | null;
   deliveryPackSubmitted: boolean;
   deliveryDetailsChecked: boolean;
   // Custom stage checks loaded server-side
   checks: { id: string; label: string; checked: boolean }[];
+  // Dealer-fit options the customer has ordered
+  dealerFitOptions: { id: string; label: string; fitted: boolean }[];
+}
+
+// Custom delivery checks that overlap with the core toggle cards above are
+// hidden so the same thing isn't toggled twice with different effects. Match
+// is case-insensitive after stripping punctuation. The labels here mirror
+// historical admin-defined check names (Lou's spreadsheet had "PDI + Plates
+// pushed", "Invoiced", "Delivery pack submitted to funder" as customs).
+const DEDUP_LABELS = new Set([
+  "pdi", "pdi plates", "pdi plates pushed", "pdi done",
+  "fd", "finance docs", "finance docs signed",
+  "invoiced",
+  "itc", "itc complete",
+  "taxed",
+  "delivery pack", "delivery pack submitted", "delivery pack submitted to funder",
+  "delivery details checked", "details checked",
+]);
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 }
 
 const POLICY_LABEL = { none: "No", pending: "Yes · pending", complete: "Yes · complete" } as const;
 
 export function TrackerCard({ data, openByDefault = false }: { data: TrackerCardData; openByDefault?: boolean }) {
   const [open, setOpen] = useState(openByDefault);
-  // Track summary indicators independently so the closed card reflects the
-  // current state without re-querying.
+  // Now-five core toggles — completedCount is informational only.
   const completedCount =
     (data.pdiDone ? 1 : 0) + (data.financeAgreementSigned ? 1 : 0) +
-    (data.invoiced ? 1 : 0) + (data.itcComplete ? 1 : 0);
+    (data.invoiced ? 1 : 0) + (data.itcComplete ? 1 : 0) + (data.taxed ? 1 : 0);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -78,17 +107,35 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
             £{data.monthlyRental.toFixed(2)}/mo
             {data.execName && <><span className="mx-1 text-slate-300">·</span>{data.execName}</>}
           </div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          {/* ETA tile — Ford location + ETA date prominent on the card so
+              the exec doesn't have to expand to see when the vehicle's
+              expected. The whole tracker bucket is already date-ordered;
+              this lets you eyeball the date inside the bucket too. */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {data.etaLabel ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-1 text-[11px] font-bold text-sky-900 ring-1 ring-sky-200">
+                <span aria-hidden>🚚</span>
+                <span>ETA {data.etaLabel}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
+                ETA TBA
+              </span>
+            )}
             {data.locationLabel && (
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">📍 {data.locationLabel}</span>
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200">
+                📍 {data.locationLabel}
+              </span>
             )}
             {data.deliveryBookedAt && (
-              <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800">📅 Booked {fmtDateUk(data.deliveryBookedAt)}</span>
+              <span className="rounded-md bg-teal-100 px-2 py-1 text-[11px] font-semibold text-teal-800 ring-1 ring-teal-200">
+                📅 Customer {fmtDateUk(data.deliveryBookedAt)}
+              </span>
             )}
             {data.regNumber && (
-              <span className="rounded-full bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-white">{data.regNumber}</span>
+              <span className="rounded-md bg-slate-900 px-2 py-1 font-mono text-[11px] font-bold uppercase text-white">{data.regNumber}</span>
             )}
-            <span className="rounded-full bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-600 ring-1 ring-slate-200">{completedCount}/4 checks</span>
+            <span className="rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200">{completedCount}/5 ✓</span>
           </div>
         </div>
         <div className="shrink-0 text-right">
@@ -222,50 +269,84 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
         </Field>
       </div>
 
-      {/* Boolean checks — 4 across at desktop, 2 across at mobile */}
-      <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-4">
+      {/* Core delivery checks — 5 across at desktop, 2 across at mobile.
+          Now also includes Taxed (promoted from the old admin custom-check
+          list because every delivery needs it). Plus any custom delivery
+          checks the admin has defined that DON'T duplicate one of these. */}
+      <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         <CheckRow label="PDI done" checked={data.pdiDone} onChange={(v) => commit({ pdiDone: v })} disabled={pending} />
         <CheckRow label="Finance docs signed" checked={data.financeAgreementSigned} onChange={(v) => commit({ financeAgreementSigned: v })} disabled={pending} />
         <CheckRow label="Invoiced" checked={data.invoiced} onChange={(v) => commit({ invoiced: v })} disabled={pending} />
+        <CheckRow label="Taxed" checked={data.taxed} onChange={(v) => commit({ taxed: v })} disabled={pending} />
         <CheckRow label="ITC complete" checked={data.itcComplete} onChange={(v) => commit({ itcComplete: v })} disabled={pending} />
+        {/* Surface remaining custom checks as the same big tile so it all
+            reads as a single grid. */}
+        {data.checks
+          .filter((c) => !DEDUP_LABELS.has(normalizeLabel(c.label)))
+          .map((c) => (
+            <CheckRow
+              key={c.id}
+              label={c.label}
+              checked={c.checked}
+              onChange={(v) => toggleCheck(c.id, v)}
+              disabled={pending}
+            />
+          ))}
       </div>
 
-      {/* Custom delivery checks (admin-defined) live underneath the four core booleans */}
-      {data.checks.length > 0 && (
-        <div className="mt-3 rounded-lg bg-white p-2 ring-1 ring-slate-200">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Custom delivery checks</div>
-          <div className="mt-1.5 flex flex-wrap gap-3">
-            {data.checks.map((c) => (
-              <label key={c.id} className="flex items-center gap-1.5 text-xs text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={c.checked}
-                  disabled={pending}
-                  onChange={(e) => toggleCheck(c.id, e.currentTarget.checked)}
-                />
-                {c.label}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Policies — GAP + TF Protect tri-state */}
+      {/* Policies — GAP + TF Protect tri-state, with policy number sub-field
+          revealed once the customer has actually purchased one. */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field label="GAP policy">
-          <PolicySelect
-            value={data.gapPolicyStatus}
-            onChange={(v) => commit({ gapPolicyStatus: v })}
-            disabled={pending}
-          />
-        </Field>
-        <Field label="TrustFord Protect">
-          <PolicySelect
-            value={data.tfpPolicyStatus}
-            onChange={(v) => commit({ tfpPolicyStatus: v })}
-            disabled={pending}
-          />
-        </Field>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <Field label="GAP policy">
+            <PolicySelect
+              value={data.gapPolicyStatus}
+              onChange={(v) => commit({ gapPolicyStatus: v })}
+              disabled={pending}
+            />
+          </Field>
+          {data.gapPolicyStatus !== "none" && (
+            <div className="mt-2">
+              <Field label="GAP policy number">
+                <BlurInput
+                  initial={data.gapPolicyNumber ?? ""}
+                  placeholder="From the GAP insurer"
+                  onCommit={(v) => commit({ gapPolicyNumber: v || null })}
+                  pending={pending}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <Field label="TrustFord Protect">
+            <PolicySelect
+              value={data.tfpPolicyStatus}
+              onChange={(v) => commit({ tfpPolicyStatus: v })}
+              disabled={pending}
+            />
+          </Field>
+          {data.tfpPolicyStatus !== "none" && (
+            <div className="mt-2">
+              <Field label="TFP policy number">
+                <BlurInput
+                  initial={data.tfpPolicyNumber ?? ""}
+                  placeholder="From TFP"
+                  onCommit={(v) => commit({ tfpPolicyNumber: v || null })}
+                  pending={pending}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Dealer-fit options — anything we're fitting in-house (tow bar,
+          mats, paint protection, etc). Exec adds rows, ticks fitted when
+          installed, and can remove a row entirely if the customer changes
+          their mind. */}
+      <div className="mt-4">
+        <DealerFitOptionsEditor proposalId={data.id} initial={data.dealerFitOptions} />
       </div>
 
       {/* Notes — full-width textarea */}
@@ -469,6 +550,123 @@ function PolicySelect({ value, onChange, disabled }: { value: "none" | "pending"
       <option value="pending">{POLICY_LABEL.pending}</option>
       <option value="complete">{POLICY_LABEL.complete}</option>
     </select>
+  );
+}
+
+// Dealer-fit options — list + add row + per-row fitted toggle + delete.
+// Keeps local state for the add input + the option list so the user gets
+// immediate feedback; the server actions return ok/error which we react to.
+function DealerFitOptionsEditor({
+  proposalId,
+  initial,
+}: {
+  proposalId: string;
+  initial: { id: string; label: string; fitted: boolean }[];
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [options, setOptions] = useState(initial);
+  const [newLabel, setNewLabel] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  function add() {
+    const label = newLabel.trim();
+    if (!label) return;
+    setErr(null);
+    start(async () => {
+      const res = await addDealerFitOptionAction(proposalId, label);
+      if (!res.ok) { setErr(res.error); return; }
+      setOptions((cur) => [...cur, { id: res.id, label, fitted: false }]);
+      setNewLabel("");
+      router.refresh();
+    });
+  }
+  function toggleFitted(id: string, fitted: boolean) {
+    setOptions((cur) => cur.map((o) => o.id === id ? { ...o, fitted } : o));
+    start(async () => {
+      const res = await setDealerFitOptionFittedAction(id, fitted);
+      if (!res.ok) {
+        setErr(res.error);
+        // Roll back the optimistic update if the server rejected.
+        setOptions((cur) => cur.map((o) => o.id === id ? { ...o, fitted: !fitted } : o));
+      } else {
+        router.refresh();
+      }
+    });
+  }
+  function remove(id: string) {
+    setErr(null);
+    start(async () => {
+      const res = await deleteDealerFitOptionAction(id);
+      if (!res.ok) { setErr(res.error); return; }
+      setOptions((cur) => cur.filter((o) => o.id !== id));
+      router.refresh();
+    });
+  }
+
+  const fittedCount = options.filter((o) => o.fitted).length;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex items-baseline justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Dealer-fit options</div>
+        {options.length > 0 && (
+          <div className="text-[10px] font-medium text-slate-500 tabular-nums">{fittedCount}/{options.length} fitted</div>
+        )}
+      </div>
+      {options.length > 0 && (
+        <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
+          {options.map((o) => (
+            <div
+              key={o.id}
+              className={`flex items-center gap-2 rounded-lg border p-2 text-sm transition ${
+                o.fitted ? "border-emerald-300 bg-emerald-50" : "border-slate-300 bg-white"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={o.fitted}
+                disabled={pending}
+                onChange={(e) => toggleFitted(o.id, e.currentTarget.checked)}
+                className="h-4 w-4 shrink-0"
+              />
+              <span className={`flex-1 truncate font-medium ${o.fitted ? "text-emerald-900" : "text-slate-700"}`}>{o.label}</span>
+              <button
+                type="button"
+                onClick={() => remove(o.id)}
+                disabled={pending}
+                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-700 disabled:opacity-50"
+                aria-label="Remove option"
+                title="Remove"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Add new */}
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="text"
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          disabled={pending}
+          placeholder="Tow bar, mats, paint protection…"
+          className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={pending || !newLabel.trim()}
+          className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          + Add
+        </button>
+      </div>
+      {err && <p className="mt-1 text-[11px] text-rose-700">{err}</p>}
+    </div>
   );
 }
 

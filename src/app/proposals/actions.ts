@@ -2,8 +2,9 @@
 import { changeStatus, createProposal, invalidateProposals, setStageCheck, updateOrderFields } from "@/lib/proposals";
 import type { ProposalStatus } from "@/lib/proposal-constants";
 import { db } from "@/db";
-import { funders, proposalEvents, proposals, salesExecs } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { dealerFitOptions, funders, proposalEvents, proposals, salesExecs } from "@/db/schema";
+import { eq, max } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { getQuote } from "@/lib/quote";
 
@@ -239,4 +240,71 @@ export async function listFundersForConfigAction(proposalId: string): Promise<
   const known = new Set([...rated.map((r) => r.id), ...missingFromQuote.map((r) => r.id)]);
   const fallback = FALLBACK_COMMISSION_FUNDERS.filter((f) => !known.has(f.id)).map((f) => ({ id: f.id, name: f.name, rank: null, monthly: null }));
   return [...rated, ...missingFromQuote, ...fallback];
+}
+
+// ── Dealer-fit options ────────────────────────────────────────────────────
+// One row per item the customer's ordered as a dealer-fit extra (tow bar,
+// rubber mats, paint protection…). Sales exec adds them on the tracker and
+// ticks them off when fitted.
+
+export async function listDealerFitOptionsAction(proposalId: string) {
+  const rows = await db
+    .select()
+    .from(dealerFitOptions)
+    .where(eq(dealerFitOptions.proposalId, proposalId))
+    .orderBy(dealerFitOptions.sortOrder);
+  return rows.map((r) => ({ id: r.id, label: r.label, fitted: r.fitted }));
+}
+
+export async function addDealerFitOptionAction(proposalId: string, label: string) {
+  const clean = label.trim();
+  if (!clean) return { ok: false as const, error: "Label is required." };
+  const [{ value: maxSort }] = await db
+    .select({ value: max(dealerFitOptions.sortOrder) })
+    .from(dealerFitOptions)
+    .where(eq(dealerFitOptions.proposalId, proposalId));
+  const sortOrder = (maxSort ?? 0) + 1;
+  const id = randomUUID();
+  const now = new Date();
+  await db.insert(dealerFitOptions).values({
+    id, proposalId, label: clean, fitted: false, sortOrder, createdAt: now, updatedAt: now,
+  });
+  await db.insert(proposalEvents).values({
+    proposalId, kind: "note", note: `Dealer-fit option added: ${clean}`, createdAt: now,
+  });
+  const [p] = await db.select().from(proposals).where(eq(proposals.id, proposalId)).limit(1);
+  if (p) revalidateForProposal(p.customerId);
+  return { ok: true as const, id };
+}
+
+export async function setDealerFitOptionFittedAction(id: string, fitted: boolean) {
+  const [row] = await db.select().from(dealerFitOptions).where(eq(dealerFitOptions.id, id)).limit(1);
+  if (!row) return { ok: false as const, error: "Option not found." };
+  if (row.fitted === fitted) return { ok: true as const };
+  const now = new Date();
+  await db.update(dealerFitOptions).set({ fitted, updatedAt: now }).where(eq(dealerFitOptions.id, id));
+  await db.insert(proposalEvents).values({
+    proposalId: row.proposalId,
+    kind: "note",
+    note: `Dealer-fit option "${row.label}" marked ${fitted ? "fitted" : "not fitted"}`,
+    createdAt: now,
+  });
+  const [p] = await db.select().from(proposals).where(eq(proposals.id, row.proposalId)).limit(1);
+  if (p) revalidateForProposal(p.customerId);
+  return { ok: true as const };
+}
+
+export async function deleteDealerFitOptionAction(id: string) {
+  const [row] = await db.select().from(dealerFitOptions).where(eq(dealerFitOptions.id, id)).limit(1);
+  if (!row) return { ok: false as const, error: "Option not found." };
+  await db.delete(dealerFitOptions).where(eq(dealerFitOptions.id, id));
+  await db.insert(proposalEvents).values({
+    proposalId: row.proposalId,
+    kind: "note",
+    note: `Dealer-fit option removed: ${row.label}`,
+    createdAt: new Date(),
+  });
+  const [p] = await db.select().from(proposals).where(eq(proposals.id, row.proposalId)).limit(1);
+  if (p) revalidateForProposal(p.customerId);
+  return { ok: true as const };
 }

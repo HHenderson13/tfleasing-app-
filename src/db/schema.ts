@@ -193,7 +193,12 @@ export const proposals = sqliteTable(
     // GAP / TF Protect — tri-state because customers either don't have one,
     // have one pending setup, or have one fully paid + activated.
     gapPolicyStatus: text("gap_policy_status").notNull().default("none"),    // 'none' | 'pending' | 'complete'
+    gapPolicyNumber: text("gap_policy_number"),                              // shown once status != 'none'
     tfpPolicyStatus: text("tfp_policy_status").notNull().default("none"),    // 'none' | 'pending' | 'complete'
+    tfpPolicyNumber: text("tfp_policy_number"),
+    // Taxed — promoted from the old admin-managed custom-check list because
+    // every CV/car delivery needs it. Rendered as a core toggle card.
+    taxed: integer("taxed", { mode: "boolean" }).notNull().default(false),
     deliveryNotes: text("delivery_notes"),
     // Gate the delivered transition — both must be ticked before status
     // can flip from awaiting_delivery to delivered.
@@ -206,6 +211,24 @@ export const proposals = sqliteTable(
     byCustomer: index("idx_proposals_customer").on(t.customerId),
     byStatus: index("idx_proposals_status").on(t.status),
   })
+);
+
+// Dealer-fit options the customer's ordered (tow bars, mats, paint protection,
+// etc) — one row per item, marked off as fitted. Surface on the delivery
+// tracker so the exec can confirm everything's been installed before the
+// vehicle goes out.
+export const dealerFitOptions = sqliteTable(
+  "dealer_fit_options",
+  {
+    id: text("id").primaryKey(),
+    proposalId: text("proposal_id").notNull(),
+    label: text("label").notNull(),
+    fitted: integer("fitted", { mode: "boolean" }).notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({ byProposal: index("idx_dealer_fit_options_proposal").on(t.proposalId) }),
 );
 
 export const proposalEvents = sqliteTable(

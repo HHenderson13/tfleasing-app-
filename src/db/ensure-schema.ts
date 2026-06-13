@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -87,11 +87,29 @@ async function runEnsureAppSchema() {
     { name: "invoiced", sqlType: "INTEGER NOT NULL DEFAULT 0" },
     { name: "itc_complete", sqlType: "INTEGER NOT NULL DEFAULT 0" },
     { name: "gap_policy_status", sqlType: "TEXT NOT NULL DEFAULT 'none'" },
+    { name: "gap_policy_number", sqlType: "TEXT" },
     { name: "tfp_policy_status", sqlType: "TEXT NOT NULL DEFAULT 'none'" },
+    { name: "tfp_policy_number", sqlType: "TEXT" },
+    { name: "taxed", sqlType: "INTEGER NOT NULL DEFAULT 0" },
     { name: "delivery_notes", sqlType: "TEXT" },
     { name: "delivery_pack_submitted", sqlType: "INTEGER NOT NULL DEFAULT 0" },
     { name: "delivery_details_checked", sqlType: "INTEGER NOT NULL DEFAULT 0" },
   ]);
+  // Dealer-fit options table — one row per item on a proposal.
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS dealer_fit_options (
+      id TEXT PRIMARY KEY,
+      proposal_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      fitted INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE INDEX IF NOT EXISTS idx_dealer_fit_options_proposal ON dealer_fit_options(proposal_id)`,
+  ));
   await ensureFunderInterestRatesTable();
   await ensureScraperTables();
   await ensureLoginAttemptsTable();

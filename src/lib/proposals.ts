@@ -260,7 +260,10 @@ export async function updateOrderFields(
     invoiced: boolean;
     itcComplete: boolean;
     gapPolicyStatus: "none" | "pending" | "complete";
+    gapPolicyNumber: string | null;
     tfpPolicyStatus: "none" | "pending" | "complete";
+    tfpPolicyNumber: string | null;
+    taxed: boolean;
     deliveryNotes: string | null;
     deliveryPackSubmitted: boolean;
     deliveryDetailsChecked: boolean;
@@ -349,8 +352,20 @@ export async function updateOrderFields(
   if (patch.gapPolicyStatus && ["none", "pending", "complete"].includes(patch.gapPolicyStatus)) {
     if (patch.gapPolicyStatus !== p.gapPolicyStatus) { clean.gapPolicyStatus = patch.gapPolicyStatus; events.push({ field: "GAP policy", value: patch.gapPolicyStatus }); }
   }
+  if (patch.gapPolicyNumber !== undefined) {
+    const v = patch.gapPolicyNumber?.trim() || null;
+    if (v !== (p.gapPolicyNumber ?? null)) { clean.gapPolicyNumber = v; events.push({ field: "GAP policy #", value: v ?? "cleared" }); }
+  }
   if (patch.tfpPolicyStatus && ["none", "pending", "complete"].includes(patch.tfpPolicyStatus)) {
     if (patch.tfpPolicyStatus !== p.tfpPolicyStatus) { clean.tfpPolicyStatus = patch.tfpPolicyStatus; events.push({ field: "TFP policy", value: patch.tfpPolicyStatus }); }
+  }
+  if (patch.tfpPolicyNumber !== undefined) {
+    const v = patch.tfpPolicyNumber?.trim() || null;
+    if (v !== (p.tfpPolicyNumber ?? null)) { clean.tfpPolicyNumber = v; events.push({ field: "TFP policy #", value: v ?? "cleared" }); }
+  }
+  if (typeof patch.taxed === "boolean" && patch.taxed !== p.taxed) {
+    clean.taxed = patch.taxed;
+    events.push({ field: "Taxed", value: patch.taxed ? "yes" : "cleared" });
   }
   if (patch.deliveryNotes !== undefined) {
     const v = patch.deliveryNotes?.trim() || null;

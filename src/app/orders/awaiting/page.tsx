@@ -2,10 +2,10 @@ import Link from "next/link";
 import { listProposals } from "@/lib/proposals";
 import { TopNav } from "@/components/top-nav";
 import { db } from "@/db";
-import { proposals, proposalStageChecks, salesExecs, stageCheckDefs, stockVehicles } from "@/db/schema";
+import { dealerFitOptions, proposals, proposalStageChecks, salesExecs, stageCheckDefs, stockVehicles } from "@/db/schema";
 import { asc, eq, inArray, isNull, and } from "drizzle-orm";
 import { ExecFilter } from "../exec-filter";
-import { matchProposalAgainstStock, type StockHit } from "@/lib/stock-match";
+import { buildStockMatchIndex, type IndexedStockMatcher, type StockHit } from "@/lib/stock-match";
 import { requireOrdersAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
 import { StatTile } from "@/components/stat-tile";
@@ -37,9 +37,9 @@ function isDeliveredStatus(s: string | null | undefined): boolean {
 
 function matchProposalToStock(
   p: { vin: string | null; orderNumber: string | null; manualEtaAt: Date | null; manualLocation: string | null; deliveredDetectedAt: Date | null },
-  stock: StockRow[]
+  matcher: IndexedStockMatcher,
 ): Match {
-  const { hit, source } = matchProposalAgainstStock(p, stock);
+  const { hit, source } = matcher.match(p);
   if (hit) {
     const delivered = isDeliveredStatus(hit.locationStatus);
     return {
@@ -142,18 +142,33 @@ export default async function OrdersAwaitingPage({
     db.select().from(stageCheckDefs).where(eq(stageCheckDefs.stage, "delivery")).orderBy(asc(stageCheckDefs.sortOrder), asc(stageCheckDefs.label)),
   ]);
 
-  const stock: StockRow[] = stockRaw;
+  // Build VIN + order-number indexes once for the whole page. matchProposalToStock
+  // is then O(1) per proposal instead of O(stock-size), which was the dominant
+  // cost on big stock + proposal lists.
+  const matcher = buildStockMatchIndex(stockRaw as StockHit[]);
 
   const filtered = effectiveExec ? rows.filter((r) => r.salesExecId === effectiveExec) : rows;
   const awaiting = filtered.filter((r) => r.status === "awaiting_delivery");
 
-  const ticksRaw = awaiting.length
-    ? await db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, awaiting.map((p) => p.id)))
-    : [];
+  const awaitingIds = awaiting.map((p) => p.id);
+  const [ticksRaw, dealerFitRaw] = awaitingIds.length
+    ? await Promise.all([
+        db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, awaitingIds)),
+        db.select().from(dealerFitOptions)
+          .where(inArray(dealerFitOptions.proposalId, awaitingIds))
+          .orderBy(asc(dealerFitOptions.sortOrder)),
+      ])
+    : [[], []];
   const ticksByProposal = new Map<string, Set<string>>();
   for (const t of ticksRaw) {
     if (!ticksByProposal.has(t.proposalId)) ticksByProposal.set(t.proposalId, new Set());
     ticksByProposal.get(t.proposalId)!.add(t.checkId);
+  }
+  const dealerFitByProposal = new Map<string, { id: string; label: string; fitted: boolean }[]>();
+  for (const o of dealerFitRaw) {
+    const list = dealerFitByProposal.get(o.proposalId) ?? [];
+    list.push({ id: o.id, label: o.label, fitted: o.fitted });
+    dealerFitByProposal.set(o.proposalId, list);
   }
 
   type Bucketed = {
@@ -164,7 +179,7 @@ export default async function OrdersAwaitingPage({
     p,
     match: p.isGroupBq
       ? { delivered: false, etaAt: null, location: null, source: "none" as const, interestBearingAt: null, adoptedAt: null, registeredReview: false }
-      : matchProposalToStock(p, stock),
+      : matchProposalToStock(p, matcher),
   }));
 
   // Mark just-delivered: any awaiting deal observed delivered with no detected timestamp gets one now.
@@ -254,6 +269,7 @@ export default async function OrdersAwaitingPage({
           <TrackerView
             items={items}
             ticksByProposal={ticksByProposal}
+            dealerFitByProposal={dealerFitByProposal}
             deliveryDefs={deliveryDefs}
             sortedKeys={sortedKeys}
             groups={groups}
@@ -279,12 +295,14 @@ type ListedProposal = Awaited<ReturnType<typeof listProposals>>[number];
 function TrackerView({
   items,
   ticksByProposal,
+  dealerFitByProposal,
   deliveryDefs,
   sortedKeys,
   groups,
 }: {
   items: { p: ListedProposal; match: Match }[];
   ticksByProposal: Map<string, Set<string>>;
+  dealerFitByProposal: Map<string, { id: string; label: string; fitted: boolean }[]>;
   deliveryDefs: { id: string; label: string; appliesToBq: boolean }[];
   sortedKeys: string[];
   groups: Map<string, { p: ListedProposal; match: Match }[]>;
@@ -341,13 +359,17 @@ function TrackerView({
                 financeAgreementSigned: p.financeAgreementSigned,
                 invoiced: p.invoiced ?? false,
                 itcComplete: p.itcComplete ?? false,
+                taxed: p.taxed ?? false,
                 deliveryBookedAt: p.deliveryBookedAt ? p.deliveryBookedAt.toISOString().slice(0, 10) : null,
                 gapPolicyStatus: (p.gapPolicyStatus as "none" | "pending" | "complete") ?? "none",
+                gapPolicyNumber: p.gapPolicyNumber ?? null,
                 tfpPolicyStatus: (p.tfpPolicyStatus as "none" | "pending" | "complete") ?? "none",
+                tfpPolicyNumber: p.tfpPolicyNumber ?? null,
                 deliveryNotes: p.deliveryNotes ?? null,
                 deliveryPackSubmitted: p.deliveryPackSubmitted ?? false,
                 deliveryDetailsChecked: p.deliveryDetailsChecked ?? false,
                 checks,
+                dealerFitOptions: dealerFitByProposal.get(p.id) ?? [],
               };
               return <TrackerCard key={p.id} data={data} />;
             })}
