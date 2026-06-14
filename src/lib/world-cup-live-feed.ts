@@ -49,10 +49,27 @@ const TEAM_ALIASES: Record<string, string> = {
   congodr: "DR Congo",
   democraticrepublicofcongo: "DR Congo",
   uzbekistan: "Uzbekistan",
+  // Curaçao — DB seed has the accent-stripped spelling but ESPN sends the
+  // ç. Aliasing here so the raw name returned by normaliseTeamName lines
+  // up with what's in wc_fixtures.team{1,2}.
+  curacao: "Curacao",
+  // Türkiye — defensive, in case the rebrand surfaces in ESPN before our
+  // seed adopts it.
+  turkiye: "Turkey",
+  turkey: "Turkey",
 };
 
-function normalizeKey(s: string): string {
-  return s.toLowerCase().replace(/[^a-z]/g, "");
+export function normalizeKey(s: string): string {
+  // Decompose accented characters into base + combining mark, then strip
+  // the combining marks. This turns "Curaçao" → "Curacao", "Türkiye" →
+  // "Turkiye", "São Tomé" → "Sao Tome" etc. BEFORE the lowercase + non-
+  // [a-z] strip. Without this step the raw [^a-z] regex eats the ç/ü/é
+  // outright and the name no longer matches our seeded version.
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
 }
 
 export function normaliseTeamName(raw: string): string {
@@ -207,12 +224,18 @@ export function mapToFixtures(
   fixtures: Array<{ fixtureNumber: number; stage: string; groupName: string | null; team1: string | null; team2: string | null; kickoffAt: Date }>,
 ): MappedLiveMatch[] {
   const out: MappedLiveMatch[] = [];
+  // Compare via normalizeKey so the match is accent-insensitive AND
+  // whitespace-insensitive. Belt-and-braces alongside the alias bank —
+  // catches cases like "Curaçao" vs "Curacao" or "São Tomé" vs "Sao Tome"
+  // even when we haven't aliased the accented form yet.
+  const sameName = (a: string | null, b: string) =>
+    a !== null && normalizeKey(a) === normalizeKey(b);
   for (const m of feed) {
     if (m.status === "scheduled") continue;
     // 1. Try exact team match within ±6h of kickoff (covers timezone drift).
     const hit = fixtures.find((f) => {
-      const sameTeams = (f.team1 === m.team1 && f.team2 === m.team2) ||
-                       (f.team1 === m.team2 && f.team2 === m.team1);
+      const sameTeams = (sameName(f.team1, m.team1) && sameName(f.team2, m.team2)) ||
+                       (sameName(f.team1, m.team2) && sameName(f.team2, m.team1));
       if (!sameTeams) return false;
       const diff = Math.abs(f.kickoffAt.getTime() - m.kickoffAt.getTime());
       return diff < 6 * 3600 * 1000;
@@ -220,7 +243,7 @@ export function mapToFixtures(
     if (!hit) continue;
     // Handle the case where ESPN flips home/away vs our seed — orient scores
     // to our team1/team2 ordering so downstream maths is consistent.
-    const flipped = hit.team1 === m.team2 && hit.team2 === m.team1;
+    const flipped = sameName(hit.team1, m.team2) && sameName(hit.team2, m.team1);
     out.push({
       ...m,
       team1: hit.team1!,

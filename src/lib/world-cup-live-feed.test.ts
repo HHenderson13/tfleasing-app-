@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 // are importable here.
 vi.mock("server-only", () => ({}));
 
-import { parseMinute, parseStatus } from "./world-cup-live-feed";
+import { normaliseTeamName, normalizeKey, parseMinute, parseStatus } from "./world-cup-live-feed";
 
 // Status payload structure ESPN returns. type.state controls scheduled /
 // in-progress / post; type.name + type.description disambiguate halftime
@@ -92,5 +92,39 @@ describe("parseMinute", () => {
     expect(parseMinute(clock("HT"))).toEqual({ minute: null, stoppage: null });
     expect(parseMinute(null)).toEqual({ minute: null, stoppage: null });
     expect(parseMinute({})).toEqual({ minute: null, stoppage: null });
+  });
+});
+
+describe("normalizeKey", () => {
+  it("strips accents so ESPN's accented names match the seeded ASCII variants", () => {
+    // Regression for the Germany vs Curaçao live-widget bug — ESPN reports
+    // "Curaçao" with the cedilla and the old normaliser dropped the ç as
+    // a non-[a-z] char, producing "curaao" which then failed to match our
+    // seeded "Curacao" → "curacao". NFD decomposes ç into c + combining
+    // cedilla so the cedilla can be stripped without losing the c.
+    expect(normalizeKey("Curaçao")).toBe(normalizeKey("Curacao"));
+    expect(normalizeKey("Türkiye")).toBe(normalizeKey("Turkiye"));
+    expect(normalizeKey("São Tomé")).toBe(normalizeKey("Sao Tome"));
+  });
+
+  it("is still case + whitespace insensitive", () => {
+    expect(normalizeKey("United States")).toBe("unitedstates");
+    expect(normalizeKey("UNITED  STATES")).toBe("unitedstates");
+  });
+});
+
+describe("normaliseTeamName", () => {
+  it("returns the seeded name for an aliased ESPN form", () => {
+    expect(normaliseTeamName("Korea Republic")).toBe("South Korea");
+    expect(normaliseTeamName("United States")).toBe("USA");
+  });
+
+  it("maps an accented ESPN name to the seeded ASCII spelling via the alias bank", () => {
+    // ESPN reports "Curaçao" with the cedilla. Our DB seed has "Curacao".
+    // The "curacao" alias kicks in (key derived via the accent-stripping
+    // normalizeKey), so the returned name lines up with the seed and the
+    // mapToFixtures string match succeeds.
+    expect(normaliseTeamName("Curaçao")).toBe("Curacao");
+    expect(normaliseTeamName("Curacao")).toBe("Curacao");
   });
 });
