@@ -218,13 +218,59 @@ export function StockBrowser({ rows }: { rows: StockRow[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, q, sel, sort]);
 
-  // Facet options always reflect the current selection across every filter (including this one),
-  // so picking an option immediately narrows what's left in every panel. Currently-selected
-  // values stay visible via FacetGroup's selectedOnly union.
+  // Guided faceted search — each facet's options reflect the pool filtered
+  // by every OTHER facet but NOT by its own selection. This is the standard
+  // multi-select faceted UX: once you pick "Focus" in Model, you can still
+  // see Puma / Kuga / Transit in the Model facet to add to the selection,
+  // but the Colour / Variant / etc. facets only show options available
+  // across the currently-selected models.
+  //
+  // To avoid 14 separate O(N×F) passes (one per facet), we precompute which
+  // facets each row fails once, then derive per-facet pools in O(N) by
+  // accepting rows whose failure set is empty OR contains only this facet.
+  // For a typical 3000-row dataset that's ~50k ops vs ~600k for the naive
+  // approach — keeps the filter feel instant even on big stock lists.
   const facetOptions: Record<FacetId, [string, number][]> = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const SEARCH_KEY = "__search" as const;
+
+    // Per-row: set of facets (+ search) the row fails against the current
+    // selection. A row passes the entire filter when this set is empty.
+    const failsByRow = new Map<StockRow, Set<string>>();
+    for (const r of rows) {
+      const fails = new Set<string>();
+      for (const f of FACETS) {
+        const picked = sel[f.id];
+        if (picked.size === 0) continue;
+        const val = f.get(r);
+        if (val === null || val === undefined) { fails.add(f.id); continue; }
+        let passes: boolean;
+        if (Array.isArray(val)) {
+          // AND-semantics on the factory-options facet — must have every selected option.
+          passes = [...picked].every((s) => val.includes(s));
+        } else {
+          passes = picked.has(val);
+        }
+        if (!passes) fails.add(f.id);
+      }
+      if (needle) {
+        const hay = `${r.vin} ${r.orderNo ?? ""} ${r.bucket} ${r.variant} ${r.derivative ?? ""} ${r.series ?? ""} ${r.colour} ${r.dealer} ${r.destination ?? ""} ${r.options.join(" ")}`.toLowerCase();
+        if (!hay.includes(needle)) fails.add(SEARCH_KEY);
+      }
+      if (fails.size > 0) failsByRow.set(r, fails);
+    }
+
     const o = {} as Record<FacetId, [string, number][]>;
-    const pool = rows.filter((r) => matches(r, null));
     for (const f of FACETS) {
+      // Pool for THIS facet: every row that either passes everything
+      // OR fails only against this facet's own selection. Search failures
+      // always disqualify (search isn't a facet you can "skip").
+      const pool = rows.filter((r) => {
+        const fails = failsByRow.get(r);
+        if (!fails) return true;
+        if (fails.size === 1 && fails.has(f.id)) return true;
+        return false;
+      });
       o[f.id] = tally(pool, f.get);
     }
     return o;
