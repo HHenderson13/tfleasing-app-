@@ -20,6 +20,12 @@ export function QuoteForm({ models }: { models: string[] }) {
   const [mileage, setMileage] = useState(10000);
   const [upfront, setUpfront] = useState(6);
   const [wallbox, setWallbox] = useState(false);
+  // Broker-deal commission (£). Used only for the display-only "adjusted
+  // discount" shown alongside each funder. It reduces each funder's
+  // headline discount by `brokerCommissionGbp / listPriceNet` so the user
+  // can see what discount they'd actually offer the customer after paying
+  // the broker. Doesn't affect the underlying rental math.
+  const [brokerCommissionGbp, setBrokerCommissionGbp] = useState<string>("");
   const [result, setResult] = useState<QuoteResult | null>(null);
   const [pending, start] = useTransition();
 
@@ -109,6 +115,31 @@ export function QuoteForm({ models }: { models: string[] }) {
           />
         )}
 
+        {/* Broker commission — only meaningful on broker deals, but shown
+            unconditionally because the affected display sits in the
+            results panel and not on the proposal save flow itself. Reduces
+            each funder's headline discount by the percentage that
+            commission represents of the list price. */}
+        <div className="rounded-xl border border-slate-100 bg-violet-50/40 p-3">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-violet-700">Broker commission</div>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Only applies on broker deals. Reduces each funder&apos;s discount by{" "}
+            <code className="rounded bg-white px-1 text-[10px]">£ / list price</code>.
+          </p>
+          <div className="relative mt-2">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">£</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={brokerCommissionGbp}
+              onChange={(e) => setBrokerCommissionGbp(e.target.value)}
+              placeholder="e.g. 500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 pl-6 text-sm tabular-nums focus:border-slate-400 focus:outline-none"
+            />
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <span className={`h-1.5 w-1.5 rounded-full ${pending ? "animate-pulse bg-amber-400" : "bg-emerald-400"}`} />
           {pending ? "Updating…" : "Live — changes apply instantly"}
@@ -119,6 +150,7 @@ export function QuoteForm({ models }: { models: string[] }) {
         <Results
           result={result}
           pending={pending}
+          brokerCommissionGbp={parseFloat(brokerCommissionGbp) || 0}
           config={{ contract, maintenance, termMonths: term, annualMileage: mileage, initialRentalMultiplier: upfront }}
         />
       </div>
@@ -143,7 +175,14 @@ const FALLBACK_COMMISSION_FUNDERS: { id: string; name: string }[] = [
   { id: "arval",  name: "Arval" },
 ];
 
-function Results({ result, pending, config }: { result: QuoteResult | null; pending: boolean; config: QuoteConfig }) {
+function Results({ result, pending, brokerCommissionGbp, config }: { result: QuoteResult | null; pending: boolean; brokerCommissionGbp: number; config: QuoteConfig }) {
+  // Percentage points to deduct from each funder's headline discount when
+  // a broker commission is set. brokerCommissionGbp / listPriceNet × 100 —
+  // mirrors how the user thinks about it ("£500 commission on a £30k list
+  // is a 1.67pp discount cut"). Zero when no commission or no list price.
+  const commissionDiscountPct = result?.listPriceNet && brokerCommissionGbp > 0
+    ? (brokerCommissionGbp / result.listPriceNet) * 100
+    : 0;
   const router = useRouter();
   const [saveFor, setSaveFor] = useState<{ funderId: string; funderName: string; rank: number; monthlyRental: number } | null>(null);
 
@@ -261,7 +300,20 @@ function Results({ result, pending, config }: { result: QuoteResult | null; pend
                   )}
                 </div>
                 <div className="mt-0.5 text-xs text-slate-500">
-                  {f.discountPct != null ? `${(f.discountPct * 100).toFixed(2)}% discount` : "discount n/a"}
+                  {f.discountPct != null ? (
+                    commissionDiscountPct > 0 ? (
+                      <>
+                        <span className="line-through text-slate-400">{(f.discountPct * 100).toFixed(2)}%</span>
+                        <span className="mx-1 text-slate-300">→</span>
+                        <span className="font-semibold text-violet-700">
+                          {(f.discountPct * 100 - commissionDiscountPct).toFixed(2)}% discount
+                        </span>
+                        <span className="ml-1 text-[10px] text-violet-600">(after broker)</span>
+                      </>
+                    ) : (
+                      <>{(f.discountPct * 100).toFixed(2)}% discount</>
+                    )
+                  ) : "discount n/a"}
                   <span className="mx-1.5 text-slate-300">·</span>
                   £{f.commissionGbp} commission
                 </div>
