@@ -4,9 +4,10 @@ import { proposalEtaSnapshots, proposals, stockSettings, stockUploads, stockVehi
 import { parseStockWorkbook } from "@/lib/stock-parser";
 import { eq, inArray } from "drizzle-orm";
 import { matchProposalAgainstStock } from "@/lib/stock-match";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { del } from "@vercel/blob";
+import { STOCK_VEHICLES_TAG } from "@/lib/stock-list";
 
 async function getPassword(): Promise<string> {
   const [row] = await db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1);
@@ -113,6 +114,9 @@ async function processWorkbook(buffer: Buffer, filename: string) {
   // detect ETA movements vs. the previous upload.
   await captureEtaSnapshots(uploadId, now);
 
+  // Bust the cross-request mapped-stock cache so /stock, /orders/awaiting,
+  // and all broker pages get the new rows on their next render.
+  updateTag(STOCK_VEHICLES_TAG);
   revalidatePath("/admin/stock");
   revalidatePath("/stock");
   return { ok: true as const, count: parsed.length };

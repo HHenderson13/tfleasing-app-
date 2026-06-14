@@ -1,9 +1,16 @@
 import { db } from "@/db";
 import { and, eq, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { ratebook, vehicles } from "@/db/schema";
 import { cachedFunders } from "./funder-lookup";
 import { cachedFunderCommissions, cachedModelDiscounts } from "./lookups";
 import { defaultDiscountKey } from "./discount-map";
+
+// Tags so listModels / listDerivatives can be invalidated when admin
+// uploads new vehicles or a new ratebook. Bust both via updateTag from
+// the relevant admin actions.
+export const VEHICLES_TAG = "vehicles";
+export const RATEBOOK_TAG = "ratebook";
 
 export type Contract = "PCH" | "BCH";
 export type Maintenance = "customer" | "maintained";
@@ -186,7 +193,11 @@ export async function getQuote(input: QuoteInput): Promise<QuoteResult> {
   };
 }
 
-export async function listModels(): Promise<string[]> {
+// Cached: the (vehicles, ratebook) JOIN is one of the slowest queries in
+// the app (full DISTINCT scan + EXISTS subquery). Models change only on
+// admin upload (vehicles or ratebook), so a tag-busted unstable_cache is
+// safe and big-impact for the /quote landing page TTFB.
+const _listModels = async (): Promise<string[]> => {
   const rows = await db.all<{ model: string }>(sql`
     SELECT DISTINCT v.model FROM vehicles v
     WHERE v.model != 'Unknown'
@@ -194,8 +205,14 @@ export async function listModels(): Promise<string[]> {
     ORDER BY v.model
   `);
   return rows.map((r) => r.model);
-}
-export async function listDerivatives(model: string): Promise<string[]> {
+};
+export const listModels = unstable_cache(
+  _listModels,
+  ["quote-models-v1"],
+  { tags: [VEHICLES_TAG, RATEBOOK_TAG], revalidate: 3600 },
+);
+
+const _listDerivatives = async (model: string): Promise<string[]> => {
   const rows = await db.all<{ derivative: string }>(sql`
     SELECT DISTINCT v.derivative FROM vehicles v
     WHERE v.model = ${model}
@@ -203,4 +220,9 @@ export async function listDerivatives(model: string): Promise<string[]> {
     ORDER BY v.derivative
   `);
   return rows.map((r) => r.derivative);
-}
+};
+export const listDerivatives = unstable_cache(
+  _listDerivatives,
+  ["quote-derivatives-v1"],
+  { tags: [VEHICLES_TAG, RATEBOOK_TAG], revalidate: 3600 },
+);

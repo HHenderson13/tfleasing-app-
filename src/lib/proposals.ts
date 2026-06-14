@@ -520,6 +520,52 @@ export async function listAwaitingForTracker() {
   return { items, ticksByProposal, dealerFitByProposal, deliveryDefs };
 }
 
+// Narrow variant of listProposals for /orders, which only renders in_order
+// deals. listProposals("orders") pulls in_order + awaiting_delivery +
+// delivered together (potentially thousands of rows) just for the page to
+// JS-filter down to the in_order slice. This helper uses the byStatus
+// index directly — same lookups, same shape per row, much less data.
+export async function listInOrderProposals() {
+  const ps = await db
+    .select()
+    .from(proposals)
+    .where(eq(proposals.status, "in_order"))
+    .orderBy(desc(proposals.updatedAt));
+
+  if (ps.length === 0) return [];
+
+  const [execs, custs, sites, defs, ticks] = await Promise.all([
+    cachedSalesExecs(),
+    cachedCustomers(),
+    cachedGroupSites(),
+    cachedStageCheckDefs(),
+    db.select().from(proposalStageChecks).where(inArray(proposalStageChecks.proposalId, ps.map((p) => p.id))),
+  ]);
+  const execMap = new Map(execs.map((e) => [e.id, e]));
+  const custMap = new Map(custs.map((c) => [c.id, c]));
+  const siteMap = new Map(sites.map((s) => [s.id, s]));
+  const ticksByProposal = new Map<string, Set<string>>();
+  for (const t of ticks) {
+    if (!ticksByProposal.has(t.proposalId)) ticksByProposal.set(t.proposalId, new Set());
+    ticksByProposal.get(t.proposalId)!.add(t.checkId);
+  }
+
+  return ps.map((p) => {
+    const ticked = ticksByProposal.get(p.id) ?? new Set<string>();
+    // /orders only renders in_order rows so the next-stage checks are
+    // always the "order" stage defs.
+    const applicable = defs.filter((d) => d.stage === "order" && (p.isGroupBq ? d.appliesToBq : true));
+    const customRemaining = applicable.filter((d) => !ticked.has(d.id)).length;
+    return {
+      ...p,
+      exec: p.salesExecId ? execMap.get(p.salesExecId) ?? null : null,
+      customer: custMap.get(p.customerId) ?? null,
+      groupSite: p.groupSiteId ? siteMap.get(p.groupSiteId) ?? null : null,
+      customRemaining,
+    };
+  });
+}
+
 export async function listProposals(section?: Section) {
   // Two waves: proposals first (so the ticks query can use their IDs), then
   // four lookups + ticks in parallel. Was six sequential round-trips → two.

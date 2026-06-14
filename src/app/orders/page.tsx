@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listProposals } from "@/lib/proposals";
+import { listInOrderProposals } from "@/lib/proposals";
 import { STATUS_LABELS } from "@/lib/proposal-constants";
 import { TopNav } from "@/components/top-nav";
 import { db } from "@/db";
@@ -29,7 +29,7 @@ function daysLeftFromAcceptance(acceptedAt: Date | null) {
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
 }
 
-type OrderRowData = Awaited<ReturnType<typeof listProposals>>[number];
+type OrderRowData = Awaited<ReturnType<typeof listInOrderProposals>>[number];
 
 function matchesFocus(p: OrderRowData, focus: Focus): boolean {
   switch (focus) {
@@ -79,13 +79,14 @@ export default async function OrdersActionsPage({
   const focusKeys: Focus[] = ["agreements", "chips", "vehicles", "motorComplete", "overdue"];
   const focus = focusKeys.includes(sp.focus as Focus) ? (sp.focus as Focus) : null;
 
-  const [rows, execs] = await Promise.all([
-    listProposals("orders"),
-    db.select().from(salesExecs).orderBy(asc(salesExecs.name)),
+  const [inOrderRows, execs] = await Promise.all([
+    // Narrowed query — only fetches in_order proposals via the byStatus
+    // index instead of pulling in_order + awaiting + delivered together.
+    listInOrderProposals(),
+    db.select({ id: salesExecs.id, name: salesExecs.name }).from(salesExecs).orderBy(asc(salesExecs.name)),
   ]);
 
-  const filtered = execFilter ? rows.filter((r) => r.salesExecId === execFilter) : rows;
-  const inOrderAll = filtered.filter((r) => r.status === "in_order");
+  const inOrderAll = execFilter ? inOrderRows.filter((r) => r.salesExecId === execFilter) : inOrderRows;
 
   const stats: Record<Focus, number> = {
     agreements: inOrderAll.filter((p) => matchesFocus(p, "agreements")).length,

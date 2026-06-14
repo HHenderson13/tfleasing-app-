@@ -2,13 +2,18 @@
 import { db } from "@/db";
 import { stockMappings } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { STOCK_MAPPINGS_TAG } from "@/lib/stock-list";
 
 export type MappingKind =
   | "dealer" | "model" | "colour" | "engine" | "destination" | "option"
   | "body" | "transmission" | "drive" | "status" | "derivative";
 
 function reval() {
+  // Tag busts the cross-request mapped-stock cache (used by /stock,
+  // /orders/awaiting, and every broker page). revalidatePath flushes the
+  // server-rendered shell for the same routes.
+  updateTag(STOCK_MAPPINGS_TAG);
   revalidatePath("/admin/stock-mappings");
   revalidatePath("/stock");
 }

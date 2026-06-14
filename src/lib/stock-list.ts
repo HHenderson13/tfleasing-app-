@@ -1,8 +1,16 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { stockMappings, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
+
+// Cache tags so the mapped-stock cache can be invalidated when admin
+// uploads a new stock file or edits the mapping table. Both tags are
+// busted via updateTag() from the admin actions in
+// src/app/admin/stock/actions.ts and stock-mappings/actions.ts.
+export const STOCK_VEHICLES_TAG = "stock-vehicles";
+export const STOCK_MAPPINGS_TAG = "stock-mappings";
 
 // Single source of truth for the mapped-stock pipeline. Used by:
 //   • /stock (TF leasing-app full view — every field, every facet)
@@ -42,12 +50,22 @@ export interface MappedStockRow {
 type MapEntry = { name: string; hidden: boolean; promoteToVariant: boolean };
 type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "option" | "body" | "transmission" | "drive" | "status" | "derivative";
 
-// React-cache wrapped: every page on the broker quote flow loads the
-// mapped stock (search → route picker → outright/PCP/HP/HP-Balloon →
-// /broker/quotes/[id] detail). Without this cache the same heavy
-// SELECT + mapping work runs 2-4× per render of a single quote page.
-// Cache scope is per-request, so it never leaks across users.
-export const loadMappedStock = cache(_loadMappedStock);
+// Two-layer cache:
+//   • Outer (unstable_cache): tagged + 5-minute revalidate so the same
+//     mapped output is shared across requests + users. Stock changes only
+//     when admin uploads (~daily) or edits a mapping, both of which call
+//     updateTag() to bust the cache. Dominant perf win on /stock (the
+//     highest-traffic page in Speed Insights) — was 4s+ TTFB, now should
+//     drop to the cached-payload retrieval cost on warm functions.
+//   • Inner (React cache()): per-request dedup so multiple components on
+//     the same render (broker search → route picker → quote form) don't
+//     each pay the cache lookup overhead.
+const cachedMappedStock = unstable_cache(
+  _loadMappedStock,
+  ["mapped-stock-v1"],
+  { tags: [STOCK_VEHICLES_TAG, STOCK_MAPPINGS_TAG], revalidate: 300 },
+);
+export const loadMappedStock = cache(cachedMappedStock);
 
 async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploadedAt: Date | null }> {
   const [rows, mappings, latestUploadRows] = await Promise.all([

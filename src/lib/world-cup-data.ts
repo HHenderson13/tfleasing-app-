@@ -117,7 +117,13 @@ export interface LeaderboardEntry {
 // Aggregates points across all settled wc_predictions for every user with
 // the wc or wc_admin role. Users with no predictions still appear (0 pts) so
 // the office can see who has joined.
-export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
+//
+// The query is heavy (two SQL aggregates + JOINs across users, predictions,
+// fixtures, results) but the underlying data only changes when a result is
+// recorded — commitFixtureResult calls updateTag(WC_CACHE_TAGS.results) so
+// the cache busts at exactly the right moment. Caching this here is the
+// single biggest perf win for /world-cup/leaderboard.
+async function _loadLeaderboard(): Promise<LeaderboardEntry[]> {
   // Join users with their points aggregated from wc_predictions. We include
   // every user whose roles JSON includes "wc" OR "wc_admin" OR "admin".
   const rows = await db.all<{
@@ -183,6 +189,14 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
     streak: streakByUser.get(r.user_id) ?? 0,
   }));
 }
+
+export const loadLeaderboard = unstable_cache(
+  _loadLeaderboard,
+  ["wc-leaderboard-v1"],
+  // Busted on every commitFixtureResult (results tag). 300s safety net
+  // covers role grants (admin → wc) which currently have no tag bust.
+  { tags: [WC_CACHE_TAGS.results], revalidate: 300 },
+);
 
 // Returns the user's predictions for SETTLED fixtures only — used by the
 // public "see this player's history" page so a quick look at someone's
