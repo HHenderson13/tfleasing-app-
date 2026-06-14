@@ -127,4 +127,15 @@ describe("normaliseTeamName", () => {
     expect(normaliseTeamName("Curaçao")).toBe("Curacao");
     expect(normaliseTeamName("Curacao")).toBe("Curacao");
   });
+
+  it("aliases ESPN's older Czech Republic spelling to the seeded Czechia", () => {
+    expect(normaliseTeamName("Czech Republic")).toBe("Czechia");
+    expect(normaliseTeamName("Czechia")).toBe("Czechia");
+  });
+
+  it("aliases the FIFA-formal Iran variants back to the seeded short form", () => {
+    expect(normaliseTeamName("Iran")).toBe("Iran");
+    expect(normaliseTeamName("IR Iran")).toBe("Iran");
+    expect(normaliseTeamName("Islamic Republic of Iran")).toBe("Iran");
+  });
 });

@@ -57,6 +57,15 @@ const TEAM_ALIASES: Record<string, string> = {
   // seed adopts it.
   turkiye: "Turkey",
   turkey: "Turkey",
+  // Czech Republic ↔ Czechia. UEFA / FIFA adopted "Czechia" in 2016 but
+  // ESPN scoreboards still default to "Czech Republic" most of the time.
+  czechrepublic: "Czechia",
+  czechia: "Czechia",
+  // Iran — FIFA's formal "Islamic Republic of Iran" and the common "IR
+  // Iran" short form both surface in feeds depending on the source.
+  iran: "Iran",
+  iriran: "Iran",
+  islamicrepublicofiran: "Iran",
 };
 
 export function normalizeKey(s: string): string {
