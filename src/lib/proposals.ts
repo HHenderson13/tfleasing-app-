@@ -246,6 +246,11 @@ export async function updateOrderFields(
     chipConfirmed: boolean;
     motorCompleteSigned: boolean;
     financeAgreementSigned: boolean;
+    // Finance Proposal Number — editable at any stage of the deal because
+    // funders sometimes assign it retroactively, and corrections happen
+    // after the proposal moves through accepted / in_order / awaiting /
+    // delivered. Empty string clears.
+    financeProposalNumber: string | null;
     orderNumber: string | null;
     vin: string | null;
     model: string;
@@ -301,6 +306,13 @@ export async function updateOrderFields(
     if (v !== (p.orderNumber ?? null)) {
       clean.orderNumber = v;
       events.push({ field: "Order number", value: v ?? "cleared" });
+    }
+  }
+  if (patch.financeProposalNumber !== undefined) {
+    const v = patch.financeProposalNumber?.trim() || null;
+    if (v !== (p.financeProposalNumber ?? null)) {
+      clean.financeProposalNumber = v;
+      events.push({ field: "Finance Proposal #", value: v ?? "cleared" });
     }
   }
   if (patch.vin !== undefined) {

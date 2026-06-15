@@ -9,6 +9,7 @@ export function DealEditor({
   initialDerivative,
   initialOrderNumber,
   initialVin,
+  initialFinanceProposalNumber,
   showVehicleIds,
 }: {
   proposalId: string;
@@ -16,6 +17,7 @@ export function DealEditor({
   initialDerivative: string;
   initialOrderNumber: string | null;
   initialVin: string | null;
+  initialFinanceProposalNumber: string | null;
   showVehicleIds: boolean;
 }) {
   const router = useRouter();
@@ -24,6 +26,7 @@ export function DealEditor({
   const [derivative, setDerivative] = useState(initialDerivative);
   const [orderNumber, setOrderNumber] = useState(initialOrderNumber ?? "");
   const [vin, setVin] = useState(initialVin ?? "");
+  const [financeProposalNumber, setFinanceProposalNumber] = useState(initialFinanceProposalNumber ?? "");
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
@@ -31,7 +34,8 @@ export function DealEditor({
     model.trim() !== initialModel ||
     derivative.trim() !== initialDerivative ||
     (orderNumber.trim() || null) !== (initialOrderNumber ?? null) ||
-    (vin.trim().toUpperCase() || null) !== (initialVin ?? null);
+    (vin.trim().toUpperCase() || null) !== (initialVin ?? null) ||
+    (financeProposalNumber.trim() || null) !== (initialFinanceProposalNumber ?? null);
 
   function save() {
     setErr(null);
@@ -46,6 +50,7 @@ export function DealEditor({
       const res = await updateOrderFieldsAction(proposalId, {
         model: model.trim(),
         derivative: derivative.trim(),
+        financeProposalNumber: financeProposalNumber.trim() || null,
         ...(showVehicleIds ? { orderNumber: orderNumber.trim() || null, vin: vin.trim().toUpperCase() || null } : {}),
       });
       if (!res.ok) setErr(res.error);
@@ -89,6 +94,15 @@ export function DealEditor({
             </label>
           </>
         )}
+        <label className="col-span-2 block">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Finance Proposal #</span>
+          <input
+            className={inp}
+            value={financeProposalNumber}
+            onChange={(e) => setFinanceProposalNumber(e.target.value)}
+            placeholder="e.g. FP-00012345"
+          />
+        </label>
       </div>
       {err && <div className="mt-2 text-[11px] text-red-600">{err}</div>}
       <div className="mt-2 flex justify-end gap-2">

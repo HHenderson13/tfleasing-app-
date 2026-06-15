@@ -150,6 +150,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
               initialDerivative={p.derivative}
               initialOrderNumber={p.orderNumber}
               initialVin={p.vin}
+              initialFinanceProposalNumber={p.financeProposalNumber}
               showVehicleIds={!p.isGroupBq}
             />
             {!isTerminal && <CancelDealButton proposalId={p.id} currentStatus={p.status} />}

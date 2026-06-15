@@ -141,6 +141,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
               initialDerivative={proposal.derivative}
               initialOrderNumber={proposal.orderNumber}
               initialVin={proposal.vin}
+              initialFinanceProposalNumber={proposal.financeProposalNumber}
               showVehicleIds={!isBq}
             />
             <CancelDealButton proposalId={proposal.id} currentStatus={proposal.status} />

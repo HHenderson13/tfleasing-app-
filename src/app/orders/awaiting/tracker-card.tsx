@@ -216,8 +216,8 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
           <BlurInput
             initial={data.financeProposalNumber ?? ""}
             placeholder="25xxxxxx"
-            onCommit={() => { /* finance prop number isn't in updateOrderFields — read only */ }}
-            disabled
+            onCommit={(v) => commit({ financeProposalNumber: v || null })}
+            pending={pending}
           />
         </Field>
         <Field label="Reg number">
