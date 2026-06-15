@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 // Public, unauthenticated paths for the TF leasing app.
-const TF_PUBLIC_PATHS = ["/login", "/setup"];
+// /forgot-password and /reset-password are public so locked-out users can
+// recover their own accounts. The reset page only acts on a valid token
+// short-lived enough that brute-force guesses aren't feasible.
+const TF_PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/reset-password"];
 
 // Public, unauthenticated paths inside the broker portal.
 const BROKER_PUBLIC_PATHS = ["/broker/login", "/broker/setup"];

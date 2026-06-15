@@ -1,5 +1,6 @@
 "use client";
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { bootstrapAdminAction, signInAction } from "./actions";
 
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm";
@@ -24,6 +25,11 @@ export function LoginForm() {
       >
         {pending ? "Signing in…" : "Sign in"}
       </button>
+      <p className="pt-1 text-right text-xs">
+        <Link href="/forgot-password" className="text-slate-500 hover:text-slate-800 hover:underline">
+          Forgot password?
+        </Link>
+      </p>
     </form>
   );
 }
