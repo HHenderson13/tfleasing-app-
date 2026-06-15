@@ -115,6 +115,31 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Form control readability ──────────────────────────────────────────────
+   Multiple users reported text in inputs reading as too pale — by default
+   Tailwind inputs inherit colour from the nearest parent (often a slate-500
+   panel) and the browser's default placeholder is around slate-400 on
+   white. Force the strong foreground on typed text and a darker
+   placeholder so what they're entering is always clearly legible. Done
+   here (not !important) so per-component overrides still work. */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  color: var(--fg-strong);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b; /* slate-500 — was browser default (≈slate-400) */
+  opacity: 1;     /* Firefox dims placeholder opacity by default */
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: var(--fg-muted);
+}
+
 /* Tabular numerics on all monetary / count displays */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
