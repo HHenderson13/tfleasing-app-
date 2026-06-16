@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -243,13 +243,11 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
           />
         </Field>
 
-        <Field label="Confirmed delivery date">
-          <input
-            type="date"
-            value={data.deliveryBookedAt ?? ""}
-            onChange={(e) => commit({ deliveryBookedAt: e.target.value ? new Date(e.target.value) : null })}
+        <Field label="Confirmed delivery date" hint="type DD/MM/YYYY or pick from the calendar">
+          <FlexibleDateInput
+            value={data.deliveryBookedAt}
             disabled={pending}
-            className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm tabular-nums disabled:opacity-50"
+            onCommit={(iso) => commit({ deliveryBookedAt: iso ? new Date(iso) : null })}
           />
         </Field>
         <Field label="Wallbox / customer saving" hint="EV only">
@@ -734,4 +732,156 @@ function fmtDateUk(iso: string) {
   const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
   if (!y || !m || !d) return iso;
   return `${d}/${m}/${String(y).slice(-2)}`;
+}
+
+// Parse a user-typed UK date. Accepts:
+//   DD/MM/YYYY, DD/MM/YY, DD-MM-YYYY, DD-MM-YY, DD.MM.YYYY, DD.MM.YY
+//   YYYY-MM-DD (so paste-from-ISO still works)
+//   Compact: DDMMYYYY, DDMMYY (no separators)
+// Returns ISO yyyy-mm-dd or null when unparseable. Two-digit years
+// resolve via the standard 2000-2099 century window — every year on
+// the delivery tracker is in that range.
+function parseUserDate(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+
+  // Already ISO?
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const [, y, m, d] = iso;
+    return toIso(parseInt(y, 10), parseInt(m, 10), parseInt(d, 10));
+  }
+
+  // DD<sep>MM<sep>YY[YY] with /, -, or .
+  const sep = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})$/);
+  if (sep) {
+    const [, d, m, y] = sep;
+    return toIso(expandYear(y), parseInt(m, 10), parseInt(d, 10));
+  }
+
+  // Compact DDMMYYYY or DDMMYY
+  const compact = s.match(/^(\d{2})(\d{2})(\d{2}|\d{4})$/);
+  if (compact) {
+    const [, d, m, y] = compact;
+    return toIso(expandYear(y), parseInt(m, 10), parseInt(d, 10));
+  }
+
+  return null;
+}
+
+function expandYear(y: string): number {
+  const n = parseInt(y, 10);
+  if (y.length === 4) return n;
+  // Two-digit: every delivery is post-2000 in practice.
+  return 2000 + n;
+}
+
+function toIso(y: number, m: number, d: number): string | null {
+  if (!y || !m || !d) return null;
+  if (m < 1 || m > 12) return null;
+  if (d < 1 || d > 31) return null;
+  // Round-trip through Date to validate (catches e.g. 31/02).
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// Hybrid date input — typing OR calendar picker, both feeding the same
+// state. The visible text input accepts every common UK shorthand and
+// the small calendar icon opens the browser's native date picker via
+// the hidden type=date sibling.
+function FlexibleDateInput({
+  value, disabled, onCommit,
+}: {
+  value: string | null;
+  disabled?: boolean;
+  onCommit: (iso: string | null) => void;
+}) {
+  // Local text mirrors the committed ISO when not focused so external
+  // updates (e.g. router.refresh after a commit) flow through.
+  const [text, setText] = useState(value ? fmtDateUk(value) : "");
+  const [parseErr, setParseErr] = useState(false);
+  const pickerRef = useRef<HTMLInputElement | null>(null);
+
+  // Re-sync from the server value when it changes from outside (e.g. a
+  // sibling change triggers router.refresh) and we're not actively editing.
+  useEffect(() => {
+    setText(value ? fmtDateUk(value) : "");
+    setParseErr(false);
+  }, [value]);
+
+  function commitText(raw: string) {
+    if (!raw.trim()) {
+      setParseErr(false);
+      if (value !== null) onCommit(null);
+      return;
+    }
+    const iso = parseUserDate(raw);
+    if (iso === null) {
+      setParseErr(true);
+      return;
+    }
+    setParseErr(false);
+    setText(fmtDateUk(iso));
+    if (iso !== value) onCommit(iso);
+  }
+
+  function openPicker() {
+    const el = pickerRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      el.showPicker();
+    } else {
+      el.focus();
+      el.click();
+    }
+  }
+
+  return (
+    <div className="flex w-full items-stretch gap-1">
+      <input
+        type="text"
+        value={text}
+        disabled={disabled}
+        placeholder="DD/MM/YYYY"
+        inputMode="numeric"
+        onChange={(e) => { setText(e.target.value); setParseErr(false); }}
+        onBlur={(e) => commitText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitText((e.target as HTMLInputElement).value); } }}
+        className={`flex-1 rounded-lg border px-2.5 py-1.5 text-sm tabular-nums disabled:opacity-50 ${
+          parseErr ? "border-rose-400 bg-rose-50" : "border-slate-300 bg-white"
+        }`}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={disabled}
+        title="Pick from calendar"
+        aria-label="Pick from calendar"
+        className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+      >
+        <span aria-hidden>📅</span>
+      </button>
+      {/* Hidden native picker — provides the calendar UI without forcing
+          the user into the YYYY-MM-DD typing format. Its value is the
+          source of truth for the calendar; on change we mirror to the
+          text input + commit. */}
+      <input
+        ref={pickerRef}
+        type="date"
+        value={value ?? ""}
+        disabled={disabled}
+        onChange={(e) => {
+          const iso = e.target.value || null;
+          setParseErr(false);
+          setText(iso ? fmtDateUk(iso) : "");
+          if (iso !== value) onCommit(iso);
+        }}
+        tabIndex={-1}
+        aria-hidden
+        className="sr-only w-0"
+        style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
+      />
+    </div>
+  );
 }
