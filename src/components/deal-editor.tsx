@@ -39,13 +39,6 @@ export function DealEditor({
 
   function save() {
     setErr(null);
-    if (showVehicleIds && vin.trim()) {
-      const v = vin.trim().toUpperCase();
-      if (!/^[A-Z0-9]{11}$/.test(v)) {
-        setErr("VIN must be exactly 11 characters (letters and numbers only).");
-        return;
-      }
-    }
     start(async () => {
       const res = await updateOrderFieldsAction(proposalId, {
         model: model.trim(),

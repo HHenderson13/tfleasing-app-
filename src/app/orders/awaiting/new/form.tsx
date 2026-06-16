@@ -25,10 +25,6 @@ export function AddDealForm({ execs }: { execs: { id: string; name: string }[] }
       setErr("Enter a VIN or an order number.");
       return;
     }
-    if (vinClean && !/^[A-Z0-9]{11}$/.test(vinClean)) {
-      setErr("VIN must be exactly 11 characters (letters and numbers only).");
-      return;
-    }
     if (!salesExecId) {
       setErr("Allocate to an exec.");
       return;

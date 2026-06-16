@@ -10,7 +10,9 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { z } from "zod";
 
 // Back-loaded deal entry comes straight from a form; treat as untrusted.
-// VIN must be exactly 11 alphanumeric chars (Ford convention used elsewhere).
+// VIN accepts any string — no character-count or alphabet rule. Funder
+// paperwork sometimes carries shorter / longer references and we want any
+// value through.
 const createAwaitingSchema = z
   .object({
     customerName: z.string().trim().min(1, "Customer name required").max(200),
@@ -21,7 +23,6 @@ const createAwaitingSchema = z
       .string()
       .trim()
       .transform((v) => v.toUpperCase())
-      .pipe(z.string().regex(/^[A-Z0-9]{11}$/, "VIN must be 11 letters/numbers"))
       .nullable()
       .optional(),
     orderNumber: z.string().trim().max(40).nullable().optional(),

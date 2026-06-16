@@ -10,6 +10,7 @@ import {
   setStageCheckAction,
   updateOrderFieldsAction,
 } from "../../proposals/actions";
+import { isDedupedDeliveryCheck } from "@/lib/delivery-checks";
 
 // All editable fields on the tracker card. Each one commits on blur (text/
 // date) or on change (booleans/selects) so the user never has to hit "save".
@@ -57,22 +58,11 @@ export interface TrackerCardData {
 }
 
 // Custom delivery checks that overlap with the core toggle cards above are
-// hidden so the same thing isn't toggled twice with different effects. Match
-// is case-insensitive after stripping punctuation. The labels here mirror
-// historical admin-defined check names (Lou's spreadsheet had "PDI + Plates
-// pushed", "Invoiced", "Delivery pack submitted to funder" as customs).
-const DEDUP_LABELS = new Set([
-  "pdi", "pdi plates", "pdi plates pushed", "pdi done",
-  "fd", "finance docs", "finance docs signed",
-  "invoiced",
-  "itc", "itc complete",
-  "taxed",
-  "delivery pack", "delivery pack submitted", "delivery pack submitted to funder",
-  "delivery details checked", "details checked",
-]);
-function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-}
+// hidden in the tracker AND skipped by the server-side delivered-transition
+// gate. See @/lib/delivery-checks for the source of truth on which labels
+// are deduped — keeping both sides in sync stops a legacy admin custom def
+// from silently blocking a transition that's already satisfied by a core
+// toggle.
 
 const POLICY_LABEL = { none: "No", pending: "Yes · pending", complete: "Yes · complete" } as const;
 
@@ -182,7 +172,13 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
     });
   }
 
-  const allChecksDone = data.checks.every((c) => c.checked);
+  // Custom checks the user can actually see in the UI — others are
+  // satisfied by core toggles (PDI / FD / Invoiced / ITC / Taxed / the
+  // two delivery-pack gates), so they don't count toward "all checks
+  // ticked" for the purposes of enabling the Mark Delivered button.
+  const visibleChecks = data.checks.filter((c) => !isDedupedDeliveryCheck(c.label));
+  const unTickedVisibleChecks = visibleChecks.filter((c) => !c.checked);
+  const allChecksDone = unTickedVisibleChecks.length === 0;
   const canMarkDelivered =
     !!data.deliveryBookedAt &&
     data.deliveryPackSubmitted &&
@@ -282,7 +278,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
         {/* Surface remaining custom checks as the same big tile so it all
             reads as a single grid. */}
         {data.checks
-          .filter((c) => !DEDUP_LABELS.has(normalizeLabel(c.label)))
+          .filter((c) => !isDedupedDeliveryCheck(c.label))
           .map((c) => (
             <CheckRow
               key={c.id}
@@ -394,9 +390,11 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
           data={data}
           pending={pending}
           canMark={canMarkDelivered}
+          unTickedCustomChecks={unTickedVisibleChecks}
+          serverError={err}
           onConfirmPack={(v) => commit({ deliveryPackSubmitted: v })}
           onConfirmDetails={(v) => commit({ deliveryDetailsChecked: v })}
-          onMarkDelivered={() => { setConfirmOpen(false); markDelivered(); }}
+          onMarkDelivered={() => { markDelivered(); }}
           onClose={() => setConfirmOpen(false)}
         />
       )}
@@ -407,31 +405,87 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
 // ─── Mark delivered modal — the two-checkbox gate ──────────────────────────
 
 function MarkDeliveredModal({
-  data, pending, canMark, onConfirmPack, onConfirmDetails, onMarkDelivered, onClose,
+  data, pending, canMark, unTickedCustomChecks, serverError,
+  onConfirmPack, onConfirmDetails, onMarkDelivered, onClose,
 }: {
   data: TrackerCardData;
   pending: boolean;
   canMark: boolean;
+  unTickedCustomChecks: { id: string; label: string; checked: boolean }[];
+  serverError: string | null;
   onConfirmPack: (v: boolean) => void;
   onConfirmDetails: (v: boolean) => void;
   onMarkDelivered: () => void;
   onClose: () => void;
 }) {
+  // Pre-flight items mirror the server-side gate exactly so the user
+  // sees every requirement up front + which ones are still outstanding.
+  // If any of these are red the server will reject; if all are green
+  // the transition will go through (modulo a status-isn't-awaiting case
+  // which can't happen here because the tracker only renders awaiting).
+  const preflight: { label: string; ok: boolean; detail?: string }[] = [
+    {
+      label: "Delivery date set",
+      ok: !!data.deliveryBookedAt,
+      detail: data.deliveryBookedAt ? undefined : "Set the customer delivery date on the tracker card.",
+    },
+    {
+      label: "All custom delivery checks ticked",
+      ok: unTickedCustomChecks.length === 0,
+      detail: unTickedCustomChecks.length === 0
+        ? undefined
+        : unTickedCustomChecks.map((c) => c.label).join(", "),
+    },
+    {
+      label: "Delivery pack submitted to the funder",
+      ok: data.deliveryPackSubmitted,
+    },
+    {
+      label: "Delivery details checked before submission",
+      ok: data.deliveryDetailsChecked,
+    },
+  ];
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Mark as delivered</h3>
-            <p className="mt-0.5 text-xs text-slate-500">{data.customerName} · {data.model} {data.derivative}</p>
+            <p className="mt-0.5 text-xs text-slate-600">{data.customerName} · {data.model} {data.derivative}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700">✕</button>
+        </div>
+
+        {/* Pre-flight checklist — every server-side requirement made
+            visible. Helps the user spot the one item that's stopping the
+            transition (the case that's burned Karen Elizabeth Williams). */}
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Ready to deliver?</div>
+          <ul className="mt-1.5 space-y-1.5">
+            {preflight.map((item) => (
+              <li key={item.label} className="flex items-start gap-2 text-xs">
+                <span
+                  className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                    item.ok ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                  }`}
+                  aria-hidden
+                >
+                  {item.ok ? "✓" : "✕"}
+                </span>
+                <span>
+                  <span className={`font-medium ${item.ok ? "text-emerald-900" : "text-rose-900"}`}>{item.label}</span>
+                  {item.detail && (
+                    <span className="block text-[10px] text-slate-600">{item.detail}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="mt-4 space-y-3">
-          <p className="text-xs text-slate-600">
-            Both confirmations are required before this deal can move to the Delivered tab.
-            Tick each one only after you&apos;ve actually done it.
+          <p className="text-xs text-slate-700">
+            Tick the two boxes below once each step is actually done — they unlock the green button.
           </p>
           <label className="flex items-start gap-2.5 rounded-xl border-2 border-slate-200 bg-slate-50 p-3 hover:bg-slate-100 cursor-pointer">
             <input
@@ -443,7 +497,7 @@ function MarkDeliveredModal({
             />
             <span className="text-sm">
               <span className="font-semibold text-slate-900">Delivery pack submitted to the funder</span>
-              <span className="block text-[11px] text-slate-500">Full pack — finance documents, invoice, ITC etc — sent to {data.funderName}.</span>
+              <span className="block text-[11px] text-slate-600">Full pack — finance documents, invoice, ITC etc — sent to {data.funderName}.</span>
             </span>
           </label>
           <label className="flex items-start gap-2.5 rounded-xl border-2 border-slate-200 bg-slate-50 p-3 hover:bg-slate-100 cursor-pointer">
@@ -456,10 +510,16 @@ function MarkDeliveredModal({
             />
             <span className="text-sm">
               <span className="font-semibold text-slate-900">Delivery details checked before submission</span>
-              <span className="block text-[11px] text-slate-500">Reg, VIN, dates, customer info — all reviewed and correct.</span>
+              <span className="block text-[11px] text-slate-600">Reg, VIN, dates, customer info — all reviewed and correct.</span>
             </span>
           </label>
         </div>
+
+        {serverError && (
+          <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">
+            {serverError}
+          </div>
+        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">

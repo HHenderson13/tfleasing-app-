@@ -7,6 +7,7 @@ import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { ORDER_STATUSES, PROPOSAL_SECTION_STATUSES, type ProposalStatus } from "./proposal-constants";
 import { sendStatusChangeEmail } from "./email";
+import { isDedupedDeliveryCheck } from "./delivery-checks";
 import {
   CUSTOMERS_TAG,
   GROUP_SITES_TAG,
@@ -198,7 +199,15 @@ export async function changeStatus(proposalId: string, toStatus: ProposalStatus,
     if (!p.deliveryDetailsChecked) throw new Error("Confirm all delivery details were checked before submission.");
     const isBq = p.isGroupBq;
     const defs = await db.select().from(stageCheckDefs).where(eq(stageCheckDefs.stage, "delivery"));
-    const applicable = defs.filter((d) => isBq ? d.appliesToBq : true);
+    // Filter out admin custom checks that have since been promoted to
+    // core tracker toggles (PDI / FD / Invoiced / ITC / Taxed) or to
+    // the two gate booleans above. Those concepts are now validated by
+    // the dedicated p.* fields, so a leftover custom def with a matching
+    // label would otherwise silently block the transition even though
+    // the user can no longer see / tick it in the UI.
+    const applicable = defs.filter((d) =>
+      (isBq ? d.appliesToBq : true) && !isDedupedDeliveryCheck(d.label),
+    );
     if (applicable.length) {
       const ticked = await db.select().from(proposalStageChecks).where(eq(proposalStageChecks.proposalId, proposalId));
       const tickedIds = new Set(ticked.map((t) => t.checkId));
@@ -316,10 +325,10 @@ export async function updateOrderFields(
     }
   }
   if (patch.vin !== undefined) {
+    // No character-count or alphabet restriction — funder paperwork
+    // occasionally uses shorter / longer references and we want any
+    // string accepted. Trim + upper-case for consistency only.
     const v = patch.vin?.trim().toUpperCase() || null;
-    if (v && !/^[A-Z0-9]{11}$/.test(v)) {
-      throw new Error("VIN must be exactly 11 characters (letters and numbers only).");
-    }
     if (v !== (p.vin ?? null)) {
       clean.vin = v;
       events.push({ field: "VIN", value: v ?? "cleared" });
