@@ -737,6 +737,29 @@ function fmtDateUk(iso: string) {
   return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 
+// Is the ISO date strictly before today (in the local timezone)? Compared
+// at midnight so a delivery set for "today" doesn't trip the warning.
+function isPastIso(iso: string): boolean {
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return false;
+  const today = new Date();
+  const candidate = new Date(y, m - 1, d);
+  today.setHours(0, 0, 0, 0);
+  candidate.setHours(0, 0, 0, 0);
+  return candidate.getTime() < today.getTime();
+}
+
+// Native confirm — sync so the calling commit path can decide whether to
+// keep editing. Returns true if the user confirmed they meant a past date.
+function confirmPastDate(iso: string): boolean {
+  if (typeof window === "undefined") return true; // SSR — never blocks.
+  return window.confirm(
+    `Heads-up: ${fmtDateUk(iso)} is in the past.\n\n` +
+    `Most "wrong date" cases are a year typo (e.g. 2025 instead of 2026). ` +
+    `Click OK to keep this past date, or Cancel to fix it.`,
+  );
+}
+
 // Parse a user-typed UK date. Accepts:
 //   DD/MM/YYYY, DD/MM/YY, DD-MM-YYYY, DD-MM-YY, DD.MM.YYYY, DD.MM.YY
 //   YYYY-MM-DD (so paste-from-ISO still works)
@@ -824,6 +847,14 @@ function FlexibleDateInput({
       setParseErr(true);
       return;
     }
+    // Past-date guard — catches the common "wrong year" typo
+    // ("05/06/25" instead of "05/06/26"). Skip the confirm when the
+    // value hasn't changed so editing a different field on the card
+    // doesn't keep re-prompting about an already-saved past date.
+    if (iso !== value && isPastIso(iso) && !confirmPastDate(iso)) {
+      setText(value ? fmtDateUk(value) : "");
+      return;
+    }
     setParseErr(false);
     setText(fmtDateUk(iso));
     if (iso !== value) onCommit(iso);
@@ -877,6 +908,13 @@ function FlexibleDateInput({
         onChange={(e) => {
           const iso = e.target.value || null;
           setParseErr(false);
+          // Same past-date guard as the typed path so picking a wrong-
+          // year date from the calendar prompts identically.
+          if (iso && iso !== value && isPastIso(iso) && !confirmPastDate(iso)) {
+            // User cancelled — revert the calendar to its previous value.
+            e.target.value = value ?? "";
+            return;
+          }
           setText(iso ? fmtDateUk(iso) : "");
           if (iso !== value) onCommit(iso);
         }}
