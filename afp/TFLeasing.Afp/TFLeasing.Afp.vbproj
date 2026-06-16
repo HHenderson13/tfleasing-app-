@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- netstandard2.0 so the library is usable from .NET Framework 4.6.1+,
+         .NET Core / .NET 5+, and Mono. No external dependencies. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>TFLeasing.Afp</RootNamespace>
+    <AssemblyName>TFLeasing.Afp</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <OptionStrict>On</OptionStrict>
+    <OptionExplicit>On</OptionExplicit>
+    <OptionInfer>On</OptionInfer>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>A dependency-free library for generating AFP (Advanced Function Presentation / MO:DCA-P) print files.</Description>
+    <Company>TF Leasing</Company>
+    <Product>TFLeasing.Afp</Product>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>
