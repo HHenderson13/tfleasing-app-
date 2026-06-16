@@ -731,7 +731,10 @@ function DealerFitOptionsEditor({
 function fmtDateUk(iso: string) {
   const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
   if (!y || !m || !d) return iso;
-  return `${d}/${m}/${String(y).slice(-2)}`;
+  // Always full DD/MM/YYYY with leading zeros so what the user typed
+  // ("5/6/26") doesn't read back as "5/6/26" — it lands as "05/06/2026"
+  // both in the input field and on the tracker card chip.
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 
 // Parse a user-typed UK date. Accepts:
