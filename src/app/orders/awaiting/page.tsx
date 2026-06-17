@@ -165,7 +165,7 @@ export default async function OrdersAwaitingPage() {
           execs={execs}
           defaultExecId={defaultExecId}
           myExecId={myExecId}
-          adminAddDealHref={admin ? "/orders/awaiting/new" : null}
+          addDealHref="/orders/awaiting/new"
         />
       </main>
     </div>

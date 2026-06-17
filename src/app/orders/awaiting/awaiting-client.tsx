@@ -35,12 +35,12 @@ interface Props {
   execs: { id: string; name: string }[];
   defaultExecId: string | null;   // Server-computed default (own deals for execs, all for admins)
   myExecId: string | null;
-  adminAddDealHref: string | null;   // Non-null shows the "+ Add deal" button
+  addDealHref: string;   // Where the "+ Add deal" button points
 }
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export function AwaitingClient({ items, execs, defaultExecId, myExecId, adminAddDealHref }: Props) {
+export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealHref }: Props) {
   const [view, setView] = useState<AwaitingView>("tracker");
   const [execFilter, setExecFilter] = useState<string | null>(defaultExecId);
 
@@ -80,13 +80,13 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, adminAdd
 
   return (
     <>
-      {/* Top action bar — add-deal + exec filter */}
+      {/* Top action bar — add-deal + exec filter. Add deal is available to
+          every signed-in user with orders access; back-loaded rows still
+          get flagged so they're excluded from reports. */}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        {adminAddDealHref && (
-          <Link href={adminAddDealHref} className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">
-            + Add deal
-          </Link>
-        )}
+        <Link href={addDealHref} className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">
+          + Add deal
+        </Link>
         <ExecFilterClient execs={execs} value={execFilter} onChange={setExecFilter} myExecId={myExecId} />
       </div>
 

@@ -6,7 +6,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { CUSTOMERS_TAG } from "@/lib/cache-tags";
 import { invalidateProposals } from "@/lib/proposals";
 import { randomUUID } from "node:crypto";
-import { requireAdmin } from "@/lib/auth-guard";
+import { requireOrdersAccess } from "@/lib/auth-guard";
 import { z } from "zod";
 
 // Back-loaded deal entry comes straight from a form; treat as untrusted.
@@ -85,7 +85,10 @@ export async function createAwaitingDealAction(input: {
   salesExecId: string;
 }) {
   try {
-    await requireAdmin();
+    // Any signed-in user with orders access can back-load a deal. Rows
+    // get backLoaded=true via createBackLoadedAwaiting so reports/KPIs
+    // still exclude them.
+    await requireOrdersAccess();
     const parsed = createAwaitingSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid input" };
