@@ -87,6 +87,7 @@ export default async function OrdersAwaitingPage() {
       salesExecId: p.salesExecId,
       isGroupBq: isBq,
       deliveryBookedAtIso,
+      estimatedDeliveryMonth: p.estimatedDeliveryMonth ?? null,
       match,
       calendarEntry: deliveryBookedAtIso
         ? {
@@ -129,6 +130,7 @@ export default async function OrdersAwaitingPage() {
         itcComplete: p.itcComplete ?? false,
         taxed: p.taxed ?? false,
         deliveryBookedAt: deliveryBookedAtIso,
+        estimatedDeliveryMonth: p.estimatedDeliveryMonth ?? null,
         gapPolicyStatus: (p.gapPolicyStatus as "none" | "pending" | "complete") ?? "none",
         gapPolicyNumber: p.gapPolicyNumber ?? null,
         tfpPolicyStatus: (p.tfpPolicyStatus as "none" | "pending" | "complete") ?? "none",

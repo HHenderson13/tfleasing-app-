@@ -27,6 +27,10 @@ export interface AwaitingItemPayload {
   salesExecId: string | null;     // For client-side filter
   isGroupBq: boolean;
   deliveryBookedAtIso: string | null;
+  // YYYY-MM coarse estimate when no firm date is set. Feeds the bucket
+  // logic so deals without a confirmed ETA still slot into a planning
+  // month, and breaks ties within the "Delivered (at TF)" bucket.
+  estimatedDeliveryMonth: string | null;
   calendarEntry: CalendarEntry | null;   // Pre-built for calendar view
 }
 
@@ -67,15 +71,13 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
   const stats = useMemo(() => {
     const total = filtered.length;
     let etaConfirmed = 0, etaTba = 0, arrived = 0, deliveryBooked = 0;
-    let monthlySum = 0;
     for (const it of filtered) {
-      monthlySum += it.card.monthlyRental;
       if (it.match.delivered) arrived++;
       else if (it.match.etaAt) etaConfirmed++;
       else etaTba++;
       if (!it.match.delivered && it.deliveryBookedAtIso) deliveryBooked++;
     }
-    return { total, etaConfirmed, etaTba, arrived, deliveryBooked, monthlySum };
+    return { total, etaConfirmed, etaTba, arrived, deliveryBooked };
   }, [filtered]);
 
   return (
@@ -98,9 +100,6 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
         <StatTile label="Arrived at us" value={stats.arrived} tone="emerald" />
         <StatTile label="Delivery booked" value={stats.deliveryBooked} tone="teal" />
       </section>
-      <div className="mt-2 text-right text-[11px] text-slate-400">
-        Total monthly rental in pipeline: £{stats.monthlySum.toFixed(2)}
-      </div>
 
       {/* Tab nav — purely client state */}
       <div className="mt-6">
@@ -191,14 +190,25 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 // the same after the refactor. Pure functions over the in-memory items so
 // React can re-compute them on filter changes in <1ms.
 
+// Bucket priority (highest wins):
+//   1. Group BQ                       — always its own bucket
+//   2. Delivered at TF dealer         — its own bucket (awaiting customer)
+//   3. Customer delivery date set     — overrides everything else, that month
+//   4. Ford ETA from stock report     — that month
+//   5. Estimated delivery month set   — that month (planning bucket)
+//   6. Nothing                        — "tba"
 function bucketKey(item: AwaitingItemPayload): string {
   if (item.isGroupBq) return "bq";
   if (item.match.delivered) return "delivered";
-  if (!item.match.etaAt) return "tba";
-  // Both Match.etaAt and the client-side reconstruction agree on the ISO
-  // form so we can use it directly here without re-parsing.
-  const d = new Date(item.match.etaAt);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  // Customer-booked date overrides any Ford ETA — once the exec has
+  // committed a date for handover, that's the date we plan against.
+  if (item.deliveryBookedAtIso) return item.deliveryBookedAtIso.slice(0, 7);
+  if (item.match.etaAt) {
+    const d = new Date(item.match.etaAt);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  if (item.estimatedDeliveryMonth) return item.estimatedDeliveryMonth;
+  return "tba";
 }
 
 function bucketLabel(key: string): string {
@@ -227,23 +237,40 @@ function bucketByEta(items: AwaitingItemPayload[]): {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(it);
   }
-  // Within each month bucket sort by ETA asc so earliest dates float to top.
+  // Sort each bucket. Sort key picked per the same priority used by
+  // bucketKey — customer-booked date wins, then Ford ETA, then estimated
+  // month — so the earliest planned hand-over floats to the top of each
+  // group regardless of which field carries the date.
   for (const [k, arr] of groups) {
     if (k === "tba" || k === "bq") continue;
     if (k === "delivered") {
-      // Adopted (worst) → IB → plain delivered. Pure presentation order so
-      // the most-at-risk vehicles surface first inside the delivered group.
-      arr.sort((a, b) => ibStage(b.match) - ibStage(a.match));
+      // For the "delivered to TF dealer" bucket, the user wants estimated
+      // delivery month (e.g. July < August) to drive ordering — items
+      // estimated sooner should surface first. The legacy IB-stage risk
+      // ordering is preserved as a tiebreaker so adopted/IB vehicles
+      // still bubble inside the same month.
+      arr.sort((a, b) => {
+        const am = a.estimatedDeliveryMonth ?? "9999-99";
+        const bm = b.estimatedDeliveryMonth ?? "9999-99";
+        if (am !== bm) return am.localeCompare(bm);
+        return ibStage(b.match) - ibStage(a.match);
+      });
       continue;
     }
-    arr.sort((a, b) => {
-      const ax = a.match.etaAt ? new Date(a.match.etaAt).getTime() : 0;
-      const bx = b.match.etaAt ? new Date(b.match.etaAt).getTime() : 0;
-      return ax - bx;
-    });
+    arr.sort((a, b) => sortMs(a) - sortMs(b));
   }
   const sortedKeys = Array.from(groups.keys()).sort((a, b) => bucketSortValue(a) - bucketSortValue(b));
   return { groups, sortedKeys };
+}
+
+// Single "best available" date for in-bucket sorting. Falls back across
+// the same fields bucketKey uses so a customer-booked date overrides ETA,
+// ETA overrides estimated month. Items with nothing land at the end.
+function sortMs(item: AwaitingItemPayload): number {
+  if (item.deliveryBookedAtIso) return new Date(item.deliveryBookedAtIso).getTime();
+  if (item.match.etaAt) return new Date(item.match.etaAt).getTime();
+  if (item.estimatedDeliveryMonth) return new Date(item.estimatedDeliveryMonth + "-01").getTime();
+  return Number.MAX_SAFE_INTEGER;
 }
 
 function ibStage(m: Match): number {

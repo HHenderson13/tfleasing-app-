@@ -44,6 +44,8 @@ export interface TrackerCardData {
   itcComplete: boolean;
   taxed: boolean;
   deliveryBookedAt: string | null;  // ISO yyyy-mm-dd
+  // YYYY-MM coarse estimate when no firm date is set. Optional planning aid.
+  estimatedDeliveryMonth: string | null;
   gapPolicyStatus: "none" | "pending" | "complete";
   gapPolicyNumber: string | null;
   tfpPolicyStatus: "none" | "pending" | "complete";
@@ -93,8 +95,6 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
             {data.model} {data.derivative}
             <span className="mx-1 text-slate-300">·</span>
             <span className="font-medium text-slate-700">{data.funderName}</span>
-            <span className="mx-1 text-slate-300">·</span>
-            £{data.monthlyRental.toFixed(2)}/mo
             {data.execName && <><span className="mx-1 text-slate-300">·</span>{data.execName}</>}
           </div>
           {/* ETA tile — Ford location + ETA date prominent on the card so
@@ -120,6 +120,14 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
             {data.deliveryBookedAt && (
               <span className="rounded-md bg-teal-100 px-2 py-1 text-[11px] font-semibold text-teal-800 ring-1 ring-teal-200">
                 📅 Customer {fmtDateUk(data.deliveryBookedAt)}
+              </span>
+            )}
+            {/* Estimated month — only show on the closed card when no firm
+                customer date is set, otherwise the firm date is the
+                authoritative signal and the estimate is just noise. */}
+            {!data.deliveryBookedAt && data.estimatedDeliveryMonth && (
+              <span className="rounded-md bg-indigo-100 px-2 py-1 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200">
+                🗓 Est. {fmtMonthUk(data.estimatedDeliveryMonth)}
               </span>
             )}
             {data.regNumber && (
@@ -248,6 +256,13 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
             value={data.deliveryBookedAt}
             disabled={pending}
             onCommit={(iso) => commit({ deliveryBookedAt: iso ? new Date(iso) : null })}
+          />
+        </Field>
+        <Field label="Estimated month" hint="when no firm date yet — planning only">
+          <EstimatedMonthInput
+            value={data.estimatedDeliveryMonth}
+            disabled={pending}
+            onCommit={(yyyyMm) => commit({ estimatedDeliveryMonth: yyyyMm })}
           />
         </Field>
         <Field label="Wallbox / customer saving" hint="EV only">
@@ -735,6 +750,38 @@ function fmtDateUk(iso: string) {
   // ("5/6/26") doesn't read back as "5/6/26" — it lands as "05/06/2026"
   // both in the input field and on the tracker card chip.
   return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+}
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function fmtMonthUk(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || m < 1 || m > 12) return yyyyMm;
+  return `${MONTH_SHORT[m - 1]} ${y}`;
+}
+
+// Estimated-month picker. Native <input type="month"> is the cleanest
+// match for the data shape (YYYY-MM in, YYYY-MM out) so we just use that —
+// the browser renders a calendar dropdown of months. Empty value clears.
+function EstimatedMonthInput({
+  value, disabled, onCommit,
+}: {
+  value: string | null;
+  disabled?: boolean;
+  onCommit: (v: string | null) => void;
+}) {
+  return (
+    <input
+      type="month"
+      value={value ?? ""}
+      disabled={disabled}
+      onChange={(e) => {
+        const v = e.target.value || null;
+        if (v !== value) onCommit(v);
+      }}
+      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm tabular-nums disabled:opacity-50"
+    />
+  );
 }
 
 // Is the ISO date strictly before today (in the local timezone)? Compared

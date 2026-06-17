@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -94,6 +94,8 @@ async function runEnsureAppSchema() {
     { name: "delivery_notes", sqlType: "TEXT" },
     { name: "delivery_pack_submitted", sqlType: "INTEGER NOT NULL DEFAULT 0" },
     { name: "delivery_details_checked", sqlType: "INTEGER NOT NULL DEFAULT 0" },
+    // YYYY-MM coarse delivery estimate — see schema.ts for the rationale.
+    { name: "estimated_delivery_month", sqlType: "TEXT" },
   ]);
   // Dealer-fit options table — one row per item on a proposal.
   await db.run(sql.raw(`

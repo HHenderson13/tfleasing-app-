@@ -174,6 +174,11 @@ export const proposals = sqliteTable(
     deliveredDetectedAt: integer("delivered_detected_at", { mode: "timestamp" }),
     // Customer-handover fields (used after Ford has delivered to us, before we hand to customer).
     deliveryBookedAt: integer("delivery_booked_at", { mode: "timestamp" }),
+    // Coarse "expected delivery month" the exec sets when a firm date
+    // isn't yet known. Stored as YYYY-MM (e.g. "2026-07") so it can be
+    // ranked + grouped trivially without needing a full date. Optional —
+    // some execs use it as a planning aid, others don't.
+    estimatedDeliveryMonth: text("estimated_delivery_month"),
     regNumber: text("reg_number"),
     deliveredAt: integer("delivered_at", { mode: "timestamp" }),
     // Admin-only manual back-load into awaiting delivery. These deals have

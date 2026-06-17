@@ -265,6 +265,9 @@ export async function updateOrderFields(
     model: string;
     derivative: string;
     deliveryBookedAt: Date | null;
+    // YYYY-MM coarse estimate when the exec doesn't have a firm date yet.
+    // Pass null or empty string to clear.
+    estimatedDeliveryMonth: string | null;
     regNumber: string | null;
     // Delivery tracker patch fields. Optional — only set the ones you're
     // editing. Each field gets its own audit event in proposalEvents.
@@ -348,6 +351,17 @@ export async function updateOrderFields(
     if (v !== (p.regNumber ?? null)) {
       clean.regNumber = v;
       events.push({ field: "Reg number", value: v ?? "cleared" });
+    }
+  }
+  if (patch.estimatedDeliveryMonth !== undefined) {
+    const raw = patch.estimatedDeliveryMonth?.trim() || null;
+    // Accept YYYY-MM only — reject anything else so the column stays
+    // sortable as a plain string (e.g. "2026-07" < "2026-08").
+    const v = raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : null;
+    if (raw && !v) throw new Error("Estimated delivery month must be YYYY-MM (e.g. 2026-07).");
+    if (v !== (p.estimatedDeliveryMonth ?? null)) {
+      clean.estimatedDeliveryMonth = v;
+      events.push({ field: "Estimated delivery month", value: v ?? "cleared" });
     }
   }
   if (patch.vehicleColour !== undefined) {
