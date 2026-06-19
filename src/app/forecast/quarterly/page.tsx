@@ -46,7 +46,7 @@ export default async function ForecastQuarterlyPage({ searchParams }: PageProps)
         month: m,
         lines: lines.map((l) => ({
           source: l.source,
-          vehicleType: l.vehicleType,
+          kind: l.kind,
           chassisProfit: l.chassisProfit,
           addBonus: l.addBonus,
           metalSubsidy: l.metalSubsidy,

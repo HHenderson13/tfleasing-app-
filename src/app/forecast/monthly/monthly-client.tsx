@@ -9,7 +9,7 @@ import type { DealbookRollup } from "../rollup";
 
 interface DealbookLine {
   source: string;
-  vehicleType: string | null;
+  kind: string;
   chassisProfit: number;
   addBonus: number;
   metalSubsidy: number;
@@ -48,14 +48,12 @@ const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
 ];
 
 function rollupFor(sheet: SheetKey, lines: DealbookLine[]): DealbookRollup {
-  if (sheet === "car") {
-    const filtered = lines.filter((l) => l.source === "lease_new_cars" || l.source === "salary_sacrifice");
-    return rollupDealbookLines(filtered, "all");
-  }
-  if (sheet === "cv") {
-    const filtered = lines.filter((l) => l.source === "lease_new_commercial");
-    return rollupDealbookLines(filtered, "all");
-  }
+  // Car / CV split is now driven by per-line `kind` (set at upload time
+  // by the vehicle classifier in src/lib/forecast-classify.ts), not by
+  // the upload's source. Lines whose model couldn't be matched stay out
+  // of both rollups so the user fixes the catalogue first.
+  if (sheet === "car") return rollupDealbookLines(lines, "car");
+  if (sheet === "cv")  return rollupDealbookLines(lines, "cv");
   return rollupDealbookLines([], "all");
 }
 

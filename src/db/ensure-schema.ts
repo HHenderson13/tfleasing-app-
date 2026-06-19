@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 22;
+const SCHEMA_VERSION = 23;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -136,6 +136,11 @@ async function ensureForecastTables() {
       uploaded_by_user_id TEXT NOT NULL
     )
   `));
+  // Old test rows used the previous 3-source enum (lease_new_cars /
+  // lease_new_commercial / salary_sacrifice). Map both lease values to
+  // the consolidated "lease" tag so we don't strand them.
+  await db.run(sql.raw(`UPDATE forecast_dealbook_uploads SET source = 'lease' WHERE source IN ('lease_new_cars', 'lease_new_commercial', 'leasing')`));
+  await db.run(sql.raw(`UPDATE forecast_dealbook_lines SET source = 'lease' WHERE source IN ('lease_new_cars', 'lease_new_commercial', 'leasing')`));
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS forecast_dealbook_lines (
       id TEXT PRIMARY KEY,
@@ -185,6 +190,13 @@ async function ensureForecastTables() {
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_month ON forecast_dealbook_lines(effective_month)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_source ON forecast_dealbook_lines(source)`));
 
+  // Backfill kind + vehicle_id columns onto existing line rows.
+  await ensureColumns("forecast_dealbook_lines", [
+    { name: "kind", sqlType: "TEXT NOT NULL DEFAULT 'unknown'" },
+    { name: "vehicle_id", sqlType: "TEXT" },
+  ]);
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_kind ON forecast_dealbook_lines(kind)`));
+
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS forecast_actuals (
       id TEXT PRIMARY KEY,
@@ -224,6 +236,64 @@ async function ensureForecastTables() {
       updated_at INTEGER NOT NULL
     )
   `));
+
+  // Vehicle catalogue + per-vehicle bonus values.
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_vehicles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      keywords TEXT NOT NULL DEFAULT '[]',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_vehicle_bonuses (
+      vehicle_id TEXT NOT NULL,
+      bonus_key TEXT NOT NULL,
+      value REAL NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (vehicle_id, bonus_key)
+    )
+  `));
+
+  // Seed the catalogue. INSERT OR IGNORE so admin edits aren't trampled.
+  // Keywords are picked to match Dealbook "Model" text, with the more
+  // specific compound names (e.g. "Puma Gen-E") landing in their own
+  // vehicle so the classifier doesn't fall back to plain "Puma".
+  const nowSec = Math.floor(Date.now() / 1000);
+  const vehicleSeeds: Array<{
+    id: string; name: string; kind: "car" | "van"; keywords: string[]; sort: number;
+  }> = [
+    // ── Cars ──
+    { id: "puma-gen-e",      name: "Puma Gen-E",      kind: "car", keywords: ["Puma Gen-E"],                  sort: 10 },
+    { id: "explorer",        name: "Explorer",        kind: "car", keywords: ["Explorer"],                    sort: 20 },
+    { id: "capri",           name: "Capri",           kind: "car", keywords: ["Capri"],                       sort: 30 },
+    { id: "mustang-mach-e",  name: "Mustang Mach-E",  kind: "car", keywords: ["Mustang Mach-E", "Mach-E"],    sort: 40 },
+    { id: "kuga-phev",       name: "Kuga PHEV",       kind: "car", keywords: ["Kuga PHEV", "Kuga Phev"],      sort: 50 },
+    { id: "kuga",            name: "Kuga",            kind: "car", keywords: ["Kuga"],                        sort: 60 },
+    { id: "puma",            name: "Puma",            kind: "car", keywords: ["Puma"],                        sort: 70 },
+    { id: "focus",           name: "Focus",           kind: "car", keywords: ["Focus"],                       sort: 80 },
+    // ── Vans ──
+    { id: "ranger",                 name: "Ranger",                 kind: "van", keywords: ["Ranger"],                       sort: 110 },
+    { id: "e-transit-custom",       name: "E-Transit Custom",       kind: "van", keywords: ["E-Transit Custom"],             sort: 120 },
+    { id: "transit-custom",         name: "Transit Custom",         kind: "van", keywords: ["Transit Custom"],               sort: 130 },
+    { id: "e-transit-courier",      name: "E-Transit Courier",      kind: "van", keywords: ["E-Transit Courier"],            sort: 140 },
+    { id: "transit-courier",        name: "Transit Courier",        kind: "van", keywords: ["Transit Courier"],              sort: 150 },
+    { id: "transit-connect-phev",   name: "Transit Connect PHEV",   kind: "van", keywords: ["Transit Connect PHEV"],         sort: 160 },
+    { id: "transit-connect",        name: "Transit Connect",        kind: "van", keywords: ["Transit Connect"],              sort: 170 },
+    { id: "transit-city",           name: "Transit City",           kind: "van", keywords: ["Transit City"],                 sort: 180 },
+    { id: "e-transit",              name: "E-Transit",              kind: "van", keywords: ["E-Transit"],                    sort: 190 },
+    { id: "transit",                name: "Transit",                kind: "van", keywords: ["Transit"],                      sort: 200 },
+  ];
+  for (const v of vehicleSeeds) {
+    await db.run(sql`
+      INSERT OR IGNORE INTO forecast_vehicles (id, name, kind, keywords, sort_order, created_at, updated_at)
+      VALUES (${v.id}, ${v.name}, ${v.kind}, ${JSON.stringify(v.keywords)}, ${v.sort}, ${nowSec}, ${nowSec})
+    `);
+  }
 
   // Seed sensible defaults so the admin tab isn't empty on first boot.
   // INSERT OR IGNORE so any value the admin has already edited stays put.

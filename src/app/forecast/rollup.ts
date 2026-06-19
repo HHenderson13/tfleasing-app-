@@ -6,7 +6,7 @@ import type { DealbookSummable } from "./line-definitions";
 export interface DealbookRollup extends DealbookSummable {}
 
 export function rollupDealbookLines(
-  lines: Array<{ vehicleType: string | null } & Partial<DealbookSummable>>,
+  lines: Array<{ kind: string } & Partial<DealbookSummable>>,
   filter: "car" | "cv" | "all",
 ): DealbookRollup {
   const r: DealbookRollup = {
@@ -17,9 +17,9 @@ export function rollupDealbookLines(
     warranty: 0, totalFiIncome: 0, totalGrossProfit: 0,
   };
   for (const line of lines) {
-    const t = (line.vehicleType ?? "").toLowerCase();
-    const isVan = t === "lcv" || t === "van";
-    if (filter === "car" && isVan) continue;
+    const isVan = line.kind === "van";
+    const isCar = line.kind === "car";
+    if (filter === "car" && !isCar) continue;
     if (filter === "cv" && !isVan) continue;
     r.units += 1;
     r.chassisProfit += line.chassisProfit ?? 0;

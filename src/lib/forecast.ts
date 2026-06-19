@@ -5,9 +5,12 @@ import {
   forecastActuals,
   forecastInputs,
   forecastConfig,
+  forecastVehicles,
+  forecastVehicleBonuses,
 } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import type { SheetKey } from "@/app/forecast/line-definitions";
+import { parseVehicle, type ParsedVehicle } from "@/lib/forecast-classify";
 
 // Re-export client-safe pieces so existing server callers see the same
 // surface. Anything that touches the DB lives below; anything pure lives
@@ -265,6 +268,21 @@ export async function loadForecastInputs(monthYyyymm: string) {
 
 export async function loadForecastConfig() {
   return db.select().from(forecastConfig).orderBy(forecastConfig.category, forecastConfig.sortOrder);
+}
+
+export async function loadForecastVehicles(): Promise<ParsedVehicle[]> {
+  const rows = await db.select().from(forecastVehicles).orderBy(forecastVehicles.sortOrder, forecastVehicles.name);
+  return rows.map((r) => parseVehicle({
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    keywords: r.keywords,
+    sortOrder: r.sortOrder,
+  }));
+}
+
+export async function loadVehicleBonuses() {
+  return db.select().from(forecastVehicleBonuses);
 }
 
 export async function findForecastActual(monthYyyymm: string, sheet: SheetKey, lineKey: string) {

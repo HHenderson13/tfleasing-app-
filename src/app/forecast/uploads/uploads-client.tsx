@@ -1,9 +1,10 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ForecastPageHeader } from "../page-shell";
 import { monthLabel, currentMonth } from "../pickers";
-import { DEPARTMENTS, DEPARTMENT_LABELS, type Department } from "../sources";
+import { DEPARTMENTS, DEPARTMENT_LABELS, DEPARTMENT_DESCRIPTIONS, type Department } from "../sources";
 import {
   uploadDealbookAction,
   deleteUploadAction,
@@ -24,7 +25,8 @@ interface FocusLine {
   customerName: string | null;
   model: string | null;
   regNo: string | null;
-  vehicleType: string | null;
+  kind: string;                 // "car" | "van" | "unknown"
+  vehicleId: string | null;
   defaultMonth: string;
   overrideMonth: string | null;
   effectiveMonth: string;
@@ -51,8 +53,6 @@ export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
       const res = await uploadDealbookAction(formData);
       if (!res.ok) { setErr(res.error); return; }
       setOpenUploadFor(null);
-      // Drop into the review window for this upload — every line gets
-      // a month dropdown defaulting to the upload's month.
       const url = new URL(window.location.href);
       url.searchParams.set("upload", res.uploadId);
       router.push(url.pathname + "?" + url.searchParams.toString());
@@ -65,14 +65,12 @@ export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
     router.push(url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
   }
 
-  // Review window takes the whole page so the user is focused on
-  // confirming/adjusting per-line months.
   if (focusUpload) {
     return (
       <>
         <ForecastPageHeader
           title="Allocate units"
-          description={`Confirm which month each unit lands in. Default is the upload's target month — change the dropdown per row to move a unit into a different month.`}
+          description="Confirm the month for each vehicle and check the Car / Van split. Anything we couldn't recognise is flagged at the top."
         />
         <main className="mx-auto max-w-7xl px-6 py-8">
           <ReviewWindow
@@ -89,7 +87,7 @@ export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
     );
   }
 
-  // Group recent uploads per department.
+  // Group uploads per department.
   const grouped = new Map<Department, UploadPayload[]>();
   for (const d of DEPARTMENTS) grouped.set(d, []);
   for (const u of uploads) {
@@ -102,14 +100,14 @@ export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
     <>
       <ForecastPageHeader
         title="Uploads"
-        description="Three departments, one upload per month. We'll show a per-vehicle review after upload so you can move any rows that registered in a different month."
+        description="Two dealbooks: the Lease file (which contains both cars and vans — we split them by model), and the Salary Sacrifice file. Upload one per month, then review the allocation."
       />
       <main className="mx-auto max-w-7xl px-6 py-8">
         {err && !openUploadFor && (
           <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</p>
         )}
 
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-2">
           {DEPARTMENTS.map((d) => (
             <DepartmentCard
               key={d}
@@ -153,10 +151,7 @@ function DepartmentCard({
   onDelete: (id: string, filename: string, rowCount: number) => void;
   onReview: (id: string) => void;
 }) {
-  const tone =
-    department === "lease_new_cars" ? "from-sky-500 to-blue-700"
-    : department === "lease_new_commercial" ? "from-emerald-500 to-teal-700"
-    : "from-violet-500 to-indigo-700";
+  const tone = department === "lease" ? "from-sky-500 to-blue-700" : "from-violet-500 to-indigo-700";
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -165,7 +160,8 @@ function DepartmentCard({
         <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-slate-900">{DEPARTMENT_LABELS[department]}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500">{DEPARTMENT_DESCRIPTIONS[department]}</p>
+            <p className="mt-1 text-[11px] text-slate-400">
               {uploads.length === 0
                 ? "No uploads yet"
                 : `${uploads.length} upload${uploads.length === 1 ? "" : "s"} on file`}
@@ -240,7 +236,7 @@ function UploadForm({
   onClose: () => void;
   onSubmit: (fd: FormData) => void;
 }) {
-  // Pick a sensible month list to choose from (current + 11 prior months).
+  // Last 12 months for the dropdown.
   const months = useMemo(() => {
     const out: string[] = [];
     const d = new Date();
@@ -257,9 +253,9 @@ function UploadForm({
         fd.set("source", department);
         onSubmit(fd);
       }}
-      className="border-y border-slate-200 bg-slate-50 p-5 space-y-3"
+      className="border-y border-slate-200 bg-slate-50 px-5 py-4 space-y-3"
     >
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col">
           <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Month</span>
           <select
@@ -281,22 +277,22 @@ function UploadForm({
             className="mt-1 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm"
           />
         </label>
-        <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {pending ? "Uploading…" : "Upload"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+        >
+          {pending ? "Uploading…" : "Upload"}
+        </button>
       </div>
     </form>
   );
@@ -315,7 +311,7 @@ function ReviewWindow({
 }) {
   const router = useRouter();
   const [, startSave] = useTransition();
-  const [filter, setFilter] = useState<"all" | "changed">("all");
+  const [filter, setFilter] = useState<"all" | "changed" | "unmatched">("all");
 
   const monthOptions = useMemo(() => {
     const out: string[] = [];
@@ -327,12 +323,24 @@ function ReviewWindow({
     return Array.from(new Set(out)).sort();
   }, [upload.monthYyyymm]);
 
+  const unmatched = useMemo(() => lines.filter((l) => l.kind !== "car" && l.kind !== "van"), [lines]);
+  const changed = useMemo(() => lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm), [lines, upload.monthYyyymm]);
   const filtered = useMemo(() => {
-    if (filter === "all") return lines;
-    return lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm);
-  }, [lines, filter, upload.monthYyyymm]);
+    if (filter === "changed") return changed;
+    if (filter === "unmatched") return unmatched;
+    return lines;
+  }, [lines, filter, changed, unmatched]);
 
-  const changedCount = lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm).length;
+  // Group unmatched by their raw model text — that's what the admin needs
+  // to copy into a vehicle keyword.
+  const unmatchedModels = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of unmatched) {
+      const k = l.model ?? "(no model)";
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [unmatched]);
 
   function setMonth(lineId: string, month: string) {
     onError(null);
@@ -344,10 +352,49 @@ function ReviewWindow({
     });
   }
 
+  const carCount = lines.filter((l) => l.kind === "car").length;
+  const vanCount = lines.filter((l) => l.kind === "van").length;
   const departmentLabel = DEPARTMENT_LABELS[upload.source as Department] ?? upload.source;
 
   return (
     <div className="space-y-5">
+      {unmatched.length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-amber-900">
+                {unmatched.length} unit{unmatched.length === 1 ? "" : "s"} couldn't be matched to a vehicle
+              </div>
+              <p className="mt-1 text-xs text-amber-800">
+                The model text below didn't match any keyword in your vehicle catalogue. Until you
+                add a match, these units will be left out of the Car and CV rollups.
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-1">
+                {unmatchedModels.slice(0, 8).map(([model, count]) => (
+                  <li
+                    key={model}
+                    className="rounded-md border border-amber-200 bg-white px-2 py-0.5 text-[11px] text-amber-900"
+                  >
+                    {model} <span className="text-amber-500">×{count}</span>
+                  </li>
+                ))}
+                {unmatchedModels.length > 8 && (
+                  <li className="rounded-md border border-dashed border-amber-200 px-2 py-0.5 text-[11px] text-amber-700">
+                    + {unmatchedModels.length - 8} more
+                  </li>
+                )}
+              </ul>
+            </div>
+            <Link
+              href="/forecast/admin?tab=vehicles"
+              className="rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-semibold text-amber-50 hover:bg-amber-800"
+            >
+              Open vehicles admin →
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
@@ -358,26 +405,29 @@ function ReviewWindow({
               {upload.rowCount} unit{upload.rowCount === 1 ? "" : "s"} for {monthLabel(upload.monthYyyymm)}
             </h3>
             <p className="mt-1 text-xs text-slate-500">
-              {changedCount === 0
-                ? "Everything's currently going into this month — change a row's dropdown to allocate it elsewhere."
-                : `${changedCount} row${changedCount === 1 ? "" : "s"} are pointing at a different month already.`}
+              <span className="font-medium text-slate-700">{carCount}</span> car{carCount === 1 ? "" : "s"} ·{" "}
+              <span className="font-medium text-slate-700">{vanCount}</span> van{vanCount === 1 ? "" : "s"}
+              {unmatched.length > 0 && (
+                <> · <span className="font-medium text-amber-700">{unmatched.length} unmatched</span></>
+              )}
+              {changed.length > 0 && (
+                <> · <span className="font-medium text-amber-700">{changed.length} reallocated</span></>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-xs">
-              <button
-                type="button"
-                onClick={() => setFilter("all")}
-                className={`px-2.5 py-1 ${filter === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-              >
+              <button type="button" onClick={() => setFilter("all")}
+                className={`px-2.5 py-1 ${filter === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
                 All ({lines.length})
               </button>
-              <button
-                type="button"
-                onClick={() => setFilter("changed")}
-                className={`px-2.5 py-1 ${filter === "changed" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-              >
-                Reallocated ({changedCount})
+              <button type="button" onClick={() => setFilter("changed")}
+                className={`px-2.5 py-1 ${filter === "changed" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                Reallocated ({changed.length})
+              </button>
+              <button type="button" onClick={() => setFilter("unmatched")}
+                className={`px-2.5 py-1 ${filter === "unmatched" ? "bg-amber-900 text-white" : "bg-white text-amber-700 hover:bg-amber-50"}`}>
+                Unmatched ({unmatched.length})
               </button>
             </div>
             <button
@@ -401,21 +451,33 @@ function ReviewWindow({
                 <th className="px-5 py-3 text-left font-medium">Reg No</th>
                 <th className="px-3 py-3 text-left font-medium">Customer</th>
                 <th className="px-3 py-3 text-left font-medium">Vehicle</th>
+                <th className="px-3 py-3 text-left font-medium">Kind</th>
                 <th className="px-3 py-3 text-left font-medium">Reg date</th>
                 <th className="px-5 py-3 text-left font-medium">Goes to</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-400">No rows.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">No rows.</td></tr>
               ) : (
                 filtered.map((l, idx) => {
                   const moved = l.effectiveMonth !== upload.monthYyyymm;
+                  const isUnmatched = l.kind !== "car" && l.kind !== "van";
+                  const rowClass = isUnmatched
+                    ? "bg-amber-50/60"
+                    : moved
+                    ? "bg-amber-50/40"
+                    : idx % 2 === 0 ? "" : "bg-slate-50/40";
                   return (
-                    <tr key={l.id} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"} ${moved ? "bg-amber-50/50" : ""}`}>
+                    <tr key={l.id} className={`border-t border-slate-100 ${rowClass}`}>
                       <td className="px-5 py-2 font-mono text-xs text-slate-700">{l.regNo ?? "—"}</td>
                       <td className="px-3 py-2 text-slate-800">{l.customerName ?? "—"}</td>
                       <td className="px-3 py-2 text-slate-700">{l.model ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        {l.kind === "car" && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800">Car</span>}
+                        {l.kind === "van" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">Van</span>}
+                        {isUnmatched && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">Unmatched</span>}
+                      </td>
                       <td className="px-3 py-2 text-slate-500">{l.regDate ?? "—"}</td>
                       <td className="px-5 py-2">
                         <select

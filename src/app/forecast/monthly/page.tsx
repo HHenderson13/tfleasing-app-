@@ -41,7 +41,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
         lineCount={lines.length}
         lines={lines.map((l) => ({
           source: l.source,
-          vehicleType: l.vehicleType,
+          kind: l.kind,
           chassisProfit: l.chassisProfit,
           addBonus: l.addBonus,
           metalSubsidy: l.metalSubsidy,

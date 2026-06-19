@@ -6,6 +6,8 @@ import {
   forecastActuals,
   forecastInputs,
   forecastConfig,
+  forecastVehicles,
+  forecastVehicleBonuses,
 } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -14,9 +16,11 @@ import { requireAdmin } from "@/lib/auth-guard";
 import {
   parseDealbookCsv,
   deriveDefaultMonth,
+  loadForecastVehicles,
   DEALBOOK_SOURCES,
   type DealbookSource,
 } from "@/lib/forecast";
+import { classifyModel } from "@/lib/forecast-classify";
 import { logError } from "@/lib/logger";
 
 function isYyyymm(s: string): boolean {
@@ -56,6 +60,11 @@ export async function uploadDealbookAction(formData: FormData) {
       uploadedAt: now,
       uploadedByUserId: me.id,
     });
+    // Classify each row by its model text against the vehicle catalogue
+    // so Car / Van rollups know which sheet to feed. Unknown rows surface
+    // in the review window with a "needs adding" prompt.
+    const vehicles = await loadForecastVehicles();
+    let unknownCount = 0;
     // Insert lines in chunks to stay under SQLite variable limits.
     const CHUNK = 100;
     for (let i = 0; i < parsed.rows.length; i += CHUNK) {
@@ -63,6 +72,8 @@ export async function uploadDealbookAction(formData: FormData) {
       await db.insert(forecastDealbookLines).values(
         slice.map((r) => {
           const defaultMonth = deriveDefaultMonth(r, monthRaw);
+          const classification = classifyModel(r.model, vehicles);
+          if (classification.kind === "unknown") unknownCount++;
           return {
             id: randomUUID(),
             uploadId,
@@ -70,6 +81,8 @@ export async function uploadDealbookAction(formData: FormData) {
             defaultMonth,
             overrideMonth: null,
             effectiveMonth: defaultMonth,
+            vehicleId: classification.vehicleId,
+            kind: classification.kind,
             branch: r.branch,
             vehicleType: r.vehicleType,
             salesType: r.salesType,
@@ -111,7 +124,13 @@ export async function uploadDealbookAction(formData: FormData) {
     }
 
     revalidatePath("/forecast");
-    return { ok: true as const, uploadId, rowCount: parsed.rows.length, warnings: parsed.warnings };
+    return {
+      ok: true as const,
+      uploadId,
+      rowCount: parsed.rows.length,
+      unknownCount,
+      warnings: parsed.warnings,
+    };
   } catch (e) {
     logError("forecast/uploadDealbookAction", e);
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
@@ -355,6 +374,98 @@ export async function deleteConfigAction(key: string) {
     return { ok: true as const };
   } catch (e) {
     logError("forecast/deleteConfigAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+// ── Vehicle catalogue ─────────────────────────────────────────────────────
+export async function upsertVehicleAction(input: {
+  id?: string;          // optional — provided when editing existing
+  name: string;
+  kind: "car" | "van";
+  keywords: string[];
+  sortOrder?: number;
+}) {
+  try {
+    await requireAdmin();
+    const id = (input.id ?? input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")).trim();
+    if (!id) return { ok: false as const, error: "Need a name or id." };
+    if (input.kind !== "car" && input.kind !== "van") return { ok: false as const, error: "Kind must be car or van." };
+    const keywords = input.keywords.filter((k) => k.trim().length > 0);
+    const now = new Date();
+    const existing = await db.select().from(forecastVehicles).where(eq(forecastVehicles.id, id)).limit(1);
+    if (existing.length > 0) {
+      await db.update(forecastVehicles).set({
+        name: input.name.trim(),
+        kind: input.kind,
+        keywords: JSON.stringify(keywords),
+        sortOrder: input.sortOrder ?? existing[0].sortOrder,
+        updatedAt: now,
+      }).where(eq(forecastVehicles.id, id));
+    } else {
+      await db.insert(forecastVehicles).values({
+        id,
+        name: input.name.trim(),
+        kind: input.kind,
+        keywords: JSON.stringify(keywords),
+        sortOrder: input.sortOrder ?? 999,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    revalidatePath("/forecast");
+    return { ok: true as const, id };
+  } catch (e) {
+    logError("forecast/upsertVehicleAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+export async function deleteVehicleAction(id: string) {
+  try {
+    await requireAdmin();
+    await db.delete(forecastVehicleBonuses).where(eq(forecastVehicleBonuses.vehicleId, id));
+    await db.delete(forecastVehicles).where(eq(forecastVehicles.id, id));
+    revalidatePath("/forecast");
+    return { ok: true as const };
+  } catch (e) {
+    logError("forecast/deleteVehicleAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+// Set / clear a per-vehicle bonus value. value=null deletes the row.
+export async function setVehicleBonusAction(input: {
+  vehicleId: string;
+  bonusKey: string;
+  value: number | null;
+}) {
+  try {
+    await requireAdmin();
+    const now = new Date();
+    if (input.value === null || Number.isNaN(input.value)) {
+      await db.delete(forecastVehicleBonuses).where(and(
+        eq(forecastVehicleBonuses.vehicleId, input.vehicleId),
+        eq(forecastVehicleBonuses.bonusKey, input.bonusKey),
+      ));
+    } else {
+      // Upsert: delete + insert (libsql doesn't support ON CONFLICT
+      // cleanly with composite keys via Drizzle's API).
+      await db.delete(forecastVehicleBonuses).where(and(
+        eq(forecastVehicleBonuses.vehicleId, input.vehicleId),
+        eq(forecastVehicleBonuses.bonusKey, input.bonusKey),
+      ));
+      await db.insert(forecastVehicleBonuses).values({
+        vehicleId: input.vehicleId,
+        bonusKey: input.bonusKey,
+        value: input.value,
+        updatedAt: now,
+      });
+    }
+    revalidatePath("/forecast");
+    return { ok: true as const };
+  } catch (e) {
+    logError("forecast/setVehicleBonusAction", e);
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
   }
 }

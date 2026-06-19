@@ -7,7 +7,7 @@ import { rollupDealbookLines } from "../rollup";
 
 interface DealbookLine {
   source: string;
-  vehicleType: string | null;
+  kind: string;
   chassisProfit: number;
   addBonus: number;
   metalSubsidy: number;
@@ -57,12 +57,11 @@ function valuesForMonthSheet(sheet: SheetKey, data: MonthData): {
   net: number;        // Net profit
   units: number;      // Total units
 } {
-  const filtered = sheet === "car"
-    ? data.lines.filter((l) => l.source === "lease_new_cars" || l.source === "salary_sacrifice")
+  const rollup = sheet === "car"
+    ? rollupDealbookLines(data.lines, "car")
     : sheet === "cv"
-      ? data.lines.filter((l) => l.source === "lease_new_commercial")
-      : [];
-  const rollup = rollupDealbookLines(filtered, "all");
+      ? rollupDealbookLines(data.lines, "cv")
+      : rollupDealbookLines([], "all");
 
   const lines = getLinesForSheet(sheet);
   const actuals = new Map<string, number>();

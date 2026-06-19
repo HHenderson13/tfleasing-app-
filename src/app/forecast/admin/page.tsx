@@ -1,6 +1,11 @@
 import { TopNav } from "@/components/top-nav";
 import { requireAdmin } from "@/lib/auth-guard";
-import { loadForecastActuals, loadForecastConfig } from "@/lib/forecast";
+import {
+  loadForecastActuals,
+  loadForecastConfig,
+  loadForecastVehicles,
+  loadVehicleBonuses,
+} from "@/lib/forecast";
 import { AdminClient } from "./admin-client";
 import type { SheetKey } from "../line-definitions";
 
@@ -15,16 +20,24 @@ function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+const VALID_TABS = ["math", "baselines", "published", "vehicles"] as const;
+type Tab = (typeof VALID_TABS)[number];
+
 export default async function ForecastAdminPage({ searchParams }: PageProps) {
   await requireAdmin();
   const sp = await searchParams;
-  const tab = (sp.tab === "baselines" || sp.tab === "published") ? sp.tab : "math";
+  const tab: Tab = VALID_TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "math";
   const sheet: SheetKey = sp.sheet === "cv" ? "cv" : sp.sheet === "overheads" ? "overheads" : "car";
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : currentMonth();
 
-  const [config, actuals] = await Promise.all([
+  const needsActuals = tab === "baselines" || tab === "published";
+  const needsVehicles = tab === "vehicles";
+
+  const [config, actuals, vehicles, bonuses] = await Promise.all([
     loadForecastConfig(),
-    tab === "math" ? Promise.resolve([] as Awaited<ReturnType<typeof loadForecastActuals>>) : loadForecastActuals(month),
+    needsActuals ? loadForecastActuals(month) : Promise.resolve([] as Awaited<ReturnType<typeof loadForecastActuals>>),
+    needsVehicles ? loadForecastVehicles() : Promise.resolve([] as Awaited<ReturnType<typeof loadForecastVehicles>>),
+    needsVehicles ? loadVehicleBonuses() : Promise.resolve([] as Awaited<ReturnType<typeof loadVehicleBonuses>>),
   ]);
 
   return (
@@ -43,6 +56,18 @@ export default async function ForecastAdminPage({ searchParams }: PageProps) {
         actuals={actuals
           .filter((a) => a.sheet === sheet)
           .map((a) => ({ lineKey: a.lineKey, value: a.value }))}
+        vehicles={vehicles.map((v) => ({
+          id: v.id,
+          name: v.name,
+          kind: v.kind,
+          keywords: v.keywords,
+          sortOrder: v.sortOrder,
+        }))}
+        bonuses={bonuses.map((b) => ({
+          vehicleId: b.vehicleId,
+          bonusKey: b.bonusKey,
+          value: b.value,
+        }))}
       />
     </div>
   );

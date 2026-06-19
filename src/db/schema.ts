@@ -1135,11 +1135,20 @@ export const forecastDealbookLines = sqliteTable("forecast_dealbook_lines", {
   customerExternalId: text("customer_external_id"),          // Dealbook "Customer Id"
   financeCo: text("finance_co"),
 
+  // Vehicle classification — set at upload time by matching `model`
+  // against forecast_vehicles.keywords. `kind` drives the Car/CV sheet
+  // split; `vehicleId` lets per-vehicle bonus rates flow through.
+  // `kind = "unknown"` flags lines we couldn't match and prompts the
+  // admin to add the vehicle in Admin → Vehicles.
+  vehicleId: text("vehicle_id"),
+  kind: text("kind").notNull().default("unknown"),           // "car" | "van" | "unknown"
+
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 }, (t) => ({
   byUpload: index("idx_forecast_lines_upload").on(t.uploadId),
   byMonth: index("idx_forecast_lines_month").on(t.effectiveMonth),
   bySource: index("idx_forecast_lines_source").on(t.source),
+  byKind: index("idx_forecast_lines_kind").on(t.kind),
 }));
 
 // User-keyed final accounts. Once the official accounts publish, the user
@@ -1181,6 +1190,35 @@ export const forecastConfig = sqliteTable("forecast_config", {
   sortOrder: integer("sort_order").notNull().default(0),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
+
+// Vehicle catalogue used to split dealbook lines into Cars vs Commercials
+// and to drive per-vehicle bonus rates (Guarantee B %, DPA %, etc.).
+// `keywords` is a JSON array of substrings — when the classifier finds
+// any of them inside the dealbook "Model" column, the line is tagged
+// with this vehicle + kind. Longer keywords win to keep "Puma Gen-E"
+// from being misclassified as plain "Puma".
+export const forecastVehicles = sqliteTable("forecast_vehicles", {
+  id: text("id").primaryKey(),                                  // slug e.g. "puma-gen-e"
+  name: text("name").notNull(),                                  // display "Puma Gen-E"
+  kind: text("kind").notNull(),                                  // "car" | "van"
+  keywords: text("keywords").notNull().default("[]"),            // JSON array of strings
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Per-vehicle bonus values. Each row is one bonus slot for one vehicle.
+// Bonus keys differ for cars vs vans (see CAR_BONUS_KEYS / VAN_BONUS_KEYS
+// in src/app/forecast/vehicle-bonuses.ts) but the table is generic so
+// adding new bonus types is metadata-only.
+export const forecastVehicleBonuses = sqliteTable("forecast_vehicle_bonuses", {
+  vehicleId: text("vehicle_id").notNull(),
+  bonusKey: text("bonus_key").notNull(),
+  value: real("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.vehicleId, t.bonusKey] }),
+}));
 
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {

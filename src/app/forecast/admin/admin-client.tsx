@@ -3,8 +3,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ForecastPageHeader } from "../page-shell";
 import { MonthPicker } from "../pickers";
-import { setConfigAction, addConfigAction, deleteConfigAction, setActualAction } from "../actions";
+import {
+  setConfigAction, addConfigAction, deleteConfigAction, setActualAction,
+  upsertVehicleAction, deleteVehicleAction, setVehicleBonusAction,
+} from "../actions";
 import { getLinesForSheet, type ForecastLine, type SheetKey } from "../line-definitions";
+import { bonusesForKind, CAR_BONUSES, VAN_BONUSES, type BonusDef } from "../vehicle-bonuses";
+import { keywordsToText, keywordsFromText } from "@/lib/forecast-classify";
 
 export interface ConfigPayload {
   key: string;
@@ -13,12 +18,28 @@ export interface ConfigPayload {
   category: string;
 }
 
+export interface VehiclePayload {
+  id: string;
+  name: string;
+  kind: "car" | "van";
+  keywords: string[];
+  sortOrder: number;
+}
+
+export interface BonusPayload {
+  vehicleId: string;
+  bonusKey: string;
+  value: number;
+}
+
 interface Props {
-  tab: "math" | "baselines" | "published";
+  tab: "math" | "baselines" | "published" | "vehicles";
   sheet: SheetKey;
   month: string;
   config: ConfigPayload[];
   actuals: { lineKey: string; value: number }[];
+  vehicles: VehiclePayload[];
+  bonuses: BonusPayload[];
 }
 
 const SHEET_LABELS: Record<SheetKey, string> = {
@@ -29,11 +50,12 @@ const SHEET_LABELS: Record<SheetKey, string> = {
 
 const TABS: { key: Props["tab"]; label: string; description: string }[] = [
   { key: "math",       label: "Math",                description: "Percentages, multipliers and constants the forecast and quarterly views use." },
+  { key: "vehicles",   label: "Vehicles",            description: "The car / van catalogue. Keywords identify each vehicle in the dealbook CSV; bonuses set the per-vehicle rates." },
   { key: "baselines",  label: "Prior Year + Budget", description: "Per-sheet, per-month prior-year and budget values driving the monthly variances." },
   { key: "published",  label: "Published Accounts",  description: "Final published account numbers — once entered they overwrite that month's forecast." },
 ];
 
-export function AdminClient({ tab, sheet, month, config, actuals }: Props) {
+export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonuses }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -50,8 +72,8 @@ export function AdminClient({ tab, sheet, month, config, actuals }: Props) {
     <>
       <ForecastPageHeader
         title="Admin"
-        description="Math config, baseline numbers (prior year + budget) and final published accounts that drive the forecasts."
-        picker={tab !== "math" ? <MonthPicker value={month} /> : undefined}
+        description="Math config, vehicle catalogue, baseline numbers and final published accounts."
+        picker={tab === "baselines" || tab === "published" ? <MonthPicker value={month} /> : undefined}
       />
 
       <main className="mx-auto max-w-6xl px-6 py-8 space-y-6">
@@ -87,7 +109,17 @@ export function AdminClient({ tab, sheet, month, config, actuals }: Props) {
           />
         )}
 
-        {tab !== "math" && (
+        {tab === "vehicles" && (
+          <VehiclesTab
+            vehicles={vehicles}
+            bonuses={bonuses}
+            pending={pending}
+            onError={setErr}
+            onRefresh={() => router.refresh()}
+          />
+        )}
+
+        {(tab === "baselines" || tab === "published") && (
           <DataTab
             tab={tab}
             sheet={sheet}
@@ -427,3 +459,263 @@ function ValueCell({
     </td>
   );
 }
+
+// ────────────────────────── Vehicles tab ───────────────────────────
+
+function VehiclesTab({
+  vehicles, bonuses, pending, onError, onRefresh,
+}: {
+  vehicles: VehiclePayload[];
+  bonuses: BonusPayload[];
+  pending: boolean;
+  onError: (e: string | null) => void;
+  onRefresh: () => void;
+}) {
+  const cars = vehicles.filter((v) => v.kind === "car");
+  const vans = vehicles.filter((v) => v.kind === "van");
+
+  // Bonus index for O(1) lookup per (vehicleId, bonusKey).
+  const bonusByKey = new Map<string, number>();
+  for (const b of bonuses) bonusByKey.set(`${b.vehicleId}::${b.bonusKey}`, b.value);
+
+  return (
+    <div className="space-y-6">
+      <AddVehicleCard pending={pending} onError={onError} onAdded={onRefresh} />
+
+      <VehicleSection
+        title="Cars"
+        accent="from-sky-500 to-blue-700"
+        vehicles={cars}
+        bonuses={CAR_BONUSES}
+        bonusByKey={bonusByKey}
+        pending={pending}
+        onError={onError}
+        onRefresh={onRefresh}
+      />
+      <VehicleSection
+        title="Vans"
+        accent="from-emerald-500 to-teal-700"
+        vehicles={vans}
+        bonuses={VAN_BONUSES}
+        bonusByKey={bonusByKey}
+        pending={pending}
+        onError={onError}
+        onRefresh={onRefresh}
+      />
+    </div>
+  );
+}
+
+function VehicleSection({
+  title, accent, vehicles, bonuses, bonusByKey, pending, onError, onRefresh,
+}: {
+  title: string;
+  accent: string;
+  vehicles: VehiclePayload[];
+  bonuses: BonusDef[];
+  bonusByKey: Map<string, number>;
+  pending: boolean;
+  onError: (e: string | null) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="relative border-b border-slate-200">
+        <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`} />
+        <div className="px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Keywords match against the Dealbook "Model" column. Add the bonus rates so per-vehicle
+            money math can fold them in automatically.
+          </p>
+        </div>
+      </div>
+
+      {vehicles.length === 0 ? (
+        <div className="px-5 py-8 text-sm text-slate-400">No {title.toLowerCase()} yet — add one above.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              <tr>
+                <th className="px-5 py-3 text-left font-medium w-1/5">Vehicle</th>
+                <th className="px-3 py-3 text-left font-medium">Keywords</th>
+                {bonuses.map((b) => (
+                  <th key={b.key} className="px-2 py-3 text-right font-medium">{b.label}</th>
+                ))}
+                <th className="px-5 py-3 text-right font-medium w-16"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((v, idx) => (
+                <VehicleRow
+                  key={v.id}
+                  vehicle={v}
+                  bonuses={bonuses}
+                  bonusByKey={bonusByKey}
+                  pending={pending}
+                  stripe={idx % 2 === 0 ? "" : "bg-slate-50/40"}
+                  onError={onError}
+                  onRefresh={onRefresh}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function VehicleRow({
+  vehicle, bonuses, bonusByKey, pending, stripe, onError, onRefresh,
+}: {
+  vehicle: VehiclePayload;
+  bonuses: BonusDef[];
+  bonusByKey: Map<string, number>;
+  pending: boolean;
+  stripe: string;
+  onError: (e: string | null) => void;
+  onRefresh: () => void;
+}) {
+  const [, start] = useTransition();
+
+  function commitKeywords(text: string) {
+    const parsed = keywordsFromText(text);
+    if (parsed.join(",") === vehicle.keywords.join(",")) return;
+    start(async () => {
+      const res = await upsertVehicleAction({
+        id: vehicle.id,
+        name: vehicle.name,
+        kind: vehicle.kind,
+        keywords: parsed,
+        sortOrder: vehicle.sortOrder,
+      });
+      if (!res.ok) onError(res.error); else onRefresh();
+    });
+  }
+
+  function commitBonus(bonusKey: string, value: number | null) {
+    start(async () => {
+      const res = await setVehicleBonusAction({ vehicleId: vehicle.id, bonusKey, value });
+      if (!res.ok) onError(res.error); else onRefresh();
+    });
+  }
+
+  function remove() {
+    if (!confirm(`Delete vehicle "${vehicle.name}"? Existing dealbook lines tagged to this vehicle will stay but their kind will go back to "unknown".`)) return;
+    start(async () => {
+      const res = await deleteVehicleAction(vehicle.id);
+      if (!res.ok) onError(res.error); else onRefresh();
+    });
+  }
+
+  return (
+    <tr className={`border-t border-slate-100 ${stripe}`}>
+      <td className="px-5 py-2 align-top">
+        <div className="font-semibold text-slate-900">{vehicle.name}</div>
+        <div className="text-[10px] font-mono text-slate-400">{vehicle.id}</div>
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="text"
+          defaultValue={keywordsToText(vehicle.keywords)}
+          disabled={pending}
+          onBlur={(e) => commitKeywords(e.target.value)}
+          placeholder="comma, separated, model phrases"
+          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+        />
+      </td>
+      {bonuses.map((b) => {
+        const value = bonusByKey.get(`${vehicle.id}::${b.key}`);
+        return (
+          <td key={b.key} className="px-2 py-2 text-right">
+            <input
+              type="number"
+              step="0.01"
+              defaultValue={value ?? ""}
+              disabled={pending}
+              onBlur={(e) => {
+                if (e.target.value === "") {
+                  if (value !== undefined) commitBonus(b.key, null);
+                } else {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v) && v !== value) commitBonus(b.key, v);
+                }
+              }}
+              className="w-20 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-right text-xs tabular-nums hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+            />
+          </td>
+        );
+      })}
+      <td className="px-5 py-2 text-right">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={remove}
+          className="text-[11px] text-rose-600 hover:text-rose-800 disabled:opacity-50"
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function AddVehicleCard({
+  pending, onError, onAdded,
+}: {
+  pending: boolean;
+  onError: (e: string | null) => void;
+  onAdded: () => void;
+}) {
+  const [, start] = useTransition();
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"car" | "van">("car");
+  const [keywords, setKeywords] = useState("");
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50 to-transparent px-6 py-3">
+        <h3 className="text-sm font-semibold text-slate-900">Add a new vehicle</h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Keywords are substrings the classifier looks for in the Dealbook "Model" column —
+          more specific phrases like <code className="rounded bg-slate-100 px-1">Puma Gen-E</code>
+          take priority over plain <code className="rounded bg-slate-100 px-1">Puma</code>.
+        </p>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onError(null);
+          if (!name.trim()) { onError("Need a vehicle name."); return; }
+          start(async () => {
+            const res = await upsertVehicleAction({
+              name: name.trim(),
+              kind,
+              keywords: keywordsFromText(keywords || name),
+            });
+            if (!res.ok) { onError(res.error); return; }
+            setName(""); setKeywords(""); setKind("car");
+            onAdded();
+          });
+        }}
+        className="grid gap-3 p-6 sm:grid-cols-[1fr_120px_2fr_auto]"
+      >
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Vehicle name"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+        <select value={kind} onChange={(e) => setKind(e.target.value as "car" | "van")}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <option value="car">Car</option>
+          <option value="van">Van</option>
+        </select>
+        <input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Keywords (defaults to name if empty)"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+        <button type="submit" disabled={pending}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add</button>
+      </form>
+    </section>
+  );
+}
+
+void bonusesForKind; // re-exported for typing convenience
