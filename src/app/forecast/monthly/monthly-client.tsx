@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { ForecastPageHeader, monthLabel } from "../page-shell";
+import { MonthPicker } from "../pickers";
 import { SheetView } from "./sheet-view";
 import { getLinesForSheet, type SheetKey } from "../line-definitions";
 import { rollupDealbookLines } from "../rollup";
@@ -38,7 +39,6 @@ interface Props {
   lines: DealbookLine[];
   actuals: { sheet: string; lineKey: string; value: number }[];
   inputs: { sheet: string; scenarioKey: string; value: number }[];
-  config: { key: string; value: number }[];
 }
 
 const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
@@ -47,9 +47,6 @@ const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
   { key: "overheads", label: "General Overheads",    sub: "Department-wide costs" },
 ];
 
-// Map each department upload to the sheet it contributes to. We can wire
-// SalSac elsewhere once we know where it lands; for now it joins Lease
-// New Cars since most SalSac orders are passenger cars.
 function rollupFor(sheet: SheetKey, lines: DealbookLine[]): DealbookRollup {
   if (sheet === "car") {
     const filtered = lines.filter((l) => l.source === "lease_new_cars" || l.source === "salary_sacrifice");
@@ -63,17 +60,22 @@ function rollupFor(sheet: SheetKey, lines: DealbookLine[]): DealbookRollup {
 }
 
 export function MonthlyClient({
-  month, defaultSheet, uploadCount, lineCount, lines, actuals, inputs, config,
+  month, defaultSheet, uploadCount, lineCount, lines, actuals, inputs,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKey>(defaultSheet);
 
-  const actualsBySheet = useMemo(() => {
-    const m = new Map<string, Map<string, number>>();
+  // Split admin-keyed actuals into baselines (prior year + budget) and
+  // published actuals so the sheet view can prefer published over forecast
+  // and show the right column header.
+  const splitBySheet = useMemo(() => {
+    const baselines = new Map<string, Map<string, number>>();
+    const published = new Map<string, Map<string, number>>();
     for (const a of actuals) {
-      if (!m.has(a.sheet)) m.set(a.sheet, new Map());
-      m.get(a.sheet)!.set(a.lineKey, a.value);
+      const target = a.lineKey.startsWith("published_") ? published : baselines;
+      if (!target.has(a.sheet)) target.set(a.sheet, new Map());
+      target.get(a.sheet)!.set(a.lineKey, a.value);
     }
-    return m;
+    return { baselines, published };
   }, [actuals]);
 
   const inputsBySheet = useMemo(() => {
@@ -85,12 +87,6 @@ export function MonthlyClient({
     return m;
   }, [inputs]);
 
-  const configByKey = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const c of config) m.set(c.key, c.value);
-    return m;
-  }, [config]);
-
   const rollup = useMemo(() => rollupFor(sheet, lines), [sheet, lines]);
 
   return (
@@ -98,7 +94,7 @@ export function MonthlyClient({
       <ForecastPageHeader
         title="Monthly Forecast"
         description={`Lease New Cars, Lease New Commercial and General Overheads for ${monthLabel(month)}.`}
-        month={month}
+        picker={<MonthPicker value={month} />}
       />
 
       <main className="mx-auto max-w-7xl px-6 py-8">
@@ -132,9 +128,9 @@ export function MonthlyClient({
             month={month}
             lines={getLinesForSheet(sheet)}
             rollup={rollup}
-            actuals={actualsBySheet.get(sheet) ?? new Map()}
+            baselines={splitBySheet.baselines.get(sheet) ?? new Map()}
+            published={splitBySheet.published.get(sheet) ?? new Map()}
             inputs={inputsBySheet.get(sheet) ?? new Map()}
-            config={configByKey}
           />
         </div>
       </main>

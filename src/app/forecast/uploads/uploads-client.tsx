@@ -1,12 +1,13 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ForecastPageHeader, monthLabel } from "../page-shell";
+import { ForecastPageHeader } from "../page-shell";
+import { monthLabel, currentMonth } from "../pickers";
 import { DEPARTMENTS, DEPARTMENT_LABELS, type Department } from "../sources";
 import {
   uploadDealbookAction,
   deleteUploadAction,
-  bulkOverrideMonthAction,
+  setLineOverrideMonthAction,
 } from "../actions";
 
 interface UploadPayload {
@@ -22,6 +23,7 @@ interface FocusLine {
   id: string;
   customerName: string | null;
   model: string | null;
+  regNo: string | null;
   vehicleType: string | null;
   defaultMonth: string;
   overrideMonth: string | null;
@@ -30,129 +32,244 @@ interface FocusLine {
 }
 
 interface Props {
-  month: string;
   uploads: UploadPayload[];
-  focusUpload: { id: string; monthYyyymm: string; source: string; filename: string } | null;
+  focusUpload: { id: string; monthYyyymm: string; source: string; filename: string; rowCount: number } | null;
   focusLines: FocusLine[];
 }
 
-export function UploadsClient({ month, uploads, focusUpload, focusLines }: Props) {
+export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [openUploadFor, setOpenUploadFor] = useState<Department | null>(null);
 
   function refresh() { router.refresh(); }
 
   async function onUpload(formData: FormData) {
-    setErr(null); setSuccess(null);
+    setErr(null);
     start(async () => {
       const res = await uploadDealbookAction(formData);
       if (!res.ok) { setErr(res.error); return; }
-      setSuccess(`Uploaded ${res.rowCount} rows.${res.warnings.length ? " Warnings: " + res.warnings.join("; ") : ""}`);
-      // Jump straight into the allocation prompt for this upload.
+      setOpenUploadFor(null);
+      // Drop into the review window for this upload — every line gets
+      // a month dropdown defaulting to the upload's month.
       const url = new URL(window.location.href);
       url.searchParams.set("upload", res.uploadId);
       router.push(url.pathname + "?" + url.searchParams.toString());
     });
   }
 
+  function closeReview() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("upload");
+    router.push(url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
+  }
+
+  // Review window takes the whole page so the user is focused on
+  // confirming/adjusting per-line months.
+  if (focusUpload) {
+    return (
+      <>
+        <ForecastPageHeader
+          title="Allocate units"
+          description={`Confirm which month each unit lands in. Default is the upload's target month — change the dropdown per row to move a unit into a different month.`}
+        />
+        <main className="mx-auto max-w-7xl px-6 py-8">
+          <ReviewWindow
+            upload={focusUpload}
+            lines={focusLines}
+            pending={pending}
+            err={err}
+            onError={setErr}
+            onRefresh={refresh}
+            onComplete={closeReview}
+          />
+        </main>
+      </>
+    );
+  }
+
+  // Group recent uploads per department.
+  const grouped = new Map<Department, UploadPayload[]>();
+  for (const d of DEPARTMENTS) grouped.set(d, []);
+  for (const u of uploads) {
+    if (DEPARTMENTS.includes(u.source as Department)) {
+      grouped.get(u.source as Department)!.push(u);
+    }
+  }
+
   return (
     <>
       <ForecastPageHeader
         title="Uploads"
-        description="Drop a dealbook CSV per department per month. We'll spot anything registered in a previous month so you can keep them where they belong."
-        month={month}
-        showMonthPicker={false}
+        description="Three departments, one upload per month. We'll show a per-vehicle review after upload so you can move any rows that registered in a different month."
       />
-
-      <main className="mx-auto max-w-5xl px-6 py-8 space-y-8">
-        <UploadCard
-          month={month}
-          pending={pending}
-          err={err}
-          success={success}
-          onSubmit={onUpload}
-        />
-
-        {focusUpload && focusLines.length > 0 && (
-          <AllocatePanel
-            upload={focusUpload}
-            lines={focusLines}
-            pending={pending}
-            onDismiss={() => {
-              const url = new URL(window.location.href);
-              url.searchParams.delete("upload");
-              router.push(url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
-            }}
-            onError={(e) => setErr(e)}
-            onRefresh={refresh}
-          />
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        {err && !openUploadFor && (
+          <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</p>
         )}
 
-        <RecentUploads
-          uploads={uploads}
-          pending={pending}
-          onDelete={(id, filename, rowCount) => {
-            if (!confirm(`Delete "${filename}" and all ${rowCount} lines?`)) return;
-            start(async () => {
-              const res = await deleteUploadAction(id);
-              if (!res.ok) setErr(res.error); else refresh();
-            });
-          }}
-          onFocus={(id) => {
-            const url = new URL(window.location.href);
-            url.searchParams.set("upload", id);
-            router.push(url.pathname + "?" + url.searchParams.toString());
-          }}
-        />
+        <div className="grid gap-5 lg:grid-cols-3">
+          {DEPARTMENTS.map((d) => (
+            <DepartmentCard
+              key={d}
+              department={d}
+              uploads={grouped.get(d) ?? []}
+              isOpen={openUploadFor === d}
+              pending={pending}
+              onOpen={() => setOpenUploadFor(d)}
+              onClose={() => setOpenUploadFor(null)}
+              onSubmit={onUpload}
+              onDelete={(id, filename, rowCount) => {
+                if (!confirm(`Delete "${filename}" and all ${rowCount} lines?`)) return;
+                start(async () => {
+                  const res = await deleteUploadAction(id);
+                  if (!res.ok) setErr(res.error); else refresh();
+                });
+              }}
+              onReview={(id) => {
+                const url = new URL(window.location.href);
+                url.searchParams.set("upload", id);
+                router.push(url.pathname + "?" + url.searchParams.toString());
+              }}
+            />
+          ))}
+        </div>
       </main>
     </>
   );
 }
 
-function UploadCard({
-  month, pending, err, success, onSubmit,
+function DepartmentCard({
+  department, uploads, isOpen, pending, onOpen, onClose, onSubmit, onDelete, onReview,
 }: {
-  month: string;
+  department: Department;
+  uploads: UploadPayload[];
+  isOpen: boolean;
   pending: boolean;
-  err: string | null;
-  success: string | null;
+  onOpen: () => void;
+  onClose: () => void;
   onSubmit: (fd: FormData) => void;
+  onDelete: (id: string, filename: string, rowCount: number) => void;
+  onReview: (id: string) => void;
 }) {
+  const tone =
+    department === "lease_new_cars" ? "from-sky-500 to-blue-700"
+    : department === "lease_new_commercial" ? "from-emerald-500 to-teal-700"
+    : "from-violet-500 to-indigo-700";
+
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-transparent px-6 py-4">
-        <h2 className="text-base font-semibold text-slate-900">Upload dealbook CSV</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Pick the department, target month and CSV. Each line falls into its registered month by
-          default — we'll let you reassign anything that landed in the wrong bucket straight after upload.
-        </p>
+      <div className="relative">
+        <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${tone}`} />
+        <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">{DEPARTMENT_LABELS[department]}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {uploads.length === 0
+                ? "No uploads yet"
+                : `${uploads.length} upload${uploads.length === 1 ? "" : "s"} on file`}
+            </p>
+          </div>
+          {!isOpen && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+            >
+              + Upload
+            </button>
+          )}
+        </div>
       </div>
-      <form action={onSubmit} className="grid gap-5 p-6 sm:grid-cols-[1fr_1fr_2fr_auto] sm:items-end">
+
+      {isOpen && (
+        <UploadForm
+          department={department}
+          pending={pending}
+          onClose={onClose}
+          onSubmit={onSubmit}
+        />
+      )}
+
+      {uploads.length === 0 ? (
+        <div className="px-5 pb-5 text-xs text-slate-400">Click + Upload to add a dealbook CSV.</div>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {uploads.slice(0, 30).map((u) => (
+            <li key={u.id} className="px-5 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-900">{monthLabel(u.monthYyyymm)}</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    {u.rowCount} line{u.rowCount === 1 ? "" : "s"}
+                    {" · "}{new Date(u.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    {" · "}<span className="text-slate-400">{u.filename}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onReview(u.id)}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Review
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(u.id, u.filename, u.rowCount)}
+                    className="rounded-md border border-rose-200 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function UploadForm({
+  department, pending, onClose, onSubmit,
+}: {
+  department: Department;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (fd: FormData) => void;
+}) {
+  // Pick a sensible month list to choose from (current + 11 prior months).
+  const months = useMemo(() => {
+    const out: string[] = [];
+    const d = new Date();
+    for (let offset = 0; offset < 12; offset++) {
+      const m = new Date(d.getFullYear(), d.getMonth() - offset, 1);
+      out.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return out;
+  }, []);
+
+  return (
+    <form
+      action={(fd) => {
+        fd.set("source", department);
+        onSubmit(fd);
+      }}
+      className="border-y border-slate-200 bg-slate-50 p-5 space-y-3"
+    >
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <label className="flex flex-col">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Department</span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Month</span>
           <select
-            name="source"
-            required
-            defaultValue=""
-            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium focus:border-slate-500 focus:outline-none"
-          >
-            <option value="" disabled>Choose…</option>
-            {DEPARTMENTS.map((d) => (
-              <option key={d} value={d}>{DEPARTMENT_LABELS[d]}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Target month</span>
-          <input
-            type="month"
             name="month"
-            defaultValue={month}
+            defaultValue={currentMonth()}
             required
-            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium tabular-nums focus:border-slate-500 focus:outline-none"
-          />
+            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold focus:border-slate-500 focus:outline-none"
+          >
+            {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+          </select>
         </label>
         <label className="flex flex-col">
           <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">CSV file</span>
@@ -164,206 +281,181 @@ function UploadCard({
             className="mt-1 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm"
           />
         </label>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-        >
-          {pending ? "Uploading…" : "Upload"}
-        </button>
-      </form>
-      {err && <p className="border-t border-rose-100 bg-rose-50 px-6 py-2.5 text-xs text-rose-700">{err}</p>}
-      {success && <p className="border-t border-emerald-100 bg-emerald-50 px-6 py-2.5 text-xs text-emerald-700">{success}</p>}
-    </section>
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {pending ? "Uploading…" : "Upload"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }
 
-function AllocatePanel({
-  upload, lines, pending, onDismiss, onError, onRefresh,
+function ReviewWindow({
+  upload, lines, pending, err, onError, onRefresh, onComplete,
 }: {
-  upload: { id: string; monthYyyymm: string; source: string; filename: string };
+  upload: { id: string; monthYyyymm: string; source: string; filename: string; rowCount: number };
   lines: FocusLine[];
   pending: boolean;
-  onDismiss: () => void;
-  onError: (e: string) => void;
+  err: string | null;
+  onError: (e: string | null) => void;
   onRefresh: () => void;
+  onComplete: () => void;
 }) {
-  const [, start] = useTransition();
-  // Mismatched lines = those whose effective month doesn't match the
-  // upload's target month. Group them by detected (effective) month so the
-  // admin can decide per-bucket.
-  const mismatched = useMemo(() => lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm), [lines, upload.monthYyyymm]);
-  const groups = useMemo(() => {
-    const m = new Map<string, FocusLine[]>();
-    for (const l of mismatched) {
-      if (!m.has(l.effectiveMonth)) m.set(l.effectiveMonth, []);
-      m.get(l.effectiveMonth)!.push(l);
-    }
-    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [mismatched]);
+  const router = useRouter();
+  const [, startSave] = useTransition();
+  const [filter, setFilter] = useState<"all" | "changed">("all");
 
-  // Default: each bucket has an in-line action ("keep in detected month"
-  // already happens by default; the admin can choose to bring everything
-  // back to the upload month with one click).
-  function bulkMove(groupLineIds: string[], targetMonth: string | null) {
-    start(async () => {
-      const res = await bulkOverrideMonthAction(groupLineIds, targetMonth);
-      if (!res.ok) { onError(res.error); return; }
-      onRefresh();
+  const monthOptions = useMemo(() => {
+    const out: string[] = [];
+    const [y, m] = upload.monthYyyymm.split("-").map((s) => parseInt(s, 10));
+    for (let offset = -12; offset <= 6; offset++) {
+      const d = new Date(y, m - 1 + offset, 1);
+      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return Array.from(new Set(out)).sort();
+  }, [upload.monthYyyymm]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return lines;
+    return lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm);
+  }, [lines, filter, upload.monthYyyymm]);
+
+  const changedCount = lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm).length;
+
+  function setMonth(lineId: string, month: string) {
+    onError(null);
+    const override = month === upload.monthYyyymm ? null : month;
+    startSave(async () => {
+      const res = await setLineOverrideMonthAction(lineId, override);
+      if (!res.ok) onError(res.error);
+      else onRefresh();
     });
   }
 
-  if (mismatched.length === 0) {
-    return (
-      <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 shadow-sm">
-        <div className="flex items-start justify-between px-6 py-4">
+  const departmentLabel = DEPARTMENT_LABELS[upload.source as Department] ?? upload.source;
+
+  return (
+    <div className="space-y-5">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
-            <div className="text-sm font-semibold text-emerald-900">Everything lined up.</div>
-            <p className="mt-1 text-xs text-emerald-800">
-              All {lines.length} line{lines.length === 1 ? "" : "s"} in <strong>{upload.filename}</strong>
-              {" "}were registered in {monthLabel(upload.monthYyyymm)} — nothing to allocate.
+            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+              {departmentLabel} · {upload.filename}
+            </div>
+            <h3 className="mt-1 text-base font-semibold text-slate-900">
+              {upload.rowCount} unit{upload.rowCount === 1 ? "" : "s"} for {monthLabel(upload.monthYyyymm)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              {changedCount === 0
+                ? "Everything's currently going into this month — change a row's dropdown to allocate it elsewhere."
+                : `${changedCount} row${changedCount === 1 ? "" : "s"} are pointing at a different month already.`}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
-          >
-            Done
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={`px-2.5 py-1 ${filter === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                All ({lines.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter("changed")}
+                className={`px-2.5 py-1 ${filter === "changed" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                Reallocated ({changedCount})
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onComplete}
+              className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Complete
+            </button>
+          </div>
+        </div>
+
+        {err && (
+          <p className="border-b border-rose-100 bg-rose-50 px-5 py-2 text-xs text-rose-700">{err}</p>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              <tr>
+                <th className="px-5 py-3 text-left font-medium">Reg No</th>
+                <th className="px-3 py-3 text-left font-medium">Customer</th>
+                <th className="px-3 py-3 text-left font-medium">Vehicle</th>
+                <th className="px-3 py-3 text-left font-medium">Reg date</th>
+                <th className="px-5 py-3 text-left font-medium">Goes to</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-400">No rows.</td></tr>
+              ) : (
+                filtered.map((l, idx) => {
+                  const moved = l.effectiveMonth !== upload.monthYyyymm;
+                  return (
+                    <tr key={l.id} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"} ${moved ? "bg-amber-50/50" : ""}`}>
+                      <td className="px-5 py-2 font-mono text-xs text-slate-700">{l.regNo ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{l.customerName ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-700">{l.model ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-500">{l.regDate ?? "—"}</td>
+                      <td className="px-5 py-2">
+                        <select
+                          value={l.effectiveMonth}
+                          disabled={pending}
+                          onChange={(e) => setMonth(l.id, e.target.value)}
+                          className={`rounded-lg border bg-white px-2 py-1 text-xs font-medium ${
+                            moved ? "border-amber-300 text-amber-900" : "border-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {monthOptions.map((m) => (
+                            <option key={m} value={m}>{monthLabel(m)}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
-    );
-  }
 
-  return (
-    <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-      <div className="border-b border-amber-200 bg-amber-50 px-6 py-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-amber-900">Allocate previous-month units</h2>
-          <p className="mt-1 text-sm text-amber-800">
-            {mismatched.length} of {lines.length} line{lines.length === 1 ? "" : "s"} in{" "}
-            <strong>{upload.filename}</strong> were registered before {monthLabel(upload.monthYyyymm)}.
-            Decide where each group should land — keep them in their registered month, or pull them
-            forward into this upload's month.
-          </p>
-        </div>
+      <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={onDismiss}
-          className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+          onClick={() => router.push("/forecast/uploads")}
+          className="text-xs text-slate-500 hover:text-slate-700"
         >
-          I'm done
+          ← Back to uploads
+        </button>
+        <button
+          type="button"
+          onClick={onComplete}
+          className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+        >
+          Complete &amp; return
         </button>
       </div>
-      <div className="divide-y divide-amber-100">
-        {groups.map(([detectedMonth, groupLines]) => (
-          <div key={detectedMonth} className="px-6 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {groupLines.length} line{groupLines.length === 1 ? "" : "s"} registered in {monthLabel(detectedMonth)}
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Default keeps them in {monthLabel(detectedMonth)} — that's typically right.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => bulkMove(groupLines.map((l) => l.id), null)}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Keep in {monthLabel(detectedMonth)}
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => bulkMove(groupLines.map((l) => l.id), upload.monthYyyymm)}
-                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                >
-                  Move to {monthLabel(upload.monthYyyymm)}
-                </button>
-              </div>
-            </div>
-            <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
-              {groupLines.slice(0, 12).map((l) => (
-                <li key={l.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-xs">
-                  <div className="font-medium text-slate-800">{l.customerName ?? "—"}</div>
-                  <div className="text-slate-500">{l.model ?? "—"}{l.regDate ? ` · reg ${l.regDate}` : ""}</div>
-                </li>
-              ))}
-              {groupLines.length > 12 && (
-                <li className="rounded-lg border border-dashed border-slate-200 px-3 py-1.5 text-xs text-slate-500">
-                  + {groupLines.length - 12} more
-                </li>
-              )}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RecentUploads({
-  uploads, pending, onDelete, onFocus,
-}: {
-  uploads: UploadPayload[];
-  pending: boolean;
-  onDelete: (id: string, filename: string, rowCount: number) => void;
-  onFocus: (id: string) => void;
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">Recent uploads</h2>
-        <span className="text-[11px] text-slate-500">{uploads.length} total</span>
-      </div>
-      {uploads.length === 0 ? (
-        <div className="px-6 py-10 text-center text-sm text-slate-500">
-          No uploads yet — drop a CSV above to get started.
-        </div>
-      ) : (
-        <ul className="divide-y divide-slate-100">
-          {uploads.slice(0, 25).map((u) => (
-            <li key={u.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-sm">
-              <div className="min-w-0">
-                <div className="font-medium text-slate-900">{u.filename}</div>
-                <div className="mt-0.5 text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">
-                    {DEPARTMENT_LABELS[u.source as Department] ?? u.source}
-                  </span>
-                  {" · "}target {monthLabel(u.monthYyyymm)}
-                  {" · "}{u.rowCount} line{u.rowCount === 1 ? "" : "s"}
-                  {" · "}{new Date(u.uploadedAt).toLocaleString("en-GB", {
-                    day: "numeric", month: "short", year: "numeric",
-                    hour: "2-digit", minute: "2-digit",
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onFocus(u.id)}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Allocate
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => onDelete(u.id, u.filename, u.rowCount)}
-                  className="rounded-lg border border-rose-200 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    </div>
   );
 }

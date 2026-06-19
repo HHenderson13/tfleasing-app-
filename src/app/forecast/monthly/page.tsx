@@ -5,7 +5,6 @@ import {
   listForecastLinesForMonth,
   loadForecastActuals,
   loadForecastInputs,
-  loadForecastConfig,
 } from "@/lib/forecast";
 import { MonthlyClient } from "./monthly-client";
 
@@ -25,12 +24,11 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : currentMonth();
 
-  const [uploads, lines, actuals, inputs, config] = await Promise.all([
+  const [uploads, lines, actuals, inputs] = await Promise.all([
     listForecastUploads(),
     listForecastLinesForMonth(month),
     loadForecastActuals(month),
     loadForecastInputs(month),
-    loadForecastConfig(),
   ]);
 
   return (
@@ -66,7 +64,6 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
         }))}
         actuals={actuals.map((a) => ({ sheet: a.sheet, lineKey: a.lineKey, value: a.value }))}
         inputs={inputs.map((i) => ({ sheet: i.sheet, scenarioKey: i.scenarioKey, value: i.value }))}
-        config={config.map((c) => ({ key: c.key, value: c.value }))}
       />
     </div>
   );

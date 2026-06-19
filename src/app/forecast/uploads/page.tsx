@@ -29,11 +29,12 @@ export default async function ForecastUploadsPage({ searchParams }: PageProps) {
   const focusUpload = focusUploadId ? uploads.find((u) => u.id === focusUploadId) ?? null : null;
   const focusLines = focusUpload ? await listForecastLinesForUpload(focusUpload.id) : [];
 
+  void month; // current month no longer needed on this page
+
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="forecast" />
       <UploadsClient
-        month={month}
         uploads={uploads.map((u) => ({
           id: u.id,
           source: u.source,
@@ -47,11 +48,13 @@ export default async function ForecastUploadsPage({ searchParams }: PageProps) {
           monthYyyymm: focusUpload.monthYyyymm,
           source: focusUpload.source,
           filename: focusUpload.filename,
+          rowCount: focusUpload.rowCount,
         } : null}
         focusLines={focusLines.map((l) => ({
           id: l.id,
           customerName: l.customerName,
           model: l.model,
+          regNo: l.regNo,
           vehicleType: l.vehicleType,
           defaultMonth: l.defaultMonth,
           overrideMonth: l.overrideMonth,
