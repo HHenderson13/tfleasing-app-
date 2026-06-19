@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ForecastPageHeader } from "../page-shell";
 import { MonthPicker } from "../pickers";
@@ -9,7 +9,7 @@ import {
 } from "../actions";
 import { getLinesForSheet, type ForecastLine, type SheetKey } from "../line-definitions";
 import { bonusesForKind, CAR_BONUSES, VAN_BONUSES, type BonusDef } from "../vehicle-bonuses";
-import { keywordsToText, keywordsFromText } from "@/lib/forecast-classify";
+import { classifyModel, keywordsToText, keywordsFromText, type ParsedVehicle } from "@/lib/forecast-classify";
 
 export interface ConfigPayload {
   key: string;
@@ -49,10 +49,10 @@ const SHEET_LABELS: Record<SheetKey, string> = {
 };
 
 const TABS: { key: Props["tab"]; label: string; description: string }[] = [
-  { key: "math",       label: "Math",                description: "Percentages, multipliers and constants the forecast and quarterly views use." },
-  { key: "vehicles",   label: "Vehicles",            description: "The car / van catalogue. Keywords identify each vehicle in the dealbook CSV; bonuses set the per-vehicle rates." },
-  { key: "baselines",  label: "Prior Year + Budget", description: "Per-sheet, per-month prior-year and budget values driving the monthly variances." },
-  { key: "published",  label: "Published Accounts",  description: "Final published account numbers — once entered they overwrite that month's forecast." },
+  { key: "math",       label: "Math",               description: "Percentages, multipliers and constants the forecast and quarterly views use." },
+  { key: "vehicles",   label: "Vehicles",           description: "The car / van catalogue. Keywords identify each vehicle in the dealbook CSV; bonuses set the per-vehicle rates." },
+  { key: "baselines",  label: "Budget",             description: "Per-sheet, per-month budget values driving the variance column on the monthly view." },
+  { key: "published",  label: "Published Accounts", description: "Final published account numbers — once entered they overwrite that month's forecast." },
 ];
 
 export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonuses }: Props) {
@@ -353,7 +353,7 @@ function DataTab({
 
         <div className="border-b border-slate-200 px-5 py-2.5 text-[11px] text-slate-500">
           {tab === "baselines"
-            ? "Key prior-year and budget figures for each line — these drive the variance columns on the monthly view."
+            ? "Key budget figures for each line — these drive the variance column on the monthly view."
             : "Once the official accounts publish, key the final figures here. They'll overwrite that month's forecast on the monthly + quarterly views."}
         </div>
 
@@ -362,14 +362,9 @@ function DataTab({
             <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Line</th>
-                {tab === "baselines" ? (
-                  <>
-                    <th className="px-3 py-3 text-right font-medium">Prior year</th>
-                    <th className="px-5 py-3 text-right font-medium">Budget</th>
-                  </>
-                ) : (
-                  <th className="px-5 py-3 text-right font-medium">Published actual</th>
-                )}
+                <th className="px-5 py-3 text-right font-medium">
+                  {tab === "baselines" ? "Budget" : "Published actual"}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -377,7 +372,7 @@ function DataTab({
                 if (l.kind === "header") {
                   return (
                     <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                      <td colSpan={tab === "baselines" ? 3 : 2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
                         {l.label}
                       </td>
                     </tr>
@@ -387,32 +382,17 @@ function DataTab({
                   return (
                     <tr key={l.key} className="border-t border-slate-100 bg-slate-50/60">
                       <td className="px-5 py-2 text-slate-500 font-semibold">{l.label}</td>
-                      {tab === "baselines" ? (
-                        <>
-                          <td className="px-3 py-2 text-right text-slate-300">auto</td>
-                          <td className="px-5 py-2 text-right text-slate-300">auto</td>
-                        </>
-                      ) : (
-                        <td className="px-5 py-2 text-right text-slate-300">auto</td>
-                      )}
+                      <td className="px-5 py-2 text-right text-slate-300">auto</td>
                     </tr>
                   );
                 }
                 const stripe = idx % 2 === 0 ? "" : "bg-slate-50/40";
+                const prefix = tab === "baselines" ? "budget" : "published";
                 return (
                   <tr key={l.key} className={`border-t border-slate-100 ${stripe}`}>
                     <td className="px-5 py-2 text-slate-800">{l.label}</td>
-                    {tab === "baselines" ? (
-                      <>
-                        <ValueCell value={byKey.get(`prior_year_${l.key}`)} kind={l.kind} pending={pending}
-                          onCommit={(v) => commit("prior_year", l.key, v)} />
-                        <ValueCell value={byKey.get(`budget_${l.key}`)} kind={l.kind} pending={pending}
-                          onCommit={(v) => commit("budget", l.key, v)} padding="px-5" />
-                      </>
-                    ) : (
-                      <ValueCell value={byKey.get(`published_${l.key}`)} kind={l.kind} pending={pending}
-                        onCommit={(v) => commit("published", l.key, v)} padding="px-5" />
-                    )}
+                    <ValueCell value={byKey.get(`${prefix}_${l.key}`)} kind={l.kind} pending={pending}
+                      onCommit={(v) => commit(prefix, l.key, v)} padding="px-5" />
                   </tr>
                 );
               })}
@@ -474,12 +454,20 @@ function VehiclesTab({
   const cars = vehicles.filter((v) => v.kind === "car");
   const vans = vehicles.filter((v) => v.kind === "van");
 
-  // Bonus index for O(1) lookup per (vehicleId, bonusKey).
   const bonusByKey = new Map<string, number>();
   for (const b of bonuses) bonusByKey.set(`${b.vehicleId}::${b.bonusKey}`, b.value);
 
+  // Keyword overlap detection. For each vehicle's keywords, flag any
+  // OTHER vehicle whose keyword is contained inside this one (or vice
+  // versa). The classifier picks the longest match so this isn't a bug,
+  // but it tells the admin which pairs the algorithm is relying on — so
+  // they can spot a missing "PHEV" on a base "Kuga" before it bites.
+  const overlaps = computeKeywordOverlaps(vehicles);
+
   return (
     <div className="space-y-6">
+      <ClassifierTester vehicles={vehicles} />
+
       <AddVehicleCard pending={pending} onError={onError} onAdded={onRefresh} />
 
       <VehicleSection
@@ -488,6 +476,7 @@ function VehiclesTab({
         vehicles={cars}
         bonuses={CAR_BONUSES}
         bonusByKey={bonusByKey}
+        overlaps={overlaps}
         pending={pending}
         onError={onError}
         onRefresh={onRefresh}
@@ -498,6 +487,7 @@ function VehiclesTab({
         vehicles={vans}
         bonuses={VAN_BONUSES}
         bonusByKey={bonusByKey}
+        overlaps={overlaps}
         pending={pending}
         onError={onError}
         onRefresh={onRefresh}
@@ -506,14 +496,136 @@ function VehiclesTab({
   );
 }
 
+// Test panel — admin pastes a Model string, sees which vehicle the
+// classifier picks and which keyword scored the win. Defends against the
+// "Kuga vs Kuga PHEV" double-count/no-count risk by letting the admin
+// verify before uploading.
+function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
+  const [text, setText] = useState("");
+  const parsed = useMemo<ParsedVehicle[]>(
+    () => vehicles.map((v) => ({ id: v.id, name: v.name, kind: v.kind, keywords: v.keywords, sortOrder: v.sortOrder })),
+    [vehicles],
+  );
+  const result = useMemo(() => classifyModel(text || null, parsed), [text, parsed]);
+
+  // Show every keyword that COULD match so the admin can see which other
+  // vehicles were in contention and why the winner won.
+  const otherMatches = useMemo(() => {
+    if (!text.trim()) return [];
+    const lower = text.toLowerCase();
+    const all: { vehicleName: string; keyword: string; length: number; winner: boolean }[] = [];
+    for (const v of parsed) {
+      for (const kw of v.keywords) {
+        if (lower.includes(kw.toLowerCase())) {
+          all.push({
+            vehicleName: v.name,
+            keyword: kw,
+            length: kw.length,
+            winner: v.id === result.vehicleId && kw === result.matchedKeyword,
+          });
+        }
+      }
+    }
+    return all.sort((a, b) => b.length - a.length);
+  }, [text, parsed, result]);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-sky-50 to-transparent px-6 py-3">
+        <h3 className="text-sm font-semibold text-slate-900">Test the classifier</h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Paste a Dealbook "Model" string to confirm it lands on the right vehicle. Longest matching
+          keyword wins — that's how "Puma Gen-E" beats plain "Puma" and "Kuga PHEV" beats "Kuga".
+        </p>
+      </div>
+      <div className="p-6 space-y-3">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="e.g. Kuga 5 Door 2.5 Duratec 243 Phev Active Auto"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+        />
+        {text.trim() && (
+          <div className="space-y-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+              {result.vehicleId ? (
+                <>
+                  <span className="text-xs text-slate-500">Picked → </span>
+                  <span className="font-semibold text-slate-900">
+                    {parsed.find((v) => v.id === result.vehicleId)?.name ?? result.vehicleId}
+                  </span>
+                  <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-800">
+                    {result.kind}
+                  </span>
+                  <span className="ml-2 text-xs text-slate-500">
+                    matched <code className="rounded bg-white px-1">{result.matchedKeyword}</code>
+                  </span>
+                </>
+              ) : (
+                <span className="font-semibold text-amber-800">No vehicle matched — would land as Unmatched.</span>
+              )}
+            </div>
+            {otherMatches.length > 1 && (
+              <div className="text-xs text-slate-500">
+                <div className="mb-1 font-medium text-slate-600">Other keywords that matched (sorted longest first):</div>
+                <ul className="space-y-0.5">
+                  {otherMatches.map((m, i) => (
+                    <li key={i} className={m.winner ? "text-emerald-700" : ""}>
+                      <code className="rounded bg-slate-100 px-1">{m.keyword}</code>
+                      <span className="text-slate-400"> ({m.length} chars)</span>
+                      {" → "}{m.vehicleName}
+                      {m.winner && <span className="ml-1 text-[10px] font-semibold text-emerald-700">WINNER</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+interface OverlapInfo {
+  // For each vehicle id, a list of other vehicles whose keywords are
+  // contained inside this vehicle's keywords (longer-than / superset).
+  betterMatches: Map<string, { vehicleId: string; vehicleName: string; keyword: string }[]>;
+}
+
+function computeKeywordOverlaps(vehicles: VehiclePayload[]): OverlapInfo {
+  const betterMatches = new Map<string, { vehicleId: string; vehicleName: string; keyword: string }[]>();
+  for (const a of vehicles) {
+    for (const kwA of a.keywords) {
+      const la = kwA.toLowerCase();
+      for (const b of vehicles) {
+        if (a.id === b.id) continue;
+        for (const kwB of b.keywords) {
+          const lb = kwB.toLowerCase();
+          // B is more specific than A: every model that matches A's
+          // shorter keyword could be intercepted by B's longer one.
+          if (lb.length > la.length && lb.includes(la)) {
+            const arr = betterMatches.get(a.id) ?? [];
+            arr.push({ vehicleId: b.id, vehicleName: b.name, keyword: kwB });
+            betterMatches.set(a.id, arr);
+          }
+        }
+      }
+    }
+  }
+  return { betterMatches };
+}
+
 function VehicleSection({
-  title, accent, vehicles, bonuses, bonusByKey, pending, onError, onRefresh,
+  title, accent, vehicles, bonuses, bonusByKey, overlaps, pending, onError, onRefresh,
 }: {
   title: string;
   accent: string;
   vehicles: VehiclePayload[];
   bonuses: BonusDef[];
   bonusByKey: Map<string, number>;
+  overlaps: OverlapInfo;
   pending: boolean;
   onError: (e: string | null) => void;
   onRefresh: () => void;
@@ -553,6 +665,7 @@ function VehicleSection({
                   vehicle={v}
                   bonuses={bonuses}
                   bonusByKey={bonusByKey}
+                  betterMatches={overlaps.betterMatches.get(v.id) ?? []}
                   pending={pending}
                   stripe={idx % 2 === 0 ? "" : "bg-slate-50/40"}
                   onError={onError}
@@ -568,11 +681,12 @@ function VehicleSection({
 }
 
 function VehicleRow({
-  vehicle, bonuses, bonusByKey, pending, stripe, onError, onRefresh,
+  vehicle, bonuses, bonusByKey, betterMatches, pending, stripe, onError, onRefresh,
 }: {
   vehicle: VehiclePayload;
   bonuses: BonusDef[];
   bonusByKey: Map<string, number>;
+  betterMatches: { vehicleId: string; vehicleName: string; keyword: string }[];
   pending: boolean;
   stripe: string;
   onError: (e: string | null) => void;
@@ -615,6 +729,14 @@ function VehicleRow({
       <td className="px-5 py-2 align-top">
         <div className="font-semibold text-slate-900">{vehicle.name}</div>
         <div className="text-[10px] font-mono text-slate-400">{vehicle.id}</div>
+        {betterMatches.length > 0 && (
+          <div
+            className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 ring-1 ring-amber-200"
+            title={`When a model also contains "${betterMatches.map((m) => m.keyword).join('", "')}" the classifier picks the more specific vehicle instead — which is what you want. If the more specific vehicle is missing its keyword, models will fall back here.`}
+          >
+            outranked by {betterMatches.map((m) => m.vehicleName).join(", ")}
+          </div>
+        )}
       </td>
       <td className="px-3 py-2">
         <input

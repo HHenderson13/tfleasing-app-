@@ -10,7 +10,7 @@ interface Props {
   month: string;
   lines: ForecastLine[];
   rollup: DealbookRollup;
-  baselines: Map<string, number>;        // prior_year_* + budget_*
+  baselines: Map<string, number>;        // budget_* values keyed in Admin
   published: Map<string, number>;         // published_* — overrides forecast when present
   inputs: Map<string, number>;            // scenario inputs
 }
@@ -106,12 +106,10 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
             <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Line</th>
-                <th className="px-3 py-3 text-right font-medium">Prior year</th>
                 <th className="px-3 py-3 text-right font-medium">Budget</th>
                 <th className="px-3 py-3 text-right font-medium">Dealbook</th>
                 <th className="px-3 py-3 text-right font-medium">{isPublished ? "Actual" : "Forecast"}</th>
-                <th className="px-3 py-3 text-right font-medium">vs Budget</th>
-                <th className="px-5 py-3 text-right font-medium">vs PY</th>
+                <th className="px-5 py-3 text-right font-medium">vs Budget</th>
               </tr>
             </thead>
             <tbody>
@@ -119,25 +117,22 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
                 if (l.kind === "header") {
                   return (
                     <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                      <td colSpan={7} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                      <td colSpan={5} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
                         {l.label}
                       </td>
                     </tr>
                   );
                 }
-                const py = resolved.priorYear.get(l.key) ?? 0;
                 const bud = resolved.budget.get(l.key) ?? 0;
                 const db = resolved.dealbook.get(l.key);
                 const fc = resolved.display.get(l.key) ?? 0;
                 const vsB = fc - bud;
-                const vsP = fc - py;
                 const isTotal = l.kind === "total";
                 const stripe = idx % 2 === 0 ? "" : "bg-slate-50/40";
                 const totalClass = isTotal ? "bg-slate-50 font-semibold text-slate-900" : "";
                 return (
                   <tr key={l.key} className={`border-t border-slate-100 ${stripe} ${totalClass}`}>
                     <td className="px-5 py-2 text-slate-800">{l.label}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">{formatNumber(py, l.kind)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-500">{formatNumber(bud, l.kind)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-400">
                       {db === undefined ? "—" : formatNumber(db, l.kind)}
@@ -145,11 +140,8 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
                     <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
                       {formatNumber(fc, l.kind)}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${tone(vsB)}`}>
+                    <td className={`px-5 py-2 text-right tabular-nums ${tone(vsB)}`}>
                       {formatNumber(vsB, l.kind === "unit" ? "unit" : "money")}
-                    </td>
-                    <td className={`px-5 py-2 text-right tabular-nums ${tone(vsP)}`}>
-                      {formatNumber(vsP, l.kind === "unit" ? "unit" : "money")}
                     </td>
                   </tr>
                 );
@@ -182,29 +174,21 @@ function resolveValues(
   additionalUnits: number,
   additionalMarginPerUnit: number,
 ) {
-  const priorYear = new Map<string, number>();
   const budget = new Map<string, number>();
   const dealbook = new Map<string, number>();
   const forecast = new Map<string, number>();
   const display = new Map<string, number>();
   const publishedMap = new Map<string, number>();
 
-  // Pass 1: leaf values.
   for (const l of lines) {
     if (l.kind === "header") continue;
     if (l.dealbookKey) dealbook.set(l.key, rollup[l.dealbookKey] ?? 0);
-    const py = baselines.get(`prior_year_${l.key}`);
-    if (py !== undefined) priorYear.set(l.key, py);
     const bud = baselines.get(`budget_${l.key}`);
     if (bud !== undefined) budget.set(l.key, bud);
     const pub = published.get(`published_${l.key}`);
     if (pub !== undefined) publishedMap.set(l.key, pub);
   }
 
-  // Apply scenario uplift to the chassis-margin lines so the forecast
-  // reflects "I expect N more deals at £X chassis margin". For now the
-  // uplift lands on Chassis GP of the relevant retail bucket; per-sheet
-  // wiring can be refined when the math lands.
   const scenarioChassis = additionalUnits * additionalMarginPerUnit;
   const scenarioUnitsKey = lines.find((l) => l.kind === "unit" && l.dealbookKey === "units")?.key ?? null;
   const scenarioChassisKey = lines.find((l) => l.kind === "money" && l.dealbookKey === "chassisProfit")?.key ?? null;
@@ -217,12 +201,10 @@ function resolveValues(
     forecast.set(l.key, f);
   }
 
-  // Pass 2: totals + per-unit, multiple sweeps to settle nested rollups.
   for (let pass = 0; pass < 3; pass++) {
     for (const l of lines) {
       if (l.kind === "total" && l.totalOf) {
         const sum = (m: Map<string, number>) => l.totalOf!.reduce((acc, k) => acc + (m.get(k) ?? 0), 0);
-        priorYear.set(l.key, sum(priorYear));
         budget.set(l.key, sum(budget));
         forecast.set(l.key, sum(forecast));
       } else if (l.kind === "perUnit" && l.perUnitOf) {
@@ -231,18 +213,16 @@ function resolveValues(
           const units = m.get(l.perUnitOf!.units);
           return money !== undefined && units && units !== 0 ? money / units : 0;
         };
-        priorYear.set(l.key, calc(priorYear));
         budget.set(l.key, calc(budget));
         forecast.set(l.key, calc(forecast));
       }
     }
   }
 
-  // Build the display column: published wins, then forecast.
   for (const l of lines) {
     if (l.kind === "header") continue;
     display.set(l.key, publishedMap.has(l.key) ? publishedMap.get(l.key)! : forecast.get(l.key) ?? 0);
   }
 
-  return { priorYear, budget, dealbook, forecast, display };
+  return { budget, dealbook, forecast, display };
 }

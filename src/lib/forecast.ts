@@ -220,13 +220,13 @@ export function parseDealbookCsv(text: string): ParsedDealbook {
   return { rows, warnings };
 }
 
-// Pick the best date to bucket a deal into a month. Falls back through
-// registered → invoiced → delivered → ordered, then the upload month.
-export function deriveDefaultMonth(row: ParsedDealbookRow, fallback: string): string {
-  for (const iso of [row.regDate, row.invoiceDate, row.delivDate, row.orderDate]) {
-    if (iso && /^\d{4}-\d{2}-/.test(iso)) return iso.slice(0, 7);
-  }
-  return fallback;
+// Default month a dealbook line lands in is the upload's target month.
+// Reg date is still captured on the row so we can later filter bonuses
+// that only count for units registered in the right quarter — but the
+// unit itself stays in the upload month unless the admin reassigns it
+// via the per-row dropdown in the review window.
+export function deriveDefaultMonth(_row: ParsedDealbookRow, uploadMonth: string): string {
+  return uploadMonth;
 }
 
 // ── DB queries ────────────────────────────────────────────────────────────
