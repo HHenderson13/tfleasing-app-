@@ -171,6 +171,10 @@ export interface SectionAccess {
   orders: boolean;
   reports: boolean;
   admin: boolean;
+  // Monthly financial forecast workspace. Currently admin-only since the
+  // numbers feed into formal accounts; future iterations may open this to
+  // a dedicated finance role.
+  forecast: boolean;
   wc: boolean;
   leaderboard: boolean;
   // Personal scorecard tile — only relevant when the user has a sales_exec
@@ -187,6 +191,7 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     orders: canSeeOrders(u),
     reports: isAdmin(u),
     admin: isAdmin(u),
+    forecast: isAdmin(u),
     wc: canPlayWc(u),
     // Leaderboard is visible to anyone in sales — admins manage participation
     // separately from view access.

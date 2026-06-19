@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 22;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -118,9 +118,137 @@ async function runEnsureAppSchema() {
   await ensureWorldCupTables();
   await ensureSalesLeaderboardTables();
   await ensureBrokerPortalTables();
+  await ensureForecastTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await ensureHotPathIndexes();
+}
+
+async function ensureForecastTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_dealbook_uploads (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL,
+      month_yyyymm TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      row_count INTEGER NOT NULL DEFAULT 0,
+      uploaded_at INTEGER NOT NULL,
+      uploaded_by_user_id TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_dealbook_lines (
+      id TEXT PRIMARY KEY,
+      upload_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      default_month TEXT NOT NULL,
+      override_month TEXT,
+      effective_month TEXT NOT NULL,
+      branch TEXT,
+      vehicle_type TEXT,
+      sales_type TEXT,
+      sales_sub_type TEXT,
+      customer_name TEXT,
+      model TEXT,
+      order_date TEXT,
+      reg_date TEXT,
+      deliv_date TEXT,
+      invoice_date TEXT,
+      deliv_status TEXT,
+      chassis_profit REAL NOT NULL DEFAULT 0,
+      add_bonus REAL NOT NULL DEFAULT 0,
+      metal_subsidy REAL NOT NULL DEFAULT 0,
+      recon_cost REAL NOT NULL DEFAULT 0,
+      oallow_discount REAL NOT NULL DEFAULT 0,
+      accessory_profit REAL NOT NULL DEFAULT 0,
+      warranty_cost REAL NOT NULL DEFAULT 0,
+      total_vehicle_profit REAL NOT NULL DEFAULT 0,
+      finance_income REAL NOT NULL DEFAULT 0,
+      finance_mb REAL NOT NULL DEFAULT 0,
+      tyre_ins_income REAL NOT NULL DEFAULT 0,
+      finance_subsidy REAL NOT NULL DEFAULT 0,
+      cpi_income REAL NOT NULL DEFAULT 0,
+      smart_repair REAL NOT NULL DEFAULT 0,
+      gap_rti_income REAL NOT NULL DEFAULT 0,
+      paint_protection REAL NOT NULL DEFAULT 0,
+      warranty REAL NOT NULL DEFAULT 0,
+      total_fi_income REAL NOT NULL DEFAULT 0,
+      total_gross_profit REAL NOT NULL DEFAULT 0,
+      vin TEXT,
+      reg_no TEXT,
+      customer_external_id TEXT,
+      finance_co TEXT,
+      created_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_upload ON forecast_dealbook_lines(upload_id)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_month ON forecast_dealbook_lines(effective_month)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_source ON forecast_dealbook_lines(source)`));
+
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_actuals (
+      id TEXT PRIMARY KEY,
+      month_yyyymm TEXT NOT NULL,
+      sheet TEXT NOT NULL,
+      line_key TEXT NOT NULL,
+      value REAL NOT NULL,
+      updated_at INTEGER NOT NULL,
+      updated_by_user_id TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_forecast_actuals_slot ON forecast_actuals(month_yyyymm, sheet, line_key)`,
+  ));
+
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_inputs (
+      id TEXT PRIMARY KEY,
+      month_yyyymm TEXT NOT NULL,
+      sheet TEXT NOT NULL,
+      scenario_key TEXT NOT NULL,
+      value REAL NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_forecast_inputs_slot ON forecast_inputs(month_yyyymm, sheet, scenario_key)`,
+  ));
+
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_config (
+      key TEXT PRIMARY KEY,
+      value REAL NOT NULL,
+      description TEXT,
+      category TEXT NOT NULL DEFAULT 'general',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+
+  // Seed sensible defaults so the admin tab isn't empty on first boot.
+  // INSERT OR IGNORE so any value the admin has already edited stays put.
+  const now = Math.floor(Date.now() / 1000);
+  const seeds: Array<[string, number, string, string, number]> = [
+    // [key, value, description, category, sort_order]
+    ["car_dpa_pct", 2.5, "DPA % of wholesale per car unit (Q2 default)", "car", 10],
+    ["car_dpa_half_year_pct", 1.0, "DPA half-year % of wholesale per car unit", "car", 20],
+    ["car_guaranteed_margin_pct", 1.5, "Guaranteed margin % per car unit", "car", 30],
+    ["car_stocking_credits_pct", 0.54, "Stocking credits % per car unit", "car", 40],
+    ["car_house_charge_per_unit", 175, "Flat 'Other income' per car unit", "car", 50],
+    ["cv_dpa_pct", 2.5, "CV DPA % of wholesale per CV unit", "cv", 10],
+    ["cv_frpa_pct", 0, "FRPA % per CV unit", "cv", 20],
+    ["cv_guaranteed_margin_pct", 1.5, "Guaranteed margin % per CV unit", "cv", 30],
+    ["cv_standards_pct", 0.8, "VETS / Standards margin % per CV unit", "cv", 40],
+    ["cv_stocking_credits_pct", 0.29, "CV stocking credits %", "cv", 50],
+    ["cv_house_charge_per_unit", 175, "Flat 'Other income' per CV unit", "cv", 60],
+    ["overheads_monthly_budget", 2014.61, "Default monthly General Overheads budget", "overheads", 10],
+  ];
+  for (const [key, value, description, category, sortOrder] of seeds) {
+    await db.run(sql`
+      INSERT OR IGNORE INTO forecast_config (key, value, description, category, sort_order, updated_at)
+      VALUES (${key}, ${value}, ${description}, ${category}, ${sortOrder}, ${now})
+    `);
+  }
 }
 
 // Broker portal — completely separate auth from the TF leasing app. See

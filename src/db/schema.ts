@@ -1073,6 +1073,115 @@ export const carRflBands = sqliteTable("car_rfl_bands", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// ─── Forecast calculator ───────────────────────────────────────────────────
+// Monthly financial forecast built on top of dealbook CSV extracts. Two
+// upload sources (Leasing + Salary Sacrifice) feed the same line table;
+// each line carries an effective_month that defaults to the registered
+// date but can be overridden by the user.
+
+export const forecastDealbookUploads = sqliteTable("forecast_dealbook_uploads", {
+  id: text("id").primaryKey(),
+  source: text("source").notNull(),                          // 'leasing' | 'salary_sacrifice'
+  monthYyyymm: text("month_yyyymm").notNull(),               // upload's intended month, e.g. "2026-06"
+  filename: text("filename").notNull(),
+  rowCount: integer("row_count").notNull().default(0),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+  uploadedByUserId: text("uploaded_by_user_id").notNull(),
+});
+
+export const forecastDealbookLines = sqliteTable("forecast_dealbook_lines", {
+  id: text("id").primaryKey(),
+  uploadId: text("upload_id").notNull(),
+  source: text("source").notNull(),                          // copied from upload for fast filtering
+  defaultMonth: text("default_month").notNull(),             // YYYY-MM derived from reg/invoice/order date
+  overrideMonth: text("override_month"),                     // YYYY-MM user override (null = use default)
+  effectiveMonth: text("effective_month").notNull(),         // override ?? default, kept in sync at write time
+
+  branch: text("branch"),
+  vehicleType: text("vehicle_type"),                         // "Car" | "LCV" | "Van"
+  salesType: text("sales_type"),                             // "Retail" | …
+  salesSubType: text("sales_sub_type"),
+  customerName: text("customer_name"),
+  model: text("model"),
+
+  orderDate: text("order_date"),                             // YYYY-MM-DD (or original)
+  regDate: text("reg_date"),
+  delivDate: text("deliv_date"),
+  invoiceDate: text("invoice_date"),
+  delivStatus: text("deliv_status"),                         // "Dlv" | "Arr" | "Est"
+
+  chassisProfit: real("chassis_profit").notNull().default(0),
+  addBonus: real("add_bonus").notNull().default(0),
+  metalSubsidy: real("metal_subsidy").notNull().default(0),
+  reconCost: real("recon_cost").notNull().default(0),
+  oallowDiscount: real("oallow_discount").notNull().default(0),
+  accessoryProfit: real("accessory_profit").notNull().default(0),
+  warrantyCost: real("warranty_cost").notNull().default(0),
+  totalVehicleProfit: real("total_vehicle_profit").notNull().default(0),
+  financeIncome: real("finance_income").notNull().default(0),
+  financeMb: real("finance_mb").notNull().default(0),
+  tyreInsIncome: real("tyre_ins_income").notNull().default(0),
+  financeSubsidy: real("finance_subsidy").notNull().default(0),
+  cpiIncome: real("cpi_income").notNull().default(0),
+  smartRepair: real("smart_repair").notNull().default(0),
+  gapRtiIncome: real("gap_rti_income").notNull().default(0),
+  paintProtection: real("paint_protection").notNull().default(0),
+  warranty: real("warranty").notNull().default(0),
+  totalFiIncome: real("total_fi_income").notNull().default(0),
+  totalGrossProfit: real("total_gross_profit").notNull().default(0),
+
+  vin: text("vin"),
+  regNo: text("reg_no"),
+  customerExternalId: text("customer_external_id"),          // Dealbook "Customer Id"
+  financeCo: text("finance_co"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byUpload: index("idx_forecast_lines_upload").on(t.uploadId),
+  byMonth: index("idx_forecast_lines_month").on(t.effectiveMonth),
+  bySource: index("idx_forecast_lines_source").on(t.source),
+}));
+
+// User-keyed final accounts. Once the official accounts publish, the user
+// enters them per (month, sheet, line) so the forecast view can show
+// "Actual" alongside the dealbook-derived Day-X forecasts.
+export const forecastActuals = sqliteTable("forecast_actuals", {
+  id: text("id").primaryKey(),
+  monthYyyymm: text("month_yyyymm").notNull(),
+  sheet: text("sheet").notNull(),                            // 'car' | 'cv' | 'overheads'
+  lineKey: text("line_key").notNull(),                       // stable line slug e.g. 'new_car_units'
+  value: real("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  updatedByUserId: text("updated_by_user_id").notNull(),
+}, (t) => ({
+  bySlot: index("idx_forecast_actuals_slot").on(t.monthYyyymm, t.sheet, t.lineKey),
+}));
+
+// User's "I'll forecast N more units at £X margin" inputs per month/sheet.
+// Stored as free key/value pairs so we can add new inputs without schema
+// changes — the admin tab controls which keys exist.
+export const forecastInputs = sqliteTable("forecast_inputs", {
+  id: text("id").primaryKey(),
+  monthYyyymm: text("month_yyyymm").notNull(),
+  sheet: text("sheet").notNull(),                            // 'car' | 'cv' | 'overheads'
+  scenarioKey: text("scenario_key").notNull(),               // e.g. 'additional_units'
+  value: real("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  bySlot: index("idx_forecast_inputs_slot").on(t.monthYyyymm, t.sheet, t.scenarioKey),
+}));
+
+// Admin-editable configuration: percentages, flat amounts, etc. that feed
+// the forecast math. e.g. dpa_pct = 2.5, house_charge_per_unit = 175.
+export const forecastConfig = sqliteTable("forecast_config", {
+  key: text("key").primaryKey(),
+  value: real("value").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("general"),   // 'car' | 'cv' | 'overheads' | 'bpm' | 'general'
+  sortOrder: integer("sort_order").notNull().default(0),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Editable discount table driven by admin. Keyed by a stable id (slug).
 export const modelDiscounts = sqliteTable("model_discounts", {
   id: text("id").primaryKey(), // stable slug e.g. "puma-ice", "explorer-new-my-std"
