@@ -6,7 +6,7 @@ import {
   setLineOverrideMonthAction,
   bulkOverrideMonthAction,
 } from "./actions";
-import { DEALBOOK_SOURCES, DEALBOOK_SOURCE_LABELS, type DealbookSource } from "@/lib/forecast";
+import { DEALBOOK_SOURCES, DEALBOOK_SOURCE_LABELS, type DealbookSource } from "./sources";
 import { useRouter } from "next/navigation";
 
 export interface UploadPayload {

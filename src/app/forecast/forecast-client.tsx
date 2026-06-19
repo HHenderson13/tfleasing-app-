@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   rollupDealbookLines,
   type DealbookRollup,
-} from "@/lib/forecast";
+} from "./rollup";
 import {
   getLinesForSheet,
   type SheetKey,

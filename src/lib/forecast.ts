@@ -7,16 +7,14 @@ import {
   forecastConfig,
 } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
-import type { DealbookSummable, SheetKey } from "@/app/forecast/line-definitions";
+import type { SheetKey } from "@/app/forecast/line-definitions";
 
-// ── Source tags ───────────────────────────────────────────────────────────
-export const DEALBOOK_SOURCES = ["leasing", "salary_sacrifice"] as const;
-export type DealbookSource = (typeof DEALBOOK_SOURCES)[number];
-
-export const DEALBOOK_SOURCE_LABELS: Record<DealbookSource, string> = {
-  leasing: "Leasing",
-  salary_sacrifice: "Salary Sacrifice",
-};
+// Re-export client-safe pieces so existing server callers see the same
+// surface. Anything that touches the DB lives below; anything pure lives
+// in src/app/forecast/{sources,rollup}.ts so client components can import
+// it without dragging in `db`.
+export { DEALBOOK_SOURCES, DEALBOOK_SOURCE_LABELS, type DealbookSource } from "@/app/forecast/sources";
+export { rollupDealbookLines, type DealbookRollup } from "@/app/forecast/rollup";
 
 // ── Dealbook CSV parsing ──────────────────────────────────────────────────
 // The dealbook export comes out as CSV with quoted fields and a header
@@ -282,47 +280,3 @@ export async function findForecastActual(monthYyyymm: string, sheet: SheetKey, l
   return rows[0] ?? null;
 }
 
-// ── Rollups ───────────────────────────────────────────────────────────────
-// Sum dealbook lines for a month, optionally split by Car/LCV. The forecast
-// sheets use this to populate the "Actual" column.
-
-export interface DealbookRollup extends DealbookSummable {}
-
-export function rollupDealbookLines(
-  lines: Array<{ vehicleType: string | null } & Partial<DealbookSummable>>,
-  filter: "car" | "cv" | "all",
-): DealbookRollup {
-  const r: DealbookRollup = {
-    units: 0, chassisProfit: 0, addBonus: 0, metalSubsidy: 0, reconCost: 0,
-    oallowDiscount: 0, accessoryProfit: 0, warrantyCost: 0, totalVehicleProfit: 0,
-    financeIncome: 0, financeMb: 0, tyreInsIncome: 0, financeSubsidy: 0,
-    cpiIncome: 0, smartRepair: 0, gapRtiIncome: 0, paintProtection: 0,
-    warranty: 0, totalFiIncome: 0, totalGrossProfit: 0,
-  };
-  for (const line of lines) {
-    const isVan = (line.vehicleType ?? "").toLowerCase() === "lcv" || (line.vehicleType ?? "").toLowerCase() === "van";
-    if (filter === "car" && isVan) continue;
-    if (filter === "cv" && !isVan) continue;
-    r.units += 1;
-    r.chassisProfit += line.chassisProfit ?? 0;
-    r.addBonus += line.addBonus ?? 0;
-    r.metalSubsidy += line.metalSubsidy ?? 0;
-    r.reconCost += line.reconCost ?? 0;
-    r.oallowDiscount += line.oallowDiscount ?? 0;
-    r.accessoryProfit += line.accessoryProfit ?? 0;
-    r.warrantyCost += line.warrantyCost ?? 0;
-    r.totalVehicleProfit += line.totalVehicleProfit ?? 0;
-    r.financeIncome += line.financeIncome ?? 0;
-    r.financeMb += line.financeMb ?? 0;
-    r.tyreInsIncome += line.tyreInsIncome ?? 0;
-    r.financeSubsidy += line.financeSubsidy ?? 0;
-    r.cpiIncome += line.cpiIncome ?? 0;
-    r.smartRepair += line.smartRepair ?? 0;
-    r.gapRtiIncome += line.gapRtiIncome ?? 0;
-    r.paintProtection += line.paintProtection ?? 0;
-    r.warranty += line.warranty ?? 0;
-    r.totalFiIncome += line.totalFiIncome ?? 0;
-    r.totalGrossProfit += line.totalGrossProfit ?? 0;
-  }
-  return r;
-}

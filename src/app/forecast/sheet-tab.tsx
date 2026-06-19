@@ -3,7 +3,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setActualAction, setInputAction } from "./actions";
 import type { ForecastLine, SheetKey } from "./line-definitions";
-import type { DealbookRollup } from "@/lib/forecast";
+import type { DealbookRollup } from "./rollup";
 
 interface Props {
   sheet: SheetKey;

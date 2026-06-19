@@ -7,8 +7,8 @@ import {
   forecastInputs,
   forecastConfig,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { eq, and } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
@@ -202,14 +202,16 @@ export async function setActualAction(input: {
     if (!isYyyymm(input.monthYyyymm)) {
       return { ok: false as const, error: "Month must be YYYY-MM." };
     }
-    const existing = await db
+    const existingRows = await db
       .select()
       .from(forecastActuals)
-      .where(eq(forecastActuals.lineKey, input.lineKey))
+      .where(and(
+        eq(forecastActuals.monthYyyymm, input.monthYyyymm),
+        eq(forecastActuals.sheet, input.sheet),
+        eq(forecastActuals.lineKey, input.lineKey),
+      ))
       .limit(1);
-    const existingForSlot = existing.find(
-      (r) => r.monthYyyymm === input.monthYyyymm && r.sheet === input.sheet,
-    );
+    const existingForSlot = existingRows[0] ?? null;
     if (input.value === null || Number.isNaN(input.value)) {
       if (existingForSlot) {
         await db.delete(forecastActuals).where(eq(forecastActuals.id, existingForSlot.id));
@@ -251,13 +253,16 @@ export async function setInputAction(input: {
     if (!isYyyymm(input.monthYyyymm)) {
       return { ok: false as const, error: "Month must be YYYY-MM." };
     }
-    const all = await db.select().from(forecastInputs);
-    const existing = all.find(
-      (r) =>
-        r.monthYyyymm === input.monthYyyymm &&
-        r.sheet === input.sheet &&
-        r.scenarioKey === input.scenarioKey,
-    );
+    const existingRows = await db
+      .select()
+      .from(forecastInputs)
+      .where(and(
+        eq(forecastInputs.monthYyyymm, input.monthYyyymm),
+        eq(forecastInputs.sheet, input.sheet),
+        eq(forecastInputs.scenarioKey, input.scenarioKey),
+      ))
+      .limit(1);
+    const existing = existingRows[0] ?? null;
     if (input.value === null || Number.isNaN(input.value)) {
       if (existing) await db.delete(forecastInputs).where(eq(forecastInputs.id, existing.id));
     } else if (existing) {
