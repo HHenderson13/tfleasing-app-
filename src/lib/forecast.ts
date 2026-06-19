@@ -59,6 +59,7 @@ interface ParsedDealbookRow {
   warranty: number;
   totalFiIncome: number;
   totalGrossProfit: number;
+  basic: number;
 }
 
 export interface ParsedDealbook {
@@ -165,6 +166,7 @@ export function parseDealbookCsv(text: string): ParsedDealbook {
     vehicleType: indexOf("Vehicle Type"),
     vin: indexOf("VIN"),
     regNo: indexOf("Reg No"),
+    basic: indexOf("Basic"),
   };
   for (const [name, idx] of Object.entries(want)) {
     if (idx === -1) warnings.push(`Column "${name}" not found in CSV header`);
@@ -215,6 +217,7 @@ export function parseDealbookCsv(text: string): ParsedDealbook {
       warranty: num("actWarranty"),
       totalFiIncome: num("actTotalFiIncome"),
       totalGrossProfit: num("actTotalGrossProfit"),
+      basic: num("basic"),
     });
   }
   return { rows, warnings };
@@ -276,6 +279,7 @@ export async function loadForecastVehicles(): Promise<ParsedVehicle[]> {
     id: r.id,
     name: r.name,
     kind: r.kind,
+    fuelType: r.fuelType,
     keywords: r.keywords,
     sortOrder: r.sortOrder,
   }));

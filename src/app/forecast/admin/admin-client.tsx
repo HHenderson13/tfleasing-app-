@@ -22,6 +22,7 @@ export interface VehiclePayload {
   id: string;
   name: string;
   kind: "car" | "van";
+  fuelType: "ice" | "bev";
   keywords: string[];
   sortOrder: number;
 }
@@ -139,7 +140,7 @@ export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonu
 // ────────────────────────── Math tab ────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
-  car: "Lease New Cars",
+  car: "Lease New Cars — per-unit costs",
   cv: "Lease New Commercial",
   overheads: "General Overheads",
   bpm: "Quarterly (BPM)",
@@ -503,7 +504,7 @@ function VehiclesTab({
 function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
   const [text, setText] = useState("");
   const parsed = useMemo<ParsedVehicle[]>(
-    () => vehicles.map((v) => ({ id: v.id, name: v.name, kind: v.kind, keywords: v.keywords, sortOrder: v.sortOrder })),
+    () => vehicles.map((v) => ({ id: v.id, name: v.name, kind: v.kind, fuelType: v.fuelType, keywords: v.keywords, sortOrder: v.sortOrder })),
     [vehicles],
   );
   const result = useMemo(() => classifyModel(text || null, parsed), [text, parsed]);
@@ -651,6 +652,7 @@ function VehicleSection({
             <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
               <tr>
                 <th className="px-5 py-3 text-left font-medium w-1/5">Vehicle</th>
+                <th className="px-3 py-3 text-left font-medium w-24">Powertrain</th>
                 <th className="px-3 py-3 text-left font-medium">Keywords</th>
                 {bonuses.map((b) => (
                   <th key={b.key} className="px-2 py-3 text-right font-medium">{b.label}</th>
@@ -702,7 +704,23 @@ function VehicleRow({
         id: vehicle.id,
         name: vehicle.name,
         kind: vehicle.kind,
+        fuelType: vehicle.fuelType,
         keywords: parsed,
+        sortOrder: vehicle.sortOrder,
+      });
+      if (!res.ok) onError(res.error); else onRefresh();
+    });
+  }
+
+  function commitFuel(fuel: "ice" | "bev") {
+    if (fuel === vehicle.fuelType) return;
+    start(async () => {
+      const res = await upsertVehicleAction({
+        id: vehicle.id,
+        name: vehicle.name,
+        kind: vehicle.kind,
+        fuelType: fuel,
+        keywords: vehicle.keywords,
         sortOrder: vehicle.sortOrder,
       });
       if (!res.ok) onError(res.error); else onRefresh();
@@ -737,6 +755,26 @@ function VehicleRow({
             outranked by {betterMatches.map((m) => m.vehicleName).join(", ")}
           </div>
         )}
+      </td>
+      <td className="px-3 py-2">
+        <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-[10px] font-semibold uppercase tracking-[0.1em]">
+          <button
+            type="button"
+            onClick={() => commitFuel("ice")}
+            disabled={pending}
+            className={`px-2 py-1 ${vehicle.fuelType === "ice" ? "bg-amber-600 text-white" : "bg-white text-slate-500 hover:bg-amber-50"}`}
+          >
+            ICE
+          </button>
+          <button
+            type="button"
+            onClick={() => commitFuel("bev")}
+            disabled={pending}
+            className={`px-2 py-1 ${vehicle.fuelType === "bev" ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-emerald-50"}`}
+          >
+            BEV
+          </button>
+        </div>
       </td>
       <td className="px-3 py-2">
         <input
@@ -794,6 +832,7 @@ function AddVehicleCard({
   const [, start] = useTransition();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"car" | "van">("car");
+  const [fuel, setFuel] = useState<"ice" | "bev">("ice");
   const [keywords, setKeywords] = useState("");
 
   return (
@@ -815,14 +854,15 @@ function AddVehicleCard({
             const res = await upsertVehicleAction({
               name: name.trim(),
               kind,
+              fuelType: fuel,
               keywords: keywordsFromText(keywords || name),
             });
             if (!res.ok) { onError(res.error); return; }
-            setName(""); setKeywords(""); setKind("car");
+            setName(""); setKeywords(""); setKind("car"); setFuel("ice");
             onAdded();
           });
         }}
-        className="grid gap-3 p-6 sm:grid-cols-[1fr_120px_2fr_auto]"
+        className="grid gap-3 p-6 sm:grid-cols-[1fr_100px_100px_2fr_auto]"
       >
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Vehicle name"
           className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
@@ -830,6 +870,11 @@ function AddVehicleCard({
           className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
           <option value="car">Car</option>
           <option value="van">Van</option>
+        </select>
+        <select value={fuel} onChange={(e) => setFuel(e.target.value as "ice" | "bev")}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <option value="ice">ICE</option>
+          <option value="bev">BEV</option>
         </select>
         <input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Keywords (defaults to name if empty)"
           className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />

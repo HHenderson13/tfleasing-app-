@@ -5,6 +5,9 @@ import {
   listForecastLinesForMonth,
   loadForecastActuals,
   loadForecastInputs,
+  loadForecastConfig,
+  loadForecastVehicles,
+  loadVehicleBonuses,
 } from "@/lib/forecast";
 import { MonthlyClient } from "./monthly-client";
 
@@ -24,11 +27,14 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : currentMonth();
 
-  const [uploads, lines, actuals, inputs] = await Promise.all([
+  const [uploads, lines, actuals, inputs, config, vehicles, bonuses] = await Promise.all([
     listForecastUploads(),
     listForecastLinesForMonth(month),
     loadForecastActuals(month),
     loadForecastInputs(month),
+    loadForecastConfig(),
+    loadForecastVehicles(),
+    loadVehicleBonuses(),
   ]);
 
   return (
@@ -42,13 +48,9 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
         lines={lines.map((l) => ({
           source: l.source,
           kind: l.kind,
-          chassisProfit: l.chassisProfit,
-          addBonus: l.addBonus,
-          metalSubsidy: l.metalSubsidy,
+          vehicleId: l.vehicleId ?? null,
+          basic: l.basic ?? 0,
           reconCost: l.reconCost,
-          oallowDiscount: l.oallowDiscount,
-          accessoryProfit: l.accessoryProfit,
-          warrantyCost: l.warrantyCost,
           totalVehicleProfit: l.totalVehicleProfit,
           financeIncome: l.financeIncome,
           financeMb: l.financeMb,
@@ -59,11 +61,22 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
           gapRtiIncome: l.gapRtiIncome,
           paintProtection: l.paintProtection,
           warranty: l.warranty,
+          // Kept for the CV rollup until that math is rewritten.
+          chassisProfit: l.chassisProfit,
+          accessoryProfit: l.accessoryProfit,
           totalFiIncome: l.totalFiIncome,
           totalGrossProfit: l.totalGrossProfit,
         }))}
         actuals={actuals.map((a) => ({ sheet: a.sheet, lineKey: a.lineKey, value: a.value }))}
         inputs={inputs.map((i) => ({ sheet: i.sheet, scenarioKey: i.scenarioKey, value: i.value }))}
+        vehicles={vehicles.map((v) => ({
+          id: v.id,
+          name: v.name,
+          kind: v.kind,
+          fuelType: v.fuelType,
+        }))}
+        bonuses={bonuses.map((b) => ({ vehicleId: b.vehicleId, bonusKey: b.bonusKey, value: b.value }))}
+        config={config.map((c) => ({ key: c.key, value: c.value }))}
       />
     </div>
   );

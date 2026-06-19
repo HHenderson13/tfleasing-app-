@@ -1,22 +1,24 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ForecastPageHeader, monthLabel } from "../page-shell";
-import { MonthPicker } from "../pickers";
+import { ForecastPageHeader } from "../page-shell";
+import { MonthPicker, monthLabel } from "../pickers";
 import { SheetView } from "./sheet-view";
 import { getLinesForSheet, type SheetKey } from "../line-definitions";
 import { rollupDealbookLines } from "../rollup";
-import type { DealbookRollup } from "../rollup";
+import {
+  computeCarMonthForecast,
+  settleDerivedLines,
+  type DealbookCarLine,
+  type VehicleInfo,
+  type BonusLookup,
+} from "./car-forecast";
 
 interface DealbookLine {
   source: string;
   kind: string;
-  chassisProfit: number;
-  addBonus: number;
-  metalSubsidy: number;
+  vehicleId: string | null;
+  basic: number;
   reconCost: number;
-  oallowDiscount: number;
-  accessoryProfit: number;
-  warrantyCost: number;
   totalVehicleProfit: number;
   financeIncome: number;
   financeMb: number;
@@ -27,8 +29,18 @@ interface DealbookLine {
   gapRtiIncome: number;
   paintProtection: number;
   warranty: number;
+  // Used by the CV rollup until that math is rewritten.
+  chassisProfit: number;
+  accessoryProfit: number;
   totalFiIncome: number;
   totalGrossProfit: number;
+}
+
+interface VehiclePayload {
+  id: string;
+  name: string;
+  kind: "car" | "van";
+  fuelType: "ice" | "bev";
 }
 
 interface Props {
@@ -39,32 +51,46 @@ interface Props {
   lines: DealbookLine[];
   actuals: { sheet: string; lineKey: string; value: number }[];
   inputs: { sheet: string; scenarioKey: string; value: number }[];
+  vehicles: VehiclePayload[];
+  bonuses: { vehicleId: string; bonusKey: string; value: number }[];
+  config: { key: string; value: number }[];
 }
 
 const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
-  { key: "car",       label: "Lease New Cars",       sub: "Retail / Employee / Motability" },
+  { key: "car",       label: "Lease New Cars",       sub: "ICE + BEV mix" },
   { key: "cv",        label: "Lease New Commercial", sub: "Vans + light commercial" },
   { key: "overheads", label: "General Overheads",    sub: "Department-wide costs" },
 ];
 
-function rollupFor(sheet: SheetKey, lines: DealbookLine[]): DealbookRollup {
-  // Car / CV split is now driven by per-line `kind` (set at upload time
-  // by the vehicle classifier in src/lib/forecast-classify.ts), not by
-  // the upload's source. Lines whose model couldn't be matched stay out
-  // of both rollups so the user fixes the catalogue first.
-  if (sheet === "car") return rollupDealbookLines(lines, "car");
-  if (sheet === "cv")  return rollupDealbookLines(lines, "cv");
-  return rollupDealbookLines([], "all");
-}
-
 export function MonthlyClient({
-  month, defaultSheet, uploadCount, lineCount, lines, actuals, inputs,
+  month, defaultSheet, uploadCount, lineCount,
+  lines, actuals, inputs, vehicles, bonuses, config,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKey>(defaultSheet);
 
-  // Split admin-keyed actuals into baselines (prior year + budget) and
-  // published actuals so the sheet view can prefer published over forecast
-  // and show the right column header.
+  // Lookup tables built once per render.
+  const vehicleMap = useMemo(() => {
+    const m = new Map<string, VehicleInfo>();
+    for (const v of vehicles) m.set(v.id, { id: v.id, fuelType: v.fuelType });
+    return m;
+  }, [vehicles]);
+
+  const bonusLookup = useMemo<BonusLookup>(() => {
+    const m: BonusLookup = new Map();
+    for (const b of bonuses) {
+      if (!m.has(b.vehicleId)) m.set(b.vehicleId, new Map());
+      m.get(b.vehicleId)!.set(b.bonusKey, b.value);
+    }
+    return m;
+  }, [bonuses]);
+
+  const configMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of config) m.set(c.key, c.value);
+    return m;
+  }, [config]);
+
+  // Split admin actuals into baselines (budget_*) and published.
   const splitBySheet = useMemo(() => {
     const baselines = new Map<string, Map<string, number>>();
     const published = new Map<string, Map<string, number>>();
@@ -85,7 +111,65 @@ export function MonthlyClient({
     return m;
   }, [inputs]);
 
-  const rollup = useMemo(() => rollupFor(sheet, lines), [sheet, lines]);
+  // Compute the active sheet's forecast values. Car uses the new
+  // per-vehicle-aware math; CV / Overheads fall back to the simple
+  // dealbook-column rollup until those formulas land.
+  const sheetForecast = useMemo(() => {
+    const sheetInputs = inputsBySheet.get(sheet) ?? new Map();
+    const extraUnits = sheetInputs.get("additional_units") ?? 0;
+    const extraMargin = sheetInputs.get("additional_margin_per_unit") ?? 0;
+
+    if (sheet === "car") {
+      const carLines: DealbookCarLine[] = lines.map((l) => ({
+        vehicleId: l.vehicleId,
+        kind: l.kind,
+        source: l.source,
+        basic: l.basic,
+        reconCost: l.reconCost,
+        totalVehicleProfit: l.totalVehicleProfit,
+        financeIncome: l.financeIncome,
+        financeMb: l.financeMb,
+        tyreInsIncome: l.tyreInsIncome,
+        financeSubsidy: l.financeSubsidy,
+        cpiIncome: l.cpiIncome,
+        smartRepair: l.smartRepair,
+        gapRtiIncome: l.gapRtiIncome,
+        paintProtection: l.paintProtection,
+        warranty: l.warranty,
+      }));
+      const result = computeCarMonthForecast({
+        lines: carLines,
+        vehicles: vehicleMap,
+        bonuses: bonusLookup,
+        config: configMap,
+        scenarioExtraUnits: extraUnits,
+        scenarioMarginPerUnit: extraMargin,
+      });
+      // Settle derived rows (totals, per-unit) for the layout's totals.
+      settleDerivedLines(getLinesForSheet("car"), result.values);
+      return { values: result.values, unmatchedCount: result.unmatchedCount, iceUnits: result.iceUnits, bevUnits: result.bevUnits };
+    }
+
+    if (sheet === "cv") {
+      const rollup = rollupDealbookLines(lines, "cv");
+      const values = new Map<string, number>();
+      values.set("cv_units", rollup.units + extraUnits);
+      values.set("cv_chassis_gp", rollup.chassisProfit + extraUnits * extraMargin);
+      values.set("cv_commission_vb", rollup.financeIncome);
+      values.set("cv_alloy_tyre", rollup.tyreInsIncome);
+      values.set("cv_gap", rollup.gapRtiIncome);
+      values.set("cv_paint_fabric", rollup.paintProtection);
+      values.set("cv_warranty", rollup.warranty);
+      values.set("cv_accessory_gp", rollup.accessoryProfit);
+      settleDerivedLines(getLinesForSheet("cv"), values);
+      return { values, unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
+    }
+
+    // Overheads — entirely user-keyed; no dealbook contribution.
+    const values = new Map<string, number>();
+    settleDerivedLines(getLinesForSheet("overheads"), values);
+    return { values, unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
+  }, [sheet, lines, vehicleMap, bonusLookup, configMap, inputsBySheet]);
 
   return (
     <>
@@ -118,6 +202,14 @@ export function MonthlyClient({
           {uploadCount === 0
             ? "No uploads yet — head to Uploads to drop a dealbook CSV."
             : `${lineCount} dealbook line${lineCount === 1 ? "" : "s"} loaded for ${monthLabel(month)} across all departments.`}
+          {sheet === "car" && (sheetForecast.iceUnits > 0 || sheetForecast.bevUnits > 0) && (
+            <span> · <span className="font-medium text-slate-700">{sheetForecast.iceUnits}</span> ICE
+              {" · "}<span className="font-medium text-slate-700">{sheetForecast.bevUnits}</span> BEV
+              {sheetForecast.unmatchedCount > 0 && <>
+                {" · "}<span className="font-medium text-amber-700">{sheetForecast.unmatchedCount} unmatched</span>
+              </>}
+            </span>
+          )}
         </div>
 
         <div className="mt-6">
@@ -125,7 +217,7 @@ export function MonthlyClient({
             sheet={sheet}
             month={month}
             lines={getLinesForSheet(sheet)}
-            rollup={rollup}
+            forecastValues={sheetForecast.values}
             baselines={splitBySheet.baselines.get(sheet) ?? new Map()}
             published={splitBySheet.published.get(sheet) ?? new Map()}
             inputs={inputsBySheet.get(sheet) ?? new Map()}

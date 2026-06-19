@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 24;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -190,10 +190,11 @@ async function ensureForecastTables() {
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_month ON forecast_dealbook_lines(effective_month)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_source ON forecast_dealbook_lines(source)`));
 
-  // Backfill kind + vehicle_id columns onto existing line rows.
+  // Backfill kind + vehicle_id + basic columns onto existing line rows.
   await ensureColumns("forecast_dealbook_lines", [
     { name: "kind", sqlType: "TEXT NOT NULL DEFAULT 'unknown'" },
     { name: "vehicle_id", sqlType: "TEXT" },
+    { name: "basic", sqlType: "REAL NOT NULL DEFAULT 0" },
   ]);
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_kind ON forecast_dealbook_lines(kind)`));
 
@@ -243,12 +244,17 @@ async function ensureForecastTables() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       kind TEXT NOT NULL,
+      fuel_type TEXT NOT NULL DEFAULT 'ice',
       keywords TEXT NOT NULL DEFAULT '[]',
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )
   `));
+  // Existing rows might pre-date the fuel_type column.
+  await ensureColumns("forecast_vehicles", [
+    { name: "fuel_type", sqlType: "TEXT NOT NULL DEFAULT 'ice'" },
+  ]);
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS forecast_vehicle_bonuses (
       vehicle_id TEXT NOT NULL,
@@ -265,53 +271,51 @@ async function ensureForecastTables() {
   // vehicle so the classifier doesn't fall back to plain "Puma".
   const nowSec = Math.floor(Date.now() / 1000);
   const vehicleSeeds: Array<{
-    id: string; name: string; kind: "car" | "van"; keywords: string[]; sort: number;
+    id: string; name: string; kind: "car" | "van"; fuel: "ice" | "bev"; keywords: string[]; sort: number;
   }> = [
     // ── Cars ──
-    { id: "puma-gen-e",      name: "Puma Gen-E",      kind: "car", keywords: ["Puma Gen-E"],                  sort: 10 },
-    { id: "explorer",        name: "Explorer",        kind: "car", keywords: ["Explorer"],                    sort: 20 },
-    { id: "capri",           name: "Capri",           kind: "car", keywords: ["Capri"],                       sort: 30 },
-    { id: "mustang-mach-e",  name: "Mustang Mach-E",  kind: "car", keywords: ["Mustang Mach-E", "Mach-E"],    sort: 40 },
-    { id: "kuga-phev",       name: "Kuga PHEV",       kind: "car", keywords: ["Kuga PHEV", "Kuga Phev"],      sort: 50 },
-    { id: "kuga",            name: "Kuga",            kind: "car", keywords: ["Kuga"],                        sort: 60 },
-    { id: "puma",            name: "Puma",            kind: "car", keywords: ["Puma"],                        sort: 70 },
-    { id: "focus",           name: "Focus",           kind: "car", keywords: ["Focus"],                       sort: 80 },
-    // ── Vans ──
-    { id: "ranger",                 name: "Ranger",                 kind: "van", keywords: ["Ranger"],                       sort: 110 },
-    { id: "e-transit-custom",       name: "E-Transit Custom",       kind: "van", keywords: ["E-Transit Custom"],             sort: 120 },
-    { id: "transit-custom",         name: "Transit Custom",         kind: "van", keywords: ["Transit Custom"],               sort: 130 },
-    { id: "e-transit-courier",      name: "E-Transit Courier",      kind: "van", keywords: ["E-Transit Courier"],            sort: 140 },
-    { id: "transit-courier",        name: "Transit Courier",        kind: "van", keywords: ["Transit Courier"],              sort: 150 },
-    { id: "transit-connect-phev",   name: "Transit Connect PHEV",   kind: "van", keywords: ["Transit Connect PHEV"],         sort: 160 },
-    { id: "transit-connect",        name: "Transit Connect",        kind: "van", keywords: ["Transit Connect"],              sort: 170 },
-    { id: "transit-city",           name: "Transit City",           kind: "van", keywords: ["Transit City"],                 sort: 180 },
-    { id: "e-transit",              name: "E-Transit",              kind: "van", keywords: ["E-Transit"],                    sort: 190 },
-    { id: "transit",                name: "Transit",                kind: "van", keywords: ["Transit"],                      sort: 200 },
+    { id: "puma-gen-e",      name: "Puma Gen-E",      kind: "car", fuel: "bev", keywords: ["Puma Gen-E"],                  sort: 10 },
+    { id: "explorer",        name: "Explorer",        kind: "car", fuel: "bev", keywords: ["Explorer"],                    sort: 20 },
+    { id: "capri",           name: "Capri",           kind: "car", fuel: "bev", keywords: ["Capri"],                       sort: 30 },
+    { id: "mustang-mach-e",  name: "Mustang Mach-E",  kind: "car", fuel: "bev", keywords: ["Mustang Mach-E", "Mach-E"],    sort: 40 },
+    { id: "kuga-phev",       name: "Kuga PHEV",       kind: "car", fuel: "ice", keywords: ["Kuga PHEV", "Kuga Phev"],      sort: 50 },
+    { id: "kuga",            name: "Kuga",            kind: "car", fuel: "ice", keywords: ["Kuga"],                        sort: 60 },
+    { id: "puma",            name: "Puma",            kind: "car", fuel: "ice", keywords: ["Puma"],                        sort: 70 },
+    { id: "focus",           name: "Focus",           kind: "car", fuel: "ice", keywords: ["Focus"],                       sort: 80 },
+    // ── Vans ── (kind=van vehicles ignore fuel_type for now)
+    { id: "ranger",                 name: "Ranger",                 kind: "van", fuel: "ice", keywords: ["Ranger"],                       sort: 110 },
+    { id: "e-transit-custom",       name: "E-Transit Custom",       kind: "van", fuel: "bev", keywords: ["E-Transit Custom"],             sort: 120 },
+    { id: "transit-custom",         name: "Transit Custom",         kind: "van", fuel: "ice", keywords: ["Transit Custom"],               sort: 130 },
+    { id: "e-transit-courier",      name: "E-Transit Courier",      kind: "van", fuel: "bev", keywords: ["E-Transit Courier"],            sort: 140 },
+    { id: "transit-courier",        name: "Transit Courier",        kind: "van", fuel: "ice", keywords: ["Transit Courier"],              sort: 150 },
+    { id: "transit-connect-phev",   name: "Transit Connect PHEV",   kind: "van", fuel: "ice", keywords: ["Transit Connect PHEV"],         sort: 160 },
+    { id: "transit-connect",        name: "Transit Connect",        kind: "van", fuel: "ice", keywords: ["Transit Connect"],              sort: 170 },
+    { id: "transit-city",           name: "Transit City",           kind: "van", fuel: "ice", keywords: ["Transit City"],                 sort: 180 },
+    { id: "e-transit",              name: "E-Transit",              kind: "van", fuel: "bev", keywords: ["E-Transit"],                    sort: 190 },
+    { id: "transit",                name: "Transit",                kind: "van", fuel: "ice", keywords: ["Transit"],                      sort: 200 },
   ];
   for (const v of vehicleSeeds) {
     await db.run(sql`
-      INSERT OR IGNORE INTO forecast_vehicles (id, name, kind, keywords, sort_order, created_at, updated_at)
-      VALUES (${v.id}, ${v.name}, ${v.kind}, ${JSON.stringify(v.keywords)}, ${v.sort}, ${nowSec}, ${nowSec})
+      INSERT OR IGNORE INTO forecast_vehicles (id, name, kind, fuel_type, keywords, sort_order, created_at, updated_at)
+      VALUES (${v.id}, ${v.name}, ${v.kind}, ${v.fuel}, ${JSON.stringify(v.keywords)}, ${v.sort}, ${nowSec}, ${nowSec})
     `);
   }
 
   // Seed sensible defaults so the admin tab isn't empty on first boot.
   // INSERT OR IGNORE so any value the admin has already edited stays put.
   const now = Math.floor(Date.now() / 1000);
+  // Per-unit constants used by the monthly Lease New Cars math. Each
+  // is exposed in Admin → Math so the user can tune without redeploy.
+  // (Note: the Excel templates split £175 off Chassis GP into Other
+  // income, so the same constant drives both — keep them in sync.)
   const seeds: Array<[string, number, string, string, number]> = [
     // [key, value, description, category, sort_order]
-    ["car_dpa_pct", 2.5, "DPA % of wholesale per car unit (Q2 default)", "car", 10],
-    ["car_dpa_half_year_pct", 1.0, "DPA half-year % of wholesale per car unit", "car", 20],
-    ["car_guaranteed_margin_pct", 1.5, "Guaranteed margin % per car unit", "car", 30],
-    ["car_stocking_credits_pct", 0.54, "Stocking credits % per car unit", "car", 40],
-    ["car_house_charge_per_unit", 175, "Flat 'Other income' per car unit", "car", 50],
-    ["cv_dpa_pct", 2.5, "CV DPA % of wholesale per CV unit", "cv", 10],
-    ["cv_frpa_pct", 0, "FRPA % per CV unit", "cv", 20],
-    ["cv_guaranteed_margin_pct", 1.5, "Guaranteed margin % per CV unit", "cv", 30],
-    ["cv_standards_pct", 0.8, "VETS / Standards margin % per CV unit", "cv", 40],
-    ["cv_stocking_credits_pct", 0.29, "CV stocking credits %", "cv", 50],
-    ["cv_house_charge_per_unit", 175, "Flat 'Other income' per CV unit", "cv", 60],
-    ["overheads_monthly_budget", 2014.61, "Default monthly General Overheads budget", "overheads", 10],
+    ["car_house_charge_per_unit",          175,  "House charge per car unit — subtracted from Chassis GP, added back as Other income.", "car", 10],
+    ["car_pdi_prep_per_unit",              135,  "PDI & Prep cost per car unit.",            "car", 20],
+    ["car_cleaning_per_unit",              35,   "Cleaning cost per car unit.",              "car", 30],
+    ["car_sales_commission_per_unit",      80,   "Sales commission per car unit.",           "car", 40],
+    ["car_collection_delivery_per_unit",   200,  "Collection & Delivery per car unit (excl. Salary Sacrifice).", "car", 50],
+    ["overheads_monthly_budget",          2014.61, "Default monthly General Overheads budget.", "overheads", 10],
   ];
   for (const [key, value, description, category, sortOrder] of seeds) {
     await db.run(sql`

@@ -11,6 +11,7 @@ export interface VehicleRow {
   id: string;
   name: string;
   kind: string;             // "car" | "van"
+  fuelType: string;         // "ice" | "bev"
   keywords: string;         // JSON-encoded array
   sortOrder: number;
 }
@@ -19,6 +20,7 @@ export interface ParsedVehicle {
   id: string;
   name: string;
   kind: "car" | "van";
+  fuelType: "ice" | "bev";
   keywords: string[];
   sortOrder: number;
 }
@@ -35,6 +37,7 @@ export function parseVehicle(row: VehicleRow): ParsedVehicle {
     id: row.id,
     name: row.name,
     kind: row.kind === "van" ? "van" : "car",
+    fuelType: row.fuelType === "bev" ? "bev" : "ice",
     keywords,
     sortOrder: row.sortOrder,
   };

@@ -1143,6 +1143,11 @@ export const forecastDealbookLines = sqliteTable("forecast_dealbook_lines", {
   vehicleId: text("vehicle_id"),
   kind: text("kind").notNull().default("unknown"),           // "car" | "van" | "unknown"
 
+  // Column BQ of the dealbook export — used by the ICE chassis-GP
+  // formula and by Standards / Stocking credits which multiply this by
+  // a per-vehicle percentage.
+  basic: real("basic").notNull().default(0),
+
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 }, (t) => ({
   byUpload: index("idx_forecast_lines_upload").on(t.uploadId),
@@ -1201,6 +1206,11 @@ export const forecastVehicles = sqliteTable("forecast_vehicles", {
   id: text("id").primaryKey(),                                  // slug e.g. "puma-gen-e"
   name: text("name").notNull(),                                  // display "Puma Gen-E"
   kind: text("kind").notNull(),                                  // "car" | "van"
+  // Powertrain — only "car" rows use this, but it lives on every row
+  // for simplicity. ICE rows get the Guarantee B deduction in Chassis
+  // GP and qualify for Standards margin + Stocking credits; BEV rows
+  // skip all three.
+  fuelType: text("fuel_type").notNull().default("ice"),         // "ice" | "bev"
   keywords: text("keywords").notNull().default("[]"),            // JSON array of strings
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),

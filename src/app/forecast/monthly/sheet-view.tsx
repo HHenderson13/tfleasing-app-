@@ -1,32 +1,27 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setInputAction } from "../actions";
 import type { ForecastLine, SheetKey } from "../line-definitions";
-import type { DealbookRollup } from "../rollup";
+import { settleDerivedLines } from "./car-forecast";
 
 interface Props {
   sheet: SheetKey;
   month: string;
   lines: ForecastLine[];
-  rollup: DealbookRollup;
+  forecastValues: Map<string, number>;   // already computed by monthly-client
   baselines: Map<string, number>;        // budget_* values keyed in Admin
-  published: Map<string, number>;         // published_* — overrides forecast when present
-  inputs: Map<string, number>;            // scenario inputs
+  published: Map<string, number>;        // published_* — overrides forecast when present
+  inputs: Map<string, number>;           // scenario inputs (editable)
 }
 
-// Read-only sheet view. The only editable inputs live at the top of the
-// page (scenario: extra units + £ per unit). Everything else is driven
-// by:
-//   - Prior year + Budget    → keyed in Admin → Baselines
-//   - Dealbook so far         → CSV uploads + per-line month allocation
-//   - Forecast               → Dealbook + scenario  (or Published actual,
-//                              once Admin → Published Accounts has values
-//                              for the month — that overwrites Forecast)
-//
-// Columns mirror the BPM / sheet templates the user copies into.
+// Read-only display. Scenario card is the only editable surface here.
+// All numeric leaf lines come pre-computed via the monthly-client →
+// car-forecast pipeline; this component just lays them out + settles
+// totals/per-unit derivations against the budget column so the same
+// layout drives both the Budget and Forecast columns.
 
-export function SheetView({ sheet, month, lines, rollup, baselines, published, inputs }: Props) {
+export function SheetView({ sheet, month, lines, forecastValues, baselines, published, inputs }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -34,12 +29,32 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
   const additionalUnits = inputs.get("additional_units") ?? 0;
   const additionalMarginPerUnit = inputs.get("additional_margin_per_unit") ?? 0;
 
-  const resolved = useMemo(
-    () => resolveValues(lines, rollup, baselines, published, additionalUnits, additionalMarginPerUnit),
-    [lines, rollup, baselines, published, additionalUnits, additionalMarginPerUnit],
-  );
+  // Budget values — admin keys the leaf rows in Admin → Budget. We
+  // settle totals so things like GP Before Variables show the right sum
+  // even when only the leaves are keyed.
+  const budgetValues = (() => {
+    const m = new Map<string, number>();
+    for (const l of lines) {
+      if (l.kind === "header" || l.kind === "total" || l.kind === "perUnit") continue;
+      const v = baselines.get(`budget_${l.key}`);
+      if (v !== undefined) m.set(l.key, v);
+    }
+    settleDerivedLines(lines, m);
+    return m;
+  })();
 
-  // Tells the user whether any published actuals exist for this slot.
+  // Display values: published wins, then forecast.
+  const displayValues = (() => {
+    const m = new Map<string, number>();
+    for (const l of lines) {
+      if (l.kind === "header") continue;
+      const pub = published.get(`published_${l.key}`);
+      if (pub !== undefined) m.set(l.key, pub);
+      else m.set(l.key, forecastValues.get(l.key) ?? 0);
+    }
+    return m;
+  })();
+
   const isPublished = published.size > 0;
 
   function commitInput(scenarioKey: string, value: number | null) {
@@ -107,8 +122,7 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Line</th>
                 <th className="px-3 py-3 text-right font-medium">Budget</th>
-                <th className="px-3 py-3 text-right font-medium">Dealbook</th>
-                <th className="px-3 py-3 text-right font-medium">{isPublished ? "Actual" : "Forecast"}</th>
+                <th className="px-3 py-3 text-right font-medium">Forecast</th>
                 <th className="px-5 py-3 text-right font-medium">vs Budget</th>
               </tr>
             </thead>
@@ -117,15 +131,14 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
                 if (l.kind === "header") {
                   return (
                     <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                      <td colSpan={5} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                      <td colSpan={4} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
                         {l.label}
                       </td>
                     </tr>
                   );
                 }
-                const bud = resolved.budget.get(l.key) ?? 0;
-                const db = resolved.dealbook.get(l.key);
-                const fc = resolved.display.get(l.key) ?? 0;
+                const bud = budgetValues.get(l.key) ?? 0;
+                const fc = displayValues.get(l.key) ?? 0;
                 const vsB = fc - bud;
                 const isTotal = l.kind === "total";
                 const stripe = idx % 2 === 0 ? "" : "bg-slate-50/40";
@@ -134,12 +147,7 @@ export function SheetView({ sheet, month, lines, rollup, baselines, published, i
                   <tr key={l.key} className={`border-t border-slate-100 ${stripe} ${totalClass}`}>
                     <td className="px-5 py-2 text-slate-800">{l.label}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-500">{formatNumber(bud, l.kind)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">
-                      {db === undefined ? "—" : formatNumber(db, l.kind)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
-                      {formatNumber(fc, l.kind)}
-                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{formatNumber(fc, l.kind)}</td>
                     <td className={`px-5 py-2 text-right tabular-nums ${tone(vsB)}`}>
                       {formatNumber(vsB, l.kind === "unit" ? "unit" : "money")}
                     </td>
@@ -164,65 +172,4 @@ function formatNumber(v: number, kind: ForecastLine["kind"]): string {
   if (kind === "pct") return `${v.toFixed(2)}%`;
   if (Math.abs(v) < 0.005) return "0";
   return v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function resolveValues(
-  lines: ForecastLine[],
-  rollup: DealbookRollup,
-  baselines: Map<string, number>,
-  published: Map<string, number>,
-  additionalUnits: number,
-  additionalMarginPerUnit: number,
-) {
-  const budget = new Map<string, number>();
-  const dealbook = new Map<string, number>();
-  const forecast = new Map<string, number>();
-  const display = new Map<string, number>();
-  const publishedMap = new Map<string, number>();
-
-  for (const l of lines) {
-    if (l.kind === "header") continue;
-    if (l.dealbookKey) dealbook.set(l.key, rollup[l.dealbookKey] ?? 0);
-    const bud = baselines.get(`budget_${l.key}`);
-    if (bud !== undefined) budget.set(l.key, bud);
-    const pub = published.get(`published_${l.key}`);
-    if (pub !== undefined) publishedMap.set(l.key, pub);
-  }
-
-  const scenarioChassis = additionalUnits * additionalMarginPerUnit;
-  const scenarioUnitsKey = lines.find((l) => l.kind === "unit" && l.dealbookKey === "units")?.key ?? null;
-  const scenarioChassisKey = lines.find((l) => l.kind === "money" && l.dealbookKey === "chassisProfit")?.key ?? null;
-
-  for (const l of lines) {
-    if (l.kind === "header") continue;
-    let f = dealbook.get(l.key) ?? 0;
-    if (l.key === scenarioUnitsKey) f += additionalUnits;
-    if (l.key === scenarioChassisKey) f += scenarioChassis;
-    forecast.set(l.key, f);
-  }
-
-  for (let pass = 0; pass < 3; pass++) {
-    for (const l of lines) {
-      if (l.kind === "total" && l.totalOf) {
-        const sum = (m: Map<string, number>) => l.totalOf!.reduce((acc, k) => acc + (m.get(k) ?? 0), 0);
-        budget.set(l.key, sum(budget));
-        forecast.set(l.key, sum(forecast));
-      } else if (l.kind === "perUnit" && l.perUnitOf) {
-        const calc = (m: Map<string, number>) => {
-          const money = m.get(l.perUnitOf!.money);
-          const units = m.get(l.perUnitOf!.units);
-          return money !== undefined && units && units !== 0 ? money / units : 0;
-        };
-        budget.set(l.key, calc(budget));
-        forecast.set(l.key, calc(forecast));
-      }
-    }
-  }
-
-  for (const l of lines) {
-    if (l.kind === "header") continue;
-    display.set(l.key, publishedMap.has(l.key) ? publishedMap.get(l.key)! : forecast.get(l.key) ?? 0);
-  }
-
-  return { budget, dealbook, forecast, display };
 }

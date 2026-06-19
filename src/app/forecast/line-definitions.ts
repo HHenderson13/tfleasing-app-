@@ -26,8 +26,9 @@ export interface ForecastLine {
   perUnitOf?: { money: string; units: string };
   // Section header — visual grouping only.
   section?: boolean;
-  // For "total": which keys to sum.
+  // For "total": which keys to sum, and which to subtract.
   totalOf?: string[];
+  subtractOf?: string[];
   // Hint about indentation in the UI (0 default, 1 nested).
   indent?: number;
 }
@@ -58,56 +59,30 @@ export interface DealbookSummable {
 }
 
 // ── New Retail Car ────────────────────────────────────────────────────────
-// Mirrors `New Retail Car Input.xlsx` row-for-row. Lines tagged with
-// dealbookKey draw their Actual value from the uploaded dealbook; others
-// are user-keyed or derived.
+// Slim layout: Retail Car (units + Chassis GP), F&I, other income lines
+// and the cost stack. Lines tagged with `dealbookKey` draw their value
+// from the per-vehicle car-month forecast computation in monthly/
+// car-forecast.ts; the rest are derived totals / per-unit cells.
 export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "section_retail", label: "New Retail Car", kind: "header", section: true },
   { key: "car_units",          label: "New Car Units",        kind: "unit",   dealbookKey: "units" },
   { key: "car_chassis_gp",     label: "Chassis GP",           kind: "money",  dealbookKey: "chassisProfit" },
   { key: "car_chassis_per",    label: "Chassis GP per unit",  kind: "perUnit", perUnitOf: { money: "car_chassis_gp", units: "car_units" } },
 
-  { key: "section_employee", label: "New Employee Car", kind: "header", section: true },
-  { key: "emp_units",          label: "New Car Units",        kind: "unit" },
-  { key: "emp_chassis_gp",     label: "Chassis GP",           kind: "money" },
-  { key: "emp_chassis_per",    label: "Chassis GP per unit",  kind: "perUnit", perUnitOf: { money: "emp_chassis_gp", units: "emp_units" } },
-
-  { key: "section_motab", label: "New Motability Car", kind: "header", section: true },
-  { key: "motab_units",        label: "New Car Units",        kind: "unit" },
-  { key: "motab_chassis_gp",   label: "Chassis GP",           kind: "money" },
-  { key: "motab_chassis_per",  label: "Chassis GP per unit",  kind: "perUnit", perUnitOf: { money: "motab_chassis_gp", units: "motab_units" } },
-
-  { key: "section_showroom", label: "Showroom (rollup)", kind: "header", section: true },
-  { key: "showroom_units",     label: "New Car Units",        kind: "total", totalOf: ["car_units", "emp_units", "motab_units"] },
-  { key: "showroom_chassis_gp", label: "Chassis GP",          kind: "total", totalOf: ["car_chassis_gp", "emp_chassis_gp", "motab_chassis_gp"] },
-  { key: "showroom_chassis_per", label: "Chassis GP per unit", kind: "perUnit", perUnitOf: { money: "showroom_chassis_gp", units: "showroom_units" } },
-
   { key: "section_fi", label: "F&I", kind: "header", section: true },
   { key: "commission_vb",      label: "Commission & VB",      kind: "money",  dealbookKey: "financeIncome" },
-  { key: "debit_back",          label: "Debit back provision (minus)", kind: "money" },
   { key: "alloy_tyre",          label: "Alloy Wheel & Tyre",    kind: "money", dealbookKey: "tyreInsIncome" },
   { key: "gap",                 label: "GAP",                   kind: "money", dealbookKey: "gapRtiIncome" },
   { key: "paint_fabric",        label: "Paint & Fabric",        kind: "money", dealbookKey: "paintProtection" },
   { key: "warranty",            label: "Warranty",              kind: "money", dealbookKey: "warranty" },
-  { key: "dcr",                 label: "DCR",                   kind: "money" },
-  { key: "total_fi",            label: "Total F&I",             kind: "total", totalOf: ["commission_vb", "debit_back", "alloy_tyre", "gap", "paint_fabric", "warranty", "dcr"] },
-  { key: "fi_per_unit",         label: "F&I per unit",          kind: "perUnit", perUnitOf: { money: "total_fi", units: "showroom_units" } },
+  { key: "total_fi",            label: "Total F&I",             kind: "total", totalOf: ["commission_vb", "alloy_tyre", "gap", "paint_fabric", "warranty"] },
+  { key: "fi_per_unit",         label: "F&I per unit",          kind: "perUnit", perUnitOf: { money: "total_fi", units: "car_units" } },
 
   { key: "section_other_income", label: "Other income lines", kind: "header", section: true },
-  { key: "igroup_gp",           label: "New I/Group Gross Profit", kind: "money" },
-  { key: "accessory_gp",        label: "Accessory Gross Profit",   kind: "money", dealbookKey: "accessoryProfit" },
-  { key: "delivery_gp",         label: "Delivery Gross Profit",    kind: "money" },
-  { key: "dpa_faststart",       label: "DPA / Faststart",          kind: "money" },
-  { key: "dpa_half_year",       label: "DPA half year",            kind: "money" },
-  { key: "motab_month",         label: "Motab month",              kind: "money" },
-  { key: "motab_quarter",       label: "Motab quarter",            kind: "money" },
-  { key: "guaranteed_margin",   label: "Guaranteed Margin",        kind: "money" },
-  { key: "ev_standards_2pct",   label: "2% EV Standards",          kind: "money" },
-  { key: "standards_margin",    label: "Standards margin",         kind: "money" },
-  { key: "stocking_credits",    label: "Stocking credits",         kind: "money" },
-  { key: "cspa",                label: "CSPA",                     kind: "money" },
-  { key: "other_income",        label: "Other income (House charge etc.)", kind: "money" },
-  { key: "gp_before_variables", label: "GP Before Variables",      kind: "total", totalOf: ["showroom_chassis_gp", "total_fi", "igroup_gp", "accessory_gp", "delivery_gp", "dpa_faststart", "dpa_half_year", "motab_month", "motab_quarter", "guaranteed_margin", "ev_standards_2pct", "standards_margin", "stocking_credits", "cspa", "other_income"] },
+  { key: "standards_margin",    label: "Standards margin (ICE)",   kind: "money" },
+  { key: "stocking_credits",    label: "Stocking credits (ICE)",   kind: "money" },
+  { key: "other_income",        label: "Other income (House charge)", kind: "money" },
+  { key: "gp_before_variables", label: "GP Before Variables",      kind: "total", totalOf: ["car_chassis_gp", "total_fi", "standards_margin", "stocking_credits", "other_income"] },
 
   { key: "section_variable", label: "Variable costs", kind: "header", section: true },
   { key: "pdi_prep",            label: "PDI & Prep",               kind: "money" },
@@ -116,8 +91,8 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "collection_delivery", label: "Collection & Delivery",    kind: "money" },
   { key: "late_costs",          label: "Late Costs",               kind: "money" },
   { key: "total_variable",      label: "Total variable costs",     kind: "total", totalOf: ["pdi_prep", "cleaning", "sales_commissions", "collection_delivery", "late_costs"] },
-  { key: "variable_per_unit",   label: "Variable costs per unit",  kind: "perUnit", perUnitOf: { money: "total_variable", units: "showroom_units" } },
-  { key: "gross_profit",        label: "Gross Profit",             kind: "total", totalOf: ["gp_before_variables"] },
+  { key: "variable_per_unit",   label: "Variable costs per unit",  kind: "perUnit", perUnitOf: { money: "total_variable", units: "car_units" } },
+  { key: "gross_profit",        label: "Gross Profit",             kind: "total", totalOf: ["gp_before_variables"], subtractOf: ["total_variable"] },
 
   { key: "section_expenses", label: "Expenses", kind: "header", section: true },
   { key: "personnel",           label: "Personnel Costs",          kind: "money" },
@@ -129,7 +104,7 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "property",            label: "Property Costs",           kind: "money" },
   { key: "total_expenses",      label: "Total Expenses",           kind: "total", totalOf: ["personnel", "sales_promotion", "vehicle_costs", "equipment", "stock_control", "other_direct", "property"] },
   { key: "total_interest",      label: "Total Interest",           kind: "money" },
-  { key: "net_profit",          label: "Net profit",               kind: "total", totalOf: ["gross_profit", "total_variable", "total_expenses", "total_interest"] },
+  { key: "net_profit",          label: "Net profit",               kind: "total", totalOf: ["gross_profit"], subtractOf: ["total_expenses", "total_interest"] },
 
   { key: "section_kpi", label: "KPIs / bad-debt", kind: "header", section: true },
   { key: "dpa_pct_achieved",    label: "DPA % achieved",           kind: "pct" },
@@ -186,7 +161,7 @@ export const NEW_RETAIL_CV_LINES: ForecastLine[] = [
   { key: "cv_late_costs",       label: "Late Costs",              kind: "money" },
   { key: "cv_total_variable",   label: "Total variable costs",    kind: "total", totalOf: ["cv_pdi_prep", "cv_cleaning", "cv_sales_commissions", "cv_collection_delivery", "cv_late_costs"] },
   { key: "cv_variable_per_unit", label: "Variable costs per unit", kind: "perUnit", perUnitOf: { money: "cv_total_variable", units: "cv_units" } },
-  { key: "cv_gross_profit",     label: "Gross Profit",            kind: "total", totalOf: ["cv_gp_before_variables"] },
+  { key: "cv_gross_profit",     label: "Gross Profit",            kind: "total", totalOf: ["cv_gp_before_variables"], subtractOf: ["cv_total_variable"] },
 
   { key: "section_cv_expenses", label: "Expenses", kind: "header", section: true },
   { key: "cv_personnel",        label: "Personnel Costs",         kind: "money" },
@@ -198,7 +173,7 @@ export const NEW_RETAIL_CV_LINES: ForecastLine[] = [
   { key: "cv_property",         label: "Property Costs",          kind: "money" },
   { key: "cv_total_expenses",   label: "Total Expenses",          kind: "total", totalOf: ["cv_personnel", "cv_sales_promotion", "cv_vehicle_costs", "cv_equipment", "cv_stock_control", "cv_other_direct", "cv_property"] },
   { key: "cv_total_interest",   label: "Total Interest",          kind: "money" },
-  { key: "cv_net_profit",       label: "Net profit",              kind: "total", totalOf: ["cv_gross_profit", "cv_total_variable", "cv_total_expenses", "cv_total_interest"] },
+  { key: "cv_net_profit",       label: "Net profit",              kind: "total", totalOf: ["cv_gross_profit"], subtractOf: ["cv_total_expenses", "cv_total_interest"] },
 
   { key: "section_cv_kpi", label: "KPIs / bad-debt", kind: "header", section: true },
   { key: "cvdpa_pct_achieved",  label: "CVDPA % achieved",        kind: "pct" },
@@ -224,7 +199,7 @@ export const OVERHEADS_LINES: ForecastLine[] = [
   { key: "oh_total_expenses", label: "Total Expenses",         kind: "total", totalOf: ["oh_personnel", "oh_sales_promotion", "oh_vehicle_costs", "oh_equipment", "oh_stock_control", "oh_other_direct", "oh_property"] },
   { key: "oh_total_interest", label: "Total Interest",         kind: "money" },
   { key: "oh_other_income",   label: "Other income",           kind: "money" },
-  { key: "oh_net_profit",     label: "Net profit",             kind: "total", totalOf: ["oh_other_income", "oh_total_expenses", "oh_total_interest"] },
+  { key: "oh_net_profit",     label: "Net profit",             kind: "total", totalOf: ["oh_other_income"], subtractOf: ["oh_total_expenses", "oh_total_interest"] },
 ];
 
 export type SheetKey = "car" | "cv" | "overheads";

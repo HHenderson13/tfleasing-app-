@@ -113,6 +113,7 @@ export async function uploadDealbookAction(formData: FormData) {
             warranty: r.warranty,
             totalFiIncome: r.totalFiIncome,
             totalGrossProfit: r.totalGrossProfit,
+            basic: r.basic,
             vin: r.vin,
             regNo: r.regNo,
             customerExternalId: r.customerExternalId,
@@ -383,6 +384,7 @@ export async function upsertVehicleAction(input: {
   id?: string;          // optional — provided when editing existing
   name: string;
   kind: "car" | "van";
+  fuelType?: "ice" | "bev";
   keywords: string[];
   sortOrder?: number;
 }) {
@@ -391,6 +393,7 @@ export async function upsertVehicleAction(input: {
     const id = (input.id ?? input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")).trim();
     if (!id) return { ok: false as const, error: "Need a name or id." };
     if (input.kind !== "car" && input.kind !== "van") return { ok: false as const, error: "Kind must be car or van." };
+    const fuelType = input.fuelType === "bev" ? "bev" : "ice";
     const keywords = input.keywords.filter((k) => k.trim().length > 0);
     const now = new Date();
     const existing = await db.select().from(forecastVehicles).where(eq(forecastVehicles.id, id)).limit(1);
@@ -398,6 +401,7 @@ export async function upsertVehicleAction(input: {
       await db.update(forecastVehicles).set({
         name: input.name.trim(),
         kind: input.kind,
+        fuelType,
         keywords: JSON.stringify(keywords),
         sortOrder: input.sortOrder ?? existing[0].sortOrder,
         updatedAt: now,
@@ -407,6 +411,7 @@ export async function upsertVehicleAction(input: {
         id,
         name: input.name.trim(),
         kind: input.kind,
+        fuelType,
         keywords: JSON.stringify(keywords),
         sortOrder: input.sortOrder ?? 999,
         createdAt: now,

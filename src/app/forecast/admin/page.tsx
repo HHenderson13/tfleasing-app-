@@ -60,6 +60,7 @@ export default async function ForecastAdminPage({ searchParams }: PageProps) {
           id: v.id,
           name: v.name,
           kind: v.kind,
+          fuelType: v.fuelType,
           keywords: v.keywords,
           sortOrder: v.sortOrder,
         }))}
