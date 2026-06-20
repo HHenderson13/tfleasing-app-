@@ -20,6 +20,7 @@ interface DealbookLine {
   vehicleId: string | null;
   regDate: string | null;
   overrideMonth: string | null;
+  effectiveMonth: string;
   basic: number;
   reconCost: number;
   totalVehicleProfit: number;
@@ -145,6 +146,7 @@ export function MonthlyClient({
         source: l.source,
         regDate: l.regDate,
         overrideMonth: l.overrideMonth,
+        effectiveMonth: l.effectiveMonth,
         basic: l.basic,
         reconCost: l.reconCost,
         totalVehicleProfit: l.totalVehicleProfit,

@@ -304,9 +304,11 @@ export async function listForecastLinesByRegDateRange(startYyyymm: string, endYy
   }>(sql`
     SELECT * FROM forecast_dealbook_lines
     WHERE
-      (override_month IS NOT NULL AND override_month BETWEEN ${startYyyymm} AND ${endYyyymm})
-      OR
-      (override_month IS NULL AND reg_date IS NOT NULL AND substr(reg_date, 1, 7) BETWEEN ${startYyyymm} AND ${endYyyymm})
+      COALESCE(
+        override_month,
+        CASE WHEN reg_date IS NOT NULL AND reg_date != '' THEN substr(reg_date, 1, 7) ELSE NULL END,
+        effective_month
+      ) BETWEEN ${startYyyymm} AND ${endYyyymm}
   `);
 }
 

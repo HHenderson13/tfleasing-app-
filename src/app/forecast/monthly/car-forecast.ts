@@ -19,6 +19,7 @@ export interface DealbookCarLine {
   source: string;            // "lease" | "salary_sacrifice"
   regDate: string | null;    // YYYY-MM-DD — natural registered date from dealbook
   overrideMonth: string | null; // YYYY-MM — admin override for DPA bucket only
+  effectiveMonth: string;    // YYYY-MM — upload's month, final fallback for DPA bucket
   basic: number;             // column BQ
   reconCost: number;         // column Q (typically negative)
   totalVehicleProfit: number;// column U
@@ -240,10 +241,15 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   for (const l of input.regHalfLines) {
     if (l.kind !== "car") continue;
     if (!l.vehicleId) continue;
-    // DPA bucket follows override_month if set, else the natural reg
-    // date. So a unit reg'd in March but moved to April by the admin
-    // counts toward Q2 / H1 instead of Q1.
-    const bucketYyyymm = l.overrideMonth ?? (l.regDate ? l.regDate.slice(0, 7) : null);
+    // DPA bucket priority: override_month → natural reg-date month →
+    // upload's effective month. Most dealbook CSV exports leave the
+    // Registered Date column blank, so the effective_month fallback
+    // means a unit uploaded for June automatically counts toward Q2 / H1
+    // unless the admin manually moves it via the upload review window.
+    const bucketYyyymm =
+      l.overrideMonth ??
+      (l.regDate && l.regDate.length >= 7 ? l.regDate.slice(0, 7) : null) ??
+      l.effectiveMonth;
     if (!bucketYyyymm) continue;
     const regMonth = parseInt(bucketYyyymm.slice(5, 7), 10);
     if (!regMonth) continue;
