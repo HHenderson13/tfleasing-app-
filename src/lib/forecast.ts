@@ -255,11 +255,11 @@ export async function listForecastLinesForUpload(uploadId: string) {
     .where(eq(forecastDealbookLines.uploadId, uploadId));
 }
 
-// Lines whose registered date falls in the given YYYY-MM window (inclusive
-// at both ends). DPA + Pot of Gold computations need this because they're
-// based on the registration month, not the dealbook upload's effective
-// month — a unit registered in March is a Q1 unit even if the admin has
-// reallocated it into a later forecast month.
+// Lines whose effective registration month falls in the given YYYY-MM
+// window (inclusive). Effective reg month = override_month if set,
+// otherwise the natural reg_date month. Used by Quarter/Half-Year DPA
+// + Pot of Gold so units that the admin moved between reg buckets land
+// in the right place.
 export async function listForecastLinesByRegDateRange(startYyyymm: string, endYyyymm: string) {
   return db.all<{
     id: string;
@@ -303,9 +303,10 @@ export async function listForecastLinesByRegDateRange(startYyyymm: string, endYy
     kind: string;
   }>(sql`
     SELECT * FROM forecast_dealbook_lines
-    WHERE reg_date IS NOT NULL
-      AND substr(reg_date, 1, 7) >= ${startYyyymm}
-      AND substr(reg_date, 1, 7) <= ${endYyyymm}
+    WHERE
+      (override_month IS NOT NULL AND override_month BETWEEN ${startYyyymm} AND ${endYyyymm})
+      OR
+      (override_month IS NULL AND reg_date IS NOT NULL AND substr(reg_date, 1, 7) BETWEEN ${startYyyymm} AND ${endYyyymm})
   `);
 }
 

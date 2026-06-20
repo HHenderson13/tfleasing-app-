@@ -95,6 +95,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
           kind: l.kind,
           vehicleId: l.vehicleId ?? null,
           regDate: l.regDate ?? null,
+          overrideMonth: l.overrideMonth ?? null,
           basic: l.basic ?? 0,
           reconCost: l.reconCost,
           totalVehicleProfit: l.totalVehicleProfit,
@@ -118,6 +119,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
           kind: l.kind,
           vehicleId: l.vehicle_id,
           regDate: l.reg_date,
+          overrideMonth: l.override_month ?? null,
           basic: l.basic ?? 0,
           // The DPA computation only needs basic + reg-date + vehicle.
           // Fill out the rest so it satisfies the DealbookCarLine shape.

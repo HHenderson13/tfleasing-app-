@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 26;
+const SCHEMA_VERSION = 27;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -204,6 +204,10 @@ async function ensureForecastTables() {
     { name: "basic", sqlType: "REAL NOT NULL DEFAULT 0" },
   ]);
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_kind ON forecast_dealbook_lines(kind)`));
+  // Volume placement is now permanently the upload's target month —
+  // override_month only steers DPA bucketing. Restore effective_month
+  // for any historic rows where it was shifted off default_month.
+  await db.run(sql.raw(`UPDATE forecast_dealbook_lines SET effective_month = default_month WHERE effective_month != default_month`));
 
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS forecast_actuals (

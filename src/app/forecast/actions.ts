@@ -158,8 +158,10 @@ export async function deleteUploadAction(uploadId: string) {
   }
 }
 
-// Set an override registration month on a single dealbook line. Empty
-// string clears the override, returning the line to its default_month.
+// Set an override REGISTRATION month on a single dealbook line.
+// This only affects DPA / Pot of Gold bucket assignment (quarter +
+// half-year). The unit's VOLUME always stays in the upload's target
+// month — `effective_month` is left alone.
 export async function setLineOverrideMonthAction(lineId: string, monthYyyymm: string | null) {
   try {
     await requireAdmin();
@@ -167,16 +169,9 @@ export async function setLineOverrideMonthAction(lineId: string, monthYyyymm: st
     if (override !== null && !isYyyymm(override)) {
       return { ok: false as const, error: "Month must be YYYY-MM." };
     }
-    const [existing] = await db
-      .select()
-      .from(forecastDealbookLines)
-      .where(eq(forecastDealbookLines.id, lineId))
-      .limit(1);
-    if (!existing) return { ok: false as const, error: "Line not found." };
-    const effective = override ?? existing.defaultMonth;
     await db
       .update(forecastDealbookLines)
-      .set({ overrideMonth: override, effectiveMonth: effective })
+      .set({ overrideMonth: override })
       .where(eq(forecastDealbookLines.id, lineId));
     revalidatePath("/forecast");
     return { ok: true as const };
@@ -186,8 +181,8 @@ export async function setLineOverrideMonthAction(lineId: string, monthYyyymm: st
   }
 }
 
-// Bulk reassignment — useful when many lines from a single upload need
-// the same override month (e.g. "all of these went into March instead").
+// Bulk reg-month reassignment for several lines at once. Same rule:
+// reg month for DPA only, volume placement is untouched.
 export async function bulkOverrideMonthAction(lineIds: string[], monthYyyymm: string | null) {
   try {
     await requireAdmin();
@@ -196,16 +191,9 @@ export async function bulkOverrideMonthAction(lineIds: string[], monthYyyymm: st
       return { ok: false as const, error: "Month must be YYYY-MM." };
     }
     for (const id of lineIds) {
-      const [existing] = await db
-        .select()
-        .from(forecastDealbookLines)
-        .where(eq(forecastDealbookLines.id, id))
-        .limit(1);
-      if (!existing) continue;
-      const effective = override ?? existing.defaultMonth;
       await db
         .update(forecastDealbookLines)
-        .set({ overrideMonth: override, effectiveMonth: effective })
+        .set({ overrideMonth: override })
         .where(eq(forecastDealbookLines.id, id));
     }
     revalidatePath("/forecast");

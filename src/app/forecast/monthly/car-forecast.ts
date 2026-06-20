@@ -17,7 +17,8 @@ export interface DealbookCarLine {
   vehicleId: string | null;
   kind: string;              // expect "car"
   source: string;            // "lease" | "salary_sacrifice"
-  regDate: string | null;    // YYYY-MM-DD — used by Quarter/Half-year DPA classification
+  regDate: string | null;    // YYYY-MM-DD — natural registered date from dealbook
+  overrideMonth: string | null; // YYYY-MM — admin override for DPA bucket only
   basic: number;             // column BQ
   reconCost: number;         // column Q (typically negative)
   totalVehicleProfit: number;// column U
@@ -129,11 +130,10 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   let gapPolicies = 0;
   let paintPolicies = 0;
   let warrantyPolicies = 0;
-  // ICE-only roll-ups for Standards / Stocking notes.
-  let standardsUnits = 0;
-  let standardsBasicSum = 0;
-  let stockingUnits = 0;
-  let stockingBasicSum = 0;
+  // Per-vehicle Standards / Stocking roll-ups so notes can show the
+  // % each vehicle was charged at.
+  const standardsByVehicle = new Map<string, { units: number; basicSum: number; total: number; pct: number }>();
+  const stockingByVehicle = new Map<string, { units: number; basicSum: number; total: number; pct: number }>();
 
   for (const l of carLines) {
     const veh = l.vehicleId ? input.vehicles.get(l.vehicleId) : null;
@@ -162,6 +162,7 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
     // income row, which also picks it up).
     const baseChassis = l.totalVehicleProfit + l.reconCost + houseCharge;
     if (isIce) {
+      const vehicleName = veh?.id ?? l.vehicleId ?? "(no vehicle)";
       const gbPct = bonusPct(input.bonuses, l.vehicleId, B.GUARANTEE_B);
       // Chassis GP gets the deduction; Standards margin gets the same
       // value back. Net effect: moves the £ from one row to another so
@@ -169,14 +170,17 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
       const guaranteeAmount = l.basic * gbPct / 100;
       chassisGp += baseChassis - guaranteeAmount;
       standardsMargin += guaranteeAmount;
-      standardsUnits++;
-      standardsBasicSum += l.basic;
+      const sBucket = standardsByVehicle.get(vehicleName) ?? { units: 0, basicSum: 0, total: 0, pct: gbPct };
+      sBucket.units++; sBucket.basicSum += l.basic; sBucket.total += guaranteeAmount; sBucket.pct = gbPct;
+      standardsByVehicle.set(vehicleName, sBucket);
 
       // Stocking credits: Basic × per-vehicle Stocking Credits %.
       const scPct = bonusPct(input.bonuses, l.vehicleId, B.STOCKING_CREDITS);
-      stockingCredits += l.basic * scPct / 100;
-      stockingUnits++;
-      stockingBasicSum += l.basic;
+      const stockingAmount = l.basic * scPct / 100;
+      stockingCredits += stockingAmount;
+      const sCBucket = stockingByVehicle.get(vehicleName) ?? { units: 0, basicSum: 0, total: 0, pct: scPct };
+      sCBucket.units++; sCBucket.basicSum += l.basic; sCBucket.total += stockingAmount; sCBucket.pct = scPct;
+      stockingByVehicle.set(vehicleName, sCBucket);
     } else {
       chassisGp += baseChassis;
     }
@@ -235,8 +239,13 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
 
   for (const l of input.regHalfLines) {
     if (l.kind !== "car") continue;
-    if (!l.regDate || !l.vehicleId) continue;
-    const regMonth = parseInt(l.regDate.slice(5, 7), 10);
+    if (!l.vehicleId) continue;
+    // DPA bucket follows override_month if set, else the natural reg
+    // date. So a unit reg'd in March but moved to April by the admin
+    // counts toward Q2 / H1 instead of Q1.
+    const bucketYyyymm = l.overrideMonth ?? (l.regDate ? l.regDate.slice(0, 7) : null);
+    if (!bucketYyyymm) continue;
+    const regMonth = parseInt(bucketYyyymm.slice(5, 7), 10);
     if (!regMonth) continue;
     const inActiveQuarter = quartersMatch(m, regMonth);
     const halfStart = m <= 6 ? 1 : 7;
@@ -322,14 +331,21 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   if (paintPolicies) addNote("paint_fabric", `${paintPolicies} polic${paintPolicies === 1 ? "y" : "ies"}`);
   if (warrantyPolicies) addNote("warranty", `${warrantyPolicies} polic${warrantyPolicies === 1 ? "y" : "ies"}`);
 
-  // Standards / Stocking — ICE units only.
-  if (standardsUnits > 0) {
-    const avg = Math.round(standardsBasicSum / standardsUnits);
-    addNote("standards_margin", `${standardsUnits} ICE × avg £${avg.toLocaleString("en-GB")} wholesale`);
+  // Standards margin — one note per ICE vehicle so the user sees the
+  // rate that was applied to each (e.g. "Kuga: 5 × £30,000 × 1.5% = £2,250").
+  for (const [vehicle, b] of standardsByVehicle) {
+    if (b.units === 0) continue;
+    const avg = Math.round(b.basicSum / b.units);
+    addNote("standards_margin",
+      `${vehicle} · ${b.units} ICE × avg £${avg.toLocaleString("en-GB")} × ${b.pct}% = £${Math.round(b.total).toLocaleString("en-GB")}`,
+    );
   }
-  if (stockingUnits > 0) {
-    const avg = Math.round(stockingBasicSum / stockingUnits);
-    addNote("stocking_credits", `${stockingUnits} ICE × avg £${avg.toLocaleString("en-GB")} wholesale`);
+  for (const [vehicle, b] of stockingByVehicle) {
+    if (b.units === 0) continue;
+    const avg = Math.round(b.basicSum / b.units);
+    addNote("stocking_credits",
+      `${vehicle} · ${b.units} ICE × avg £${avg.toLocaleString("en-GB")} × ${b.pct}% = £${Math.round(b.total).toLocaleString("en-GB")}`,
+    );
   }
 
   // DPA Quarter — one note per vehicle so the user sees each rate.

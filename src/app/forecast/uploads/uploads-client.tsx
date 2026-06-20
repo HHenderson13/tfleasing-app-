@@ -324,7 +324,15 @@ function ReviewWindow({
   }, [upload.monthYyyymm]);
 
   const unmatched = useMemo(() => lines.filter((l) => l.kind !== "car" && l.kind !== "van"), [lines]);
-  const changed = useMemo(() => lines.filter((l) => l.effectiveMonth !== upload.monthYyyymm), [lines, upload.monthYyyymm]);
+  // "Changed" = admin moved this line's reg-month away from its natural
+  // dealbook reg-date. Volume always stays in the upload month; this
+  // only steers DPA bucket assignment.
+  const naturalRegMonth = (l: FocusLine) => l.regDate ? l.regDate.slice(0, 7) : null;
+  const effectiveRegMonth = (l: FocusLine) => l.overrideMonth ?? naturalRegMonth(l);
+  const changed = useMemo(
+    () => lines.filter((l) => l.overrideMonth !== null && l.overrideMonth !== naturalRegMonth(l)),
+    [lines],
+  );
   const filtered = useMemo(() => {
     if (filter === "changed") return changed;
     if (filter === "unmatched") return unmatched;
@@ -342,9 +350,10 @@ function ReviewWindow({
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [unmatched]);
 
-  function setMonth(lineId: string, month: string) {
+  function setMonth(lineId: string, month: string, naturalMonth: string | null) {
     onError(null);
-    const override = month === upload.monthYyyymm ? null : month;
+    // null = use the natural reg-date month (clears the override).
+    const override = month === naturalMonth ? null : month;
     startSave(async () => {
       const res = await setLineOverrideMonthAction(lineId, override);
       if (!res.ok) onError(res.error);
@@ -411,8 +420,12 @@ function ReviewWindow({
                 <> · <span className="font-medium text-amber-700">{unmatched.length} unmatched</span></>
               )}
               {changed.length > 0 && (
-                <> · <span className="font-medium text-amber-700">{changed.length} reallocated</span></>
+                <> · <span className="font-medium text-amber-700">{changed.length} reg-month override</span></>
               )}
+            </p>
+            <p className="mt-2 text-[11px] text-slate-500">
+              Volume always counts for <strong>{monthLabel(upload.monthYyyymm)}</strong> — the
+              dropdown below only changes which quarter / half-year a unit's DPA falls into.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -423,7 +436,7 @@ function ReviewWindow({
               </button>
               <button type="button" onClick={() => setFilter("changed")}
                 className={`px-2.5 py-1 ${filter === "changed" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
-                Reallocated ({changed.length})
+                Reg-month override ({changed.length})
               </button>
               <button type="button" onClick={() => setFilter("unmatched")}
                 className={`px-2.5 py-1 ${filter === "unmatched" ? "bg-amber-900 text-white" : "bg-white text-amber-700 hover:bg-amber-50"}`}>
@@ -453,7 +466,7 @@ function ReviewWindow({
                 <th className="px-3 py-3 text-left font-medium">Vehicle</th>
                 <th className="px-3 py-3 text-left font-medium">Kind</th>
                 <th className="px-3 py-3 text-left font-medium">Reg date</th>
-                <th className="px-5 py-3 text-left font-medium">Goes to</th>
+                <th className="px-5 py-3 text-left font-medium">Reg month (for DPA)</th>
               </tr>
             </thead>
             <tbody>
@@ -461,7 +474,9 @@ function ReviewWindow({
                 <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">No rows.</td></tr>
               ) : (
                 filtered.map((l, idx) => {
-                  const moved = l.effectiveMonth !== upload.monthYyyymm;
+                  const natural = naturalRegMonth(l);
+                  const eff = effectiveRegMonth(l) ?? upload.monthYyyymm;
+                  const moved = l.overrideMonth !== null && l.overrideMonth !== natural;
                   const isUnmatched = l.kind !== "car" && l.kind !== "van";
                   const rowClass = isUnmatched
                     ? "bg-amber-50/60"
@@ -481,15 +496,17 @@ function ReviewWindow({
                       <td className="px-3 py-2 text-slate-500">{l.regDate ?? "—"}</td>
                       <td className="px-5 py-2">
                         <select
-                          value={l.effectiveMonth}
+                          value={eff}
                           disabled={pending}
-                          onChange={(e) => setMonth(l.id, e.target.value)}
+                          onChange={(e) => setMonth(l.id, e.target.value, natural)}
                           className={`rounded-lg border bg-white px-2 py-1 text-xs font-medium ${
                             moved ? "border-amber-300 text-amber-900" : "border-slate-200 text-slate-700"
                           }`}
                         >
                           {monthOptions.map((m) => (
-                            <option key={m} value={m}>{monthLabel(m)}</option>
+                            <option key={m} value={m}>
+                              {monthLabel(m)}{m === natural ? " (from reg date)" : ""}
+                            </option>
                           ))}
                         </select>
                       </td>
