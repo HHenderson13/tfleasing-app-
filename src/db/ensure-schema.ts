@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 27;
+const SCHEMA_VERSION = 28;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -333,6 +333,8 @@ async function ensureForecastTables() {
   }> = [
     // ── Lease New Cars — nominal costs ──
     { key: "car_house_charge_per_unit", value: 175, description: "House charge per unit — subtracted from Chassis GP, added back as Other income.", category: "car", applies: "special", appliesTo: null, sort: 10 },
+    { key: "car_salsac_chassis_constant", value: 150, description: "Salary Sacrifice chassis constant — added to U for SalSac units only.", category: "car", applies: "special", appliesTo: null, sort: 11 },
+    { key: "car_dcr_per_product", value: 15, description: "DCR rate per F&I product (Alloy / GAP / Warranty) sold in the quarter.", category: "car", applies: "special", appliesTo: null, sort: 12 },
     { key: "car_pdi_prep_per_unit", value: 135, description: "PDI & Prep cost per unit.", category: "car", applies: "per_unit", appliesTo: "pdi_prep", sort: 20 },
     { key: "car_cleaning_per_unit", value: 35, description: "Cleaning cost per unit.", category: "car", applies: "per_unit", appliesTo: "cleaning", sort: 30 },
     { key: "car_sales_commission_per_unit", value: 80, description: "Sales commission per unit.", category: "car", applies: "per_unit", appliesTo: "sales_commissions", sort: 40 },

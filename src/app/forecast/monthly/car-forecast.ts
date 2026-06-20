@@ -84,7 +84,9 @@ export interface CarMonthForecast {
 }
 
 const C = {
-  HOUSE_CHARGE: "car_house_charge_per_unit",
+  HOUSE_CHARGE:    "car_house_charge_per_unit",
+  SALSAC_CHASSIS:  "car_salsac_chassis_constant",
+  DCR_PER_PRODUCT: "car_dcr_per_product",
 };
 
 const B = {
@@ -107,6 +109,8 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   const v = new Map<string, number>();
   const cfg = (key: string, fallback = 0) => input.config.get(key) ?? fallback;
   const houseCharge = cfg(C.HOUSE_CHARGE, 175);
+  const salSacChassisConstant = cfg(C.SALSAC_CHASSIS, 150);
+  const dcrPerProduct = cfg(C.DCR_PER_PRODUCT, 15);
 
   // Filter to actual car lines (kind === "car"). Unmatched lines stay
   // out of the rollup until the admin adds the vehicle to the catalogue.
@@ -155,35 +159,45 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
     if (l.paintProtection > 0) paintPolicies++;
     if (l.warranty > 0) warrantyPolicies++;
 
-    // Chassis GP per the user's spec:
-    //   BEV: U + Q + house_charge
-    //   ICE: U + Q + house_charge - (Basic × Guarantee B %)
+    // Chassis GP per source / fuel type:
+    //   SalSac: U + salsac_chassis_constant (£150 default). Skip the Q
+    //           recon + house charge + guarantee deduction — SalSac is
+    //           a simpler programme on the chassis side.
+    //   BEV (Lease): U + Q + house_charge
+    //   ICE (Lease): U + Q + house_charge − (Basic × Guarantee B %)
     // Q is a negative cost so "U + Q" already subtracts recon. The
     // £175 house charge is added here too (separately from the Other
     // income row, which also picks it up).
+    const isSalSac = l.source === "salary_sacrifice";
     const baseChassis = l.totalVehicleProfit + l.reconCost + houseCharge;
+    if (isSalSac) {
+      chassisGp += l.totalVehicleProfit + salSacChassisConstant;
+    } else if (isIce) {
+      const gbPct = bonusPct(input.bonuses, l.vehicleId, B.GUARANTEE_B);
+      const guaranteeAmount = l.basic * gbPct / 100;
+      chassisGp += baseChassis - guaranteeAmount;
+    } else {
+      chassisGp += baseChassis;
+    }
+
+    // Standards margin + Stocking credits — ICE units only, applied
+    // regardless of Lease vs SalSac. The user's spec: "everything is
+    // identical but the chassis calculation".
     if (isIce) {
       const vehicleName = veh?.id ?? l.vehicleId ?? "(no vehicle)";
       const gbPct = bonusPct(input.bonuses, l.vehicleId, B.GUARANTEE_B);
-      // Chassis GP gets the deduction; Standards margin gets the same
-      // value back. Net effect: moves the £ from one row to another so
-      // the user can see Standards margin separately on the sheet.
       const guaranteeAmount = l.basic * gbPct / 100;
-      chassisGp += baseChassis - guaranteeAmount;
       standardsMargin += guaranteeAmount;
       const sBucket = standardsByVehicle.get(vehicleName) ?? { units: 0, basicSum: 0, total: 0, pct: gbPct };
       sBucket.units++; sBucket.basicSum += l.basic; sBucket.total += guaranteeAmount; sBucket.pct = gbPct;
       standardsByVehicle.set(vehicleName, sBucket);
 
-      // Stocking credits: Basic × per-vehicle Stocking Credits %.
       const scPct = bonusPct(input.bonuses, l.vehicleId, B.STOCKING_CREDITS);
       const stockingAmount = l.basic * scPct / 100;
       stockingCredits += stockingAmount;
       const sCBucket = stockingByVehicle.get(vehicleName) ?? { units: 0, basicSum: 0, total: 0, pct: scPct };
       sCBucket.units++; sCBucket.basicSum += l.basic; sCBucket.total += stockingAmount; sCBucket.pct = scPct;
       stockingByVehicle.set(vehicleName, sCBucket);
-    } else {
-      chassisGp += baseChassis;
     }
 
     // F&I rows: simple sums per the spec.
@@ -231,6 +245,13 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   let dpaQuarterTotal = 0;
   let dpaHalfYearTotal = 0;
   let potOfGoldTotal = 0;
+  // DCR is paid quarterly: £15 per F&I product (Alloy / GAP / Warranty)
+  // for every car unit reg'd in the active quarter. Excludes Commission
+  // & VB and Paint & Fabric.
+  let dcrProducts = 0;
+  let dcrAlloyCount = 0;
+  let dcrGapCount = 0;
+  let dcrWarrantyCount = 0;
 
   // Per-vehicle breakdown so the Notes column can show
   // "Capri: 25 × £40,000 × 2.5% = £25,000" etc.
@@ -278,6 +299,13 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
       pot.perUnit = potPerUnit;
       pot.total += potPerUnit;
       potByVehicle.set(vehicleName, pot);
+
+      // DCR — count F&I products on this line (Alloy / GAP / Warranty).
+      // Commission & VB and Paint & Fabric explicitly excluded per spec.
+      const alloyIncome = l.financeMb + l.tyreInsIncome + l.financeSubsidy + l.cpiIncome + l.smartRepair;
+      if (alloyIncome > 0)     { dcrProducts++; dcrAlloyCount++; }
+      if (l.gapRtiIncome > 0)  { dcrProducts++; dcrGapCount++; }
+      if (l.warranty > 0)      { dcrProducts++; dcrWarrantyCount++; }
     }
 
     if (isHalfYearEnd && inActiveHalf) {
@@ -296,6 +324,7 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   v.set("dpa_quarter", dpaQuarterTotal);
   v.set("dpa_half_year", dpaHalfYearTotal);
   v.set("pot_of_gold", potOfGoldTotal);
+  v.set("dcr", dcrProducts * dcrPerProduct);
 
   // Apply admin-keyed cost rows. Each config row has an `applies` flag
   // (per_unit / per_month) and `applies_to_line_key` naming the line to
@@ -365,6 +394,14 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
     for (const [vehicle, b] of potByVehicle) {
       if (Math.round(b.total) === 0) continue;
       addNote("pot_of_gold", `${quarterLabel} · ${vehicle} · ${b.units} × £${Math.round(b.perUnit).toLocaleString("en-GB")} = £${Math.round(b.total).toLocaleString("en-GB")}`);
+    }
+    // DCR breakdown — show which products contributed.
+    if (dcrProducts > 0) {
+      const parts: string[] = [];
+      if (dcrAlloyCount > 0) parts.push(`${dcrAlloyCount} Alloy`);
+      if (dcrGapCount > 0) parts.push(`${dcrGapCount} GAP`);
+      if (dcrWarrantyCount > 0) parts.push(`${dcrWarrantyCount} Warranty`);
+      addNote("dcr", `${quarterLabel} · ${parts.join(" + ")} = ${dcrProducts} products × £${dcrPerProduct} = £${(dcrProducts * dcrPerProduct).toLocaleString("en-GB")}`);
     }
   }
 

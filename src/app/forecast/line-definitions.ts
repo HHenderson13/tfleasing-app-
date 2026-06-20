@@ -88,9 +88,8 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "dpa_quarter",         label: "Quarter DPA",              kind: "money" },
   { key: "dpa_half_year",       label: "Half-Year DPA",            kind: "money" },
   { key: "pot_of_gold",         label: "Pot of Gold",              kind: "money" },
-  { key: "cspa",                label: "CSPA",                     kind: "money" },
   { key: "other_income",        label: "Other income (House charge)", kind: "money" },
-  { key: "gp_before_variables", label: "GP Before Variables",      kind: "total", totalOf: ["car_chassis_gp", "total_fi", "standards_margin", "stocking_credits", "dpa_quarter", "dpa_half_year", "pot_of_gold", "cspa", "other_income"] },
+  { key: "gp_before_variables", label: "GP Before Variables",      kind: "total", totalOf: ["car_chassis_gp", "total_fi", "standards_margin", "stocking_credits", "dpa_quarter", "dpa_half_year", "pot_of_gold", "other_income"] },
 
   { key: "section_variable", label: "Variable costs", kind: "header", section: true },
   { key: "pdi_prep",            label: "PDI & Prep",               kind: "money" },
