@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 28;
+const SCHEMA_VERSION = 29;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -332,8 +332,7 @@ async function ensureForecastTables() {
     sort: number;
   }> = [
     // ── Lease New Cars — nominal costs ──
-    { key: "car_house_charge_per_unit", value: 175, description: "House charge per unit — subtracted from Chassis GP, added back as Other income.", category: "car", applies: "special", appliesTo: null, sort: 10 },
-    { key: "car_salsac_chassis_constant", value: 150, description: "Salary Sacrifice chassis constant — added to U for SalSac units only.", category: "car", applies: "special", appliesTo: null, sort: 11 },
+    { key: "car_house_charge_per_unit", value: 175, description: "House charge per unit — added to Chassis GP (per unit) and added again as Other income (per unit). SalSac + BEV chassis = U + this; ICE chassis = U + this − (Basic × Guarantee B %).", category: "car", applies: "special", appliesTo: null, sort: 10 },
     { key: "car_dcr_per_product", value: 15, description: "DCR rate per F&I product (Alloy / GAP / Warranty) sold in the quarter.", category: "car", applies: "special", appliesTo: null, sort: 12 },
     { key: "car_pdi_prep_per_unit", value: 135, description: "PDI & Prep cost per unit.", category: "car", applies: "per_unit", appliesTo: "pdi_prep", sort: 20 },
     { key: "car_cleaning_per_unit", value: 35, description: "Cleaning cost per unit.", category: "car", applies: "per_unit", appliesTo: "cleaning", sort: 30 },
@@ -361,6 +360,10 @@ async function ensureForecastTables() {
   // Backfill the apply config on rows that pre-date the new columns
   // (in case the table was created before this seed change landed).
   await db.run(sql.raw(`UPDATE forecast_config SET applies = 'special' WHERE applies = ''`));
+
+  // SalSac no longer needs its own chassis constant — it uses the
+  // house charge directly (same as BEV).
+  await db.run(sql.raw(`DELETE FROM forecast_config WHERE key = 'car_salsac_chassis_constant'`));
 
   // Percentages now live exclusively on the Vehicles tab — drop the
   // legacy seeded rows so they don't clutter the Costs tab.

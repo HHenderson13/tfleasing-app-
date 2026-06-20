@@ -85,7 +85,6 @@ export interface CarMonthForecast {
 
 const C = {
   HOUSE_CHARGE:    "car_house_charge_per_unit",
-  SALSAC_CHASSIS:  "car_salsac_chassis_constant",
   DCR_PER_PRODUCT: "car_dcr_per_product",
 };
 
@@ -109,7 +108,6 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   const v = new Map<string, number>();
   const cfg = (key: string, fallback = 0) => input.config.get(key) ?? fallback;
   const houseCharge = cfg(C.HOUSE_CHARGE, 175);
-  const salSacChassisConstant = cfg(C.SALSAC_CHASSIS, 150);
   const dcrPerProduct = cfg(C.DCR_PER_PRODUCT, 15);
 
   // Filter to actual car lines (kind === "car"). Unmatched lines stay
@@ -168,18 +166,16 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
     if (l.warranty > 0) warrantyPolicies++;
 
     // Chassis GP per source / fuel type:
-    //   SalSac: U + salsac_chassis_constant (£150 default). Skip the Q
-    //           recon + house charge + guarantee deduction — SalSac is
-    //           a simpler programme on the chassis side.
-    //   BEV (Lease): U + Q + house_charge
-    //   ICE (Lease): U + Q + house_charge − (Basic × Guarantee B %)
-    // Q is a negative cost so "U + Q" already subtracts recon. The
-    // £175 house charge is added here too (separately from the Other
-    // income row, which also picks it up).
+    //   SalSac:      U + house_charge (same as BEV — no Q recon, no guarantee)
+    //   BEV (Lease): U + house_charge
+    //   ICE (Lease): U + house_charge − (Basic × Guarantee B %)
+    // The £175 house charge is added here AND again as Other income —
+    // both rows pick it up. SalSac uses the same shape as BEV: the
+    // simpler programme just skips the ICE guarantee deduction.
     const isSalSac = l.source === "salary_sacrifice";
-    const baseChassis = l.totalVehicleProfit + l.reconCost + houseCharge;
+    const baseChassis = l.totalVehicleProfit + houseCharge;
     if (isSalSac) {
-      chassisGp += l.totalVehicleProfit + salSacChassisConstant;
+      chassisGp += baseChassis;
     } else if (isIce) {
       const gbPct = bonusPct(input.bonuses, l.vehicleId, B.GUARANTEE_B);
       const guaranteeAmount = l.basic * gbPct / 100;
