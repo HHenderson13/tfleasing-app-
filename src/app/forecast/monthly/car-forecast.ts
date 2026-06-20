@@ -148,8 +148,16 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
       // exec sees them — they just won't pick up ICE-specific bonuses.
     }
     const isIce = veh ? veh.fuelType === "ice" : true; // unknown defaults to ICE
-    if (isIce) iceUnits++; else bevUnits++;
-    if (l.source === "salary_sacrifice") salSacUnits++;
+    // Breakdown chip on the units row reads "X BEV · Y ICE · Z SalSac"
+    // and the three should sum cleanly to total units, so SalSac units
+    // get their own bucket rather than appearing inside ICE / BEV too.
+    if (l.source === "salary_sacrifice") {
+      salSacUnits++;
+    } else if (isIce) {
+      iceUnits++;
+    } else {
+      bevUnits++;
+    }
     if (l.source !== "salary_sacrifice") unitsExSalSac++;
 
     // F&I policy counters (any non-zero income on a line = one policy).
