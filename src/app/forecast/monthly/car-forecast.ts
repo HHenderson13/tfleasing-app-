@@ -340,14 +340,14 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   // Standards margin — one note per ICE vehicle so the user sees the
   // rate that was applied to each (e.g. "Kuga: 5 × £30,000 × 1.5% = £2,250").
   for (const [vehicle, b] of standardsByVehicle) {
-    if (b.units === 0) continue;
+    if (b.units === 0 || Math.round(b.total) === 0) continue;
     const avg = Math.round(b.basicSum / b.units);
     addNote("standards_margin",
       `${vehicle} · ${b.units} ICE × avg £${avg.toLocaleString("en-GB")} × ${b.pct}% = £${Math.round(b.total).toLocaleString("en-GB")}`,
     );
   }
   for (const [vehicle, b] of stockingByVehicle) {
-    if (b.units === 0) continue;
+    if (b.units === 0 || Math.round(b.total) === 0) continue;
     const avg = Math.round(b.basicSum / b.units);
     addNote("stocking_credits",
       `${vehicle} · ${b.units} ICE × avg £${avg.toLocaleString("en-GB")} × ${b.pct}% = £${Math.round(b.total).toLocaleString("en-GB")}`,
@@ -358,12 +358,12 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   if (isQuarterEnd) {
     const quarterLabel = quarterLabelOf(m);
     for (const [vehicle, b] of quarterByVehicle) {
-      if (b.total === 0 && b.units === 0) continue;
+      if (Math.round(b.total) === 0) continue;
       const avg = Math.round(b.basicSum / b.units);
       addNote("dpa_quarter", `${quarterLabel} ${b.pct}% · ${vehicle} · ${b.units} × £${avg.toLocaleString("en-GB")} = £${Math.round(b.total).toLocaleString("en-GB")}`);
     }
     for (const [vehicle, b] of potByVehicle) {
-      if (b.total === 0 && b.units === 0) continue;
+      if (Math.round(b.total) === 0) continue;
       addNote("pot_of_gold", `${quarterLabel} · ${vehicle} · ${b.units} × £${Math.round(b.perUnit).toLocaleString("en-GB")} = £${Math.round(b.total).toLocaleString("en-GB")}`);
     }
   }
@@ -372,7 +372,7 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   if (isHalfYearEnd) {
     const halfLabel = m <= 6 ? "H1" : "H2";
     for (const [vehicle, b] of halfYearByVehicle) {
-      if (b.total === 0 && b.units === 0) continue;
+      if (Math.round(b.total) === 0) continue;
       const avg = Math.round(b.basicSum / b.units);
       addNote("dpa_half_year", `${halfLabel} ${b.pct}% · ${vehicle} · ${b.units} × £${avg.toLocaleString("en-GB")} = £${Math.round(b.total).toLocaleString("en-GB")}`);
     }
