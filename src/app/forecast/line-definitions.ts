@@ -115,7 +115,12 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
 ];
 
 // ── New Retail CV ─────────────────────────────────────────────────────────
-// Same shape as Car with CV-specific bonus rows (CVDPA, FRPA, Backbone).
+// Mirrors the Car layout. CV-specific bits:
+//   - Chassis = U − (Basic × Standards %) − (Basic × VETS %) + £150
+//   - Guaranteed Margin = Basic × Standards %
+//   - Standards margin  = Basic × VETS %
+//   - Quarter DPA only — no Half-Year DPA, no Pot of Gold
+//   - CSPA = 10% × previous quarter's CV DPA, paid in Jan/Apr/Jul/Oct
 export const NEW_RETAIL_CV_LINES: ForecastLine[] = [
   { key: "section_retail_cv", label: "New Retail CV", kind: "header", section: true },
   { key: "cv_units",           label: "New CV Units",          kind: "unit",   dealbookKey: "units" },
@@ -124,39 +129,29 @@ export const NEW_RETAIL_CV_LINES: ForecastLine[] = [
 
   { key: "section_cv_fi", label: "F&I", kind: "header", section: true },
   { key: "cv_commission_vb",   label: "Commission & VB",       kind: "money",  dealbookKey: "financeIncome" },
-  { key: "cv_debit_back",      label: "Debit back provision (minus)", kind: "money" },
   { key: "cv_alloy_tyre",      label: "Alloy Wheel & Tyre",    kind: "money", dealbookKey: "tyreInsIncome" },
-  { key: "cv_paint_fabric",    label: "Paint & Fabric",        kind: "money", dealbookKey: "paintProtection" },
   { key: "cv_gap",             label: "GAP",                   kind: "money", dealbookKey: "gapRtiIncome" },
+  { key: "cv_paint_fabric",    label: "Paint & Fabric",        kind: "money", dealbookKey: "paintProtection" },
   { key: "cv_warranty",        label: "Warranty",              kind: "money", dealbookKey: "warranty" },
   { key: "cv_dcr",             label: "DCR",                   kind: "money" },
-  { key: "cv_total_fi",        label: "Total F&I",             kind: "total", totalOf: ["cv_commission_vb", "cv_debit_back", "cv_alloy_tyre", "cv_paint_fabric", "cv_gap", "cv_warranty", "cv_dcr"] },
+  { key: "cv_total_fi",        label: "Total F&I",             kind: "total", totalOf: ["cv_commission_vb", "cv_alloy_tyre", "cv_gap", "cv_paint_fabric", "cv_warranty", "cv_dcr"] },
   { key: "cv_fi_per_unit",     label: "F&I per unit",          kind: "perUnit", perUnitOf: { money: "cv_total_fi", units: "cv_units" } },
 
   { key: "section_cv_other", label: "Other income lines", kind: "header", section: true },
-  { key: "cv_igroup_gp",       label: "New I/Group Gross Profit", kind: "money" },
-  { key: "cv_accessory_gp",    label: "Accessory Gross Profit",   kind: "money", dealbookKey: "accessoryProfit" },
-  { key: "cv_delivery_gp",     label: "Delivery Gross Profit",    kind: "money" },
-  { key: "cv_dpa_faststart",   label: "DPA / Faststart",          kind: "money" },
-  { key: "cv_dpa_half_year",   label: "DPA half year",            kind: "money" },
-  { key: "cvdpa",              label: "CVDPA",                    kind: "money" },
-  { key: "frpa",               label: "FRPA",                     kind: "money" },
-  { key: "frpa_half_year",     label: "FRPA half year",           kind: "money" },
-  { key: "backbone",           label: "Backbone",                 kind: "money" },
   { key: "cv_guaranteed_margin", label: "Guaranteed Margin",      kind: "money" },
   { key: "cv_standards_margin", label: "Standards margin",        kind: "money" },
   { key: "cv_stocking_credits", label: "Stocking credits",        kind: "money" },
+  { key: "cvdpa",              label: "Quarter DPA",              kind: "money" },
   { key: "cv_cspa",            label: "CSPA",                     kind: "money" },
-  { key: "cv_other_income",    label: "Other income (House charge etc.)", kind: "money" },
-  { key: "cv_gp_before_variables", label: "GP Before Variables",  kind: "total", totalOf: ["cv_chassis_gp", "cv_total_fi", "cv_igroup_gp", "cv_accessory_gp", "cv_delivery_gp", "cv_dpa_faststart", "cv_dpa_half_year", "cvdpa", "frpa", "frpa_half_year", "backbone", "cv_guaranteed_margin", "cv_standards_margin", "cv_stocking_credits", "cv_cspa", "cv_other_income"] },
+  { key: "cv_other_income",    label: "Other income (House charge)", kind: "money" },
+  { key: "cv_gp_before_variables", label: "GP Before Variables",  kind: "total", totalOf: ["cv_chassis_gp", "cv_total_fi", "cv_guaranteed_margin", "cv_standards_margin", "cv_stocking_credits", "cvdpa", "cv_cspa", "cv_other_income"] },
 
   { key: "section_cv_variable", label: "Variable costs", kind: "header", section: true },
   { key: "cv_pdi_prep",         label: "PDI & Prep",              kind: "money" },
   { key: "cv_cleaning",         label: "Cleaning",                kind: "money" },
   { key: "cv_sales_commissions", label: "Sales Commissions",      kind: "money" },
   { key: "cv_collection_delivery", label: "Collection & Delivery", kind: "money" },
-  { key: "cv_late_costs",       label: "Late Costs",              kind: "money" },
-  { key: "cv_total_variable",   label: "Total variable costs",    kind: "total", totalOf: ["cv_pdi_prep", "cv_cleaning", "cv_sales_commissions", "cv_collection_delivery", "cv_late_costs"] },
+  { key: "cv_total_variable",   label: "Total variable costs",    kind: "total", totalOf: ["cv_pdi_prep", "cv_cleaning", "cv_sales_commissions", "cv_collection_delivery"] },
   { key: "cv_variable_per_unit", label: "Variable costs per unit", kind: "perUnit", perUnitOf: { money: "cv_total_variable", units: "cv_units" } },
   { key: "cv_gross_profit",     label: "Gross Profit",            kind: "total", totalOf: ["cv_gp_before_variables"], subtractOf: ["cv_total_variable"] },
 
@@ -171,16 +166,6 @@ export const NEW_RETAIL_CV_LINES: ForecastLine[] = [
   { key: "cv_total_expenses",   label: "Total Expenses",          kind: "total", totalOf: ["cv_personnel", "cv_sales_promotion", "cv_vehicle_costs", "cv_equipment", "cv_stock_control", "cv_other_direct", "cv_property"] },
   { key: "cv_total_interest",   label: "Total Interest",          kind: "money" },
   { key: "cv_net_profit",       label: "Net profit",              kind: "total", totalOf: ["cv_gross_profit"], subtractOf: ["cv_total_expenses", "cv_total_interest"] },
-
-  { key: "section_cv_kpi", label: "KPIs / bad-debt", kind: "header", section: true },
-  { key: "cvdpa_pct_achieved",  label: "CVDPA % achieved",        kind: "pct" },
-  { key: "frpa_pct_achieved",   label: "FRPA % achieved",         kind: "pct" },
-  { key: "cv_mfg_bad_debt_fc",  label: "Manufacturer bad debt Forecast", kind: "money" },
-  { key: "cv_mfg_bad_debt_pot", label: "Manufacturer bad debt potential", kind: "money" },
-  { key: "cv_veh_bad_debt_fc",  label: "Vehicle bad debt Forecast", kind: "money" },
-  { key: "cv_veh_bad_debt_pot", label: "Vehicle bad debt potential", kind: "money" },
-  { key: "cv_gl_bad_debt_fc",   label: "General ledger bad debt Forecast", kind: "money" },
-  { key: "cv_gl_bad_debt_pot",  label: "General ledger bad debt potential", kind: "money" },
 ];
 
 // ── Overheads ─────────────────────────────────────────────────────────────

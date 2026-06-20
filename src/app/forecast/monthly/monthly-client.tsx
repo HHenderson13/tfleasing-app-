@@ -5,7 +5,6 @@ import { MonthPicker, monthLabel } from "../pickers";
 import { SheetView } from "./sheet-view";
 import { ScenarioBuilder } from "./scenario-builder";
 import { getLinesForSheet, type SheetKey } from "../line-definitions";
-import { rollupDealbookLines } from "../rollup";
 import {
   computeCarMonthForecast,
   settleDerivedLines,
@@ -15,6 +14,7 @@ import {
   type BonusLookup,
   type ScenarioRow,
 } from "./car-forecast";
+import { computeCvMonthForecast } from "./cv-forecast";
 
 interface DealbookLine {
   source: string;
@@ -83,11 +83,13 @@ interface Props {
   snapshotSource: "frozen" | "live";
   lines: DealbookLine[];
   regHalfLines: DealbookLine[];
+  prevQuarterLines: DealbookLine[];
   yearLines: YearLine[];
   scenarios: { id: string; vehicleId: string; chassisGpPerUnit: number; units: number }[];
   actuals: { sheet: string; lineKey: string; value: number }[];
   vehicles: VehiclePayload[];
   liveCarVehicles: { id: string; name: string; fuelType: "ice" | "bev" }[];
+  liveCvVehicles: { id: string; name: string; fuelType: "ice" | "bev" }[];
   bonuses: { vehicleId: string; bonusKey: string; value: number }[];
   config: ConfigPayload[];
 }
@@ -126,8 +128,8 @@ function asDealbookLine(yl: YearLine): DealbookCarLine {
 
 export function MonthlyClient({
   month, monthNumber, defaultSheet, uploadCount, lineCount, snapshotSource,
-  lines, regHalfLines, yearLines, scenarios,
-  actuals, vehicles, liveCarVehicles, bonuses, config,
+  lines, regHalfLines, prevQuarterLines, yearLines, scenarios,
+  actuals, vehicles, liveCarVehicles, liveCvVehicles, bonuses, config,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKey>(defaultSheet);
 
@@ -167,9 +169,23 @@ export function MonthlyClient({
     return { baselines, published };
   }, [actuals]);
 
-  const carScenarios: ScenarioRow[] = useMemo(() => scenarios.map((s) => ({
-    id: s.id, vehicleId: s.vehicleId, chassisGpPerUnit: s.chassisGpPerUnit, units: s.units,
-  })), [scenarios]);
+  // Scenarios filtered by the kind of vehicle they target. Vehicle
+  // catalogue is the source of truth, so a single scenarios table feeds
+  // both sheets — no schema split required.
+  const carVehicleIds = useMemo(() => new Set(liveCarVehicles.map((v) => v.id)), [liveCarVehicles]);
+  const cvVehicleIds = useMemo(() => new Set(liveCvVehicles.map((v) => v.id)), [liveCvVehicles]);
+  const carScenarios: ScenarioRow[] = useMemo(
+    () => scenarios.filter((s) => carVehicleIds.has(s.vehicleId)).map((s) => ({
+      id: s.id, vehicleId: s.vehicleId, chassisGpPerUnit: s.chassisGpPerUnit, units: s.units,
+    })),
+    [scenarios, carVehicleIds],
+  );
+  const cvScenarios: ScenarioRow[] = useMemo(
+    () => scenarios.filter((s) => cvVehicleIds.has(s.vehicleId)).map((s) => ({
+      id: s.id, vehicleId: s.vehicleId, chassisGpPerUnit: s.chassisGpPerUnit, units: s.units,
+    })),
+    [scenarios, cvVehicleIds],
+  );
 
   const sheetForecast = useMemo(() => {
     if (sheet === "car") {
@@ -208,23 +224,39 @@ export function MonthlyClient({
       };
     }
     if (sheet === "cv") {
-      const rollup = rollupDealbookLines(lines, "cv");
-      const dealbookValues = new Map<string, number>();
-      dealbookValues.set("cv_units", rollup.units);
-      dealbookValues.set("cv_chassis_gp", rollup.chassisProfit);
-      dealbookValues.set("cv_commission_vb", rollup.financeIncome);
-      dealbookValues.set("cv_alloy_tyre", rollup.tyreInsIncome);
-      dealbookValues.set("cv_gap", rollup.gapRtiIncome);
-      dealbookValues.set("cv_paint_fabric", rollup.paintProtection);
-      dealbookValues.set("cv_warranty", rollup.warranty);
-      dealbookValues.set("cv_accessory_gp", rollup.accessoryProfit);
+      const toCv = (l: DealbookLine): DealbookCarLine => ({
+        vehicleId: l.vehicleId, kind: l.kind, source: l.source,
+        regDate: l.regDate, overrideMonth: l.overrideMonth, effectiveMonth: l.effectiveMonth,
+        basic: l.basic, reconCost: l.reconCost, totalVehicleProfit: l.totalVehicleProfit,
+        financeIncome: l.financeIncome, financeMb: l.financeMb, tyreInsIncome: l.tyreInsIncome,
+        financeSubsidy: l.financeSubsidy, cpiIncome: l.cpiIncome, smartRepair: l.smartRepair,
+        gapRtiIncome: l.gapRtiIncome, paintProtection: l.paintProtection, warranty: l.warranty,
+      });
+      const result = computeCvMonthForecast({
+        lines: lines.map(toCv),
+        regHalfLines: regHalfLines.map(toCv),
+        prevQuarterLines: prevQuarterLines.map(toCv),
+        yearLines: yearLines.map(asDealbookLine),
+        scenarios: cvScenarios,
+        monthNumber,
+        vehicles: vehicleMap,
+        bonuses: bonusLookup,
+        config: configMap,
+        costs: costConfigs,
+      });
       const cvLineDefs = getLinesForSheet("cv");
-      settleDerivedLines(cvLineDefs, dealbookValues);
-      const forecastValues = new Map(dealbookValues);
+      settleDerivedLines(cvLineDefs, result.dealbook);
+      settleDerivedLines(cvLineDefs, result.forecast);
       return {
-        dealbook: dealbookValues, forecast: forecastValues, notes: new Map<string, string[]>(),
-        unmatchedCount: 0, iceUnits: 0, bevUnits: 0, salSacUnits: 0, scenarioUnits: 0,
-        vehicleAverages: new Map(),
+        dealbook: result.dealbook,
+        forecast: result.forecast,
+        notes: result.notes,
+        unmatchedCount: result.unmatchedCount,
+        iceUnits: 0,
+        bevUnits: 0,
+        salSacUnits: 0,
+        scenarioUnits: result.scenarioUnits,
+        vehicleAverages: result.vehicleAverages,
       };
     }
     const dealbookValues = new Map<string, number>();
@@ -234,7 +266,7 @@ export function MonthlyClient({
       unmatchedCount: 0, iceUnits: 0, bevUnits: 0, salSacUnits: 0, scenarioUnits: 0,
       vehicleAverages: new Map(),
     };
-  }, [sheet, monthNumber, lines, regHalfLines, yearLines, carScenarios, vehicleMap, bonusLookup, configMap, costConfigs]);
+  }, [sheet, monthNumber, lines, regHalfLines, prevQuarterLines, yearLines, carScenarios, cvScenarios, vehicleMap, bonusLookup, configMap, costConfigs]);
 
   return (
     <>
@@ -291,12 +323,14 @@ export function MonthlyClient({
           ) : null}
         </div>
 
-        {sheet === "car" && (
+        {(sheet === "car" || sheet === "cv") && (
           <div className="mt-6">
             <ScenarioBuilder
               month={month}
-              scenarios={scenarios}
-              vehicles={liveCarVehicles}
+              scenarios={sheet === "car"
+                ? scenarios.filter((s) => carVehicleIds.has(s.vehicleId))
+                : scenarios.filter((s) => cvVehicleIds.has(s.vehicleId))}
+              vehicles={sheet === "car" ? liveCarVehicles : liveCvVehicles}
               averages={sheetForecast.vehicleAverages}
             />
           </div>

@@ -37,10 +37,26 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
   const regStart  = `${activeYear}-${String(halfStart).padStart(2, "0")}`;
   const regEnd    = `${activeYear}-${String(halfEnd).padStart(2, "0")}`;
 
+  // Previous quarter range — only used by CSPA. Skip the query unless
+  // the active month is in {Jan, Apr, Jul, Oct} when CSPA is payable.
+  const isCspaMonth = activeMonthNum === 1 || activeMonthNum === 4 || activeMonthNum === 7 || activeMonthNum === 10;
+  let prevQStart: string | null = null;
+  let prevQEnd:   string | null = null;
+  if (isCspaMonth) {
+    // The previous quarter contains (activeMonth - 1) months ago.
+    const prevMonth = activeMonthNum === 1 ? 12 : activeMonthNum - 1;
+    const prevYear = activeMonthNum === 1 ? activeYear - 1 : activeYear;
+    const prevQuarterIdx = Math.floor((prevMonth - 1) / 3);    // 0..3
+    const startM = prevQuarterIdx * 3 + 1;
+    const endM   = startM + 2;
+    prevQStart = `${prevYear}-${String(startM).padStart(2, "0")}`;
+    prevQEnd   = `${prevYear}-${String(endM).padStart(2, "0")}`;
+  }
+
   const [
     uploads, lines, actuals, firstUpload,
     liveConfig, liveVehicles, liveBonuses,
-    regHalfLinesRaw, yearLinesRaw, scenarios,
+    regHalfLinesRaw, yearLinesRaw, scenarios, prevQuarterLinesRaw,
   ] = await Promise.all([
     listForecastUploads(),
     listForecastLinesForMonth(month),
@@ -52,6 +68,9 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
     listForecastLinesByRegDateRange(regStart, regEnd),
     listForecastLinesForYear(String(activeYear)),
     loadScenariosForMonth(month),
+    prevQStart && prevQEnd
+      ? listForecastLinesByRegDateRange(prevQStart, prevQEnd)
+      : Promise.resolve([] as Awaited<ReturnType<typeof listForecastLinesByRegDateRange>>),
   ]);
 
   const snapshot = parseSettingsSnapshot(firstUpload?.settingsSnapshot ?? null);
@@ -84,6 +103,9 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
   // always sees the current model list, not whatever was frozen.
   const liveCarVehicles = liveVehicles
     .filter((v) => v.kind === "car")
+    .map((v) => ({ id: v.id, name: v.name, fuelType: v.fuelType }));
+  const liveCvVehicles = liveVehicles
+    .filter((v) => v.kind === "van")
     .map((v) => ({ id: v.id, name: v.name, fuelType: v.fuelType }));
 
   return (
@@ -160,6 +182,30 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
           paintProtection: l.paint_protection,
           warranty: l.warranty,
         }))}
+        prevQuarterLines={prevQuarterLinesRaw.map((l) => ({
+          source: l.source,
+          kind: l.kind,
+          vehicleId: l.vehicle_id,
+          regDate: l.reg_date,
+          overrideMonth: l.override_month ?? null,
+          effectiveMonth: l.effective_month,
+          basic: l.basic ?? 0,
+          reconCost: l.recon_cost,
+          totalVehicleProfit: l.total_vehicle_profit,
+          financeIncome: l.finance_income,
+          financeMb: l.finance_mb,
+          tyreInsIncome: l.tyre_ins_income,
+          financeSubsidy: l.finance_subsidy,
+          cpiIncome: l.cpi_income,
+          smartRepair: l.smart_repair,
+          gapRtiIncome: l.gap_rti_income,
+          paintProtection: l.paint_protection,
+          warranty: l.warranty,
+          chassisProfit: l.chassis_profit,
+          accessoryProfit: l.accessory_profit,
+          totalFiIncome: l.total_fi_income,
+          totalGrossProfit: l.total_gross_profit,
+        }))}
         scenarios={scenarios.map((s) => ({
           id: s.id,
           vehicleId: s.vehicleId,
@@ -169,6 +215,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
         actuals={actuals.map((a) => ({ sheet: a.sheet, lineKey: a.lineKey, value: a.value }))}
         vehicles={vehicles}
         liveCarVehicles={liveCarVehicles}
+        liveCvVehicles={liveCvVehicles}
         bonuses={bonuses}
         config={config}
       />
