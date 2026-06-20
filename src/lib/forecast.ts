@@ -8,7 +8,7 @@ import {
   forecastVehicles,
   forecastVehicleBonuses,
 } from "@/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import type { SheetKey } from "@/app/forecast/line-definitions";
 import { parseVehicle, type ParsedVehicle } from "@/lib/forecast-classify";
 
@@ -253,6 +253,60 @@ export async function listForecastLinesForUpload(uploadId: string) {
     .select()
     .from(forecastDealbookLines)
     .where(eq(forecastDealbookLines.uploadId, uploadId));
+}
+
+// Lines whose registered date falls in the given YYYY-MM window (inclusive
+// at both ends). DPA + Pot of Gold computations need this because they're
+// based on the registration month, not the dealbook upload's effective
+// month — a unit registered in March is a Q1 unit even if the admin has
+// reallocated it into a later forecast month.
+export async function listForecastLinesByRegDateRange(startYyyymm: string, endYyyymm: string) {
+  return db.all<{
+    id: string;
+    upload_id: string;
+    source: string;
+    default_month: string;
+    override_month: string | null;
+    effective_month: string;
+    branch: string | null;
+    vehicle_type: string | null;
+    sales_type: string | null;
+    sales_sub_type: string | null;
+    customer_name: string | null;
+    model: string | null;
+    order_date: string | null;
+    reg_date: string | null;
+    deliv_date: string | null;
+    invoice_date: string | null;
+    deliv_status: string | null;
+    chassis_profit: number;
+    add_bonus: number;
+    metal_subsidy: number;
+    recon_cost: number;
+    oallow_discount: number;
+    accessory_profit: number;
+    warranty_cost: number;
+    total_vehicle_profit: number;
+    finance_income: number;
+    finance_mb: number;
+    tyre_ins_income: number;
+    finance_subsidy: number;
+    cpi_income: number;
+    smart_repair: number;
+    gap_rti_income: number;
+    paint_protection: number;
+    warranty: number;
+    total_fi_income: number;
+    total_gross_profit: number;
+    basic: number;
+    vehicle_id: string | null;
+    kind: string;
+  }>(sql`
+    SELECT * FROM forecast_dealbook_lines
+    WHERE reg_date IS NOT NULL
+      AND substr(reg_date, 1, 7) >= ${startYyyymm}
+      AND substr(reg_date, 1, 7) <= ${endYyyymm}
+  `);
 }
 
 export async function loadForecastActuals(monthYyyymm: string) {

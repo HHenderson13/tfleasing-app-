@@ -18,6 +18,7 @@ interface DealbookLine {
   source: string;
   kind: string;
   vehicleId: string | null;
+  regDate: string | null;
   basic: number;
   reconCost: number;
   totalVehicleProfit: number;
@@ -55,11 +56,13 @@ interface ConfigPayload {
 
 interface Props {
   month: string;
+  monthNumber: number;
   defaultSheet: SheetKey;
   uploadCount: number;
   lineCount: number;
   snapshotSource: "frozen" | "live";
   lines: DealbookLine[];
+  regHalfLines: DealbookLine[];
   actuals: { sheet: string; lineKey: string; value: number }[];
   inputs: { sheet: string; scenarioKey: string; value: number }[];
   vehicles: VehiclePayload[];
@@ -74,8 +77,8 @@ const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
 ];
 
 export function MonthlyClient({
-  month, defaultSheet, uploadCount, lineCount, snapshotSource,
-  lines, actuals, inputs, vehicles, bonuses, config,
+  month, monthNumber, defaultSheet, uploadCount, lineCount, snapshotSource,
+  lines, regHalfLines, actuals, inputs, vehicles, bonuses, config,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKey>(defaultSheet);
 
@@ -135,10 +138,11 @@ export function MonthlyClient({
     const extraMargin = sheetInputs.get("additional_margin_per_unit") ?? 0;
 
     if (sheet === "car") {
-      const carLines: DealbookCarLine[] = lines.map((l) => ({
+      const toCar = (l: DealbookLine): DealbookCarLine => ({
         vehicleId: l.vehicleId,
         kind: l.kind,
         source: l.source,
+        regDate: l.regDate,
         basic: l.basic,
         reconCost: l.reconCost,
         totalVehicleProfit: l.totalVehicleProfit,
@@ -151,9 +155,11 @@ export function MonthlyClient({
         gapRtiIncome: l.gapRtiIncome,
         paintProtection: l.paintProtection,
         warranty: l.warranty,
-      }));
+      });
       const result = computeCarMonthForecast({
-        lines: carLines,
+        lines: lines.map(toCar),
+        regHalfLines: regHalfLines.map(toCar),
+        monthNumber,
         vehicles: vehicleMap,
         bonuses: bonusLookup,
         config: configMap,
@@ -163,7 +169,13 @@ export function MonthlyClient({
       });
       // Settle derived rows (totals, per-unit) for the layout's totals.
       settleDerivedLines(getLinesForSheet("car"), result.values);
-      return { values: result.values, unmatchedCount: result.unmatchedCount, iceUnits: result.iceUnits, bevUnits: result.bevUnits };
+      return {
+        values: result.values,
+        notes: result.notes,
+        unmatchedCount: result.unmatchedCount,
+        iceUnits: result.iceUnits,
+        bevUnits: result.bevUnits,
+      };
     }
 
     if (sheet === "cv") {
@@ -178,14 +190,14 @@ export function MonthlyClient({
       values.set("cv_warranty", rollup.warranty);
       values.set("cv_accessory_gp", rollup.accessoryProfit);
       settleDerivedLines(getLinesForSheet("cv"), values);
-      return { values, unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
+      return { values, notes: new Map<string, string[]>(), unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
     }
 
     // Overheads — entirely user-keyed; no dealbook contribution.
     const values = new Map<string, number>();
     settleDerivedLines(getLinesForSheet("overheads"), values);
-    return { values, unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
-  }, [sheet, lines, vehicleMap, bonusLookup, configMap, costConfigs, inputsBySheet]);
+    return { values, notes: new Map<string, string[]>(), unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
+  }, [sheet, monthNumber, lines, regHalfLines, vehicleMap, bonusLookup, configMap, costConfigs, inputsBySheet]);
 
   return (
     <>
@@ -245,6 +257,7 @@ export function MonthlyClient({
             month={month}
             lines={getLinesForSheet(sheet)}
             forecastValues={sheetForecast.values}
+            forecastNotes={sheetForecast.notes}
             baselines={splitBySheet.baselines.get(sheet) ?? new Map()}
             published={splitBySheet.published.get(sheet) ?? new Map()}
             inputs={inputsBySheet.get(sheet) ?? new Map()}

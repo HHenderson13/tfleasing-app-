@@ -2,6 +2,7 @@ import { TopNav } from "@/components/top-nav";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
   listForecastLinesForMonth,
+  listForecastLinesByRegDateRange,
   listForecastUploads,
   loadForecastActuals,
   loadForecastConfig,
@@ -29,7 +30,17 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : currentMonth();
 
-  const [uploads, lines, actuals, inputs, firstUpload, liveConfig, liveVehicles, liveBonuses] = await Promise.all([
+  // DPA + Pot of Gold are based on reg-date, scoped to the half-year
+  // window that the active month falls in. We always load the half-year
+  // so the quarter / half-year roll-ups can compute even when the user
+  // hasn't allocated every reg into the right effective month.
+  const [activeYear, activeMonthNum] = month.split("-").map((s) => parseInt(s, 10));
+  const halfStart = activeMonthNum <= 6 ? 1 : 7;
+  const halfEnd   = activeMonthNum <= 6 ? 6 : 12;
+  const regStart  = `${activeYear}-${String(halfStart).padStart(2, "0")}`;
+  const regEnd    = `${activeYear}-${String(halfEnd).padStart(2, "0")}`;
+
+  const [uploads, lines, actuals, inputs, firstUpload, liveConfig, liveVehicles, liveBonuses, regHalfLinesRaw] = await Promise.all([
     listForecastUploads(),
     listForecastLinesForMonth(month),
     loadForecastActuals(month),
@@ -38,6 +49,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
     loadForecastConfig(),
     loadForecastVehicles(),
     loadVehicleBonuses(),
+    listForecastLinesByRegDateRange(regStart, regEnd),
   ]);
 
   // Snapshot if this month has been uploaded — that's the frozen state.
@@ -77,10 +89,12 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
         uploadCount={uploads.length}
         lineCount={lines.length}
         snapshotSource={snapshot ? "frozen" : "live"}
+        monthNumber={activeMonthNum}
         lines={lines.map((l) => ({
           source: l.source,
           kind: l.kind,
           vehicleId: l.vehicleId ?? null,
+          regDate: l.regDate ?? null,
           basic: l.basic ?? 0,
           reconCost: l.reconCost,
           totalVehicleProfit: l.totalVehicleProfit,
@@ -98,6 +112,30 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
           accessoryProfit: l.accessoryProfit,
           totalFiIncome: l.totalFiIncome,
           totalGrossProfit: l.totalGrossProfit,
+        }))}
+        regHalfLines={regHalfLinesRaw.map((l) => ({
+          source: l.source,
+          kind: l.kind,
+          vehicleId: l.vehicle_id,
+          regDate: l.reg_date,
+          basic: l.basic ?? 0,
+          // The DPA computation only needs basic + reg-date + vehicle.
+          // Fill out the rest so it satisfies the DealbookCarLine shape.
+          reconCost: l.recon_cost,
+          totalVehicleProfit: l.total_vehicle_profit,
+          financeIncome: l.finance_income,
+          financeMb: l.finance_mb,
+          tyreInsIncome: l.tyre_ins_income,
+          financeSubsidy: l.finance_subsidy,
+          cpiIncome: l.cpi_income,
+          smartRepair: l.smart_repair,
+          gapRtiIncome: l.gap_rti_income,
+          paintProtection: l.paint_protection,
+          warranty: l.warranty,
+          chassisProfit: l.chassis_profit,
+          accessoryProfit: l.accessory_profit,
+          totalFiIncome: l.total_fi_income,
+          totalGrossProfit: l.total_gross_profit,
         }))}
         actuals={actuals.map((a) => ({ sheet: a.sheet, lineKey: a.lineKey, value: a.value }))}
         inputs={inputs.map((i) => ({ sheet: i.sheet, scenarioKey: i.scenarioKey, value: i.value }))}

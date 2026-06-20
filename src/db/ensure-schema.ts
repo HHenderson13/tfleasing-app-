@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 25;
+const SCHEMA_VERSION = 26;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -355,6 +355,49 @@ async function ensureForecastTables() {
   // Backfill the apply config on rows that pre-date the new columns
   // (in case the table was created before this seed change landed).
   await db.run(sql.raw(`UPDATE forecast_config SET applies = 'special' WHERE applies = ''`));
+
+  // Percentages now live exclusively on the Vehicles tab — drop the
+  // legacy seeded rows so they don't clutter the Costs tab.
+  await db.run(sql.raw(`
+    DELETE FROM forecast_config
+    WHERE key IN (
+      'car_dpa_pct',
+      'car_dpa_half_year_pct',
+      'car_guaranteed_margin_pct',
+      'car_stocking_credits_pct',
+      'cv_dpa_pct',
+      'cv_frpa_pct',
+      'cv_guaranteed_margin_pct',
+      'cv_standards_pct',
+      'cv_stocking_credits_pct',
+      'cv_house_charge_per_unit'
+    )
+  `));
+
+  // Older `special` rows for the per-unit/per-month cost set need
+  // proper applies + line-key wiring so the Costs tab can toggle them.
+  // Idempotent — re-running is safe; rows already correct don't change.
+  const wires: Array<[string, "per_unit" | "per_month", string]> = [
+    ["car_pdi_prep_per_unit",            "per_unit",  "pdi_prep"],
+    ["car_cleaning_per_unit",            "per_unit",  "cleaning"],
+    ["car_sales_commission_per_unit",    "per_unit",  "sales_commissions"],
+    ["car_collection_delivery_per_unit", "per_unit",  "collection_delivery"],
+    ["car_personnel_per_month",          "per_month", "personnel"],
+    ["car_sales_promotion_per_month",    "per_month", "sales_promotion"],
+    ["car_vehicle_costs_per_month",      "per_month", "vehicle_costs"],
+    ["car_equipment_per_month",          "per_month", "equipment"],
+    ["car_stock_control_per_month",      "per_month", "stock_control"],
+    ["car_other_direct_per_month",       "per_month", "other_direct"],
+    ["car_property_per_month",           "per_month", "property"],
+    ["car_total_interest_per_month",     "per_month", "total_interest"],
+  ];
+  for (const [key, applies, lineKey] of wires) {
+    await db.run(sql`
+      UPDATE forecast_config
+      SET applies = ${applies}, applies_to_line_key = ${lineKey}
+      WHERE key = ${key}
+    `);
+  }
 }
 
 // Broker portal — completely separate auth from the TF leasing app. See

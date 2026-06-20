@@ -10,6 +10,7 @@ interface Props {
   month: string;
   lines: ForecastLine[];
   forecastValues: Map<string, number>;   // already computed by monthly-client
+  forecastNotes: Map<string, string[]>;  // per-line notes for the right column
   baselines: Map<string, number>;        // budget_* values keyed in Admin
   published: Map<string, number>;        // published_* — overrides forecast when present
   inputs: Map<string, number>;           // scenario inputs (editable)
@@ -21,7 +22,7 @@ interface Props {
 // totals/per-unit derivations against the budget column so the same
 // layout drives both the Budget and Forecast columns.
 
-export function SheetView({ sheet, month, lines, forecastValues, baselines, published, inputs }: Props) {
+export function SheetView({ sheet, month, lines, forecastValues, forecastNotes, baselines, published, inputs }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -123,7 +124,8 @@ export function SheetView({ sheet, month, lines, forecastValues, baselines, publ
                 <th className="px-5 py-3 text-left font-medium">Line</th>
                 <th className="px-3 py-3 text-right font-medium">Budget</th>
                 <th className="px-3 py-3 text-right font-medium">Forecast</th>
-                <th className="px-5 py-3 text-right font-medium">vs Budget</th>
+                <th className="px-3 py-3 text-right font-medium">vs Budget</th>
+                <th className="px-5 py-3 text-left font-medium">Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -131,7 +133,7 @@ export function SheetView({ sheet, month, lines, forecastValues, baselines, publ
                 if (l.kind === "header") {
                   return (
                     <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                      <td colSpan={4} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                      <td colSpan={5} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
                         {l.label}
                       </td>
                     </tr>
@@ -143,13 +145,21 @@ export function SheetView({ sheet, month, lines, forecastValues, baselines, publ
                 const isTotal = l.kind === "total";
                 const stripe = idx % 2 === 0 ? "" : "bg-slate-50/40";
                 const totalClass = isTotal ? "bg-slate-50 font-semibold text-slate-900" : "";
+                const lineNotes = forecastNotes.get(l.key) ?? [];
                 return (
                   <tr key={l.key} className={`border-t border-slate-100 ${stripe} ${totalClass}`}>
                     <td className="px-5 py-2 text-slate-800">{l.label}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-500">{formatNumber(bud, l.kind)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{formatNumber(fc, l.kind)}</td>
-                    <td className={`px-5 py-2 text-right tabular-nums ${tone(vsB)}`}>
+                    <td className={`px-3 py-2 text-right tabular-nums ${tone(vsB)}`}>
                       {formatNumber(vsB, l.kind === "unit" ? "unit" : "money")}
+                    </td>
+                    <td className="px-5 py-2 text-[11px] text-slate-500 align-top">
+                      {lineNotes.length === 0 ? null : (
+                        <ul className="space-y-0.5">
+                          {lineNotes.map((n, i) => <li key={i}>{n}</li>)}
+                        </ul>
+                      )}
                     </td>
                   </tr>
                 );

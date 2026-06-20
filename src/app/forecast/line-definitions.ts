@@ -75,14 +75,22 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "gap",                 label: "GAP",                   kind: "money", dealbookKey: "gapRtiIncome" },
   { key: "paint_fabric",        label: "Paint & Fabric",        kind: "money", dealbookKey: "paintProtection" },
   { key: "warranty",            label: "Warranty",              kind: "money", dealbookKey: "warranty" },
-  { key: "total_fi",            label: "Total F&I",             kind: "total", totalOf: ["commission_vb", "alloy_tyre", "gap", "paint_fabric", "warranty"] },
+  { key: "dcr",                 label: "DCR",                   kind: "money" },
+  { key: "total_fi",            label: "Total F&I",             kind: "total", totalOf: ["commission_vb", "alloy_tyre", "gap", "paint_fabric", "warranty", "dcr"] },
   { key: "fi_per_unit",         label: "F&I per unit",          kind: "perUnit", perUnitOf: { money: "total_fi", units: "car_units" } },
 
   { key: "section_other_income", label: "Other income lines", kind: "header", section: true },
   { key: "standards_margin",    label: "Standards margin (ICE)",   kind: "money" },
   { key: "stocking_credits",    label: "Stocking credits (ICE)",   kind: "money" },
+  // Quarter DPA / Pot of Gold only land in the quarter-end month
+  // (Mar / Jun / Sep / Dec). Half-year DPA only in Jun / Dec. The
+  // forecast computation zeroes them in other months.
+  { key: "dpa_quarter",         label: "Quarter DPA",              kind: "money" },
+  { key: "dpa_half_year",       label: "Half-Year DPA",            kind: "money" },
+  { key: "pot_of_gold",         label: "Pot of Gold",              kind: "money" },
+  { key: "cspa",                label: "CSPA",                     kind: "money" },
   { key: "other_income",        label: "Other income (House charge)", kind: "money" },
-  { key: "gp_before_variables", label: "GP Before Variables",      kind: "total", totalOf: ["car_chassis_gp", "total_fi", "standards_margin", "stocking_credits", "other_income"] },
+  { key: "gp_before_variables", label: "GP Before Variables",      kind: "total", totalOf: ["car_chassis_gp", "total_fi", "standards_margin", "stocking_credits", "dpa_quarter", "dpa_half_year", "pot_of_gold", "cspa", "other_income"] },
 
   { key: "section_variable", label: "Variable costs", kind: "header", section: true },
   { key: "pdi_prep",            label: "PDI & Prep",               kind: "money" },
