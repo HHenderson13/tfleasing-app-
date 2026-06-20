@@ -5,8 +5,9 @@ import { ForecastPageHeader } from "../page-shell";
 import { MonthPicker } from "../pickers";
 import {
   setConfigAction, addConfigAction, deleteConfigAction, setActualAction,
-  upsertVehicleAction, deleteVehicleAction, setVehicleBonusAction,
+  updateConfigMetaAction, upsertVehicleAction, deleteVehicleAction, setVehicleBonusAction,
 } from "../actions";
+import { NEW_RETAIL_CAR_LINES } from "../line-definitions";
 import { getLinesForSheet, type ForecastLine, type SheetKey } from "../line-definitions";
 import { bonusesForKind, CAR_BONUSES, VAN_BONUSES, type BonusDef } from "../vehicle-bonuses";
 import { classifyModel, keywordsToText, keywordsFromText, type ParsedVehicle } from "@/lib/forecast-classify";
@@ -16,6 +17,8 @@ export interface ConfigPayload {
   value: number;
   description: string | null;
   category: string;
+  applies: "per_unit" | "per_month" | "special";
+  appliesToLineKey: string | null;
 }
 
 export interface VehiclePayload {
@@ -50,8 +53,8 @@ const SHEET_LABELS: Record<SheetKey, string> = {
 };
 
 const TABS: { key: Props["tab"]; label: string; description: string }[] = [
-  { key: "math",       label: "Math",               description: "Percentages, multipliers and constants the forecast and quarterly views use." },
-  { key: "vehicles",   label: "Vehicles",           description: "The car / van catalogue. Keywords identify each vehicle in the dealbook CSV; bonuses set the per-vehicle rates." },
+  { key: "math",       label: "Costs",              description: "Nominal £ costs — per unit (PDI, cleaning, sales commission) or per month (personnel, sales promotion, interest). Only takes effect on new uploads." },
+  { key: "vehicles",   label: "Vehicles",           description: "The car / van catalogue. Powertrain + keywords + all the % bonus rates (Guarantee B, Stocking Credits, DPA, etc.) live here." },
   { key: "baselines",  label: "Budget",             description: "Per-sheet, per-month budget values driving the variance column on the monthly view." },
   { key: "published",  label: "Published Accounts", description: "Final published account numbers — once entered they overwrite that month's forecast." },
 ];
@@ -137,16 +140,23 @@ export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonu
   );
 }
 
-// ────────────────────────── Math tab ────────────────────────────────
+// ────────────────────────── Costs tab ────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
-  car: "Lease New Cars — per-unit costs",
+  car: "Lease New Cars",
   cv: "Lease New Commercial",
   overheads: "General Overheads",
   bpm: "Quarterly (BPM)",
   general: "General",
 };
 const CATEGORY_ORDER = ["car", "cv", "overheads", "bpm", "general"];
+
+// Lines on the Car sheet that admin can target a cost at. Filter out
+// headers + totals/per-unit (those are derived) so the picker only
+// shows valid destinations.
+const CAR_TARGET_LINES = NEW_RETAIL_CAR_LINES.filter(
+  (l) => l.kind === "money" || l.kind === "unit",
+);
 
 function MathTab({
   config, pending, onError, onRefresh,
@@ -171,8 +181,24 @@ function MathTab({
     });
   }
 
+  function commitApplies(key: string, applies: "per_unit" | "per_month") {
+    onError(null);
+    start(async () => {
+      const res = await updateConfigMetaAction({ key, applies });
+      if (!res.ok) onError(res.error); else onRefresh();
+    });
+  }
+
+  function commitLineKey(key: string, lineKey: string | null) {
+    onError(null);
+    start(async () => {
+      const res = await updateConfigMetaAction({ key, appliesToLineKey: lineKey });
+      if (!res.ok) onError(res.error); else onRefresh();
+    });
+  }
+
   function remove(key: string) {
-    if (!confirm(`Delete config "${key}"?`)) return;
+    if (!confirm(`Delete cost "${key}"?`)) return;
     start(async () => {
       const res = await deleteConfigAction(key);
       if (!res.ok) onError(res.error); else onRefresh();
@@ -182,6 +208,13 @@ function MathTab({
   return (
     <div className="space-y-6">
       <AddConfigCard pending={pending} onError={onError} onAdded={onRefresh} />
+
+      <p className="text-xs text-slate-500">
+        Percentages (Guarantee B, Stocking Credits, DPA etc.) live on the
+        <strong> Vehicles</strong> tab — they're per-vehicle. Edits to either tab only affect
+        forecasts on <strong>new uploads</strong>; existing months stay frozen at the settings
+        captured when they were first uploaded.
+      </p>
 
       {CATEGORY_ORDER.map((cat) => {
         const rows = byCat.get(cat);
@@ -194,35 +227,80 @@ function MathTab({
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
                 <tr>
-                  <th className="px-6 py-2.5 text-left font-medium w-1/3">Key</th>
-                  <th className="px-3 py-2.5 text-left font-medium">Description</th>
-                  <th className="px-3 py-2.5 text-right font-medium w-32">Value</th>
+                  <th className="px-6 py-2.5 text-left font-medium w-1/4">Description</th>
+                  <th className="px-3 py-2.5 text-left font-medium w-32">Type</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Drives line</th>
+                  <th className="px-3 py-2.5 text-right font-medium w-32">£ value</th>
                   <th className="px-6 py-2.5 text-right font-medium w-20"></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((c, idx) => (
-                  <tr key={c.key} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
-                    <td className="px-6 py-2 font-mono text-xs text-slate-700">{c.key}</td>
-                    <td className="px-3 py-2 text-sm text-slate-600">{c.description ?? "—"}</td>
-                    <td className="px-3 py-2 text-right">
-                      <input
-                        type="number" step="0.01" defaultValue={c.value} disabled={pending}
-                        onBlur={(e) => {
-                          const v = Number(e.target.value);
-                          if (Number.isFinite(v) && v !== c.value) commitValue(c.key, v);
-                        }}
-                        className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right text-sm tabular-nums hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
-                      />
-                    </td>
-                    <td className="px-6 py-2 text-right">
-                      <button
-                        type="button" disabled={pending} onClick={() => remove(c.key)}
-                        className="text-xs text-rose-600 hover:text-rose-800 disabled:opacity-50"
-                      >Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((c, idx) => {
+                  const isSpecial = c.applies === "special";
+                  return (
+                    <tr key={c.key} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
+                      <td className="px-6 py-2">
+                        <div className="text-sm text-slate-800">{c.description ?? c.key}</div>
+                        <div className="font-mono text-[10px] text-slate-400">{c.key}</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        {isSpecial ? (
+                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                            Special
+                          </span>
+                        ) : (
+                          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-[10px] font-semibold uppercase tracking-[0.1em]">
+                            <button type="button" onClick={() => commitApplies(c.key, "per_unit")} disabled={pending}
+                              className={`px-2 py-1 ${c.applies === "per_unit" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                              Per unit
+                            </button>
+                            <button type="button" onClick={() => commitApplies(c.key, "per_month")} disabled={pending}
+                              className={`px-2 py-1 ${c.applies === "per_month" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                              Per month
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {isSpecial ? (
+                          <span className="text-slate-400">referenced by formula</span>
+                        ) : (
+                          <select
+                            value={c.appliesToLineKey ?? ""}
+                            disabled={pending}
+                            onChange={(e) => commitLineKey(c.key, e.target.value || null)}
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                          >
+                            <option value="">— Pick a line —</option>
+                            {CAR_TARGET_LINES.map((l) => (
+                              <option key={l.key} value={l.key}>{l.label}</option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number" step="1" defaultValue={c.value} disabled={pending}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value);
+                            if (Number.isFinite(v) && v !== c.value) commitValue(c.key, v);
+                          }}
+                          className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right text-sm tabular-nums hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                        />
+                      </td>
+                      <td className="px-6 py-2 text-right">
+                        {isSpecial ? (
+                          <span className="text-[11px] text-slate-300">locked</span>
+                        ) : (
+                          <button
+                            type="button" disabled={pending} onClick={() => remove(c.key)}
+                            className="text-xs text-rose-600 hover:text-rose-800 disabled:opacity-50"
+                          >Delete</button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </section>
@@ -243,14 +321,18 @@ function AddConfigCard({
   const [key, setKey] = useState("");
   const [value, setValue] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("general");
+  const [category, setCategory] = useState<string>("car");
+  const [applies, setApplies] = useState<"per_unit" | "per_month">("per_unit");
+  const [lineKey, setLineKey] = useState<string>("");
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50 to-transparent px-6 py-3">
-        <h3 className="text-sm font-semibold text-slate-900">Add a new value</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Add a new cost</h3>
         <p className="mt-0.5 text-xs text-slate-500">
-          For example <code className="rounded bg-slate-100 px-1">car_dpa_pct = 2.5</code>.
+          Nominal £ cost — pick whether it's <strong>per unit</strong> (multiplied by total
+          units on the sheet) or <strong>per month</strong> (flat monthly figure), and which
+          line it lands on.
         </p>
       </div>
       <form
@@ -259,27 +341,47 @@ function AddConfigCard({
           onError(null);
           const v = Number(value);
           if (!Number.isFinite(v)) { onError("Value must be a number."); return; }
+          if (!lineKey) { onError("Pick a target line."); return; }
           start(async () => {
-            const res = await addConfigAction({ key, value: v, description, category });
+            const res = await addConfigAction({
+              key, value: v, description, category, applies,
+              appliesToLineKey: lineKey,
+            });
             if (!res.ok) { onError(res.error); return; }
-            setKey(""); setValue(""); setDescription("");
+            setKey(""); setValue(""); setDescription(""); setLineKey("");
             onAdded();
           });
         }}
-        className="grid gap-3 p-6 sm:grid-cols-[1fr_2fr_1fr_120px_auto]"
+        className="space-y-3 p-6"
       >
-        <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="my_new_pct"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this?"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-        <select value={category} onChange={(e) => setCategory(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-          {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-        </select>
-        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.00" type="number" step="0.01"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm tabular-nums" />
-        <button type="submit" disabled={pending}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add</button>
+        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (e.g. Personnel costs)"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+          <select value={category} onChange={(e) => setCategory(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+          </select>
+          <select value={applies} onChange={(e) => setApplies(e.target.value as "per_unit" | "per_month")}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <option value="per_unit">Per unit</option>
+            <option value="per_month">Per month</option>
+          </select>
+          <select value={lineKey} onChange={(e) => setLineKey(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <option value="">Pick line…</option>
+            {CAR_TARGET_LINES.map((l) => (
+              <option key={l.key} value={l.key}>{l.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto]">
+          <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Stable key (e.g. car_personnel_per_month)"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs" />
+          <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="£ value" type="number" step="1"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm tabular-nums" />
+          <button type="submit" disabled={pending}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add cost</button>
+        </div>
       </form>
     </section>
   );

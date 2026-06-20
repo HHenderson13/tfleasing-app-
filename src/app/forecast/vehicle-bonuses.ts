@@ -9,10 +9,11 @@ export interface BonusDef {
 }
 
 export const CAR_BONUSES: BonusDef[] = [
-  // Drives the ICE chassis-GP deduction in monthly forecast math.
+  // Drives Chassis GP deduction (ICE only) AND Standards margin (ICE).
+  // Same number, two uses — kept under one key so the admin doesn't
+  // have to remember to update both. Subtracted from chassis (Basic ×
+  // this %) and added back as Standards margin (same).
   { key: "guarantee_b_pct",        label: "Guarantee B %",     kind: "pct" },
-  // Drives Standards margin (ICE only): Basic × this %.
-  { key: "guarantee_margin_pct",   label: "Guarantee Margin %",kind: "pct" },
   // Drives Stocking credits (ICE only): Basic × this %.
   { key: "stocking_credits_pct",   label: "Stocking Credits %",kind: "pct" },
   { key: "quarter_dpa_pct",        label: "Quarter DPA %",     kind: "pct" },

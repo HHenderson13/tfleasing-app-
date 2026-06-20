@@ -8,6 +8,7 @@ import { rollupDealbookLines } from "../rollup";
 import {
   computeCarMonthForecast,
   settleDerivedLines,
+  type CostConfig,
   type DealbookCarLine,
   type VehicleInfo,
   type BonusLookup,
@@ -43,17 +44,27 @@ interface VehiclePayload {
   fuelType: "ice" | "bev";
 }
 
+interface ConfigPayload {
+  key: string;
+  value: number;
+  description: string | null;
+  category: string;
+  applies: "per_unit" | "per_month" | "special";
+  appliesToLineKey: string | null;
+}
+
 interface Props {
   month: string;
   defaultSheet: SheetKey;
   uploadCount: number;
   lineCount: number;
+  snapshotSource: "frozen" | "live";
   lines: DealbookLine[];
   actuals: { sheet: string; lineKey: string; value: number }[];
   inputs: { sheet: string; scenarioKey: string; value: number }[];
   vehicles: VehiclePayload[];
   bonuses: { vehicleId: string; bonusKey: string; value: number }[];
-  config: { key: string; value: number }[];
+  config: ConfigPayload[];
 }
 
 const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
@@ -63,7 +74,7 @@ const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
 ];
 
 export function MonthlyClient({
-  month, defaultSheet, uploadCount, lineCount,
+  month, defaultSheet, uploadCount, lineCount, snapshotSource,
   lines, actuals, inputs, vehicles, bonuses, config,
 }: Props) {
   const [sheet, setSheet] = useState<SheetKey>(defaultSheet);
@@ -89,6 +100,10 @@ export function MonthlyClient({
     for (const c of config) m.set(c.key, c.value);
     return m;
   }, [config]);
+
+  const costConfigs = useMemo<CostConfig[]>(() => config.map((c) => ({
+    key: c.key, value: c.value, applies: c.applies, appliesToLineKey: c.appliesToLineKey,
+  })), [config]);
 
   // Split admin actuals into baselines (budget_*) and published.
   const splitBySheet = useMemo(() => {
@@ -142,6 +157,7 @@ export function MonthlyClient({
         vehicles: vehicleMap,
         bonuses: bonusLookup,
         config: configMap,
+        costs: costConfigs,
         scenarioExtraUnits: extraUnits,
         scenarioMarginPerUnit: extraMargin,
       });
@@ -169,7 +185,7 @@ export function MonthlyClient({
     const values = new Map<string, number>();
     settleDerivedLines(getLinesForSheet("overheads"), values);
     return { values, unmatchedCount: 0, iceUnits: 0, bevUnits: 0 };
-  }, [sheet, lines, vehicleMap, bonusLookup, configMap, inputsBySheet]);
+  }, [sheet, lines, vehicleMap, bonusLookup, configMap, costConfigs, inputsBySheet]);
 
   return (
     <>
@@ -198,18 +214,29 @@ export function MonthlyClient({
           ))}
         </section>
 
-        <div className="mt-3 text-[11px] text-slate-500">
-          {uploadCount === 0
-            ? "No uploads yet — head to Uploads to drop a dealbook CSV."
-            : `${lineCount} dealbook line${lineCount === 1 ? "" : "s"} loaded for ${monthLabel(month)} across all departments.`}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+          <span>
+            {uploadCount === 0
+              ? "No uploads yet — head to Uploads to drop a dealbook CSV."
+              : `${lineCount} dealbook line${lineCount === 1 ? "" : "s"} loaded for ${monthLabel(month)} across all departments.`}
+          </span>
           {sheet === "car" && (sheetForecast.iceUnits > 0 || sheetForecast.bevUnits > 0) && (
-            <span> · <span className="font-medium text-slate-700">{sheetForecast.iceUnits}</span> ICE
+            <span>· <span className="font-medium text-slate-700">{sheetForecast.iceUnits}</span> ICE
               {" · "}<span className="font-medium text-slate-700">{sheetForecast.bevUnits}</span> BEV
               {sheetForecast.unmatchedCount > 0 && <>
                 {" · "}<span className="font-medium text-amber-700">{sheetForecast.unmatchedCount} unmatched</span>
               </>}
             </span>
           )}
+          {snapshotSource === "frozen" ? (
+            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-indigo-800 ring-1 ring-indigo-200" title="Forecast uses the admin settings captured when this month was first uploaded. Editing Admin → Costs / Vehicles now won't change this month.">
+              Frozen settings
+            </span>
+          ) : uploadCount > 0 ? (
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600 ring-1 ring-slate-200">
+              Live settings
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-6">

@@ -94,7 +94,7 @@ export function SheetView({ sheet, month, lines, forecastValues, baselines, publ
                 />
               </label>
               <div className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                + £{(additionalUnits * additionalMarginPerUnit).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                + £{Math.round(additionalUnits * additionalMarginPerUnit).toLocaleString("en-GB", { maximumFractionDigits: 0 })}
               </div>
             </div>
           </div>
@@ -169,7 +169,9 @@ function tone(v: number): string {
 
 function formatNumber(v: number, kind: ForecastLine["kind"]): string {
   if (kind === "unit") return Math.round(v).toString();
-  if (kind === "pct") return `${v.toFixed(2)}%`;
-  if (Math.abs(v) < 0.005) return "0";
-  return v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (kind === "pct") return `${Math.round(v)}%`;
+  const rounded = Math.round(v);
+  if (rounded === 0) return "£0";
+  const abs = Math.abs(rounded).toLocaleString("en-GB", { maximumFractionDigits: 0 });
+  return rounded < 0 ? `−£${abs}` : `£${abs}`;
 }

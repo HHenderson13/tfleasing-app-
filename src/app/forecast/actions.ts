@@ -17,6 +17,7 @@ import {
   parseDealbookCsv,
   deriveDefaultMonth,
   loadForecastVehicles,
+  captureSettingsSnapshot,
   DEALBOOK_SOURCES,
   type DealbookSource,
 } from "@/lib/forecast";
@@ -51,12 +52,17 @@ export async function uploadDealbookAction(formData: FormData) {
 
     const now = new Date();
     const uploadId = randomUUID();
+    // Snapshot the live admin state (config + vehicles + bonuses) so
+    // later admin edits don't retroactively shift this month's forecast.
+    // The monthly view always reads from the FIRST upload's snapshot.
+    const snapshot = await captureSettingsSnapshot();
     await db.insert(forecastDealbookUploads).values({
       id: uploadId,
       source,
       monthYyyymm: monthRaw,
       filename: (file as File).name || "dealbook.csv",
       rowCount: parsed.rows.length,
+      settingsSnapshot: JSON.stringify(snapshot),
       uploadedAt: now,
       uploadedByUserId: me.id,
     });
@@ -333,13 +339,17 @@ export async function setConfigAction(key: string, value: number) {
   }
 }
 
-// Admin can add new config rows on the fly so they can introduce new
-// percentages / multipliers without a code change.
+// Admin can add new £ cost rows on the fly so they can introduce new
+// constants without a code change. `applies` controls whether the cost
+// gets multiplied by units (per_unit) or used as-is (per_month); the
+// resolver wires the value into `applies_to_line_key` on the sheet.
 export async function addConfigAction(input: {
   key: string;
   value: number;
   description: string;
   category: string;
+  applies?: "per_unit" | "per_month" | "special";
+  appliesToLineKey?: string | null;
 }) {
   try {
     await requireAdmin();
@@ -351,18 +361,42 @@ export async function addConfigAction(input: {
       .where(eq(forecastConfig.key, key))
       .limit(1);
     if (existing.length > 0) return { ok: false as const, error: "Key already exists." };
+    const applies = input.applies === "per_unit" || input.applies === "per_month" ? input.applies : "special";
     await db.insert(forecastConfig).values({
       key,
       value: input.value,
       description: input.description || null,
       category: input.category || "general",
       sortOrder: 999,
+      applies,
+      appliesToLineKey: input.appliesToLineKey ?? null,
       updatedAt: new Date(),
     });
     revalidatePath("/forecast");
     return { ok: true as const, key };
   } catch (e) {
     logError("forecast/addConfigAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+// Toggle / update the applies + applies_to_line_key on an existing row.
+// Used when the admin changes a cost from per_unit to per_month etc.
+export async function updateConfigMetaAction(input: {
+  key: string;
+  applies?: "per_unit" | "per_month" | "special";
+  appliesToLineKey?: string | null;
+}) {
+  try {
+    await requireAdmin();
+    const patch: Partial<{ applies: string; appliesToLineKey: string | null }> = {};
+    if (input.applies) patch.applies = input.applies;
+    if (input.appliesToLineKey !== undefined) patch.appliesToLineKey = input.appliesToLineKey;
+    await db.update(forecastConfig).set(patch).where(eq(forecastConfig.key, input.key));
+    revalidatePath("/forecast");
+    return { ok: true as const };
+  } catch (e) {
+    logError("forecast/updateConfigMetaAction", e);
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
   }
 }

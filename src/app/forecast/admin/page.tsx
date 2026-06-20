@@ -52,6 +52,8 @@ export default async function ForecastAdminPage({ searchParams }: PageProps) {
           value: c.value,
           description: c.description ?? null,
           category: c.category,
+          applies: (c.applies === "per_unit" || c.applies === "per_month") ? c.applies : "special" as const,
+          appliesToLineKey: c.appliesToLineKey ?? null,
         }))}
         actuals={actuals
           .filter((a) => a.sheet === sheet)

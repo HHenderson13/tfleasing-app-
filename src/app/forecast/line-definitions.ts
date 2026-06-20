@@ -105,16 +105,6 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "total_expenses",      label: "Total Expenses",           kind: "total", totalOf: ["personnel", "sales_promotion", "vehicle_costs", "equipment", "stock_control", "other_direct", "property"] },
   { key: "total_interest",      label: "Total Interest",           kind: "money" },
   { key: "net_profit",          label: "Net profit",               kind: "total", totalOf: ["gross_profit"], subtractOf: ["total_expenses", "total_interest"] },
-
-  { key: "section_kpi", label: "KPIs / bad-debt", kind: "header", section: true },
-  { key: "dpa_pct_achieved",    label: "DPA % achieved",           kind: "pct" },
-  { key: "motab_pct_achieved",  label: "Motab % achieved",         kind: "pct" },
-  { key: "mfg_bad_debt_fc",     label: "Manufacturer bad debt Forecast", kind: "money" },
-  { key: "mfg_bad_debt_pot",    label: "Manufacturer bad debt potential", kind: "money" },
-  { key: "veh_bad_debt_fc",     label: "Vehicle bad debt Forecast", kind: "money" },
-  { key: "veh_bad_debt_pot",    label: "Vehicle bad debt potential", kind: "money" },
-  { key: "gl_bad_debt_fc",      label: "General ledger bad debt Forecast", kind: "money" },
-  { key: "gl_bad_debt_pot",     label: "General ledger bad debt potential", kind: "money" },
 ];
 
 // ── New Retail CV ─────────────────────────────────────────────────────────

@@ -39,11 +39,19 @@ export interface VehicleInfo {
 export type BonusLookup = Map<string, Map<string, number>>;
 //  vehicleId → bonusKey → value
 
+export interface CostConfig {
+  key: string;
+  value: number;
+  applies: "per_unit" | "per_month" | "special";
+  appliesToLineKey: string | null;
+}
+
 export interface CarMonthInputs {
   lines: DealbookCarLine[];
   vehicles: Map<string, VehicleInfo>;
   bonuses: BonusLookup;
-  config: Map<string, number>;
+  config: Map<string, number>;            // for "special" formula lookups (house charge etc.)
+  costs: CostConfig[];                    // per_unit + per_month cost rows wired to line keys
   // Forecast scenario (extra units the user expects on top of dealbook)
   scenarioExtraUnits: number;
   scenarioMarginPerUnit: number;
@@ -59,15 +67,13 @@ export interface CarMonthForecast {
 
 const C = {
   HOUSE_CHARGE: "car_house_charge_per_unit",
-  PDI_PREP:     "car_pdi_prep_per_unit",
-  CLEANING:     "car_cleaning_per_unit",
-  SALES_COMM:   "car_sales_commission_per_unit",
-  COLL_DEL:     "car_collection_delivery_per_unit",
 };
 
 const B = {
+  // Same key drives both the Chassis GP deduction and Standards margin
+  // (the £ value subtracted from chassis is the same £ added to
+  // Standards margin — different sides of the same accounting move).
   GUARANTEE_B:        "guarantee_b_pct",
-  GUARANTEE_MARGIN:   "guarantee_margin_pct",
   STOCKING_CREDITS:   "stocking_credits_pct",
 };
 
@@ -116,11 +122,12 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
     const baseChassis = l.totalVehicleProfit + l.reconCost - houseCharge;
     if (isIce) {
       const gbPct = bonusPct(input.bonuses, l.vehicleId, B.GUARANTEE_B);
-      chassisGp += baseChassis - (l.basic * gbPct / 100);
-
-      // Standards margin: Basic × per-vehicle Guarantee Margin %.
-      const gmPct = bonusPct(input.bonuses, l.vehicleId, B.GUARANTEE_MARGIN);
-      standardsMargin += l.basic * gmPct / 100;
+      // Chassis GP gets the deduction; Standards margin gets the same
+      // value back. Net effect: moves the £ from one row to another so
+      // the user can see Standards margin separately on the sheet.
+      const guaranteeAmount = l.basic * gbPct / 100;
+      chassisGp += baseChassis - guaranteeAmount;
+      standardsMargin += guaranteeAmount;
 
       // Stocking credits: Basic × per-vehicle Stocking Credits %.
       const scPct = bonusPct(input.bonuses, l.vehicleId, B.STOCKING_CREDITS);
@@ -158,12 +165,24 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   v.set("standards_margin", standardsMargin);
   v.set("stocking_credits", stockingCredits);
 
-  // Unit-driven costs.
-  v.set("other_income",        houseCharge * totalUnits);
-  v.set("pdi_prep",            cfg(C.PDI_PREP, 135) * totalUnits);
-  v.set("cleaning",            cfg(C.CLEANING, 35) * totalUnits);
-  v.set("sales_commissions",   cfg(C.SALES_COMM, 80) * totalUnits);
-  v.set("collection_delivery", cfg(C.COLL_DEL, 200) * unitsExSalSac);
+  // Other income (House charge) is hardcoded — it's the mirror of the
+  // £175 already deducted from Chassis GP per unit.
+  v.set("other_income", houseCharge * totalUnits);
+
+  // Apply admin-keyed cost rows. Each config row has an `applies` flag
+  // (per_unit / per_month) and `applies_to_line_key` naming the line to
+  // populate. per_unit multiplies by total units; per_month uses the
+  // value as-is. Collection & Delivery is special-cased to use the
+  // SalSac-excluded unit count.
+  for (const c of input.costs) {
+    if (!c.appliesToLineKey) continue;
+    if (c.applies === "per_unit") {
+      const multiplier = c.appliesToLineKey === "collection_delivery" ? unitsExSalSac : totalUnits;
+      v.set(c.appliesToLineKey, c.value * multiplier);
+    } else if (c.applies === "per_month") {
+      v.set(c.appliesToLineKey, c.value);
+    }
+  }
 
   return {
     values: v,

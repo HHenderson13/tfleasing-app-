@@ -1081,10 +1081,15 @@ export const carRflBands = sqliteTable("car_rfl_bands", {
 
 export const forecastDealbookUploads = sqliteTable("forecast_dealbook_uploads", {
   id: text("id").primaryKey(),
-  source: text("source").notNull(),                          // 'leasing' | 'salary_sacrifice'
+  source: text("source").notNull(),                          // 'lease' | 'salary_sacrifice'
   monthYyyymm: text("month_yyyymm").notNull(),               // upload's intended month, e.g. "2026-06"
   filename: text("filename").notNull(),
   rowCount: integer("row_count").notNull().default(0),
+  // Snapshot of live config + vehicle catalogue + per-vehicle bonuses
+  // at the moment of upload, JSON-encoded. The monthly view computes
+  // its forecast from the FIRST upload's snapshot for the month, so
+  // later admin changes don't retroactively rewrite past months.
+  settingsSnapshot: text("settings_snapshot"),
   uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
   uploadedByUserId: text("uploaded_by_user_id").notNull(),
 });
@@ -1192,6 +1197,13 @@ export const forecastConfig = sqliteTable("forecast_config", {
   value: real("value").notNull(),
   description: text("description"),
   category: text("category").notNull().default("general"),   // 'car' | 'cv' | 'overheads' | 'bpm' | 'general'
+  // How the value should be applied to the forecast: multiplied by
+  // total units (per_unit), used as-is (per_month), or referenced
+  // directly by hardcoded formulas (special — e.g. car_house_charge).
+  applies: text("applies").notNull().default("special"),     // 'per_unit' | 'per_month' | 'special'
+  // The line key from line-definitions.ts that this config drives.
+  // null for "special" entries that hardcoded formulas reference by key.
+  appliesToLineKey: text("applies_to_line_key"),
   sortOrder: integer("sort_order").notNull().default(0),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });

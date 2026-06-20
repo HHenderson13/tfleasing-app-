@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 24;
+const SCHEMA_VERSION = 25;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -136,6 +136,13 @@ async function ensureForecastTables() {
       uploaded_by_user_id TEXT NOT NULL
     )
   `));
+  // Snapshot of live config + vehicles + bonuses captured at upload
+  // time. Lets the monthly view compute forecasts off the values that
+  // were live when the month was first uploaded, so admin edits don't
+  // retroactively shift older months.
+  await ensureColumns("forecast_dealbook_uploads", [
+    { name: "settings_snapshot", sqlType: "TEXT" },
+  ]);
   // Old test rows used the previous 3-source enum (lease_new_cars /
   // lease_new_commercial / salary_sacrifice). Map both lease values to
   // the consolidated "lease" tag so we don't strand them.
@@ -237,6 +244,12 @@ async function ensureForecastTables() {
       updated_at INTEGER NOT NULL
     )
   `));
+  // Newer columns: how this row should be applied, and which line key
+  // it drives. Existing rows get sensible defaults via backfill.
+  await ensureColumns("forecast_config", [
+    { name: "applies", sqlType: "TEXT NOT NULL DEFAULT 'special'" },
+    { name: "applies_to_line_key", sqlType: "TEXT" },
+  ]);
 
   // Vehicle catalogue + per-vehicle bonus values.
   await db.run(sql.raw(`
@@ -304,25 +317,44 @@ async function ensureForecastTables() {
   // Seed sensible defaults so the admin tab isn't empty on first boot.
   // INSERT OR IGNORE so any value the admin has already edited stays put.
   const now = Math.floor(Date.now() / 1000);
-  // Per-unit constants used by the monthly Lease New Cars math. Each
-  // is exposed in Admin → Math so the user can tune without redeploy.
-  // (Note: the Excel templates split £175 off Chassis GP into Other
-  // income, so the same constant drives both — keep them in sync.)
-  const seeds: Array<[string, number, string, string, number]> = [
-    // [key, value, description, category, sort_order]
-    ["car_house_charge_per_unit",          175,  "House charge per car unit — subtracted from Chassis GP, added back as Other income.", "car", 10],
-    ["car_pdi_prep_per_unit",              135,  "PDI & Prep cost per car unit.",            "car", 20],
-    ["car_cleaning_per_unit",              35,   "Cleaning cost per car unit.",              "car", 30],
-    ["car_sales_commission_per_unit",      80,   "Sales commission per car unit.",           "car", 40],
-    ["car_collection_delivery_per_unit",   200,  "Collection & Delivery per car unit (excl. Salary Sacrifice).", "car", 50],
-    ["overheads_monthly_budget",          2014.61, "Default monthly General Overheads budget.", "overheads", 10],
+  // Nominal £ costs that drive the monthly Lease New Cars math. Each
+  // row is keyed in Admin → Costs with a "per unit / per month" flag so
+  // the user can plug in a cost without touching code. The hardcoded
+  // formulas (Chassis GP, Standards margin, etc.) reference `applies =
+  // 'special'` rows directly by key.
+  const seeds: Array<{
+    key: string; value: number; description: string; category: string;
+    applies: "per_unit" | "per_month" | "special"; appliesTo: string | null;
+    sort: number;
+  }> = [
+    // ── Lease New Cars — nominal costs ──
+    { key: "car_house_charge_per_unit", value: 175, description: "House charge per unit — subtracted from Chassis GP, added back as Other income.", category: "car", applies: "special", appliesTo: null, sort: 10 },
+    { key: "car_pdi_prep_per_unit", value: 135, description: "PDI & Prep cost per unit.", category: "car", applies: "per_unit", appliesTo: "pdi_prep", sort: 20 },
+    { key: "car_cleaning_per_unit", value: 35, description: "Cleaning cost per unit.", category: "car", applies: "per_unit", appliesTo: "cleaning", sort: 30 },
+    { key: "car_sales_commission_per_unit", value: 80, description: "Sales commission per unit.", category: "car", applies: "per_unit", appliesTo: "sales_commissions", sort: 40 },
+    { key: "car_collection_delivery_per_unit", value: 200, description: "Collection & Delivery per unit (excludes Salary Sacrifice).", category: "car", applies: "per_unit", appliesTo: "collection_delivery", sort: 50 },
+    // ── Overheads (Car sheet expenses block) — defaults to 0 so the
+    // user can fill in once they know the monthly figure. ──
+    { key: "car_personnel_per_month", value: 0, description: "Personnel costs per month.", category: "car", applies: "per_month", appliesTo: "personnel", sort: 110 },
+    { key: "car_sales_promotion_per_month", value: 0, description: "Sales promotion costs per month.", category: "car", applies: "per_month", appliesTo: "sales_promotion", sort: 120 },
+    { key: "car_vehicle_costs_per_month", value: 0, description: "Vehicle costs per month.", category: "car", applies: "per_month", appliesTo: "vehicle_costs", sort: 130 },
+    { key: "car_equipment_per_month", value: 0, description: "Equipment costs per month.", category: "car", applies: "per_month", appliesTo: "equipment", sort: 140 },
+    { key: "car_stock_control_per_month", value: 0, description: "Stock control costs per month.", category: "car", applies: "per_month", appliesTo: "stock_control", sort: 150 },
+    { key: "car_other_direct_per_month", value: 0, description: "Other direct costs (incl. bad debt) per month.", category: "car", applies: "per_month", appliesTo: "other_direct", sort: 160 },
+    { key: "car_property_per_month", value: 0, description: "Property costs per month.", category: "car", applies: "per_month", appliesTo: "property", sort: 170 },
+    { key: "car_total_interest_per_month", value: 0, description: "Total interest per month.", category: "car", applies: "per_month", appliesTo: "total_interest", sort: 180 },
+    // ── Overheads sheet ──
+    { key: "overheads_monthly_budget", value: 2014.61, description: "Default monthly General Overheads budget.", category: "overheads", applies: "special", appliesTo: null, sort: 10 },
   ];
-  for (const [key, value, description, category, sortOrder] of seeds) {
+  for (const s of seeds) {
     await db.run(sql`
-      INSERT OR IGNORE INTO forecast_config (key, value, description, category, sort_order, updated_at)
-      VALUES (${key}, ${value}, ${description}, ${category}, ${sortOrder}, ${now})
+      INSERT OR IGNORE INTO forecast_config (key, value, description, category, sort_order, updated_at, applies, applies_to_line_key)
+      VALUES (${s.key}, ${s.value}, ${s.description}, ${s.category}, ${s.sort}, ${now}, ${s.applies}, ${s.appliesTo})
     `);
   }
+  // Backfill the apply config on rows that pre-date the new columns
+  // (in case the table was created before this seed change landed).
+  await db.run(sql.raw(`UPDATE forecast_config SET applies = 'special' WHERE applies = ''`));
 }
 
 // Broker portal — completely separate auth from the TF leasing app. See

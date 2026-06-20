@@ -273,6 +273,87 @@ export async function loadForecastConfig() {
   return db.select().from(forecastConfig).orderBy(forecastConfig.category, forecastConfig.sortOrder);
 }
 
+// Earliest upload for a month — its settings_snapshot freezes the
+// admin state at that moment so subsequent admin edits don't shift
+// older months' forecasts.
+export async function loadFirstUploadForMonth(monthYyyymm: string) {
+  const rows = await db
+    .select()
+    .from(forecastDealbookUploads)
+    .where(eq(forecastDealbookUploads.monthYyyymm, monthYyyymm))
+    .orderBy(forecastDealbookUploads.uploadedAt)
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// Snapshot the live admin state. Captured into each upload row at
+// upload time; the monthly view reads the FIRST upload's snapshot for
+// that month so changes after the fact don't retro-rewrite forecasts.
+export interface SettingsSnapshot {
+  config: Array<{
+    key: string;
+    value: number;
+    description: string | null;
+    category: string;
+    applies: "per_unit" | "per_month" | "special";
+    appliesToLineKey: string | null;
+  }>;
+  vehicles: Array<{
+    id: string;
+    name: string;
+    kind: "car" | "van";
+    fuelType: "ice" | "bev";
+    keywords: string[];
+  }>;
+  bonuses: Array<{
+    vehicleId: string;
+    bonusKey: string;
+    value: number;
+  }>;
+}
+
+export async function captureSettingsSnapshot(): Promise<SettingsSnapshot> {
+  const [config, vehicles, bonuses] = await Promise.all([
+    loadForecastConfig(),
+    loadForecastVehicles(),
+    loadVehicleBonuses(),
+  ]);
+  return {
+    config: config.map((c) => ({
+      key: c.key,
+      value: c.value,
+      description: c.description ?? null,
+      category: c.category,
+      applies: (c.applies === "per_unit" || c.applies === "per_month") ? c.applies : "special",
+      appliesToLineKey: c.appliesToLineKey ?? null,
+    })),
+    vehicles: vehicles.map((v) => ({
+      id: v.id,
+      name: v.name,
+      kind: v.kind,
+      fuelType: v.fuelType,
+      keywords: v.keywords,
+    })),
+    bonuses: bonuses.map((b) => ({
+      vehicleId: b.vehicleId,
+      bonusKey: b.bonusKey,
+      value: b.value,
+    })),
+  };
+}
+
+export function parseSettingsSnapshot(json: string | null): SettingsSnapshot | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!Array.isArray(parsed.config) || !Array.isArray(parsed.vehicles) || !Array.isArray(parsed.bonuses)) return null;
+    return parsed as SettingsSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadForecastVehicles(): Promise<ParsedVehicle[]> {
   const rows = await db.select().from(forecastVehicles).orderBy(forecastVehicles.sortOrder, forecastVehicles.name);
   return rows.map((r) => parseVehicle({
