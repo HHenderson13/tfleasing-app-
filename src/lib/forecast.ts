@@ -5,6 +5,7 @@ import {
   forecastActuals,
   forecastInputs,
   forecastConfig,
+  forecastScenarios,
   forecastVehicles,
   forecastVehicleBonuses,
 } from "@/db/schema";
@@ -425,6 +426,45 @@ export async function loadForecastVehicles(): Promise<ParsedVehicle[]> {
 
 export async function loadVehicleBonuses() {
   return db.select().from(forecastVehicleBonuses);
+}
+
+// Scenario rows for a month — drives the per-model "I expect N more
+// units at £X chassis" entries on the monthly view.
+export async function loadScenariosForMonth(monthYyyymm: string) {
+  return db
+    .select()
+    .from(forecastScenarios)
+    .where(eq(forecastScenarios.monthYyyymm, monthYyyymm))
+    .orderBy(forecastScenarios.createdAt);
+}
+
+// All dealbook lines whose effective month is in the given year (e.g.
+// "2026"). Used to compute per-vehicle averages — Basic, F&I income,
+// product-attach rates — that feed scenario F&I + DPA contributions.
+export async function listForecastLinesForYear(year: string) {
+  return db.all<{
+    id: string;
+    vehicle_id: string | null;
+    kind: string;
+    source: string;
+    effective_month: string;
+    basic: number;
+    finance_income: number;
+    finance_mb: number;
+    tyre_ins_income: number;
+    finance_subsidy: number;
+    cpi_income: number;
+    smart_repair: number;
+    gap_rti_income: number;
+    paint_protection: number;
+    warranty: number;
+  }>(sql`
+    SELECT id, vehicle_id, kind, source, effective_month, basic,
+           finance_income, finance_mb, tyre_ins_income, finance_subsidy,
+           cpi_income, smart_repair, gap_rti_income, paint_protection, warranty
+    FROM forecast_dealbook_lines
+    WHERE substr(effective_month, 1, 4) = ${year}
+  `);
 }
 
 export async function findForecastActual(monthYyyymm: string, sheet: SheetKey, lineKey: string) {

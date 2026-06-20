@@ -6,6 +6,7 @@ import {
   forecastActuals,
   forecastInputs,
   forecastConfig,
+  forecastScenarios,
   forecastVehicles,
   forecastVehicleBonuses,
 } from "@/db/schema";
@@ -457,6 +458,76 @@ export async function deleteVehicleAction(id: string) {
     return { ok: true as const };
   } catch (e) {
     logError("forecast/deleteVehicleAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+// ── Forecast scenarios — per-model "I expect N more units" rows ────────────
+export async function addScenarioAction(input: {
+  monthYyyymm: string;
+  vehicleId: string;
+  chassisGpPerUnit: number;
+  units: number;
+}) {
+  try {
+    await requireAdmin();
+    if (!isYyyymm(input.monthYyyymm)) return { ok: false as const, error: "Month must be YYYY-MM." };
+    if (!input.vehicleId) return { ok: false as const, error: "Pick a vehicle." };
+    if (!Number.isFinite(input.units) || input.units < 0) return { ok: false as const, error: "Units must be a non-negative number." };
+    if (!Number.isFinite(input.chassisGpPerUnit)) return { ok: false as const, error: "Chassis £ per unit must be a number." };
+    const now = new Date();
+    await db.insert(forecastScenarios).values({
+      id: randomUUID(),
+      monthYyyymm: input.monthYyyymm,
+      vehicleId: input.vehicleId,
+      chassisGpPerUnit: input.chassisGpPerUnit,
+      units: Math.round(input.units),
+      createdAt: now,
+      updatedAt: now,
+    });
+    revalidatePath("/forecast");
+    return { ok: true as const };
+  } catch (e) {
+    logError("forecast/addScenarioAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+export async function updateScenarioAction(input: {
+  id: string;
+  chassisGpPerUnit?: number;
+  units?: number;
+  vehicleId?: string;
+}) {
+  try {
+    await requireAdmin();
+    const patch: Partial<{ chassisGpPerUnit: number; units: number; vehicleId: string; updatedAt: Date }> = { updatedAt: new Date() };
+    if (input.chassisGpPerUnit !== undefined) {
+      if (!Number.isFinite(input.chassisGpPerUnit)) return { ok: false as const, error: "Chassis £ per unit must be a number." };
+      patch.chassisGpPerUnit = input.chassisGpPerUnit;
+    }
+    if (input.units !== undefined) {
+      if (!Number.isFinite(input.units) || input.units < 0) return { ok: false as const, error: "Units must be a non-negative number." };
+      patch.units = Math.round(input.units);
+    }
+    if (input.vehicleId) patch.vehicleId = input.vehicleId;
+    await db.update(forecastScenarios).set(patch).where(eq(forecastScenarios.id, input.id));
+    revalidatePath("/forecast");
+    return { ok: true as const };
+  } catch (e) {
+    logError("forecast/updateScenarioAction", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+export async function deleteScenarioAction(id: string) {
+  try {
+    await requireAdmin();
+    await db.delete(forecastScenarios).where(eq(forecastScenarios.id, id));
+    revalidatePath("/forecast");
+    return { ok: true as const };
+  } catch (e) {
+    logError("forecast/deleteScenarioAction", e);
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
   }
 }

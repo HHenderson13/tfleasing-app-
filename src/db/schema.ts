@@ -1208,6 +1208,22 @@ export const forecastConfig = sqliteTable("forecast_config", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Per-month forecast scenarios. Each row says "I expect N more units of
+// this vehicle to land in this month at this chassis £ per unit". F&I,
+// Standards margin, Stocking credits, DPA Quarter / Half-Year and Pot of
+// Gold contributions are derived automatically from the vehicle's per-
+// vehicle bonus rates and its historical averages — see
+// app/forecast/monthly/car-forecast.ts.
+export const forecastScenarios = sqliteTable("forecast_scenarios", {
+  id: text("id").primaryKey(),
+  monthYyyymm: text("month_yyyymm").notNull(),
+  vehicleId: text("vehicle_id").notNull(),
+  chassisGpPerUnit: real("chassis_gp_per_unit").notNull(),
+  units: integer("units").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Vehicle catalogue used to split dealbook lines into Cars vs Commercials
 // and to drive per-vehicle bonus rates (Guarantee B %, DPA %, etc.).
 // `keywords` is a JSON array of substrings — when the classifier finds

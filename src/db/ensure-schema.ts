@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 30;
+const SCHEMA_VERSION = 31;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -281,6 +281,18 @@ async function ensureForecastTables() {
       PRIMARY KEY (vehicle_id, bonus_key)
     )
   `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS forecast_scenarios (
+      id TEXT PRIMARY KEY,
+      month_yyyymm TEXT NOT NULL,
+      vehicle_id TEXT NOT NULL,
+      chassis_gp_per_unit REAL NOT NULL,
+      units INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_scenarios_month ON forecast_scenarios(month_yyyymm)`));
 
   // Seed the catalogue. INSERT OR IGNORE so admin edits aren't trampled.
   // Keywords are picked to match Dealbook "Model" text, with the more
