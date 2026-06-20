@@ -84,8 +84,9 @@ export interface CarMonthForecast {
 }
 
 const C = {
-  HOUSE_CHARGE:    "car_house_charge_per_unit",
-  DCR_PER_PRODUCT: "car_dcr_per_product",
+  HOUSE_CHARGE:        "car_house_charge_per_unit",   // £ × units → Other income
+  CHASSIS_PER_UNIT:    "car_chassis_per_unit",        // £ added to U in Chassis formula
+  DCR_PER_PRODUCT:     "car_dcr_per_product",
 };
 
 const B = {
@@ -108,6 +109,7 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
   const v = new Map<string, number>();
   const cfg = (key: string, fallback = 0) => input.config.get(key) ?? fallback;
   const houseCharge = cfg(C.HOUSE_CHARGE, 175);
+  const chassisPerUnit = cfg(C.CHASSIS_PER_UNIT, 150);
   const dcrPerProduct = cfg(C.DCR_PER_PRODUCT, 15);
 
   // Filter to actual car lines (kind === "car"). Unmatched lines stay
@@ -166,14 +168,13 @@ export function computeCarMonthForecast(input: CarMonthInputs): CarMonthForecast
     if (l.warranty > 0) warrantyPolicies++;
 
     // Chassis GP per source / fuel type:
-    //   SalSac:      U + house_charge (same as BEV — no Q recon, no guarantee)
-    //   BEV (Lease): U + house_charge
-    //   ICE (Lease): U + house_charge − (Basic × Guarantee B %)
-    // The £175 house charge is added here AND again as Other income —
-    // both rows pick it up. SalSac uses the same shape as BEV: the
-    // simpler programme just skips the ICE guarantee deduction.
+    //   SalSac:      U + chassis_per_unit  (same shape as BEV)
+    //   BEV (Lease): U + chassis_per_unit
+    //   ICE (Lease): U + chassis_per_unit − (Basic × Guarantee B %)
+    // Chassis constant (£150) is separate from the house charge (£175
+    // that drives Other income) — different dials in Admin → Costs.
     const isSalSac = l.source === "salary_sacrifice";
-    const baseChassis = l.totalVehicleProfit + houseCharge;
+    const baseChassis = l.totalVehicleProfit + chassisPerUnit;
     if (isSalSac) {
       chassisGp += baseChassis;
     } else if (isIce) {
