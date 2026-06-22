@@ -12,7 +12,7 @@ import {
   loadFirstUploadForMonth,
   parseSettingsSnapshot,
 } from "@/lib/forecast";
-import { monthsOfPeriod, type ForecastPeriod } from "../pickers";
+import { monthsOfPeriod, type ForecastPeriod } from "../period";
 import { QuarterlyClient } from "./quarterly-client";
 
 export const dynamic = "force-dynamic";

@@ -81,7 +81,8 @@ export function MonthPicker({ value }: { value: string; label?: string }) {
   );
 }
 
-export type ForecastPeriod = "Q1" | "Q2" | "Q3" | "Q4" | "H1" | "H2" | "FY";
+export type { ForecastPeriod } from "./period";
+import type { ForecastPeriod } from "./period";
 
 export function PeriodPicker({
   period, year,
@@ -157,13 +158,4 @@ export function PeriodPicker({
   );
 }
 
-// Returns the 1-indexed months in the given period for a year.
-export function monthsOfPeriod(period: ForecastPeriod): number[] {
-  if (period === "FY") return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  if (period === "H1") return [1, 2, 3, 4, 5, 6];
-  if (period === "H2") return [7, 8, 9, 10, 11, 12];
-  const q = parseInt(period.slice(1), 10);
-  const start = (q - 1) * 3 + 1;
-  return [start, start + 1, start + 2];
-}
 
