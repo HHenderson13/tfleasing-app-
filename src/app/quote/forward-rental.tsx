@@ -1,18 +1,18 @@
 "use client";
 import { useMemo, useState } from "react";
+import { rentalFromPv } from "@/lib/annuity-due";
 
 // Forward rental calculator — the mirror of /quote → Reverse commission.
-// Take a combined commission + options amount the broker wants spread over
-// the rental, plus the contract shape, and work out the rental uplift per
-// month including simple interest over the term so the customer pays back
-// the time value of money on the deferred amount.
+// Takes a combined commission + options amount the broker wants spread
+// over the rental, plus the contract shape, and works out the rental
+// uplift per month using Excel's CUMIPMT(rate/12, term, pv, 1, term, 1)
+// annuity-due semantics — same formula as the broker team's
+// Options Calculator.xlsx so the two tools always agree.
 //
-// Worked example (per the spec):
-//   £1,000 commission + options, upfront 6, term 35 (= 41 payments), 7% APR
-//   Base monthly = £1,000 ÷ 41 = £24.39 +VAT
-//   Interest = £1,000 × 7% × 41/12 = £239.17
-//   Total to recover = £1,000 + £239.17 = £1,239.17
-//   Monthly with interest = £1,239.17 ÷ 41 = £30.22 +VAT
+// rental = (PMT_due × term) ÷ (upfront + term)
+//
+// where PMT_due is the annuity-due payment for `pv` amortised over
+// `term` periods at the monthly rate (APR ÷ 12).
 
 const UPFRONT_OPTIONS = [1, 3, 6, 9, 12];
 const TERM_OPTIONS = [23, 35, 47, 59];
@@ -41,12 +41,28 @@ export function calculateForwardRental(input: ForwardInput): ForwardOutput {
   const totalPayments = input.upfront + input.term;
   const safePayments = totalPayments > 0 ? totalPayments : 1;
   const baseMonthlyExVat = input.amountGbp / safePayments;
-  // Simple-interest model matches the brief and lines up with the reverse
-  // commission tab — same assumption applied in the opposite direction.
-  const yearFraction = totalPayments / 12;
-  const interestGbp = Math.max(0, input.amountGbp) * (input.annualRatePct / 100) * yearFraction;
-  const totalToRecover = input.amountGbp + interestGbp;
-  const monthlyExVat = totalToRecover / safePayments;
+  // Annuity-due interest model — matches Excel's CUMIPMT used by the
+  // broker team's Options Calculator.xlsx. Negative principals (e.g.
+  // refund scenarios) short-circuit to no interest, matching the
+  // reverse-commission "negative gross" branch.
+  let monthlyExVat: number;
+  let interestGbp: number;
+  let totalToRecover: number;
+  if (input.amountGbp <= 0) {
+    monthlyExVat = baseMonthlyExVat;
+    interestGbp = 0;
+    totalToRecover = input.amountGbp;
+  } else {
+    const r = rentalFromPv({
+      pv: input.amountGbp,
+      term: input.term,
+      upfront: input.upfront,
+      annualRatePct: input.annualRatePct,
+    });
+    monthlyExVat = r.rental;
+    interestGbp = r.interest;
+    totalToRecover = r.totalPaid;
+  }
   const monthlyVat = monthlyExVat * 0.2;
   const monthlyInclVat = monthlyExVat + monthlyVat;
   return {
@@ -181,7 +197,7 @@ export function ForwardRentalCalculator() {
                 <WorkingRow
                   step="3"
                   label={`Interest @ ${rate || 0}% APR`}
-                  detail={`${gbp(parseFloat(amount) || 0)} × ${rate || 0}% × ${(out.totalPayments / 12).toFixed(2)}yr`}
+                  detail={`Amortised over ${term} period${term === 1 ? "" : "s"} (annuity-due) at ${(parseFloat(rate) || 0).toFixed(1)}% APR`}
                   value={`+ ${gbp(out.interestGbp)}`}
                 />
                 <WorkingRow

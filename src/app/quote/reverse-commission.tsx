@@ -1,17 +1,12 @@
 "use client";
 import { useMemo, useState } from "react";
+import { pvFromRental } from "@/lib/annuity-due";
 
-// Reverse-commission calculator — work out the broker commission +VAT from
-// the rentals on either side, then subtract simple interest at the chosen
-// rate so the broker is paid the present-value equivalent of the upsold
-// margin rather than the headline gross.
-//
-// Worked example (per the spec):
-//   Broker rental £400, TF rental £350, upfront 6, term 35 (= 41 payments)
-//   Difference per month = £50
-//   Upsold = £50 × 41 = £2,050
-//   Interest @ 7% APR over 41/12 yrs = £2,050 × 0.07 × 41/12 = £490.45
-//   Commission +VAT = £2,050 − £490.45 = £1,559.55
+// Reverse-commission calculator — work out the broker commission +VAT
+// from the rentals on either side. Uses Excel's CUMIPMT(rate/12, term,
+// pv, 1, term, 1) annuity-due semantics — same formula as the broker
+// team's Options Calculator.xlsx, just inverted: given the rental
+// difference, back out the present-value principal it amortises into.
 
 const UPFRONT_OPTIONS = [1, 3, 6, 9, 12];
 const TERM_OPTIONS = [23, 35, 47, 59];
@@ -38,13 +33,16 @@ export function calculateReverseCommission(input: ReverseInput): ReverseOutput {
   const totalPayments = input.upfront + input.term;
   const diffPerMonth = input.brokerRentalGbp - input.tfRentalGbp;
   const upsoldTotal = diffPerMonth * totalPayments;
-  // Simple interest over the contract length. Matches the wording in the
-  // brief ("work out the interest incurred at 7% on 6+35 and take that off
-  // the £2,050") rather than discounting the stream as an annuity, which
-  // would give a different number that's harder to defend in a deal sheet.
-  const yearFraction = totalPayments / 12;
-  const interestGbp = Math.max(0, upsoldTotal) * (input.annualRatePct / 100) * yearFraction;
-  const commissionInclVat = upsoldTotal - interestGbp;
+  // Inverse of the annuity-due forward formula used in
+  // Options Calculator.xlsx: given the monthly rental uplift, back out
+  // the PV (commission) that would amortise into it over `term` periods
+  // at the chosen rate. Negative upsell → no PV discount applied.
+  const { pv: commissionInclVat, interest: interestGbp } = pvFromRental({
+    rental: diffPerMonth,
+    term: input.term,
+    upfront: input.upfront,
+    annualRatePct: input.annualRatePct,
+  });
   // VAT split for the deal sheet — broker invoices commission +VAT, so
   // show the ex-VAT figure they'll actually receive as commission.
   const commissionExVat = commissionInclVat / 1.2;
@@ -200,7 +198,7 @@ export function ReverseCommissionCalculator() {
                 <WorkingRow
                   step="4"
                   label={`Interest @ ${rate || 0}% APR`}
-                  detail={`${gbp(out.upsoldTotal)} × ${rate || 0}% × ${(out.totalPayments / 12).toFixed(2)}yr`}
+                  detail={`Annuity-due discount across ${term} period${term === 1 ? "" : "s"} at ${(parseFloat(rate) || 0).toFixed(1)}% APR`}
                   value={`− ${gbp(out.interestGbp)}`}
                   tone="warn"
                 />
