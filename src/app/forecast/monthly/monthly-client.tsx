@@ -95,9 +95,8 @@ interface Props {
 }
 
 const SHEET_TABS: { key: SheetKey; label: string; sub: string }[] = [
-  { key: "car",       label: "Lease New Cars",       sub: "ICE + BEV mix" },
-  { key: "cv",        label: "Lease New Commercial", sub: "Vans + light commercial" },
-  { key: "overheads", label: "General Overheads",    sub: "Department-wide costs" },
+  { key: "car", label: "Lease New Cars",       sub: "ICE + BEV mix" },
+  { key: "cv",  label: "Lease New Commercial", sub: "Vans + light commercial" },
 ];
 
 // The year-line shape only contains what computeVehicleAverages needs,

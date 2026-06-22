@@ -100,18 +100,6 @@ export const NEW_RETAIL_CAR_LINES: ForecastLine[] = [
   { key: "total_variable",      label: "Total variable costs",     kind: "total", totalOf: ["pdi_prep", "cleaning", "sales_commissions", "collection_delivery", "late_costs"] },
   { key: "variable_per_unit",   label: "Variable costs per unit",  kind: "perUnit", perUnitOf: { money: "total_variable", units: "car_units" } },
   { key: "gross_profit",        label: "Gross Profit",             kind: "total", totalOf: ["gp_before_variables"], subtractOf: ["total_variable"] },
-
-  { key: "section_expenses", label: "Expenses", kind: "header", section: true },
-  { key: "personnel",           label: "Personnel Costs",          kind: "money" },
-  { key: "sales_promotion",     label: "Sales Promotion Costs",    kind: "money" },
-  { key: "vehicle_costs",       label: "Vehicle Costs",            kind: "money" },
-  { key: "equipment",           label: "Equipment Costs",          kind: "money" },
-  { key: "stock_control",       label: "Stock Control Costs",      kind: "money" },
-  { key: "other_direct",        label: "Other Direct (incl. bad debt)", kind: "money" },
-  { key: "property",            label: "Property Costs",           kind: "money" },
-  { key: "total_expenses",      label: "Total Expenses",           kind: "total", totalOf: ["personnel", "sales_promotion", "vehicle_costs", "equipment", "stock_control", "other_direct", "property"] },
-  { key: "total_interest",      label: "Total Interest",           kind: "money" },
-  { key: "net_profit",          label: "Net profit",               kind: "total", totalOf: ["gross_profit"], subtractOf: ["total_expenses", "total_interest"] },
 ];
 
 // ── New Retail CV ─────────────────────────────────────────────────────────
@@ -154,18 +142,6 @@ export const NEW_RETAIL_CV_LINES: ForecastLine[] = [
   { key: "cv_total_variable",   label: "Total variable costs",    kind: "total", totalOf: ["cv_pdi_prep", "cv_cleaning", "cv_sales_commissions", "cv_collection_delivery"] },
   { key: "cv_variable_per_unit", label: "Variable costs per unit", kind: "perUnit", perUnitOf: { money: "cv_total_variable", units: "cv_units" } },
   { key: "cv_gross_profit",     label: "Gross Profit",            kind: "total", totalOf: ["cv_gp_before_variables"], subtractOf: ["cv_total_variable"] },
-
-  { key: "section_cv_expenses", label: "Expenses", kind: "header", section: true },
-  { key: "cv_personnel",        label: "Personnel Costs",         kind: "money" },
-  { key: "cv_sales_promotion",  label: "Sales Promotion Costs",   kind: "money" },
-  { key: "cv_vehicle_costs",    label: "Vehicle Costs",           kind: "money" },
-  { key: "cv_equipment",        label: "Equipment Costs",         kind: "money" },
-  { key: "cv_stock_control",    label: "Stock Control Costs",     kind: "money" },
-  { key: "cv_other_direct",     label: "Other Direct (incl. bad debt)", kind: "money" },
-  { key: "cv_property",         label: "Property Costs",          kind: "money" },
-  { key: "cv_total_expenses",   label: "Total Expenses",          kind: "total", totalOf: ["cv_personnel", "cv_sales_promotion", "cv_vehicle_costs", "cv_equipment", "cv_stock_control", "cv_other_direct", "cv_property"] },
-  { key: "cv_total_interest",   label: "Total Interest",          kind: "money" },
-  { key: "cv_net_profit",       label: "Net profit",              kind: "total", totalOf: ["cv_gross_profit"], subtractOf: ["cv_total_expenses", "cv_total_interest"] },
 ];
 
 // ── Overheads ─────────────────────────────────────────────────────────────

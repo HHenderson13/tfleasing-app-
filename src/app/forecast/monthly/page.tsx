@@ -114,7 +114,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
       <MonthlyClient
         month={month}
         monthNumber={activeMonthNum}
-        defaultSheet={sp.sheet === "cv" || sp.sheet === "overheads" ? sp.sheet : "car"}
+        defaultSheet={sp.sheet === "cv" ? "cv" : "car"}
         uploadCount={uploads.length}
         lineCount={lines.length}
         snapshotSource={snapshot ? "frozen" : "live"}

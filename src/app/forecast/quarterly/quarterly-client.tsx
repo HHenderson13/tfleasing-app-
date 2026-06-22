@@ -1,20 +1,28 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ForecastPageHeader } from "../page-shell";
 import { QuarterPicker } from "../pickers";
-import { getLinesForSheet, type SheetKey, type ForecastLine } from "../line-definitions";
-import { rollupDealbookLines } from "../rollup";
+import {
+  computeCarMonthForecast,
+  settleDerivedLines,
+  type CostConfig,
+  type DealbookCarLine,
+  type VehicleInfo,
+  type BonusLookup,
+  type ScenarioRow,
+} from "../monthly/car-forecast";
+import { computeCvMonthForecast } from "../monthly/cv-forecast";
+import { getLinesForSheet, type ForecastLine, type SheetKey } from "../line-definitions";
 
 interface DealbookLine {
   source: string;
   kind: string;
-  chassisProfit: number;
-  addBonus: number;
-  metalSubsidy: number;
+  vehicleId: string | null;
+  regDate: string | null;
+  overrideMonth: string | null;
+  effectiveMonth: string;
+  basic: number;
   reconCost: number;
-  oallowDiscount: number;
-  accessoryProfit: number;
-  warrantyCost: number;
   totalVehicleProfit: number;
   financeIncome: number;
   financeMb: number;
@@ -25,236 +33,296 @@ interface DealbookLine {
   gapRtiIncome: number;
   paintProtection: number;
   warranty: number;
+  chassisProfit: number;
+  accessoryProfit: number;
   totalFiIncome: number;
   totalGrossProfit: number;
 }
 
-interface MonthData {
+interface YearLine {
+  vehicleId: string | null;
+  kind: string;
+  source: string;
+  effectiveMonth: string;
+  basic: number;
+  financeIncome: number;
+  financeMb: number;
+  tyreInsIncome: number;
+  financeSubsidy: number;
+  cpiIncome: number;
+  smartRepair: number;
+  gapRtiIncome: number;
+  paintProtection: number;
+  warranty: number;
+}
+
+interface MonthPayload {
   month: string;
+  monthNumber: number;
+  snapshotSource: "frozen" | "live";
   lines: DealbookLine[];
   actuals: { sheet: string; lineKey: string; value: number }[];
-  inputs: { sheet: string; scenarioKey: string; value: number }[];
+  scenarios: { id: string; vehicleId: string; chassisGpPerUnit: number; units: number }[];
+  config: { key: string; value: number; description: string | null; category: string;
+    applies: "per_unit" | "per_month" | "special"; appliesToLineKey: string | null }[];
+  vehicles: { id: string; name: string; kind: "car" | "van"; fuelType: "ice" | "bev" }[];
+  bonuses: { vehicleId: string; bonusKey: string; value: number }[];
 }
 
 interface Props {
   quarter: number;
   year: number;
-  ytdMonths: string[];
-  perMonth: MonthData[];
+  defaultSheet: "car" | "cv";
+  quarterMonths: string[];
+  perMonth: MonthPayload[];
+  regHalfLines: DealbookLine[];
+  prevQuarterLines: DealbookLine[];
+  yearLines: YearLine[];
 }
+
+const SHEET_TABS: { key: SheetKey; label: string }[] = [
+  { key: "car", label: "Lease New Cars" },
+  { key: "cv",  label: "Lease New Commercial" },
+];
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function monthHeader(yyyymm: string): string {
-  const [, m] = yyyymm.split("-").map((s) => parseInt(s, 10));
-  return MONTH_SHORT[m - 1];
-}
-
-// Compute the "display value" (published actual or forecast) for a single
-// sheet/month combination. This mirrors what the monthly view shows but
-// scoped per-month so we can stack them quarterly + YTD.
-function valuesForMonthSheet(sheet: SheetKey, data: MonthData): {
-  net: number;        // Net profit
-  units: number;      // Total units
-} {
-  const rollup = sheet === "car"
-    ? rollupDealbookLines(data.lines, "car")
-    : sheet === "cv"
-      ? rollupDealbookLines(data.lines, "cv")
-      : rollupDealbookLines([], "all");
-
-  const lines = getLinesForSheet(sheet);
-  const actuals = new Map<string, number>();
-  const published = new Map<string, number>();
-  for (const a of data.actuals.filter((x) => x.sheet === sheet)) {
-    if (a.lineKey.startsWith("published_")) published.set(a.lineKey, a.value);
-    else actuals.set(a.lineKey, a.value);
-  }
-  const inputs = new Map<string, number>();
-  for (const i of data.inputs.filter((x) => x.sheet === sheet)) inputs.set(i.scenarioKey, i.value);
-  const additionalUnits = inputs.get("additional_units") ?? 0;
-  const additionalMargin = inputs.get("additional_margin_per_unit") ?? 0;
-
-  // Per-line forecast values, then derive Net profit + Units totals.
-  const value = new Map<string, number>();
-  const scenarioUnitsKey = lines.find((l) => l.kind === "unit" && l.dealbookKey === "units")?.key ?? null;
-  const scenarioChassisKey = lines.find((l) => l.kind === "money" && l.dealbookKey === "chassisProfit")?.key ?? null;
-  for (const l of lines) {
-    if (l.kind === "header") continue;
-    let v = 0;
-    if (l.dealbookKey) v = rollup[l.dealbookKey] ?? 0;
-    if (l.key === scenarioUnitsKey) v += additionalUnits;
-    if (l.key === scenarioChassisKey) v += additionalUnits * additionalMargin;
-    value.set(l.key, v);
-  }
-  // Settle totals / per-unit in a few sweeps.
-  for (let pass = 0; pass < 3; pass++) {
-    for (const l of lines) {
-      if (l.kind === "total" && l.totalOf) {
-        value.set(l.key, l.totalOf.reduce((acc: number, k: string) => acc + (value.get(k) ?? 0), 0));
-      } else if (l.kind === "perUnit" && l.perUnitOf) {
-        const m = value.get(l.perUnitOf.money);
-        const u = value.get(l.perUnitOf.units);
-        value.set(l.key, m !== undefined && u && u !== 0 ? m / u : 0);
-      }
-    }
-  }
-  // Published overrides per-line.
-  for (const l of lines) {
-    const pub = published.get(`published_${l.key}`);
-    if (pub !== undefined) value.set(l.key, pub);
-  }
-  // Net profit + units rollup keys differ per sheet.
-  const netKey = sheet === "car" ? "net_profit" : sheet === "cv" ? "cv_net_profit" : "oh_net_profit";
-  const unitsKey = sheet === "car" ? "showroom_units" : sheet === "cv" ? "cv_units" : null;
+function toCarLine(l: DealbookLine): DealbookCarLine {
   return {
-    net: value.get(netKey) ?? 0,
-    units: unitsKey ? (value.get(unitsKey) ?? 0) : 0,
+    vehicleId: l.vehicleId,
+    kind: l.kind,
+    source: l.source,
+    regDate: l.regDate,
+    overrideMonth: l.overrideMonth,
+    effectiveMonth: l.effectiveMonth,
+    basic: l.basic,
+    reconCost: l.reconCost,
+    totalVehicleProfit: l.totalVehicleProfit,
+    financeIncome: l.financeIncome,
+    financeMb: l.financeMb,
+    tyreInsIncome: l.tyreInsIncome,
+    financeSubsidy: l.financeSubsidy,
+    cpiIncome: l.cpiIncome,
+    smartRepair: l.smartRepair,
+    gapRtiIncome: l.gapRtiIncome,
+    paintProtection: l.paintProtection,
+    warranty: l.warranty,
   };
 }
 
-// Departmental PBT lines that match the BPM sheet rows we can compute
-// from the three monthly sheets. The rest stay as "—" until those data
-// sources are wired (Service, MSV, Bodyshop etc. don't live here yet).
-const PBT_LINES: { key: string; label: string; sheet: SheetKey | "manual" }[] = [
-  { key: "new_car",     label: "New Car Sales",   sheet: "car" },
-  { key: "new_cv",      label: "New CV",          sheet: "cv" },
-  { key: "overheads",   label: "Overheads",       sheet: "overheads" },
-];
+function asDealbookFromYearLine(yl: YearLine): DealbookCarLine {
+  return {
+    vehicleId: yl.vehicleId, kind: yl.kind, source: yl.source,
+    regDate: null, overrideMonth: null, effectiveMonth: yl.effectiveMonth,
+    basic: yl.basic, reconCost: 0, totalVehicleProfit: 0,
+    financeIncome: yl.financeIncome, financeMb: yl.financeMb,
+    tyreInsIncome: yl.tyreInsIncome, financeSubsidy: yl.financeSubsidy,
+    cpiIncome: yl.cpiIncome, smartRepair: yl.smartRepair,
+    gapRtiIncome: yl.gapRtiIncome, paintProtection: yl.paintProtection,
+    warranty: yl.warranty,
+  };
+}
 
-// Physicals rows we can derive from the sheets.
-const PHYSICAL_LINES: { key: string; label: string; sheet: SheetKey }[] = [
-  { key: "new_car_units", label: "New Car Sales Units", sheet: "car" },
-  { key: "new_cv_units",  label: "New CV Units",        sheet: "cv" },
-];
+interface ComputedMonth {
+  month: string;
+  monthLabel: string;
+  forecast: Map<string, number>;
+  budget: Map<string, number>;
+}
 
-export function QuarterlyClient({ quarter, year, ytdMonths, perMonth }: Props) {
-  const startMonthNum = (quarter - 1) * 3 + 1;
-  const quarterMonths = [0, 1, 2].map((o) => `${year}-${String(startMonthNum + o).padStart(2, "0")}`);
+export function QuarterlyClient({
+  quarter, year, defaultSheet, quarterMonths, perMonth,
+  regHalfLines, prevQuarterLines, yearLines,
+}: Props) {
+  const [sheet, setSheet] = useState<"car" | "cv">(defaultSheet);
 
-  // Per-month, per-sheet rolled values.
-  const computed = useMemo(() => {
-    const m = new Map<string, Map<SheetKey, { net: number; units: number }>>();
-    for (const md of perMonth) {
-      const sheetMap = new Map<SheetKey, { net: number; units: number }>();
-      sheetMap.set("car", valuesForMonthSheet("car", md));
-      sheetMap.set("cv", valuesForMonthSheet("cv", md));
-      sheetMap.set("overheads", valuesForMonthSheet("overheads", md));
-      m.set(md.month, sheetMap);
+  const lineDefs = useMemo(() => getLinesForSheet(sheet), [sheet]);
+
+  // Compute each month's forecast + budget using that month's own
+  // snapshot. Bracketed quarter aggregates Total + Budget across the
+  // three months.
+  const computed = useMemo<ComputedMonth[]>(() => perMonth.map((p) => {
+    // Lookups from this month's snapshot.
+    const vehicleMap = new Map<string, VehicleInfo>();
+    for (const v of p.vehicles) vehicleMap.set(v.id, { id: v.id, fuelType: v.fuelType });
+    const bonusLookup: BonusLookup = new Map();
+    for (const b of p.bonuses) {
+      if (!bonusLookup.has(b.vehicleId)) bonusLookup.set(b.vehicleId, new Map());
+      bonusLookup.get(b.vehicleId)!.set(b.bonusKey, b.value);
     }
-    return m;
-  }, [perMonth]);
+    const configMap = new Map<string, number>();
+    for (const c of p.config) configMap.set(c.key, c.value);
+    const costConfigs: CostConfig[] = p.config.map((c) => ({
+      key: c.key, value: c.value, applies: c.applies, appliesToLineKey: c.appliesToLineKey,
+    }));
+
+    const carScenarios: ScenarioRow[] = p.scenarios
+      .filter((s) => p.vehicles.find((v) => v.id === s.vehicleId)?.kind === "car")
+      .map((s) => ({ id: s.id, vehicleId: s.vehicleId, chassisGpPerUnit: s.chassisGpPerUnit, units: s.units }));
+    const cvScenarios: ScenarioRow[] = p.scenarios
+      .filter((s) => p.vehicles.find((v) => v.id === s.vehicleId)?.kind === "van")
+      .map((s) => ({ id: s.id, vehicleId: s.vehicleId, chassisGpPerUnit: s.chassisGpPerUnit, units: s.units }));
+
+    let forecast: Map<string, number>;
+    if (sheet === "car") {
+      const result = computeCarMonthForecast({
+        lines: p.lines.map(toCarLine),
+        regHalfLines: regHalfLines.map(toCarLine),
+        yearLines: yearLines.map(asDealbookFromYearLine),
+        scenarios: carScenarios,
+        monthNumber: p.monthNumber,
+        vehicles: vehicleMap,
+        bonuses: bonusLookup,
+        config: configMap,
+        costs: costConfigs,
+      });
+      forecast = result.forecast;
+    } else {
+      const result = computeCvMonthForecast({
+        lines: p.lines.map(toCarLine),
+        regHalfLines: regHalfLines.map(toCarLine),
+        prevQuarterLines: prevQuarterLines.map(toCarLine),
+        yearLines: yearLines.map(asDealbookFromYearLine),
+        scenarios: cvScenarios,
+        monthNumber: p.monthNumber,
+        vehicles: vehicleMap,
+        bonuses: bonusLookup,
+        config: configMap,
+        costs: costConfigs,
+      });
+      forecast = result.forecast;
+    }
+
+    settleDerivedLines(lineDefs, forecast);
+
+    // Per-month budget — admin-keyed leaves, derived totals settled.
+    const budget = new Map<string, number>();
+    for (const a of p.actuals) {
+      if (a.sheet !== sheet) continue;
+      if (a.lineKey.startsWith("budget_")) {
+        budget.set(a.lineKey.replace(/^budget_/, ""), a.value);
+      }
+    }
+    settleDerivedLines(lineDefs, budget);
+
+    return {
+      month: p.month,
+      monthLabel: MONTH_SHORT[p.monthNumber - 1],
+      forecast,
+      budget,
+    };
+  }), [perMonth, sheet, regHalfLines, prevQuarterLines, yearLines, lineDefs]);
 
   const quarterLabel = `Q${quarter} ${year}`;
+  const anySnapshotFrozen = perMonth.some((p) => p.snapshotSource === "frozen");
 
   return (
     <>
       <ForecastPageHeader
         title="Quarterly Forecast"
-        description={`${quarterLabel} BPM rollup — three months across plus a year-to-date column. Published actuals overwrite their month's forecast automatically.`}
+        description={`${quarterLabel} roll-up — each line's Forecast and Budget across the three months of the quarter, plus the quarter totals.`}
         picker={<QuarterPicker quarter={quarter} year={year} />}
       />
 
-      <main className="mx-auto max-w-7xl px-6 py-8 space-y-6">
-        <PbtSection
-          title={`${quarterLabel} — PBT by department`}
-          quarterMonths={quarterMonths}
-          ytdMonths={ytdMonths}
-          rows={PBT_LINES.map((l) => ({
-            key: l.key,
-            label: l.label,
-            values: l.sheet === "manual" ? null : computed,
-            sheet: l.sheet === "manual" ? null : (l.sheet as SheetKey),
-            metric: "net" as const,
-          }))}
-        />
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <section className="grid gap-3 sm:grid-cols-2">
+          {SHEET_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setSheet(t.key === "cv" ? "cv" : "car")}
+              className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition ${
+                sheet === t.key
+                  ? "border-slate-900 bg-slate-900 text-white shadow"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-sm"
+              }`}
+            >
+              <div className="text-xs uppercase tracking-[0.16em] opacity-70">{t.key === "cv" ? "Vans + light commercial" : "ICE + BEV mix"}</div>
+              <div className="mt-1 text-lg font-semibold">{t.label}</div>
+            </button>
+          ))}
+        </section>
 
-        <PbtSection
-          title="Physicals"
-          quarterMonths={quarterMonths}
-          ytdMonths={ytdMonths}
-          rows={PHYSICAL_LINES.map((l) => ({
-            key: l.key,
-            label: l.label,
-            values: computed,
-            sheet: l.sheet,
-            metric: "units" as const,
-          }))}
-        />
+        <div className="mt-3 text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+          <span>{quarterLabel} · {quarterMonths.length} month{quarterMonths.length === 1 ? "" : "s"} loaded</span>
+          {anySnapshotFrozen && (
+            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-indigo-800 ring-1 ring-indigo-200">
+              Frozen settings on uploaded months
+            </span>
+          )}
+        </div>
 
-        <BonusPlaceholder quarterLabel={quarterLabel} />
-
-        <p className="text-[11px] text-slate-400">
-          PBT and Physicals roll up live from monthly forecasts. Service / MSV / Bodyshop / Rental
-          rows will populate when those data sources are added; bonus opportunity figures will plug
-          in when the math passes are configured in Admin.
-        </p>
+        <div className="mt-6">
+          <QuarterSheet lines={lineDefs} months={computed} quarterLabel={quarterLabel} />
+        </div>
       </main>
     </>
   );
 }
 
-interface RolledRow {
-  key: string;
-  label: string;
-  values: Map<string, Map<SheetKey, { net: number; units: number }>> | null;
-  sheet: SheetKey | null;
-  metric: "net" | "units";
-}
-
-function PbtSection({
-  title, quarterMonths, ytdMonths, rows,
+function QuarterSheet({
+  lines, months, quarterLabel,
 }: {
-  title: string;
-  quarterMonths: string[];
-  ytdMonths: string[];
-  rows: RolledRow[];
+  lines: ForecastLine[];
+  months: ComputedMonth[];
+  quarterLabel: string;
 }) {
-  function valueFor(row: RolledRow, month: string): number | null {
-    if (!row.values || !row.sheet) return null;
-    const m = row.values.get(month);
-    if (!m) return 0;
-    return row.metric === "net" ? m.get(row.sheet)!.net : m.get(row.sheet)!.units;
-  }
-
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-5 py-3">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Line</th>
-              {quarterMonths.map((m) => (
-                <th key={m} className="px-3 py-3 text-right font-medium">{monthHeader(m)}</th>
+              {months.map((m) => (
+                <th key={m.month} className="px-3 py-3 text-right font-medium">{m.monthLabel}</th>
               ))}
-              <th className="px-3 py-3 text-right font-medium">Q TOTAL</th>
-              <th className="px-5 py-3 text-right font-medium">YTD</th>
+              <th className="px-3 py-3 text-right font-medium">{quarterLabel} TOTAL</th>
+              <th className="px-3 py-3 text-right font-medium">{quarterLabel} BUDGET</th>
+              <th className="px-5 py-3 text-right font-medium">vs BUDGET</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, idx) => {
-              const monthValues = quarterMonths.map((m) => valueFor(r, m));
-              const qTotal = monthValues.reduce<number | null>((acc, v) => v === null ? acc : (acc ?? 0) + v, null);
-              const ytd = ytdMonths.reduce<number | null>((acc, m) => {
-                const v = valueFor(r, m);
-                return v === null ? acc : (acc ?? 0) + v;
-              }, null);
+            {lines.map((l, idx) => {
+              if (l.kind === "header") {
+                return (
+                  <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
+                    <td colSpan={5 + months.length} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                      {l.label}
+                    </td>
+                  </tr>
+                );
+              }
+              const monthForecasts = months.map((m) => m.forecast.get(l.key) ?? 0);
+              const monthBudgets = months.map((m) => m.budget.get(l.key) ?? 0);
+              const qTotal = monthForecasts.reduce((a, v) => a + v, 0);
+              const qBudget = monthBudgets.reduce((a, v) => a + v, 0);
+              // Per-unit rows: total forecast/budget is the LAST month's
+              // derived value, not a sum (you can't sum a £/unit across
+              // months meaningfully). Same for percentages.
+              const isPerUnit = l.kind === "perUnit" || l.kind === "pct";
+              const displayQTotal = isPerUnit ? (monthForecasts[monthForecasts.length - 1] ?? 0) : qTotal;
+              const displayQBudget = isPerUnit ? (monthBudgets[monthBudgets.length - 1] ?? 0) : qBudget;
+              const vsBudget = displayQTotal - displayQBudget;
+              const isTotal = l.kind === "total";
+              const stripe = idx % 2 === 0 ? "" : "bg-slate-50/40";
+              const totalClass = isTotal ? "bg-slate-50 font-semibold text-slate-900" : "";
               return (
-                <tr key={r.key} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
-                  <td className="px-5 py-2 text-slate-800">{r.label}</td>
-                  {monthValues.map((v, i) => (
-                    <td key={i} className="px-3 py-2 text-right tabular-nums text-slate-600">
-                      {v === null ? "—" : format(v, r.metric)}
+                <tr key={l.key} className={`border-t border-slate-100 ${stripe} ${totalClass}`}>
+                  <td className="px-5 py-2 text-slate-800">{l.label}</td>
+                  {monthForecasts.map((v, i) => (
+                    <td key={i} className="px-3 py-2 text-right tabular-nums text-slate-700">
+                      {formatNumber(v, l.kind)}
                     </td>
                   ))}
                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
-                    {qTotal === null ? "—" : format(qTotal, r.metric)}
+                    {formatNumber(displayQTotal, l.kind)}
                   </td>
-                  <td className="px-5 py-2 text-right tabular-nums font-semibold text-slate-900">
-                    {ytd === null ? "—" : format(ytd, r.metric)}
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                    {formatNumber(displayQBudget, l.kind)}
+                  </td>
+                  <td className={`px-5 py-2 text-right tabular-nums ${tone(vsBudget)}`}>
+                    {formatNumber(vsBudget, l.kind === "unit" ? "unit" : "money")}
                   </td>
                 </tr>
               );
@@ -266,56 +334,16 @@ function PbtSection({
   );
 }
 
-void getLinesForSheet; // ensure import is treeshake-safe
-void ((_: ForecastLine) => undefined); // helps TS keep ForecastLine accessible
-
-function format(v: number, metric: "net" | "units"): string {
-  if (metric === "units") return Math.round(v).toString();
-  if (Math.abs(v) < 0.005) return "0";
-  return v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function tone(v: number): string {
+  if (Math.abs(v) < 0.005) return "text-slate-300";
+  return v > 0 ? "text-emerald-700" : "text-rose-700";
 }
 
-function BonusPlaceholder({ quarterLabel }: { quarterLabel: string }) {
-  const lines = [
-    "Total Dealership",
-    "Pot of Gold",
-    "DPA Fast Start",
-    "DPA",
-    "DPA ½ Year",
-    "CV DPA Fast Start",
-    "CV DPA",
-    "Motab",
-    "FRPA Fast Start",
-    "FRPA",
-    "DCR",
-    "Pre-Reg Income",
-    "UCB Rebate UCS",
-  ];
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-5 py-3">
-        <h3 className="text-sm font-semibold text-slate-900">{quarterLabel} Bonus opportunity</h3>
-      </div>
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
-          <tr>
-            <th className="px-5 py-3 text-left font-medium">Bonus</th>
-            <th className="px-3 py-3 text-right font-medium">Forecast</th>
-            <th className="px-3 py-3 text-right font-medium">Budget</th>
-            <th className="px-5 py-3 text-right font-medium">Variance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l, idx) => (
-            <tr key={l} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
-              <td className="px-5 py-2 text-slate-800">{l}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-slate-400">—</td>
-              <td className="px-3 py-2 text-right tabular-nums text-slate-400">—</td>
-              <td className="px-5 py-2 text-right tabular-nums text-slate-400">—</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
+function formatNumber(v: number, kind: ForecastLine["kind"]): string {
+  if (kind === "unit") return Math.round(v).toString();
+  if (kind === "pct") return `${Math.round(v)}%`;
+  const rounded = Math.round(v);
+  if (rounded === 0) return "£0";
+  const abs = Math.abs(rounded).toLocaleString("en-GB", { maximumFractionDigits: 0 });
+  return rounded < 0 ? `−£${abs}` : `£${abs}`;
 }
