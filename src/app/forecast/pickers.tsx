@@ -81,46 +81,62 @@ export function MonthPicker({ value }: { value: string; label?: string }) {
   );
 }
 
-export function QuarterPicker({
-  quarter, year,
+export type ForecastPeriod = "Q1" | "Q2" | "Q3" | "Q4" | "H1" | "H2" | "FY";
+
+export function PeriodPicker({
+  period, year,
 }: {
-  quarter: number; year: number;
+  period: ForecastPeriod; year: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
-  function selectQuarter(q: number, y: number) {
+  function go(p: ForecastPeriod, y: number) {
     start(() => {
       const url = new URL(window.location.href);
-      url.searchParams.set("quarter", String(q));
+      url.searchParams.set("period", p);
       url.searchParams.set("year", String(y));
+      url.searchParams.delete("quarter");           // clear the legacy param
       router.push(url.pathname + "?" + url.searchParams.toString());
     });
   }
 
   const years = [year - 1, year, year + 1];
+  const quarters: ForecastPeriod[] = ["Q1", "Q2", "Q3", "Q4"];
+  const halves: ForecastPeriod[] = ["H1", "H2"];
 
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm">
-      <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Quarter</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm">
+      <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Period</span>
       <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
-        {[1, 2, 3, 4].map((q) => (
+        {quarters.map((p) => (
           <button
-            key={q}
-            type="button"
-            onClick={() => selectQuarter(q, year)}
-            disabled={pending}
+            key={p} type="button" onClick={() => go(p, year)} disabled={pending}
             className={`px-2.5 py-1 text-xs font-semibold ${
-              q === quarter ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+              p === period ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
             } disabled:opacity-50`}
-          >
-            Q{q}
-          </button>
+          >{p}</button>
         ))}
       </div>
+      <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
+        {halves.map((p) => (
+          <button
+            key={p} type="button" onClick={() => go(p, year)} disabled={pending}
+            className={`px-2.5 py-1 text-xs font-semibold ${
+              p === period ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+            } disabled:opacity-50`}
+          >{p}</button>
+        ))}
+      </div>
+      <button
+        type="button" onClick={() => go("FY", year)} disabled={pending}
+        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+          period === "FY" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+        } disabled:opacity-50`}
+      >FY</button>
       <select
         value={year}
-        onChange={(e) => selectQuarter(quarter, parseInt(e.target.value, 10))}
+        onChange={(e) => go(period, parseInt(e.target.value, 10))}
         disabled={pending}
         className="rounded border-0 bg-transparent px-1 py-0.5 text-sm font-semibold text-slate-900 focus:outline-none disabled:opacity-50"
       >
@@ -130,7 +146,7 @@ export function QuarterPicker({
         type="button"
         onClick={() => {
           const cq = currentQuarter();
-          selectQuarter(cq.quarter, cq.year);
+          go(`Q${cq.quarter}` as ForecastPeriod, cq.year);
         }}
         disabled={pending}
         className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 disabled:opacity-50"
@@ -140,3 +156,14 @@ export function QuarterPicker({
     </div>
   );
 }
+
+// Returns the 1-indexed months in the given period for a year.
+export function monthsOfPeriod(period: ForecastPeriod): number[] {
+  if (period === "FY") return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  if (period === "H1") return [1, 2, 3, 4, 5, 6];
+  if (period === "H2") return [7, 8, 9, 10, 11, 12];
+  const q = parseInt(period.slice(1), 10);
+  const start = (q - 1) * 3 + 1;
+  return [start, start + 1, start + 2];
+}
+

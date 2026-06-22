@@ -12,53 +12,56 @@ import {
   loadFirstUploadForMonth,
   parseSettingsSnapshot,
 } from "@/lib/forecast";
+import { monthsOfPeriod, type ForecastPeriod } from "../pickers";
 import { QuarterlyClient } from "./quarterly-client";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ quarter?: string; year?: string; sheet?: string }>;
+  searchParams: Promise<{ quarter?: string; period?: string; year?: string; sheet?: string }>;
 }
 
-function currentQuarterYear(): { quarter: number; year: number } {
+function currentPeriod(): { period: ForecastPeriod; year: number } {
   const d = new Date();
-  return { quarter: Math.floor(d.getMonth() / 3) + 1, year: d.getFullYear() };
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return { period: `Q${q}` as ForecastPeriod, year: d.getFullYear() };
+}
+
+const VALID_PERIODS: ForecastPeriod[] = ["Q1", "Q2", "Q3", "Q4", "H1", "H2", "FY"];
+
+function parsePeriod(raw: string | undefined, legacyQuarter: string | undefined): ForecastPeriod {
+  if (raw && VALID_PERIODS.includes(raw as ForecastPeriod)) return raw as ForecastPeriod;
+  // Legacy ?quarter=1 support.
+  if (legacyQuarter && /^[1-4]$/.test(legacyQuarter)) return `Q${legacyQuarter}` as ForecastPeriod;
+  return currentPeriod().period;
+}
+
+// For each active month, work out which quarter precedes it (used for
+// CSPA on CV). Returns the YYYY-MM range covering that prior quarter.
+function previousQuarterRange(monthNum: number, year: number): { start: string; end: string } | null {
+  if (!(monthNum === 1 || monthNum === 4 || monthNum === 7 || monthNum === 10)) return null;
+  const prevMonth = monthNum === 1 ? 12 : monthNum - 1;
+  const prevYear = monthNum === 1 ? year - 1 : year;
+  const prevQ = Math.floor((prevMonth - 1) / 3);
+  const startM = prevQ * 3 + 1;
+  const endM = startM + 2;
+  return {
+    start: `${prevYear}-${String(startM).padStart(2, "0")}`,
+    end:   `${prevYear}-${String(endM).padStart(2, "0")}`,
+  };
 }
 
 export default async function ForecastQuarterlyPage({ searchParams }: PageProps) {
   await requireAdmin();
   const sp = await searchParams;
-  const cqy = currentQuarterYear();
-  const quarter = sp.quarter && /^[1-4]$/.test(sp.quarter) ? parseInt(sp.quarter, 10) : cqy.quarter;
-  const year = sp.year && /^\d{4}$/.test(sp.year) ? parseInt(sp.year, 10) : cqy.year;
+  const period = parsePeriod(sp.period, sp.quarter);
+  const year = sp.year && /^\d{4}$/.test(sp.year) ? parseInt(sp.year, 10) : currentPeriod().year;
 
-  // The three months of the active quarter.
-  const startMonth = (quarter - 1) * 3 + 1;
-  const quarterMonths: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    quarterMonths.push(`${year}-${String(startMonth + i).padStart(2, "0")}`);
-  }
+  const monthNums = monthsOfPeriod(period);
+  const periodMonths = monthNums.map((m) => `${year}-${String(m).padStart(2, "0")}`);
 
-  // Half-year window for each month's DPA scope. All three months in a
-  // quarter share the same half-year, so one query covers all.
-  const halfStartM = startMonth <= 6 ? 1 : 7;
-  const halfEndM   = startMonth <= 6 ? 6 : 12;
-  const regStart = `${year}-${String(halfStartM).padStart(2, "0")}`;
-  const regEnd   = `${year}-${String(halfEndM).padStart(2, "0")}`;
-
-  // Previous quarter range (for CSPA on CV when the active month is in
-  // Jan/Apr/Jul/Oct — one of the three quarter months might be a CSPA
-  // trigger). We load it unconditionally for the quarter since the
-  // first month of every quarter is a CSPA month.
-  const prevQYear = quarter === 1 ? year - 1 : year;
-  const prevQuarter = quarter === 1 ? 4 : quarter - 1;
-  const prevQStartM = (prevQuarter - 1) * 3 + 1;
-  const prevQEndM = prevQStartM + 2;
-  const prevQStart = `${prevQYear}-${String(prevQStartM).padStart(2, "0")}`;
-  const prevQEnd   = `${prevQYear}-${String(prevQEndM).padStart(2, "0")}`;
-
-  // Per-month data — lines, actuals, scenarios, first upload.
-  const perMonth = await Promise.all(quarterMonths.map(async (month) => {
+  // Per-month payload — lines, actuals, scenarios, first-upload snapshot.
+  const perMonthRaw = await Promise.all(periodMonths.map(async (month) => {
     const [lines, actuals, scenarios, firstUpload] = await Promise.all([
       listForecastLinesForMonth(month),
       loadForecastActuals(month),
@@ -68,29 +71,34 @@ export default async function ForecastQuarterlyPage({ searchParams }: PageProps)
     return { month, lines, actuals, scenarios, firstUpload };
   }));
 
-  // Shared data — half-year reg scope, prev-quarter reg scope, year
-  // lines for vehicle averages.
-  const [
-    regHalfLinesRaw, prevQuarterLinesRaw, yearLinesRaw,
-    liveConfig, liveVehicles, liveBonuses,
-  ] = await Promise.all([
-    listForecastLinesByRegDateRange(regStart, regEnd),
-    listForecastLinesByRegDateRange(prevQStart, prevQEnd),
-    listForecastLinesForYear(String(year)),
+  // DPA reg-scope: load both halves once, then per-month we pick the
+  // right slice. FY needs both; Q1/Q2/H1 needs H1; Q3/Q4/H2 needs H2.
+  const needsH1 = monthNums.some((m) => m <= 6);
+  const needsH2 = monthNums.some((m) => m >= 7);
+  const [h1Lines, h2Lines, liveConfig, liveVehicles, liveBonuses, yearLinesRaw] = await Promise.all([
+    needsH1 ? listForecastLinesByRegDateRange(`${year}-01`, `${year}-06`) : Promise.resolve([] as Awaited<ReturnType<typeof listForecastLinesByRegDateRange>>),
+    needsH2 ? listForecastLinesByRegDateRange(`${year}-07`, `${year}-12`) : Promise.resolve([] as Awaited<ReturnType<typeof listForecastLinesByRegDateRange>>),
     loadForecastConfig(),
     loadForecastVehicles(),
     loadVehicleBonuses(),
+    listForecastLinesForYear(String(year)),
   ]);
 
-  // Per-month snapshot resolution — fall back to live state when a
-  // month hasn't been uploaded yet (e.g. forecasting Q3 in June).
+  // Per-CSPA-month previous quarter reg-scope.
+  const prevQuarterByMonth: Record<string, Awaited<ReturnType<typeof listForecastLinesByRegDateRange>>> = {};
+  await Promise.all(monthNums.map(async (m, idx) => {
+    const range = previousQuarterRange(m, year);
+    if (!range) return;
+    prevQuarterByMonth[periodMonths[idx]] = await listForecastLinesByRegDateRange(range.start, range.end);
+  }));
+
   type Applies = "per_unit" | "per_month" | "special";
-  const perMonthPayload = perMonth.map(({ month, lines, actuals, scenarios, firstUpload }) => {
+  const perMonthPayload = perMonthRaw.map(({ month, lines, actuals, scenarios, firstUpload }) => {
     const snapshot = parseSettingsSnapshot(firstUpload?.settingsSnapshot ?? null);
     return {
       month,
       monthNumber: parseInt(month.slice(5, 7), 10),
-      snapshotSource: snapshot ? "frozen" as const : "live" as const,
+      snapshotSource: (snapshot ? "frozen" : "live") as "frozen" | "live",
       lines: lines.map((l) => ({
         source: l.source,
         kind: l.kind,
@@ -122,8 +130,6 @@ export default async function ForecastQuarterlyPage({ searchParams }: PageProps)
         chassisGpPerUnit: s.chassisGpPerUnit,
         units: s.units,
       })),
-      // Each month carries its own snapshot of admin state so changes
-      // post-upload don't retro-rewrite the quarter.
       config: snapshot
         ? snapshot.config.map((c) => ({
             key: c.key, value: c.value, description: c.description,
@@ -145,7 +151,7 @@ export default async function ForecastQuarterlyPage({ searchParams }: PageProps)
     };
   });
 
-  const mapRegLines = (l: typeof regHalfLinesRaw[number]) => ({
+  const mapRegLines = (l: Awaited<ReturnType<typeof listForecastLinesByRegDateRange>>[number]) => ({
     source: l.source,
     kind: l.kind,
     vehicleId: l.vehicle_id,
@@ -174,13 +180,16 @@ export default async function ForecastQuarterlyPage({ searchParams }: PageProps)
     <div className="min-h-screen bg-slate-50">
       <TopNav active="forecast" />
       <QuarterlyClient
-        quarter={quarter}
+        period={period}
         year={year}
         defaultSheet={sp.sheet === "cv" ? "cv" : "car"}
-        quarterMonths={quarterMonths}
+        periodMonths={periodMonths}
         perMonth={perMonthPayload}
-        regHalfLines={regHalfLinesRaw.map(mapRegLines)}
-        prevQuarterLines={prevQuarterLinesRaw.map(mapRegLines)}
+        h1RegLines={h1Lines.map(mapRegLines)}
+        h2RegLines={h2Lines.map(mapRegLines)}
+        prevQuarterByMonth={Object.fromEntries(
+          Object.entries(prevQuarterByMonth).map(([k, v]) => [k, v.map(mapRegLines)]),
+        )}
         yearLines={yearLinesRaw.map((l) => ({
           vehicleId: l.vehicle_id,
           kind: l.kind,
