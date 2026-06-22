@@ -236,15 +236,17 @@ function UploadForm({
   onClose: () => void;
   onSubmit: (fd: FormData) => void;
 }) {
-  // Last 12 months for the dropdown.
+  // Past 6 → current → next 18 months for the dropdown, so the user
+  // can upload forward-dated dealbooks for forecasting the rest of the
+  // year (and into next year).
   const months = useMemo(() => {
     const out: string[] = [];
     const d = new Date();
-    for (let offset = 0; offset < 12; offset++) {
-      const m = new Date(d.getFullYear(), d.getMonth() - offset, 1);
+    for (let offset = -6; offset <= 18; offset++) {
+      const m = new Date(d.getFullYear(), d.getMonth() + offset, 1);
       out.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
     }
-    return out;
+    return Array.from(new Set(out)).sort();
   }, []);
 
   return (
@@ -316,7 +318,7 @@ function ReviewWindow({
   const monthOptions = useMemo(() => {
     const out: string[] = [];
     const [y, m] = upload.monthYyyymm.split("-").map((s) => parseInt(s, 10));
-    for (let offset = -12; offset <= 6; offset++) {
+    for (let offset = -12; offset <= 18; offset++) {
       const d = new Date(y, m - 1 + offset, 1);
       out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
