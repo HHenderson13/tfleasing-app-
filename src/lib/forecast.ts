@@ -9,7 +9,7 @@ import {
   forecastVehicles,
   forecastVehicleBonuses,
 } from "@/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import type { SheetKey } from "@/app/forecast/line-definitions";
 import { parseVehicle, type ParsedVehicle } from "@/lib/forecast-classify";
 
@@ -436,6 +436,49 @@ export async function loadScenariosForMonth(monthYyyymm: string) {
     .from(forecastScenarios)
     .where(eq(forecastScenarios.monthYyyymm, monthYyyymm))
     .orderBy(forecastScenarios.createdAt);
+}
+
+// Batched per-month loaders — one IN-query each instead of N round
+// trips. Used by the quarterly / half-year / FY views which would
+// otherwise fire 12×4 separate selects against Turso.
+export async function listForecastLinesForMonths(months: string[]) {
+  if (months.length === 0) return [];
+  return db
+    .select()
+    .from(forecastDealbookLines)
+    .where(inArray(forecastDealbookLines.effectiveMonth, months));
+}
+
+export async function loadForecastActualsForMonths(months: string[]) {
+  if (months.length === 0) return [];
+  return db
+    .select()
+    .from(forecastActuals)
+    .where(inArray(forecastActuals.monthYyyymm, months));
+}
+
+export async function loadScenariosForMonths(months: string[]) {
+  if (months.length === 0) return [];
+  return db
+    .select()
+    .from(forecastScenarios)
+    .where(inArray(forecastScenarios.monthYyyymm, months))
+    .orderBy(forecastScenarios.createdAt);
+}
+
+// Earliest upload per month, batched. Returns a Map keyed by YYYY-MM.
+export async function loadFirstUploadsForMonths(months: string[]) {
+  if (months.length === 0) return new Map<string, Awaited<ReturnType<typeof loadFirstUploadForMonth>>>();
+  const rows = await db
+    .select()
+    .from(forecastDealbookUploads)
+    .where(inArray(forecastDealbookUploads.monthYyyymm, months))
+    .orderBy(forecastDealbookUploads.uploadedAt);   // ASC — first hit wins per month
+  const m = new Map<string, typeof rows[number]>();
+  for (const r of rows) {
+    if (!m.has(r.monthYyyymm)) m.set(r.monthYyyymm, r);
+  }
+  return m;
 }
 
 // All dealbook lines whose effective month is in the given year (e.g.
