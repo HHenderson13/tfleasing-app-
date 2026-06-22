@@ -236,37 +236,49 @@ function UploadForm({
   onClose: () => void;
   onSubmit: (fd: FormData) => void;
 }) {
-  // Past 6 → current → next 18 months for the dropdown, so the user
-  // can upload forward-dated dealbooks for forecasting the rest of the
-  // year (and into next year).
-  const months = useMemo(() => {
-    const out: string[] = [];
-    const d = new Date();
-    for (let offset = -6; offset <= 18; offset++) {
-      const m = new Date(d.getFullYear(), d.getMonth() + offset, 1);
-      out.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
-    }
-    return Array.from(new Set(out)).sort();
-  }, []);
+  const today = new Date();
+  const [monthIdx, setMonthIdx] = useState(today.getMonth() + 1);   // 1-12
+  const [year, setYear] = useState(today.getFullYear());
+
+  const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  // Year picker spans last 2 → next 3 — covers historical clean-ups
+  // and forward planning without flooding the dropdown.
+  const years = useMemo(() => {
+    const out: number[] = [];
+    for (let offset = -2; offset <= 3; offset++) out.push(today.getFullYear() + offset);
+    return out;
+  }, [today]);
 
   return (
     <form
       action={(fd) => {
         fd.set("source", department);
+        fd.set("month", `${year}-${String(monthIdx).padStart(2, "0")}`);
         onSubmit(fd);
       }}
       className="border-y border-slate-200 bg-slate-50 px-5 py-4 space-y-3"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-[1fr_120px_2fr]">
         <label className="flex flex-col">
           <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Month</span>
           <select
-            name="month"
-            defaultValue={currentMonth()}
-            required
+            value={monthIdx}
+            onChange={(e) => setMonthIdx(parseInt(e.target.value, 10))}
             className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold focus:border-slate-500 focus:outline-none"
           >
-            {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            {MONTH_NAMES.map((name, i) => (
+              <option key={i} value={i + 1}>{name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col">
+          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Year</span>
+          <select
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value, 10))}
+            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold tabular-nums focus:border-slate-500 focus:outline-none"
+          >
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </label>
         <label className="flex flex-col">
