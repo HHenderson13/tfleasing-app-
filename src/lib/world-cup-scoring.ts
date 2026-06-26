@@ -80,6 +80,31 @@ export interface GroupStandingRow {
   points: number;
 }
 
+// Best 8 third-place finishers across the 12 groups, ranked by the
+// same tie-breakers used inside a group (points → goal diff → goals
+// for → alphabetical). Returns up to 8 rows, in rank order.
+//
+// Used to populate the 8 "T1"…"T8" slots on the R32 fixtures once
+// every group has finished playing.
+export function computeBestThirds(
+  groupStandings: Array<{ groupName: string; standings: GroupStandingRow[] }>,
+  topN = 8,
+): Array<GroupStandingRow & { groupName: string }> {
+  const thirds: Array<GroupStandingRow & { groupName: string }> = [];
+  for (const { groupName, standings } of groupStandings) {
+    const third = standings[2];
+    if (!third) continue;
+    thirds.push({ ...third, groupName });
+  }
+  thirds.sort((x, y) =>
+    y.points - x.points ||
+    y.goalDiff - x.goalDiff ||
+    y.goalsFor - x.goalsFor ||
+    x.team.localeCompare(y.team),
+  );
+  return thirds.slice(0, topN);
+}
+
 export function computeGroupStandings(
   teams: string[],
   results: Array<{ team1: string; team2: string; team1Goals: number; team2Goals: number }>,

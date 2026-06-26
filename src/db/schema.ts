@@ -533,6 +533,13 @@ export const wcFixtures = sqliteTable(
     team2: text("team2"),
     nextFixtureNumber: integer("next_fixture_number"),
     nextSlot: text("next_slot"), // 't1' | 't2'
+    // Source placement that fills each team slot when previous results
+    // settle. Encoded as "<group><place>" for group placers ("A1",
+    // "B2", …, "L2") or "T1"…"T8" for the eight best third-place
+    // finishers. NULL for group games and for knockouts after R32
+    // (which already chain via nextFixtureNumber).
+    team1Seed: text("team1_seed"),
+    team2Seed: text("team2_seed"),
   },
   (t) => ({
     byStage: index("idx_wc_fixtures_stage").on(t.stage),

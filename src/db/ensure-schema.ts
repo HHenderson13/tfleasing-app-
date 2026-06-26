@@ -1001,6 +1001,12 @@ async function ensureWorldCupTables() {
   `));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_fixtures_stage ON wc_fixtures(stage)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_fixtures_kickoff ON wc_fixtures(kickoff_at)`));
+  // Seed strings for auto-population from group standings (R32 only;
+  // R16 onwards already chains via next_fixture_number on settlement).
+  await ensureColumns("wc_fixtures", [
+    { name: "team1_seed", sqlType: "TEXT" },
+    { name: "team2_seed", sqlType: "TEXT" },
+  ]);
 
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS wc_results (
@@ -1139,16 +1145,20 @@ async function seedWcFixturesIfEmpty() {
     team2: string | null;
     nextFixtureNumber: number | null;
     nextSlot: string | null;
+    team1Seed?: string | null;
+    team2Seed?: string | null;
   };
   const seed: Seed[] = (await import("@/lib/wc-fixtures-seed.json")).default as Seed[];
   for (const f of seed) {
     const kickoffMs = Math.floor(new Date(f.kickoffAt).getTime() / 1000);
+    const t1Seed = f.team1Seed ?? null;
+    const t2Seed = f.team2Seed ?? null;
     // Insert if missing (first boot).
     await db.run(sql`
       INSERT OR IGNORE INTO wc_fixtures
-        (fixture_number, stage, group_name, kickoff_at, stadium, city, team1, team2, next_fixture_number, next_slot)
+        (fixture_number, stage, group_name, kickoff_at, stadium, city, team1, team2, next_fixture_number, next_slot, team1_seed, team2_seed)
       VALUES
-        (${f.fixtureNumber}, ${f.stage}, ${f.groupName}, ${kickoffMs}, ${f.stadium}, ${f.city}, ${f.team1}, ${f.team2}, ${f.nextFixtureNumber}, ${f.nextSlot})
+        (${f.fixtureNumber}, ${f.stage}, ${f.groupName}, ${kickoffMs}, ${f.stadium}, ${f.city}, ${f.team1}, ${f.team2}, ${f.nextFixtureNumber}, ${f.nextSlot}, ${t1Seed}, ${t2Seed})
     `);
     // Force-sync static metadata on every boot (cheap; UPDATE is a no-op
     // when the values already match). Don't touch team1/team2.
@@ -1160,7 +1170,9 @@ async function seedWcFixturesIfEmpty() {
           stadium = ${f.stadium},
           city = ${f.city},
           next_fixture_number = ${f.nextFixtureNumber},
-          next_slot = ${f.nextSlot}
+          next_slot = ${f.nextSlot},
+          team1_seed = ${t1Seed},
+          team2_seed = ${t2Seed}
       WHERE fixture_number = ${f.fixtureNumber}
     `);
   }
