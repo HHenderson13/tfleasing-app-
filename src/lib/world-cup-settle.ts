@@ -5,6 +5,7 @@ import { wcFixtures, wcLiveScores, wcPredictions, wcResults } from "@/db/schema"
 import { and, eq } from "drizzle-orm";
 import { computeBestThirds, computeGroupStandings, scorePrediction } from "./world-cup-scoring";
 import { WC_CACHE_TAGS } from "./world-cup-data";
+import { resolveAnnexC } from "./wc-annex-c";
 
 // Sentinel user id used when the auto-record path (ESPN feed) settles a
 // fixture without a human admin involved. Stored in wc_results.settled_by_
@@ -197,22 +198,51 @@ export async function maybePopulateR32(_settledByUserId: string): Promise<boolea
     if (standings[1]) seedToTeam[`${groupName}2`] = standings[1].team;
   }
 
-  // Best thirds only resolvable once everyone's third-place row is known.
+  // Per-match best-third assignment — only possible once every group's
+  // third-place row is known, because the Annex C lookup needs the set
+  // of which 8 groups produce qualifying thirds. Returns a Map<match,
+  // teamName>; null when the lookup hasn't been seeded yet (insufficient
+  // groups complete).
+  let thirdsByMatch: Map<number, string> | null = null;
   if (allGroupsComplete) {
     const bestThirds = computeBestThirds(completeGroupStandings);
-    bestThirds.forEach((row, i) => {
-      seedToTeam[`T${i + 1}`] = row.team;
-    });
+    if (bestThirds.length === 8) {
+      const qualifyingGroups = new Set(bestThirds.map((b) => b.groupName));
+      const annex = resolveAnnexC(qualifyingGroups);
+      if (annex) {
+        thirdsByMatch = new Map();
+        // annex maps R32 matchNumber → groupLetter. The team for that
+        // slot is whichever of the qualifying thirds came from that group.
+        for (const [matchNo, groupLetter] of annex) {
+          const winner = bestThirds.find((b) => b.groupName === groupLetter);
+          if (winner) thirdsByMatch.set(matchNo, winner.team);
+        }
+      }
+    }
   }
 
   // Update every R32 fixture whose team slots are blank AND whose seed
   // resolves to a known team. Anything we can't resolve yet stays null.
+  // The team1Seed/team2Seed "3?" is the sentinel for a best-third slot —
+  // populated only from the Annex C lookup above.
   const r32 = await db.select().from(wcFixtures).where(eq(wcFixtures.stage, "r32"));
   let changed = false;
   for (const fx of r32) {
     const updates: Record<string, string> = {};
-    if (!fx.team1 && fx.team1Seed && seedToTeam[fx.team1Seed]) updates.team1 = seedToTeam[fx.team1Seed];
-    if (!fx.team2 && fx.team2Seed && seedToTeam[fx.team2Seed]) updates.team2 = seedToTeam[fx.team2Seed];
+    if (!fx.team1) {
+      if (fx.team1Seed === "3?" && thirdsByMatch?.has(fx.fixtureNumber)) {
+        updates.team1 = thirdsByMatch.get(fx.fixtureNumber)!;
+      } else if (fx.team1Seed && seedToTeam[fx.team1Seed]) {
+        updates.team1 = seedToTeam[fx.team1Seed];
+      }
+    }
+    if (!fx.team2) {
+      if (fx.team2Seed === "3?" && thirdsByMatch?.has(fx.fixtureNumber)) {
+        updates.team2 = thirdsByMatch.get(fx.fixtureNumber)!;
+      } else if (fx.team2Seed && seedToTeam[fx.team2Seed]) {
+        updates.team2 = seedToTeam[fx.team2Seed];
+      }
+    }
     if (Object.keys(updates).length === 0) continue;
     await db.update(wcFixtures).set(updates).where(eq(wcFixtures.fixtureNumber, fx.fixtureNumber));
     changed = true;
