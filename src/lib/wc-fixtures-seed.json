@@ -875,7 +875,7 @@
     "nextFixtureNumber": 89,
     "nextSlot": "t1",
     "team1Seed": "A1",
-    "team2Seed": "T1"
+    "team2Seed": "B2"
   },
   {
     "fixtureNumber": 74,
@@ -888,8 +888,8 @@
     "team2": null,
     "nextFixtureNumber": 89,
     "nextSlot": "t2",
-    "team1Seed": "B1",
-    "team2Seed": "T2"
+    "team1Seed": "C1",
+    "team2Seed": "D2"
   },
   {
     "fixtureNumber": 75,
@@ -902,8 +902,8 @@
     "team2": null,
     "nextFixtureNumber": 90,
     "nextSlot": "t1",
-    "team1Seed": "C1",
-    "team2Seed": "T3"
+    "team1Seed": "E1",
+    "team2Seed": "F2"
   },
   {
     "fixtureNumber": 76,
@@ -916,8 +916,8 @@
     "team2": null,
     "nextFixtureNumber": 90,
     "nextSlot": "t2",
-    "team1Seed": "D1",
-    "team2Seed": "T4"
+    "team1Seed": "G1",
+    "team2Seed": "H2"
   },
   {
     "fixtureNumber": 77,
@@ -930,8 +930,8 @@
     "team2": null,
     "nextFixtureNumber": 91,
     "nextSlot": "t1",
-    "team1Seed": "E1",
-    "team2Seed": "T5"
+    "team1Seed": "I1",
+    "team2Seed": "J2"
   },
   {
     "fixtureNumber": 78,
@@ -944,8 +944,8 @@
     "team2": null,
     "nextFixtureNumber": 91,
     "nextSlot": "t2",
-    "team1Seed": "F1",
-    "team2Seed": "T6"
+    "team1Seed": "K1",
+    "team2Seed": "L2"
   },
   {
     "fixtureNumber": 79,
@@ -958,8 +958,8 @@
     "team2": null,
     "nextFixtureNumber": 92,
     "nextSlot": "t1",
-    "team1Seed": "G1",
-    "team2Seed": "T7"
+    "team1Seed": "B1",
+    "team2Seed": "A2"
   },
   {
     "fixtureNumber": 80,
@@ -972,8 +972,8 @@
     "team2": null,
     "nextFixtureNumber": 92,
     "nextSlot": "t2",
-    "team1Seed": "H1",
-    "team2Seed": "T8"
+    "team1Seed": "D1",
+    "team2Seed": "C2"
   },
   {
     "fixtureNumber": 81,
@@ -986,8 +986,8 @@
     "team2": null,
     "nextFixtureNumber": 93,
     "nextSlot": "t1",
-    "team1Seed": "A2",
-    "team2Seed": "L2"
+    "team1Seed": "F1",
+    "team2Seed": "E2"
   },
   {
     "fixtureNumber": 82,
@@ -1000,8 +1000,8 @@
     "team2": null,
     "nextFixtureNumber": 93,
     "nextSlot": "t2",
-    "team1Seed": "B2",
-    "team2Seed": "K2"
+    "team1Seed": "H1",
+    "team2Seed": "G2"
   },
   {
     "fixtureNumber": 83,
@@ -1014,8 +1014,8 @@
     "team2": null,
     "nextFixtureNumber": 94,
     "nextSlot": "t1",
-    "team1Seed": "C2",
-    "team2Seed": "J2"
+    "team1Seed": "J1",
+    "team2Seed": "I2"
   },
   {
     "fixtureNumber": 84,
@@ -1028,8 +1028,8 @@
     "team2": null,
     "nextFixtureNumber": 94,
     "nextSlot": "t2",
-    "team1Seed": "D2",
-    "team2Seed": "I2"
+    "team1Seed": "L1",
+    "team2Seed": "K2"
   },
   {
     "fixtureNumber": 85,
@@ -1042,8 +1042,8 @@
     "team2": null,
     "nextFixtureNumber": 95,
     "nextSlot": "t1",
-    "team1Seed": "E2",
-    "team2Seed": "H2"
+    "team1Seed": "T1",
+    "team2Seed": "T8"
   },
   {
     "fixtureNumber": 86,
@@ -1056,8 +1056,8 @@
     "team2": null,
     "nextFixtureNumber": 95,
     "nextSlot": "t2",
-    "team1Seed": "F2",
-    "team2Seed": "G2"
+    "team1Seed": "T2",
+    "team2Seed": "T7"
   },
   {
     "fixtureNumber": 87,
@@ -1070,8 +1070,8 @@
     "team2": null,
     "nextFixtureNumber": 96,
     "nextSlot": "t1",
-    "team1Seed": "I1",
-    "team2Seed": "L1"
+    "team1Seed": "T3",
+    "team2Seed": "T6"
   },
   {
     "fixtureNumber": 88,
@@ -1084,8 +1084,8 @@
     "team2": null,
     "nextFixtureNumber": 96,
     "nextSlot": "t2",
-    "team1Seed": "J1",
-    "team2Seed": "K1"
+    "team1Seed": "T4",
+    "team2Seed": "T5"
   },
   {
     "fixtureNumber": 89,

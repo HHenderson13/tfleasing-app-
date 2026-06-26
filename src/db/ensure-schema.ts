@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 36;
+const SCHEMA_VERSION = 37;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1177,8 +1177,29 @@ async function seedWcFixturesIfEmpty() {
       VALUES
         (${f.fixtureNumber}, ${f.stage}, ${f.groupName}, ${kickoffMs}, ${f.stadium}, ${f.city}, ${f.team1}, ${f.team2}, ${f.nextFixtureNumber}, ${f.nextSlot}, ${t1Seed}, ${t2Seed})
     `);
+    // When a seed string moves between boots (e.g. R32 scheme tweak),
+    // clear the corresponding auto-populated team field so the next
+    // propagation pass writes the new placement. We only do this when
+    // the OLD seed was set AND the row currently has a result row —
+    // wait, no: blank the slot whenever the seed differs. We're not
+    // touching wc_results, so settled matches are untouched even if
+    // the seed-driven name disappears for a moment.
+    await db.run(sql`
+      UPDATE wc_fixtures
+      SET team1 = NULL
+      WHERE fixture_number = ${f.fixtureNumber}
+        AND team1_seed IS NOT NULL
+        AND team1_seed != ${t1Seed ?? ""}
+    `);
+    await db.run(sql`
+      UPDATE wc_fixtures
+      SET team2 = NULL
+      WHERE fixture_number = ${f.fixtureNumber}
+        AND team2_seed IS NOT NULL
+        AND team2_seed != ${t2Seed ?? ""}
+    `);
     // Force-sync static metadata on every boot (cheap; UPDATE is a no-op
-    // when the values already match). Don't touch team1/team2.
+    // when the values already match). Doesn't touch team1/team2 itself.
     await db.run(sql`
       UPDATE wc_fixtures
       SET stage = ${f.stage},
