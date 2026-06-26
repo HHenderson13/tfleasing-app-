@@ -5,6 +5,7 @@ import {
   clearResultAction,
   createWcUserAction,
   recomputeAllPointsAction,
+  populateR32Action,
   recordResultAction,
   setKnockoutTeamsAction,
   setPaidStatusAction,
@@ -514,22 +515,43 @@ function NewPlayerForm({ onResult }: { onResult: (ok: boolean, msg: string) => v
 function RecomputeFooter() {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [r32Pending, r32Start] = useTransition();
+  const [r32Msg, setR32Msg] = useState<string | null>(null);
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/60 px-5 py-3">
-      <p className="text-xs text-slate-500">
-        Force a clean recompute of every prediction's points. Idempotent — use if you edited a result and the leaderboard looks off.
-      </p>
-      <button
-        type="button"
-        onClick={() => start(async () => {
-          const res = await recomputeAllPointsAction();
-          setMsg(`Recomputed ${res.count} predictions`);
-        })}
-        disabled={pending}
-        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
-      >
-        {pending ? "Recomputing…" : msg ?? "Recompute all points"}
-      </button>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/60 px-5 py-3">
+        <p className="text-xs text-slate-500">
+          Force a clean recompute of every prediction's points. Idempotent — use if you edited a result and the leaderboard looks off.
+        </p>
+        <button
+          type="button"
+          onClick={() => start(async () => {
+            const res = await recomputeAllPointsAction();
+            setMsg(`Recomputed ${res.count} predictions`);
+          })}
+          disabled={pending}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+        >
+          {pending ? "Recomputing…" : msg ?? "Recompute all points"}
+        </button>
+      </div>
+      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/60 px-5 py-3">
+        <p className="text-xs text-slate-500">
+          Populate Round of 32 teams from settled group results. Idempotent — fills every group whose six games are settled (T1-T8 only once every group is complete). Only writes blank slots; admin overrides untouched.
+        </p>
+        <button
+          type="button"
+          onClick={() => r32Start(async () => {
+            const res = await populateR32Action();
+            if (res.ok) setR32Msg(res.changed ? "R32 updated" : "Nothing to update");
+            else setR32Msg(`Error: ${res.error}`);
+          })}
+          disabled={r32Pending}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+        >
+          {r32Pending ? "Populating…" : r32Msg ?? "Populate R32"}
+        </button>
+      </div>
     </div>
   );
 }

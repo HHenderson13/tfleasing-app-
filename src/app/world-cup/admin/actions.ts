@@ -13,7 +13,7 @@ import {
   scorePrediction,
   winnerForGroup,
 } from "@/lib/world-cup-scoring";
-import { commitFixtureResult } from "@/lib/world-cup-settle";
+import { commitFixtureResult, maybePopulateR32 } from "@/lib/world-cup-settle";
 
 const resultSchema = z.object({
   fixtureNumber: z.number().int().min(1).max(104),
@@ -424,6 +424,26 @@ export async function recomputeAllPointsAction() {
   }
   revalidatePath("/world-cup/leaderboard");
   return { ok: true as const, count: preds.length };
+}
+
+// Manual R32 backfill — useful when the auto-propagation didn't fire
+// (e.g. results were settled before the propagation code shipped) or
+// when the bracket cache is stale. Idempotent: only writes to blank
+// R32 team slots, so manual admin overrides win.
+export async function populateR32Action() {
+  await requireWcAdmin();
+  try {
+    const me = await requireWcAdmin();
+    const changed = await maybePopulateR32(me.id);
+    updateTag(WC_CACHE_TAGS.fixtures);
+    revalidatePath("/world-cup/groups");
+    revalidatePath("/world-cup/predictions");
+    revalidatePath("/world-cup");
+    return { ok: true as const, changed };
+  } catch (e) {
+    logError("world-cup/admin/populateR32Action", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
 }
 
 // quiet unused-import lint when sql appears unused above (it's imported

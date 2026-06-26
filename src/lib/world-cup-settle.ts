@@ -217,6 +217,13 @@ export async function maybePopulateR32(_settledByUserId: string): Promise<boolea
     await db.update(wcFixtures).set(updates).where(eq(wcFixtures.fixtureNumber, fx.fixtureNumber));
     changed = true;
   }
+  if (changed) {
+    // Bust the bracket cache so the populated teams show up on the
+    // next render. Outside a render scope (e.g. boot pipeline) the
+    // call no-ops, in which case the cache will refresh on its own
+    // schedule. commitFixtureResult's caller still tags fixtures too.
+    try { updateTag(WC_CACHE_TAGS.fixtures); } catch { /* no-op outside render */ }
+  }
   void _settledByUserId;
   void and;
   return changed;
