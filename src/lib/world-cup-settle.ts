@@ -135,28 +135,34 @@ export async function commitFixtureResult(input: SettleInput): Promise<SettleOut
   return { advancedTo };
 }
 
-// Fill every R32 team slot once every group game has a settled result.
-// Resolves the seed strings ("A1", "B2", … or "T1"…"T8") on each R32
-// fixture against the live group standings + best-thirds ranking. No-op
-// when:
-//   - the group stage isn't complete yet
-//   - the R32 slots are already populated (e.g. admin filled them
-//     manually before propagation ran)
+// Fill R32 team slots eagerly as each group completes its 6 games. Two
+// passes:
+//
+//   1. Per-group: as soon as a group has all 6 of its games settled,
+//      its 1st-place ("A1") and 2nd-place ("A2") seeds are mapped and
+//      written into matching R32 slots. Doesn't wait for the whole
+//      stage to be done — predictions on matches involving two
+//      already-determined groups can open as soon as both are final.
+//
+//   2. Best-thirds (global): the eight "T1"…"T8" seeds can only resolve
+//      once every group's third-place team is known, so this second
+//      pass only fires when all 12 groups are complete.
+//
+// Idempotent — only writes blank slots, so manual admin team-fills
+// take precedence and re-running on every result settle is safe.
 //
 // Exported so the schema-ensure pipeline can call it as a one-shot
 // backfill — covers the case where group results were already settled
-// before this propagation code shipped (the original commitFixture
-// Result path only triggers when a new result lands).
+// before this propagation code shipped (commitFixtureResult only fires
+// it when a new result lands).
 export async function maybePopulateR32(_settledByUserId: string): Promise<boolean> {
-  // 1. All 72 group games settled?
   const groupFixtures = await db.select().from(wcFixtures).where(eq(wcFixtures.stage, "group"));
   if (groupFixtures.length === 0) return false;
+
   const settledRows = await db.select().from(wcResults);
   const settledByFx = new Map(settledRows.map((r) => [r.fixtureNumber, r]));
-  const allSettled = groupFixtures.every((f) => settledByFx.has(f.fixtureNumber));
-  if (!allSettled) return false;
 
-  // 2. Compute per-group standings.
+  // Group fixtures by group letter for per-group settle checks.
   const byGroup = new Map<string, typeof groupFixtures>();
   for (const f of groupFixtures) {
     if (!f.groupName) continue;
@@ -164,8 +170,19 @@ export async function maybePopulateR32(_settledByUserId: string): Promise<boolea
     list.push(f);
     byGroup.set(f.groupName, list);
   }
-  const groupStandings: Array<{ groupName: string; standings: ReturnType<typeof computeGroupStandings> }> = [];
+
+  // Build seed → team map. A1 / A2 from groups that have all six games
+  // settled; T1…T8 only when EVERY group is done.
+  const seedToTeam: Record<string, string> = {};
+  const completeGroupStandings: Array<{ groupName: string; standings: ReturnType<typeof computeGroupStandings> }> = [];
+  let allGroupsComplete = true;
+
   for (const [groupName, fxs] of byGroup) {
+    const allSettled = fxs.every((f) => settledByFx.has(f.fixtureNumber));
+    if (!allSettled) {
+      allGroupsComplete = false;
+      continue;
+    }
     const teams = Array.from(new Set(fxs.flatMap((f) => [f.team1, f.team2].filter((t): t is string => !!t))));
     const settled = fxs
       .map((f) => settledByFx.get(f.fixtureNumber))
@@ -174,24 +191,22 @@ export async function maybePopulateR32(_settledByUserId: string): Promise<boolea
         const fx = fxs.find((x) => x.fixtureNumber === r.fixtureNumber)!;
         return { team1: fx.team1!, team2: fx.team2!, team1Goals: r.team1Goals, team2Goals: r.team2Goals };
       });
-    groupStandings.push({ groupName, standings: computeGroupStandings(teams, settled) });
-  }
-
-  // 3. Best third-place finishers.
-  const bestThirds = computeBestThirds(groupStandings);
-
-  // 4. Build the seed → team name lookup.
-  const seedToTeam: Record<string, string> = {};
-  for (const { groupName, standings } of groupStandings) {
+    const standings = computeGroupStandings(teams, settled);
+    completeGroupStandings.push({ groupName, standings });
     if (standings[0]) seedToTeam[`${groupName}1`] = standings[0].team;
     if (standings[1]) seedToTeam[`${groupName}2`] = standings[1].team;
   }
-  bestThirds.forEach((row, i) => {
-    seedToTeam[`T${i + 1}`] = row.team;
-  });
 
-  // 5. Update every R32 fixture whose team slots are still blank. Leave
-  // manually-filled slots untouched so admin overrides win.
+  // Best thirds only resolvable once everyone's third-place row is known.
+  if (allGroupsComplete) {
+    const bestThirds = computeBestThirds(completeGroupStandings);
+    bestThirds.forEach((row, i) => {
+      seedToTeam[`T${i + 1}`] = row.team;
+    });
+  }
+
+  // Update every R32 fixture whose team slots are blank AND whose seed
+  // resolves to a known team. Anything we can't resolve yet stays null.
   const r32 = await db.select().from(wcFixtures).where(eq(wcFixtures.stage, "r32"));
   let changed = false;
   for (const fx of r32) {
@@ -202,8 +217,6 @@ export async function maybePopulateR32(_settledByUserId: string): Promise<boolea
     await db.update(wcFixtures).set(updates).where(eq(wcFixtures.fixtureNumber, fx.fixtureNumber));
     changed = true;
   }
-  // Reference the unused param so linter stays quiet; preserved for
-  // future audit trail support.
   void _settledByUserId;
   void and;
   return changed;
