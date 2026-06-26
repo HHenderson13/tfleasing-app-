@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 33;
+const SCHEMA_VERSION = 34;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1069,6 +1069,23 @@ async function ensureWorldCupTables() {
 
   await seedWcFixturesIfEmpty();
   await bootstrapWcAdmin();
+  await backfillR32FromGroupsIfNeeded();
+}
+
+// One-shot backfill for the case where group results were settled
+// BEFORE the auto-propagation code shipped. Idempotent: maybePopulateR32
+// short-circuits when the group stage isn't complete, or when all R32
+// slots are already filled.
+async function backfillR32FromGroupsIfNeeded() {
+  try {
+    const { maybePopulateR32 } = await import("@/lib/world-cup-settle");
+    await maybePopulateR32("system:backfill");
+  } catch (e) {
+    // Never let the backfill break boot — the worst case is admin has
+    // to re-enter a group result to re-trigger propagation manually.
+    // eslint-disable-next-line no-console
+    console.warn("world-cup R32 backfill skipped:", e instanceof Error ? e.message : e);
+  }
 }
 
 // Self-healing wc_admin bootstrap. Three strategies, tried in order:

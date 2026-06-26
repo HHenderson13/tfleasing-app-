@@ -142,7 +142,12 @@ export async function commitFixtureResult(input: SettleInput): Promise<SettleOut
 //   - the group stage isn't complete yet
 //   - the R32 slots are already populated (e.g. admin filled them
 //     manually before propagation ran)
-async function maybePopulateR32(_settledByUserId: string): Promise<boolean> {
+//
+// Exported so the schema-ensure pipeline can call it as a one-shot
+// backfill — covers the case where group results were already settled
+// before this propagation code shipped (the original commitFixture
+// Result path only triggers when a new result lands).
+export async function maybePopulateR32(_settledByUserId: string): Promise<boolean> {
   // 1. All 72 group games settled?
   const groupFixtures = await db.select().from(wcFixtures).where(eq(wcFixtures.stage, "group"));
   if (groupFixtures.length === 0) return false;
