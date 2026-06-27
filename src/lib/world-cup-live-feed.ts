@@ -20,12 +20,26 @@ export interface FeedMatch {
   team1Goals: number;
   team2Goals: number;
   status: "scheduled" | "live" | "halftime" | "final";
-  // Base minute played (1-45 in 1st half, 46-90 in 2nd, 90-105/120 in ET).
+  // Base minute played: 1-45 (1st half), 46-90 (2nd half), 91-105 (ET
+  // 1st half), 106-120 (ET 2nd half). No cap at 90 — extra time runs
+  // through to 120 in knockouts. ESPN's displayClock includes the ET
+  // minutes so parseMinute lifts them straight through.
   minute: number | null;
-  // Added/stoppage time in minutes (e.g. 2 when ESPN reports "45+2"). Null
-  // when the match is in normal time. Rendered alongside minute as e.g.
-  // "45+2'" on the live widget.
+  // Added/stoppage time in minutes (e.g. 2 when ESPN reports "45+2" or
+  // "90+5" or "120+3"). Null when the match is in normal time. Rendered
+  // alongside minute as e.g. "45+2'" on the live widget.
   stoppage: number | null;
+  // ESPN's per-competitor "winner" boolean. The only reliable signal of
+  // who won a penalty shootout — when ET ends 2-2 and pens decide, both
+  // scores stay at 2 and the auto-record path would otherwise have no
+  // way to settle the bracket. Null on in-progress matches.
+  team1Winner: boolean | null;
+  team2Winner: boolean | null;
+  // Penalty shootout score, when ESPN ships it. Surfaced for the live
+  // widget + bracket cards ("Spain 1-1 France (4-3 pens)") and stored
+  // on wc_results.penTeam1/2 for the historic audit.
+  team1Shootout: number | null;
+  team2Shootout: number | null;
   kickoffAt: Date;
 }
 
@@ -123,6 +137,11 @@ export function parseEspnScoreboard(json: unknown): FeedMatch[] {
       const status = parseStatus(comp.status);
       const { minute, stoppage } = status === "live" ? parseMinute(comp.status) : { minute: null, stoppage: null };
 
+      const homeWinner = parseWinnerFlag(h.winner);
+      const awayWinner = parseWinnerFlag(a.winner);
+      const homeShootout = parseOptionalScore(h.shootoutScore);
+      const awayShootout = parseOptionalScore(a.shootoutScore);
+
       if (!homeName || !awayName) continue;
       out.push({
         espnId,
@@ -133,6 +152,10 @@ export function parseEspnScoreboard(json: unknown): FeedMatch[] {
         status,
         minute,
         stoppage,
+        team1Winner: homeWinner,
+        team2Winner: awayWinner,
+        team1Shootout: homeShootout,
+        team2Shootout: awayShootout,
         kickoffAt: date ?? new Date(0),
       });
     } catch (e) {
@@ -149,6 +172,25 @@ function parseScore(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
+}
+
+// Like parseScore, but returns null when the field is missing — used
+// for shootoutScore which is undefined on every match that didn't
+// reach pens. Distinguishes "no shootout" from "shootout 0".
+function parseOptionalScore(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function parseWinnerFlag(v: unknown): boolean | null {
+  if (v === true) return true;
+  if (v === false) return false;
+  return null;
 }
 
 export function parseStatus(s: unknown): FeedMatch["status"] {
@@ -251,7 +293,8 @@ export function mapToFixtures(
     });
     if (!hit) continue;
     // Handle the case where ESPN flips home/away vs our seed — orient scores
-    // to our team1/team2 ordering so downstream maths is consistent.
+    // (and winner / shootout) to our team1/team2 ordering so downstream
+    // maths is consistent.
     const flipped = sameName(hit.team1, m.team2) && sameName(hit.team2, m.team1);
     out.push({
       ...m,
@@ -259,6 +302,10 @@ export function mapToFixtures(
       team2: hit.team2!,
       team1Goals: flipped ? m.team2Goals : m.team1Goals,
       team2Goals: flipped ? m.team1Goals : m.team2Goals,
+      team1Winner: flipped ? m.team2Winner : m.team1Winner,
+      team2Winner: flipped ? m.team1Winner : m.team2Winner,
+      team1Shootout: flipped ? m.team2Shootout : m.team1Shootout,
+      team2Shootout: flipped ? m.team1Shootout : m.team2Shootout,
       fixtureNumber: hit.fixtureNumber,
       stage: hit.stage,
       groupName: hit.groupName,

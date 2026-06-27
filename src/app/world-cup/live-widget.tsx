@@ -204,6 +204,9 @@ function MatchCard({
           </span>
           {m.minute !== null && m.status === "live" && (
             <span className="font-mono text-red-700">
+              {m.minute > 90 && (
+                <span className="mr-1 rounded-md bg-red-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700">ET</span>
+              )}
               {m.minute}{m.stoppage !== null && <span className="text-red-500">+{m.stoppage}</span>}&apos;
             </span>
           )}

@@ -72,19 +72,28 @@ function BracketCell({ cell, compact }: { cell: BracketCellData; compact: boolea
   );
 
   const winner = cell.result?.winnerTeam ?? null;
+  const pens = cell.result && cell.result.penTeam1 != null && cell.result.penTeam2 != null
+    ? { t1: cell.result.penTeam1, t2: cell.result.penTeam2 }
+    : null;
   return (
     <div className={`overflow-hidden rounded-lg border ${ring} shadow-sm`}>
       <div className="divide-y divide-slate-100">
         {teamRow(cell.team1, cell.result?.team1Goals ?? null, winner === cell.team1)}
         {teamRow(cell.team2, cell.result?.team2Goals ?? null, winner === cell.team2)}
       </div>
+      {pens && (
+        <div className="flex items-center justify-between gap-2 border-t border-amber-100 bg-amber-50/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+          <span>Pens</span>
+          <span className="font-mono tabular-nums">{pens.t1}-{pens.t2}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-2 py-1 text-[10px] text-slate-500">
         <span>M{cell.fixtureNumber}</span>
         <span>{cell.kickoffAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
       </div>
       {!compact && cell.result?.winnerTeam && (
         <div className="border-t border-emerald-200 bg-emerald-100 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-emerald-900">
-          {cell.result.winnerTeam} wins
+          {cell.result.winnerTeam} wins{pens ? " on pens" : ""}
         </div>
       )}
     </div>

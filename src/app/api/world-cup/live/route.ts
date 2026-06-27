@@ -285,26 +285,49 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    // Auto-record group fixtures that have been final for >= the stability
-    // window. Knockouts are left to the admin — we can't infer from the
-    // final score alone whether ET/pens were needed, and that data has to
-    // be entered by hand.
+    // Auto-record group AND knockout fixtures that have been final for
+    // >= the stability window. Knockout winner determination uses ESPN's
+    // per-competitor `winner: true` boolean — only reliable way to
+    // settle a pens-decided match where the aggregate goal count is
+    // tied. We store the ESPN aggregate (regulation + ET; no per-period
+    // split is available on the public feed) into team1Goals/team2Goals
+    // and the shootout score into penTeam1/penTeam2 when present. The
+    // bracket advances itself all the way to the final via the existing
+    // nextFixtureNumber chain inside commitFixtureResult.
     const autoRecorded: number[] = [];
     for (const m of mapped) {
       if (m.status !== "final") continue;
-      if (m.stage !== "group") continue;
       const existing = currentByFx.get(m.fixtureNumber);
       const firstFinalAt = existing?.firstFinalAt ?? now;
       if (now.getTime() - firstFinalAt.getTime() < FT_STABILITY_WINDOW_MS) continue;
 
       const fxFull = fixtures.find((f) => f.fixtureNumber === m.fixtureNumber);
       if (!fxFull || !fxFull.team1 || !fxFull.team2) continue;
-      const winner = winnerForGroup(m.team1Goals, m.team2Goals, fxFull.team1, fxFull.team2);
+
+      let winner: string | null = null;
+      if (m.stage === "group") {
+        winner = winnerForGroup(m.team1Goals, m.team2Goals, fxFull.team1, fxFull.team2);
+      } else {
+        // Knockout — never a draw. Prefer ESPN's explicit winner flag
+        // (the only signal for pens-decided games where scores tie);
+        // fall back to score comparison for ET-decided games where the
+        // aggregate is decisive.
+        if (m.team1Winner === true) winner = fxFull.team1;
+        else if (m.team2Winner === true) winner = fxFull.team2;
+        else if (m.team1Goals > m.team2Goals) winner = fxFull.team1;
+        else if (m.team2Goals > m.team1Goals) winner = fxFull.team2;
+        else {
+          // Tied score + no winner flag yet — wait for the next poll.
+          continue;
+        }
+      }
       try {
         await commitFixtureResult({
           fx: fxFull,
           team1Goals: m.team1Goals,
           team2Goals: m.team2Goals,
+          penTeam1: m.team1Shootout,
+          penTeam2: m.team2Shootout,
           winnerTeam: winner,
           settledByUserId: SYSTEM_USER_ID,
           now,
@@ -315,6 +338,10 @@ export async function GET(req: NextRequest) {
           team1: fxFull.team1,
           team2: fxFull.team2,
           score: `${m.team1Goals}-${m.team2Goals}`,
+          pens: m.team1Shootout != null && m.team2Shootout != null
+            ? `${m.team1Shootout}-${m.team2Shootout}`
+            : undefined,
+          stage: m.stage,
         });
       } catch (e) {
         logError("api/world-cup/live/auto-record", e, { fixtureNumber: m.fixtureNumber });

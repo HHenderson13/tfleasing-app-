@@ -420,7 +420,15 @@ export interface BracketCell {
   kickoffAt: Date;
   team1: string | null;
   team2: string | null;
-  result: { team1Goals: number; team2Goals: number; winnerTeam: string } | null;
+  result: {
+    team1Goals: number;
+    team2Goals: number;
+    winnerTeam: string;
+    // Penalty shoot-out result, when one was needed to settle the tie.
+    // Null on every match decided inside regulation or extra time.
+    penTeam1: number | null;
+    penTeam2: number | null;
+  } | null;
 }
 
 // Returns the 32 knockout fixtures, grouped by stage and sorted by their
@@ -464,7 +472,13 @@ export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"]
       kickoffAt: f.kickoffAt,
       team1: f.team1,
       team2: f.team2,
-      result: r ? { team1Goals: r.team1Goals, team2Goals: r.team2Goals, winnerTeam: r.winnerTeam } : null,
+      result: r ? {
+        team1Goals: r.team1Goals,
+        team2Goals: r.team2Goals,
+        winnerTeam: r.winnerTeam,
+        penTeam1: r.penTeam1 ?? null,
+        penTeam2: r.penTeam2 ?? null,
+      } : null,
     });
   }
   return groups;

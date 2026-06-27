@@ -276,6 +276,11 @@ export default async function WorldCupPage() {
               <tr><td className="py-1 font-mono font-semibold text-slate-900">10 pts max</td><td className="py-1 text-slate-600">Per match</td></tr>
             </tbody>
           </table>
+          <p className="mt-3 max-w-md text-[11px] leading-relaxed text-slate-500">
+            <span className="font-semibold text-slate-700">Knockout rule:</span> predictions are scored against the
+            full-time score <em>including extra time</em>. Penalty shoot-outs decide who advances in the bracket
+            but don&apos;t affect the points you score on the match itself.
+          </p>
         </section>
       </main>
     </div>
