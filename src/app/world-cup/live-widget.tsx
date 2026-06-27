@@ -96,13 +96,25 @@ export function LiveWidget() {
       const p = prev.matches.find((x) => x.fixtureNumber === m.fixtureNumber);
       if (!p) continue; // First time we're seeing this fixture — don't fire.
 
+      // Detect goal OR shoot-out kick. A pens kick is detected as the
+      // team's shootout count going up between polls — same flash +
+      // confetti + sound treatment as a regulation/ET goal because the
+      // drama deserves it.
       const t1Scored = m.team1Goals > p.team1Goals;
       const t2Scored = m.team2Goals > p.team2Goals;
-      if (!t1Scored && !t2Scored) continue;
+      const t1PenScored = (m.shootout?.t1 ?? 0) > (p.shootout?.t1 ?? 0);
+      const t2PenScored = (m.shootout?.t2 ?? 0) > (p.shootout?.t2 ?? 0);
+      const anyT1 = t1Scored || t1PenScored;
+      const anyT2 = t2Scored || t2PenScored;
+      if (!anyT1 && !anyT2) continue;
 
-      const team = t1Scored ? 1 : 2;
+      const team = anyT1 ? 1 : 2;
       const scoringTeamName = team === 1 ? m.team1 : m.team2;
-      const goalId = `${m.fixtureNumber}-${team}-${m.team1Goals}-${m.team2Goals}-${Date.now()}`;
+      const isPenKick = !t1Scored && !t2Scored;
+      const scoreAtEvent = isPenKick
+        ? `Pens ${m.shootout?.t1 ?? 0}-${m.shootout?.t2 ?? 0}`
+        : `${m.team1Goals}-${m.team2Goals}`;
+      const goalId = `${m.fixtureNumber}-${team}-${scoreAtEvent}-${Date.now()}`;
 
       setGoalEvents((g) => {
         const list = g[m.fixtureNumber] ?? [];
@@ -110,7 +122,7 @@ export function LiveWidget() {
           ...g,
           [m.fixtureNumber]: [
             ...list,
-            { id: goalId, team, teamName: scoringTeamName, minute: m.minute, scoreAtGoal: `${m.team1Goals}-${m.team2Goals}`, at: Date.now() },
+            { id: goalId, team, teamName: scoringTeamName, minute: m.minute, scoreAtGoal: scoreAtEvent, at: Date.now() },
           ],
         };
       });
@@ -191,18 +203,26 @@ function MatchCard({
   const perfectPlayers = m.players.filter((p) => p.pickT1 === m.team1Goals && p.pickT2 === m.team2Goals);
 
   return (
-    <article className="relative overflow-hidden rounded-2xl border-2 border-red-300 bg-white shadow-md">
+    <article className={`relative overflow-hidden rounded-2xl border-2 ${m.shootout ? "border-amber-400" : "border-red-300"} bg-white shadow-md`}>
       {/* Goal confetti overlay — non-interactive, lives above the score */}
       <ConfettiLayer bursts={confettiBursts} />
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between gap-2 border-b border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-2 text-xs">
+      {/* Status bar — amber during a live shoot-out, red otherwise */}
+      <div className={`flex items-center justify-between gap-2 border-b px-4 py-2 text-xs ${
+        m.shootout
+          ? "border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50"
+          : "border-red-200 bg-gradient-to-r from-red-50 to-rose-50"
+      }`}>
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]" />
-          <span className="font-bold uppercase tracking-wide text-red-700">
-            {m.status === "halftime" ? "Half-time" : m.status === "final" ? "Full-time" : "Live"}
+          <span className={`inline-flex h-2.5 w-2.5 animate-pulse rounded-full ${m.shootout ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]" : "bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]"}`} />
+          <span className={`font-bold uppercase tracking-wide ${m.shootout ? "text-amber-800" : "text-red-700"}`}>
+            {m.shootout ? "🥅 Shoot-out" : m.status === "halftime" ? "Half-time" : m.status === "final" ? "Full-time" : "Live"}
           </span>
-          {m.minute !== null && m.status === "live" && (
+          {m.shootout ? (
+            <span className="ml-1 inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-amber-900">
+              {m.shootout.t1}–{m.shootout.t2}
+            </span>
+          ) : m.minute !== null && m.status === "live" && (
             <span className="font-mono text-red-700">
               {m.minute > 90 && (
                 <span className="mr-1 rounded-md bg-red-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700">ET</span>
@@ -211,7 +231,7 @@ function MatchCard({
             </span>
           )}
         </div>
-        <span className="text-[10px] text-red-700/60">via ESPN · refreshes every 15s</span>
+        <span className={`text-[10px] ${m.shootout ? "text-amber-800/70" : "text-red-700/60"}`}>via ESPN · refreshes every 15s</span>
       </div>
 
       {/* Banter ribbon — rotating one-liner across the top */}
@@ -248,11 +268,35 @@ function MatchCard({
         <div className={`text-left text-base font-semibold text-slate-900 sm:text-lg ${flash?.team === 2 ? "wc-goal-flash" : ""}`}>{m.team2}</div>
       </div>
 
-      {/* GOAL! burst — overlays the score area briefly when flash fires */}
+      {/* Shoot-out strip — one ⚽ per scored kick, per team. Sits directly
+          under the aggregate score during a live pens. Sudden-death tag
+          kicks in once both sides have hit 5 (i.e. the first-five round
+          ended level). */}
+      {m.shootout && (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-t border-amber-200 bg-amber-50/60 px-4 py-2">
+          <div className="flex justify-end gap-1 text-base">
+            <KickDots count={m.shootout.t1} />
+          </div>
+          <div className="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wide text-amber-800">
+            <span>PENS</span>
+            <span className="font-sans text-lg tabular-nums text-amber-900">{m.shootout.t1}–{m.shootout.t2}</span>
+            {m.shootout.t1 >= 5 && m.shootout.t2 >= 5 && (
+              <span className="rounded-md bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold text-amber-900">SUDDEN DEATH</span>
+            )}
+          </div>
+          <div className="flex justify-start gap-1 text-base">
+            <KickDots count={m.shootout.t2} />
+          </div>
+        </div>
+      )}
+
+      {/* GOAL! / SCORED! burst — overlays the score area briefly when flash fires */}
       {flash && (
         <div key={flash.key} className="pointer-events-none absolute left-1/2 top-[40%] z-10 -translate-x-1/2 -translate-y-1/2">
-          <span className="wc-goal-burst inline-block rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-4 py-1 text-base font-extrabold tracking-wider text-white shadow-lg">
-            ⚽ GOAL!
+          <span className={`wc-goal-burst inline-block rounded-full px-4 py-1 text-base font-extrabold tracking-wider text-white shadow-lg ${
+            m.shootout ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-amber-400 to-red-500"
+          }`}>
+            {m.shootout ? "🥅 SCORED!" : "⚽ GOAL!"}
           </span>
         </div>
       )}
@@ -347,6 +391,21 @@ function buildBanter(m: MatchData, viewer: LiveApiResponse["viewer"], relegation
   if (m.status === "halftime") phrases.push(`Half-time. Currently ${m.team1Goals}–${m.team2Goals}. 45 minutes to make or break.`);
   if (m.status === "final" && perfect.length === 0) phrases.push(`Full-time. No-one nailed it — best of the bunch: ${leader?.name ?? "nobody"} on ${leader?.points ?? 0}`);
 
+  // Shoot-out drama. These take priority over the regulation chatter
+  // because if pens are happening, nothing else matters for two minutes.
+  if (m.shootout) {
+    const { t1, t2 } = m.shootout;
+    const lead = Math.abs(t1 - t2);
+    const leading = t1 > t2 ? m.team1 : t2 > t1 ? m.team2 : null;
+    const suddenDeath = t1 >= 5 && t2 >= 5;
+    phrases.push(`🥅 PENALTIES. Cover your eyes.`);
+    if (suddenDeath) phrases.push(`🫨 Sudden death. ${t1}–${t2}. Next miss goes home.`);
+    else if (lead >= 2) phrases.push(`${leading} ahead ${t1}–${t2} — getting comfortable`);
+    else if (lead === 1) phrases.push(`${leading} edge it ${t1}–${t2} — one kick swings it back`);
+    else if (lead === 0 && t1 > 0) phrases.push(`Level on pens ${t1}–${t2}. Pure cinema.`);
+    if (perfect.length > 0) phrases.push(`Reminder: pens don't change your prediction points — ${perfect.length === 1 ? perfect[0].name : `${perfect.length} of you`} still on for the full 10`);
+  }
+
   // Always seed something so the ribbon never goes blank.
   if (phrases.length === 0) phrases.push(`${m.team1} vs ${m.team2} — ${m.players.length} players in on this one`);
   return phrases;
@@ -393,20 +452,45 @@ function LeaderboardDelta({ viewer }: { viewer: NonNullable<LiveApiResponse["vie
   );
 }
 
+// ── Per-team scored-kick dots ──────────────────────────────────────────
+// One ⚽ per kick the team has scored in the shoot-out. Sits flanking
+// the live pens score during a shoot-out.
+function KickDots({ count }: { count: number }) {
+  // Clamp the rendered dot count so a runaway sudden-death shoot-out
+  // doesn't overflow the row; show a "+N" tail when beyond the first 5.
+  const visible = Math.min(count, 5);
+  const overflow = Math.max(0, count - 5);
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {Array.from({ length: visible }).map((_, i) => (
+        <span key={i} aria-hidden className="text-amber-600">⚽</span>
+      ))}
+      {overflow > 0 && (
+        <span className="ml-1 font-mono text-[10px] font-bold text-amber-700">+{overflow}</span>
+      )}
+    </span>
+  );
+}
+
 // ── Goal timeline strip ─────────────────────────────────────────────────
 function GoalTimeline({ events }: { events: GoalEvent[] }) {
   return (
     <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Goals so far</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Goals &amp; kicks so far</div>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {events.map((e) => (
-          <span key={e.id} className="wc-goal-chip inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200">
-            <span aria-hidden>⚽</span>
-            <span>{e.teamName}</span>
-            {e.minute !== null && <span className="text-slate-400">· {e.minute}&apos;</span>}
-            <span className="font-mono text-slate-400">{e.scoreAtGoal}</span>
-          </span>
-        ))}
+        {events.map((e) => {
+          const isPenKick = e.scoreAtGoal.startsWith("Pens");
+          return (
+            <span key={e.id} className={`wc-goal-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium shadow-sm ring-1 ${
+              isPenKick ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-white text-slate-700 ring-slate-200"
+            }`}>
+              <span aria-hidden>{isPenKick ? "🥅" : "⚽"}</span>
+              <span>{e.teamName}</span>
+              {e.minute !== null && !isPenKick && <span className="text-slate-400">· {e.minute}&apos;</span>}
+              <span className={`font-mono ${isPenKick ? "text-amber-700" : "text-slate-400"}`}>{e.scoreAtGoal}</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );

@@ -78,6 +78,11 @@ export interface LiveApiResponse {
     minute: number | null;
     stoppage: number | null;
     status: "live" | "halftime" | "final";
+    // Live penalty shoot-out score, populated only while the shootout
+    // is in progress. Increments per kick. Used by the widget to
+    // render the amber "PENS" treatment and the dot-grid of kicks
+    // taken. Null on every match that isn't currently in pens.
+    shootout: { t1: number; t2: number } | null;
     players: LivePlayerEntry[];   // every player with a pick on this fixture, sorted by points desc
     // For knockouts that ESPN has been reporting as final but we haven't
     // confirmed (ET/pens require admin entry), set to the duration since
@@ -488,6 +493,14 @@ export async function GET(req: NextRequest) {
         pendingAdminMs = now.getTime() - existing.firstFinalAt.getTime();
       }
 
+      // Live shoot-out is only meaningful for in-progress knockouts.
+      // ESPN populates shootoutScore from kick #1 onward; surface it so
+      // the widget can render the amber PENS treatment + per-kick dots.
+      const liveShootout = m.stage !== "group" && m.status === "live" &&
+        m.team1Shootout != null && m.team2Shootout != null
+        ? { t1: m.team1Shootout, t2: m.team2Shootout }
+        : null;
+
       return {
         fixtureNumber: m.fixtureNumber,
         stage: m.stage,
@@ -499,6 +512,7 @@ export async function GET(req: NextRequest) {
         minute: m.minute,
         stoppage: m.stoppage,
         status: m.status as "live" | "halftime" | "final",
+        shootout: liveShootout,
         players,
         pendingAdminMs,
       };
