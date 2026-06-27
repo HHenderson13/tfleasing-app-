@@ -221,11 +221,16 @@ export default async function WorldCupPage() {
               next5.map((f) => {
                 const pick = myPickByFx.get(f.fixtureNumber);
                 const teamsKnown = !!(f.team1 && f.team2);
+                const englandInFx =
+                  f.team1?.trim().toLowerCase() === "england" ||
+                  f.team2?.trim().toLowerCase() === "england";
                 return (
                   <li key={f.fixtureNumber}>
                     <Link
                       href={`/world-cup/predictions#stage-${f.stage}`}
-                      className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition hover:bg-slate-50 sm:px-5"
+                      className={`flex items-center justify-between gap-3 px-4 py-3 text-sm transition hover:bg-slate-50 sm:px-5 ${
+                        englandInFx ? "bg-gradient-to-r from-red-50/70 via-white to-white" : ""
+                      }`}
                     >
                       <div className="flex items-center gap-2 min-w-0 sm:gap-3">
                         <span className="inline-flex shrink-0 items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
@@ -233,6 +238,7 @@ export default async function WorldCupPage() {
                         </span>
                         <div className="min-w-0">
                           <div className="truncate font-medium text-slate-900">
+                            {englandInFx && <span aria-hidden className="mr-1">🦁</span>}
                             {f.team1 ?? "TBD"} <span className="text-slate-400">vs</span> {f.team2 ?? "TBD"}
                           </div>
                           <div className="truncate text-[11px] text-slate-500">{f.stadium}{f.city ? ` · ${f.city}` : ""}</div>

@@ -19,6 +19,17 @@ const STAGE_LABELS: Record<string, string> = {
   final: "Final",
 };
 
+// Inline 🦁 decoration for any team name spelled "England" — case
+// insensitive. Used on every predictions row team label, so the
+// editing / locked / settled variants all get the same treatment
+// without three separate edits.
+function teamName(name: string | null): React.ReactNode {
+  if (name?.trim().toLowerCase() === "england") {
+    return <><span aria-hidden className="mr-0.5">🦁</span>{name}</>;
+  }
+  return name;
+}
+
 export function PredictionsClient({ stages, consensusByFx }: { stages: StageGroup[]; consensusByFx: Record<string, FixtureConsensus> }) {
   return (
     <div className="mt-6 space-y-8">
@@ -143,9 +154,9 @@ function EditableTeams({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
     <div className="space-y-3">
       {/* Team names — equal weight either side */}
       <div className="flex items-center justify-between text-base font-semibold text-slate-900 sm:text-lg">
-        <span className="truncate text-right" style={{ maxWidth: "44%" }}>{f.team1}</span>
+        <span className="truncate text-right" style={{ maxWidth: "44%" }}>{teamName(f.team1)}</span>
         <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">vs</span>
-        <span className="truncate text-left" style={{ maxWidth: "44%" }}>{f.team2}</span>
+        <span className="truncate text-left" style={{ maxWidth: "44%" }}>{teamName(f.team2)}</span>
       </div>
       {/* Score input — two big numeric boxes with a dash between */}
       <div className="flex items-center justify-center gap-3">
@@ -182,9 +193,9 @@ function LockedTeams({ fixture: f }: { fixture: FixtureWithMyPrediction }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-base font-semibold text-slate-900 sm:text-lg">{f.team1}</span>
+        <span className="text-base font-semibold text-slate-900 sm:text-lg">{teamName(f.team1)}</span>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">vs</span>
-        <span className="text-base font-semibold text-slate-900 sm:text-lg">{f.team2}</span>
+        <span className="text-base font-semibold text-slate-900 sm:text-lg">{teamName(f.team2)}</span>
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -207,13 +218,13 @@ function SettledTeams({ fixture: f, consensus }: { fixture: FixtureWithMyPredict
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="text-right text-base font-semibold text-slate-900 sm:text-lg">{f.team1}</div>
+        <div className="text-right text-base font-semibold text-slate-900 sm:text-lg">{teamName(f.team1)}</div>
         <div className="flex items-baseline gap-1 font-mono text-2xl font-bold text-slate-900 tabular-nums">
           <span>{r.team1Goals}</span>
           <span className="text-slate-400">–</span>
           <span>{r.team2Goals}</span>
         </div>
-        <div className="text-left text-base font-semibold text-slate-900 sm:text-lg">{f.team2}</div>
+        <div className="text-left text-base font-semibold text-slate-900 sm:text-lg">{teamName(f.team2)}</div>
       </div>
       {f.myPrediction ? (
         <div className="flex items-center justify-between rounded-lg bg-white/60 px-3 py-2 text-xs ring-1 ring-emerald-100">

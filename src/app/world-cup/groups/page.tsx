@@ -70,10 +70,14 @@ export default async function GroupsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {g.standings.map((row, i) => (
-                    <tr key={row.team} className={i < 2 ? "bg-emerald-50/40" : ""}>
+                  {g.standings.map((row, i) => {
+                    const isEng = row.team.trim().toLowerCase() === "england";
+                    return (
+                    <tr key={row.team} className={isEng ? "bg-gradient-to-r from-red-50/70 to-white" : i < 2 ? "bg-emerald-50/40" : ""}>
                       <td className="pl-4 pr-2 py-2 font-medium text-slate-900 sm:pl-5">
-                        <span className="inline-block min-w-[20px] text-slate-400 mr-1.5">{i + 1}</span>{row.team}
+                        <span className="inline-block min-w-[20px] text-slate-400 mr-1.5">{i + 1}</span>
+                        {isEng && <span aria-hidden className="mr-1">🦁</span>}
+                        {row.team}
                       </td>
                       <td className="px-1 py-2 text-right font-mono text-xs text-slate-700 sm:px-1.5">{row.played}</td>
                       <td className="px-1 py-2 text-right font-mono text-xs text-slate-700 sm:px-1.5">{row.won}</td>
@@ -84,7 +88,8 @@ export default async function GroupsPage() {
                       </td>
                       <td className="pl-1 pr-4 py-2 text-right font-mono text-sm font-semibold text-slate-900 sm:pl-1.5 sm:pr-5">{row.points}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-2 text-[11px] text-slate-500">
