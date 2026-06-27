@@ -266,13 +266,23 @@ select:disabled {
   animation: wc-confetti-fall 3.5s cubic-bezier(0.4, 0.0, 0.6, 1) forwards;
 }
 
+@keyframes wc-coming-home-pulse-anim {
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 0 rgba(220,38,38,0); }
+  50%      { transform: scale(1.04); text-shadow: 0 0 12px rgba(220,38,38,0.45); }
+}
+.wc-coming-home-pulse {
+  animation: wc-coming-home-pulse-anim 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wc-goal-flash,
   .wc-goal-pop,
   .wc-goal-burst,
   .wc-banter-fade,
   .wc-goal-chip,
-  .wc-confetti-piece {
+  .wc-confetti-piece,
+  .wc-coming-home-pulse {
     animation: none !important;
   }
 }

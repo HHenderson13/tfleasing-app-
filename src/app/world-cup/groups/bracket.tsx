@@ -60,16 +60,22 @@ function BracketCell({ cell, compact }: { cell: BracketCellData; compact: boolea
       ? "border-emerald-200 bg-emerald-50/40"
       : "border-slate-200 bg-white";
 
-  const teamRow = (name: string | null, goals: number | null, isWinner: boolean) => (
-    <div className={`flex items-center justify-between gap-2 px-2 py-1 text-xs ${
-      isWinner ? "font-semibold text-emerald-900" : name ? "text-slate-800" : "text-slate-400 italic"
-    }`}>
-      <span className="truncate">{name ?? "TBD"}</span>
-      {goals !== null && (
-        <span className={`font-mono tabular-nums ${isWinner ? "font-bold text-emerald-900" : "text-slate-700"}`}>{goals}</span>
-      )}
-    </div>
-  );
+  const teamRow = (name: string | null, goals: number | null, isWinner: boolean) => {
+    const isEng = name?.trim().toLowerCase() === "england";
+    return (
+      <div className={`flex items-center justify-between gap-2 px-2 py-1 text-xs ${
+        isWinner ? "font-semibold text-emerald-900" : name ? "text-slate-800" : "text-slate-400 italic"
+      }`}>
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          {isEng && <span aria-hidden className="shrink-0">🦁</span>}
+          <span className="truncate">{name ?? "TBD"}</span>
+        </span>
+        {goals !== null && (
+          <span className={`font-mono tabular-nums ${isWinner ? "font-bold text-emerald-900" : "text-slate-700"}`}>{goals}</span>
+        )}
+      </div>
+    );
+  };
 
   const winner = cell.result?.winnerTeam ?? null;
   const pens = cell.result && cell.result.penTeam1 != null && cell.result.penTeam2 != null

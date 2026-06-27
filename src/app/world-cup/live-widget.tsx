@@ -201,11 +201,29 @@ function MatchCard({
   const myPlayer = m.players.find((p) => p.isMe) ?? null;
   // "On for the perfect" — exact match of pick to current live score.
   const perfectPlayers = m.players.filter((p) => p.pickT1 === m.team1Goals && p.pickT2 === m.team2Goals);
+  // It's Coming Home™ — fires when England are in the match AND leading
+  // (or just won). Drives the red/white card theme, the rotating banner,
+  // and the confetti palette swap. Bracket cells get a small 🦁 flag on
+  // every match England is in — that's separate.
+  const englandIsT1 = isEngland(m.team1);
+  const englandIsT2 = isEngland(m.team2);
+  const englandInMatch = englandIsT1 || englandIsT2;
+  const englandLeading = englandInMatch && (
+    (englandIsT1 && m.team1Goals > m.team2Goals) ||
+    (englandIsT2 && m.team2Goals > m.team1Goals)
+  );
+  // Pens treatment wins on border (it's actively happening). Coming-Home
+  // takes the border otherwise. Default red stays for everything else.
+  const borderClass = m.shootout
+    ? "border-amber-400"
+    : englandLeading
+      ? "border-rose-500"
+      : "border-red-300";
 
   return (
-    <article className={`relative overflow-hidden rounded-2xl border-2 ${m.shootout ? "border-amber-400" : "border-red-300"} bg-white shadow-md`}>
+    <article className={`relative overflow-hidden rounded-2xl border-2 ${borderClass} bg-white shadow-md`}>
       {/* Goal confetti overlay — non-interactive, lives above the score */}
-      <ConfettiLayer bursts={confettiBursts} />
+      <ConfettiLayer bursts={confettiBursts} mode={englandLeading ? "england" : "default"} />
 
       {/* Status bar — amber during a live shoot-out, red otherwise */}
       <div className={`flex items-center justify-between gap-2 border-b px-4 py-2 text-xs ${
@@ -233,6 +251,11 @@ function MatchCard({
         </div>
         <span className={`text-[10px] ${m.shootout ? "text-amber-800/70" : "text-red-700/60"}`}>via ESPN · refreshes every 15s</span>
       </div>
+
+      {/* It's Coming Home — fires when England's leading or has just won.
+          Sits above the banter ribbon so it doesn't rotate away; the
+          banter ribbon below it picks up Three-Lions-specific copy. */}
+      {englandLeading && <ComingHomeBanner final={m.status === "final"} />}
 
       {/* Banter ribbon — rotating one-liner across the top */}
       <BanterRibbon match={m} viewer={viewer} relegation={relegation} />
@@ -290,16 +313,27 @@ function MatchCard({
         </div>
       )}
 
-      {/* GOAL! / SCORED! burst — overlays the score area briefly when flash fires */}
-      {flash && (
-        <div key={flash.key} className="pointer-events-none absolute left-1/2 top-[40%] z-10 -translate-x-1/2 -translate-y-1/2">
-          <span className={`wc-goal-burst inline-block rounded-full px-4 py-1 text-base font-extrabold tracking-wider text-white shadow-lg ${
-            m.shootout ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-amber-400 to-red-500"
-          }`}>
-            {m.shootout ? "🥅 SCORED!" : "⚽ GOAL!"}
-          </span>
-        </div>
-      )}
+      {/* GOAL! / SCORED! burst — overlays the score area briefly when flash fires.
+          England override fires when the scoring team is England — copy and gradient
+          flip to "🦁 IT'S COMING HOME!" red/white. */}
+      {flash && (() => {
+        const scoringIsEngland = (flash.team === 1 && englandIsT1) || (flash.team === 2 && englandIsT2);
+        const label = scoringIsEngland
+          ? "🦁 IT'S COMING HOME! 🦁"
+          : m.shootout ? "🥅 SCORED!" : "⚽ GOAL!";
+        const gradient = scoringIsEngland
+          ? "bg-gradient-to-r from-red-600 via-white to-red-600 text-red-900"
+          : m.shootout
+            ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+            : "bg-gradient-to-r from-amber-400 to-red-500 text-white";
+        return (
+          <div key={flash.key} className="pointer-events-none absolute left-1/2 top-[40%] z-10 -translate-x-1/2 -translate-y-1/2">
+            <span className={`wc-goal-burst inline-block rounded-full px-4 py-1 text-base font-extrabold tracking-wider shadow-lg ${gradient}`}>
+              {label}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* "On for the perfect" — highlight if someone's picking exactly the live score */}
       {perfectPlayers.length > 0 && (m.team1Goals + m.team2Goals > 0) && (
@@ -391,6 +425,33 @@ function buildBanter(m: MatchData, viewer: LiveApiResponse["viewer"], relegation
   if (m.status === "halftime") phrases.push(`Half-time. Currently ${m.team1Goals}–${m.team2Goals}. 45 minutes to make or break.`);
   if (m.status === "final" && perfect.length === 0) phrases.push(`Full-time. No-one nailed it — best of the bunch: ${leader?.name ?? "nobody"} on ${leader?.points ?? 0}`);
 
+  // It's Coming Home™ — when England's leading, slot Three-Lions
+  // banter into the rotation. Keeps the regulation chatter so the
+  // viewer still sees who's perfect/leading on points; just biases the
+  // mood. We never delete entries — we add — so the ribbon stays varied.
+  const t1IsEng = isEngland(m.team1);
+  const t2IsEng = isEngland(m.team2);
+  const englandInMatch = t1IsEng || t2IsEng;
+  const englandLeading = englandInMatch && (
+    (t1IsEng && m.team1Goals > m.team2Goals) ||
+    (t2IsEng && m.team2Goals > m.team1Goals)
+  );
+  if (englandLeading) {
+    const lead = Math.abs(m.team1Goals - m.team2Goals);
+    phrases.push(`🦁 It's coming home — England leading ${m.team1Goals}–${m.team2Goals}`);
+    if (m.status === "final") phrases.push(`🏆 ENGLAND WIN ${m.team1Goals}–${m.team2Goals}. Three Lions through.`);
+    else if (lead >= 3) phrases.push(`Football, bloody hell. England cruising ${m.team1Goals}–${m.team2Goals}.`);
+    else if (lead === 1) phrases.push(`One goal lead — don't get comfortable. England fans know how this can go.`);
+    if (goals > 0 && perfect.length > 0) phrases.push(`🦁 ${perfect.length === 1 ? perfect[0].name : `${perfect.length} of you`} called this England score dead on — full 10 if it holds`);
+  } else if (englandInMatch && m.team1Goals !== m.team2Goals) {
+    // England losing — sympathy chatter.
+    const englandGoals = t1IsEng ? m.team1Goals : m.team2Goals;
+    const themGoals = t1IsEng ? m.team2Goals : m.team1Goals;
+    phrases.push(`😬 England trailing ${englandGoals}–${themGoals}. The 60-year hurt continues.`);
+  } else if (englandInMatch && m.team1Goals === m.team2Goals && m.status === "live") {
+    phrases.push(`🦁 England level at ${m.team1Goals}–${m.team1Goals}. One goal away from the front page.`);
+  }
+
   // Shoot-out drama. These take priority over the regulation chatter
   // because if pens are happening, nothing else matters for two minutes.
   if (m.shootout) {
@@ -447,6 +508,32 @@ function LeaderboardDelta({ viewer }: { viewer: NonNullable<LiveApiResponse["vie
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── England detection ──────────────────────────────────────────────────
+// Match-only feature toggle. We don't take a stance on patriotism, but
+// "Three Lions" lore is universal in this office. Case-insensitive so a
+// future "ENG" / "England (W)" rename doesn't quietly disable it.
+function isEngland(name: string | null | undefined): boolean {
+  if (!name) return false;
+  return name.trim().toLowerCase() === "england";
+}
+
+// ── It's Coming Home banner ───────────────────────────────────────────
+// Renders directly under the status bar when England's leading or has
+// just won. Switches to a calmer "IT'S COMING HOME 🏆" lockup when the
+// match is finished — no need to keep pulsing once they're through.
+function ComingHomeBanner({ final }: { final: boolean }) {
+  return (
+    <div className="relative overflow-hidden border-b border-red-300 bg-gradient-to-r from-red-50 via-white to-red-50">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(239,68,68,0.18),_transparent_60%)]" aria-hidden />
+      <div className={`relative flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-extrabold uppercase tracking-[0.25em] text-red-700 ${final ? "" : "wc-coming-home-pulse"}`}>
+        <span aria-hidden>🦁</span>
+        <span>It&apos;s coming home</span>
+        <span aria-hidden>{final ? "🏆" : "🦁"}</span>
       </div>
     </div>
   );
@@ -645,9 +732,13 @@ function RankShift({ shift }: { shift: number }) {
 // Hand-rolled CSS confetti so we don't need to ship a dep. Each burst spawns
 // 24 absolutely-positioned spans with randomised colour / drift / rotation
 // and a 3.5s fall + fade keyframe. They auto-clear from state after 4s.
-function ConfettiLayer({ bursts }: { bursts: Array<{ id: string; side: "left" | "right" }> }) {
+// "england" mode swaps the palette for red + white (St George cross) when
+// England's the scoring side.
+function ConfettiLayer({ bursts, mode = "default" }: { bursts: Array<{ id: string; side: "left" | "right" }>; mode?: "default" | "england" }) {
   if (bursts.length === 0) return null;
-  const colors = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ec4899", "#f97316"];
+  const colors = mode === "england"
+    ? ["#dc2626", "#ffffff", "#dc2626", "#fef2f2", "#b91c1c", "#ffffff"]
+    : ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ec4899", "#f97316"];
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       {bursts.map((b) =>
