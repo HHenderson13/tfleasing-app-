@@ -51,6 +51,41 @@ function Column({ title, cells, accent }: { title: string; cells: BracketCellDat
   );
 }
 
+// FIFA-published per-match source groups for each best-third slot —
+// out of 12 possible third-place groups, each R32 best-third slot can
+// only be filled by a 3rd from one of these five. Lets us display
+// "Best 3rd (A/B/C/D/F)" mid-tournament so the office can see which
+// groups still need to finish before a specific match's pairing is
+// locked. Source: Wikipedia (2026 FIFA WC knockout stage).
+const BEST_THIRD_SOURCES: Record<number, string> = {
+  74: "A/B/C/D/F",
+  77: "C/D/F/G/H",
+  79: "C/E/F/H/I",
+  80: "E/H/I/J/K",
+  81: "B/E/F/I/J",
+  82: "A/E/H/I/J",
+  85: "E/F/G/I/J",
+  87: "D/E/I/J/L",
+};
+
+// Render an unresolved R32 placeholder using FIFA's own group-position
+// notation: "Group A — 2nd", "Best 3rd (A/B/C/D/F)", etc.
+// Same idea as FIFA's bracket page — better than a flat "TBD" because
+// the office can see *exactly* who's still slotting in.
+function seedLabel(seed: string | null, fixtureNumber: number): string {
+  if (!seed) return "TBD";
+  if (seed === "3?") {
+    const sources = BEST_THIRD_SOURCES[fixtureNumber];
+    return sources ? `Best 3rd · ${sources}` : "Best 3rd";
+  }
+  const group = seed[0];
+  const place = seed[1];
+  if (place === "1") return `Group ${group} — 1st`;
+  if (place === "2") return `Group ${group} — 2nd`;
+  if (place === "3") return `Group ${group} — 3rd`;
+  return seed;
+}
+
 function BracketCell({ cell, compact }: { cell: BracketCellData; compact: boolean }) {
   const settled = !!cell.result;
   const isFinal = cell.stage === "final";
@@ -60,15 +95,16 @@ function BracketCell({ cell, compact }: { cell: BracketCellData; compact: boolea
       ? "border-emerald-200 bg-emerald-50/40"
       : "border-slate-200 bg-white";
 
-  const teamRow = (name: string | null, goals: number | null, isWinner: boolean) => {
+  const teamRow = (name: string | null, seed: string | null, goals: number | null, isWinner: boolean) => {
     const isEng = name?.trim().toLowerCase() === "england";
+    const displayName = name ?? seedLabel(seed, cell.fixtureNumber);
     return (
       <div className={`flex items-center justify-between gap-2 px-2 py-1 text-xs ${
         isWinner ? "font-semibold text-emerald-900" : name ? "text-slate-800" : "text-slate-400 italic"
       }`}>
         <span className="flex min-w-0 items-center gap-1 truncate">
           {isEng && <span aria-hidden className="shrink-0">🦁</span>}
-          <span className="truncate">{name ?? "TBD"}</span>
+          <span className="truncate">{displayName}</span>
         </span>
         {goals !== null && (
           <span className={`font-mono tabular-nums ${isWinner ? "font-bold text-emerald-900" : "text-slate-700"}`}>{goals}</span>
@@ -84,8 +120,8 @@ function BracketCell({ cell, compact }: { cell: BracketCellData; compact: boolea
   return (
     <div className={`overflow-hidden rounded-lg border ${ring} shadow-sm`}>
       <div className="divide-y divide-slate-100">
-        {teamRow(cell.team1, cell.result?.team1Goals ?? null, winner === cell.team1)}
-        {teamRow(cell.team2, cell.result?.team2Goals ?? null, winner === cell.team2)}
+        {teamRow(cell.team1, cell.team1Seed, cell.result?.team1Goals ?? null, winner === cell.team1)}
+        {teamRow(cell.team2, cell.team2Seed, cell.result?.team2Goals ?? null, winner === cell.team2)}
       </div>
       {pens && (
         <div className="flex items-center justify-between gap-2 border-t border-amber-100 bg-amber-50/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">

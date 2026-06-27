@@ -420,6 +420,12 @@ export interface BracketCell {
   kickoffAt: Date;
   team1: string | null;
   team2: string | null;
+  // FIFA-bracket source labels — present only on R32 fixtures (e.g.
+  // "A2", "E1", "3?"). The bracket cell renders them as human-friendly
+  // placeholders ("Group A — 2nd", "Best 3rd") in the team1/team2
+  // slots when no team is resolved yet.
+  team1Seed: string | null;
+  team2Seed: string | null;
   result: {
     team1Goals: number;
     team2Goals: number;
@@ -472,6 +478,8 @@ export async function loadKnockoutBracket(): Promise<Record<BracketCell["stage"]
       kickoffAt: f.kickoffAt,
       team1: f.team1,
       team2: f.team2,
+      team1Seed: f.team1Seed ?? null,
+      team2Seed: f.team2Seed ?? null,
       result: r ? {
         team1Goals: r.team1Goals,
         team2Goals: r.team2Goals,

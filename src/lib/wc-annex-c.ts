@@ -47,3 +47,42 @@ export function resolveAnnexC(qualifyingThirds: Set<string>): Map<number, string
   }
   return null;
 }
+
+// Permutation narrowing — what FIFA does on its bracket page mid-group-
+// stage. Given:
+//   - guaranteedIn:   group letters whose 3rd-place team is mathematically
+//                     already in the top-8 (will be one of the qualifying
+//                     thirds).
+//   - eliminatedOut:  group letters whose 3rd-place team is mathematically
+//                     out of the top-8 (will NOT qualify).
+//
+// Filter the 495 Annex C rows to those consistent with both constraints
+// (every guaranteedIn group must appear in the row, no eliminatedOut
+// group may appear). Then for each best-third R32 slot (74/77/79/…/87),
+// if every surviving row agrees on the same group letter, lock that
+// slot. Returns a partial map of "match → group letter" — only entries
+// the surviving rows unanimously agree on.
+//
+// This is what lets us publish "Match 74 = Germany vs Paraguay (3rd-D)"
+// even while Group X is still playing, exactly the way FIFA does it.
+export function narrowAnnexC(
+  guaranteedIn: Set<string>,
+  eliminatedOut: Set<string>,
+): Map<number, string> {
+  const survivors = Object.values(TABLE).filter((row) => {
+    const rowGroups = new Set(Object.values(row));
+    for (const g of guaranteedIn) if (!rowGroups.has(g)) return false;
+    for (const g of eliminatedOut) if (rowGroups.has(g)) return false;
+    return true;
+  });
+  const out = new Map<number, string>();
+  if (survivors.length === 0) return out;
+  // For each best-third match slot, check if all surviving rows agree.
+  for (const matchNo of [74, 77, 79, 80, 81, 82, 85, 87]) {
+    const key = String(matchNo);
+    const seen = new Set<string>();
+    for (const row of survivors) seen.add(row[key]);
+    if (seen.size === 1) out.set(matchNo, [...seen][0]);
+  }
+  return out;
+}
