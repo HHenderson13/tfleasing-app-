@@ -310,6 +310,33 @@ export async function createWcUserAction(input: { name: string; email: string; p
   return { ok: true as const, userId: id };
 }
 
+// Reset another user's password. Original is unrecoverable (bcrypt is one-
+// way); admin sets a new one and reads it back to the player. Useful when
+// somebody locks themselves out before kick-off. Hashed via the same
+// hashPassword used by sign-up — no special "reset token" path needed,
+// the next login just works.
+const resetPasswordSchema = z.object({
+  userId: z.string().min(1),
+  password: z.string().min(8).max(200),
+});
+
+export async function resetWcUserPasswordAction(input: { userId: string; password: string }) {
+  await requireWcAdmin();
+  const parsed = resetPasswordSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const [u] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, parsed.data.userId)).limit(1);
+  if (!u) return { ok: false as const, error: "User not found" };
+
+  const { hashPassword } = await import("@/lib/auth");
+  await db.update(users)
+    .set({ passwordHash: await hashPassword(parsed.data.password), updatedAt: new Date() })
+    .where(eq(users.id, parsed.data.userId));
+
+  revalidatePath("/world-cup/admin");
+  return { ok: true as const, email: u.email };
+}
+
 // Live-score update during an in-progress match. wc_admin only. Upserts the
 // wc_live_scores row, which the landing page reads to show the "leading on
 // this match" widget. Clearing the live score (pass null) makes the widget

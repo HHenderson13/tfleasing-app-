@@ -10,6 +10,7 @@ import {
   setKnockoutTeamsAction,
   setPaidStatusAction,
   setWcAccessAction,
+  resetWcUserPasswordAction,
 } from "./actions";
 
 export interface AdminFixture {
@@ -448,16 +449,23 @@ function PlayersTab({ users, currentUserId }: { users: AdminUser[]; currentUserI
                   )}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <select
-                    value={u.level}
-                    onChange={(e) => changeLevel(u.id, e.target.value as "none" | "wc" | "wc_admin")}
-                    disabled={pending}
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
-                  >
-                    <option value="none">No access</option>
-                    <option value="wc">Player</option>
-                    <option value="wc_admin">Player + Admin</option>
-                  </select>
+                  <div className="flex items-center justify-end gap-2">
+                    <ResetPasswordButton
+                      userId={u.id}
+                      userName={u.name}
+                      onResult={(ok, msg) => { if (ok) setBannerMsg(msg); else setBannerErr(msg); }}
+                    />
+                    <select
+                      value={u.level}
+                      onChange={(e) => changeLevel(u.id, e.target.value as "none" | "wc" | "wc_admin")}
+                      disabled={pending}
+                      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
+                    >
+                      <option value="none">No access</option>
+                      <option value="wc">Player</option>
+                      <option value="wc_admin">Player + Admin</option>
+                    </select>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -468,6 +476,62 @@ function PlayersTab({ users, currentUserId }: { users: AdminUser[]; currentUserI
       <RecomputeFooter />
     </div>
   );
+}
+
+// Per-user "Reset password" affordance. Surfaced on every row of the
+// Players table. Generates a memorable 10-char password client-side
+// (admin can also override), confirms the action via window.confirm,
+// then shows the new password back in a banner so it can be passed
+// on to the player out-of-band (Slack, email, whatever).
+function ResetPasswordButton({
+  userId, userName, onResult,
+}: {
+  userId: string;
+  userName: string;
+  onResult: (ok: boolean, msg: string) => void;
+}) {
+  const [pending, start] = useTransition();
+  function go() {
+    const suggested = generateMemorablePassword();
+    const entered = window.prompt(
+      `Reset password for ${userName}?\n\nLeave the suggested password as-is, or type your own.\nThis cannot be undone — the current password becomes unusable.`,
+      suggested,
+    );
+    if (entered == null) return;
+    const next = entered.trim();
+    if (next.length < 8) {
+      onResult(false, "Password must be at least 8 characters");
+      return;
+    }
+    start(async () => {
+      const res = await resetWcUserPasswordAction({ userId, password: next });
+      if (!res.ok) onResult(false, res.error ?? "Reset failed");
+      else onResult(true, `Password reset for ${userName} → ${next}`);
+    });
+  }
+  return (
+    <button
+      type="button"
+      onClick={go}
+      disabled={pending}
+      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+      title="Reset this player's password to a new value"
+    >
+      {pending ? "…" : "Reset pwd"}
+    </button>
+  );
+}
+
+// Memorable but still randomly-generated — adjective-noun-1234 style.
+// Plenty of entropy for an office sweepstake and easy to read aloud
+// over a Teams call.
+function generateMemorablePassword(): string {
+  const adjectives = ["fast", "blue", "red", "wild", "bold", "cool", "neat", "sharp", "smart", "lucky"];
+  const nouns = ["lion", "wolf", "eagle", "tiger", "fox", "shark", "hawk", "panda", "bear", "stag"];
+  const a = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const n = nouns[Math.floor(Math.random() * nouns.length)];
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `${a}-${n}-${num}`;
 }
 
 function NewPlayerForm({ onResult }: { onResult: (ok: boolean, msg: string) => void }) {
