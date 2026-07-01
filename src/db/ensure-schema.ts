@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 38;
+const SCHEMA_VERSION = 39;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1075,11 +1075,15 @@ async function ensureWorldCupTables() {
 // One-shot backfill for the case where group results were settled
 // BEFORE the auto-propagation code shipped. Idempotent: maybePopulateR32
 // short-circuits when the group stage isn't complete, or when all R32
-// slots are already filled.
+// slots are already filled. Then rewireKnockouts rebuilds R16 / QF / SF
+// / third / final team slots from settled upstream winners under the
+// CURRENT next_fixture_number wiring — self-heals whenever the seed's
+// bracket structure has been corrected mid-tournament.
 async function backfillR32FromGroupsIfNeeded() {
   try {
-    const { maybePopulateR32 } = await import("@/lib/world-cup-settle");
+    const { maybePopulateR32, rewireKnockouts } = await import("@/lib/world-cup-settle");
     await maybePopulateR32("system:backfill");
+    await rewireKnockouts();
   } catch (e) {
     // Never let the backfill break boot — the worst case is admin has
     // to re-enter a group result to re-trigger propagation manually.

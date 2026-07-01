@@ -886,8 +886,8 @@
     "city": "Foxborough",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 89,
-    "nextSlot": "t2",
+    "nextFixtureNumber": 90,
+    "nextSlot": "t1",
     "team1Seed": "E1",
     "team2Seed": "3?"
   },
@@ -900,8 +900,8 @@
     "city": "Monterrey",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 90,
-    "nextSlot": "t1",
+    "nextFixtureNumber": 89,
+    "nextSlot": "t2",
     "team1Seed": "F1",
     "team2Seed": "C2"
   },
@@ -914,8 +914,8 @@
     "city": "Houston",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 90,
-    "nextSlot": "t2",
+    "nextFixtureNumber": 91,
+    "nextSlot": "t1",
     "team1Seed": "C1",
     "team2Seed": "F2"
   },
@@ -928,8 +928,8 @@
     "city": "East Rutherford",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 91,
-    "nextSlot": "t1",
+    "nextFixtureNumber": 90,
+    "nextSlot": "t2",
     "team1Seed": "I1",
     "team2Seed": "3?"
   },
@@ -984,7 +984,7 @@
     "city": "Santa Clara",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 93,
+    "nextFixtureNumber": 94,
     "nextSlot": "t1",
     "team1Seed": "D1",
     "team2Seed": "3?"
@@ -998,7 +998,7 @@
     "city": "Seattle",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 93,
+    "nextFixtureNumber": 94,
     "nextSlot": "t2",
     "team1Seed": "G1",
     "team2Seed": "3?"
@@ -1012,7 +1012,7 @@
     "city": "Toronto",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 94,
+    "nextFixtureNumber": 93,
     "nextSlot": "t1",
     "team1Seed": "K2",
     "team2Seed": "L2"
@@ -1026,7 +1026,7 @@
     "city": "Inglewood",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 94,
+    "nextFixtureNumber": 93,
     "nextSlot": "t2",
     "team1Seed": "H1",
     "team2Seed": "J2"
@@ -1040,7 +1040,7 @@
     "city": "Vancouver",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 95,
+    "nextFixtureNumber": 96,
     "nextSlot": "t1",
     "team1Seed": "B1",
     "team2Seed": "3?"
@@ -1055,7 +1055,7 @@
     "team1": null,
     "team2": null,
     "nextFixtureNumber": 95,
-    "nextSlot": "t2",
+    "nextSlot": "t1",
     "team1Seed": "J1",
     "team2Seed": "H2"
   },
@@ -1069,7 +1069,7 @@
     "team1": null,
     "team2": null,
     "nextFixtureNumber": 96,
-    "nextSlot": "t1",
+    "nextSlot": "t2",
     "team1Seed": "K1",
     "team2Seed": "3?"
   },
@@ -1082,7 +1082,7 @@
     "city": "Arlington",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 96,
+    "nextFixtureNumber": 95,
     "nextSlot": "t2",
     "team1Seed": "D2",
     "team2Seed": "G2"
@@ -1120,7 +1120,7 @@
     "city": "East Rutherford",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 98,
+    "nextFixtureNumber": 99,
     "nextSlot": "t1"
   },
   {
@@ -1132,7 +1132,7 @@
     "city": "Mexico City",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 98,
+    "nextFixtureNumber": 99,
     "nextSlot": "t2"
   },
   {
@@ -1144,7 +1144,7 @@
     "city": "Arlington",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 99,
+    "nextFixtureNumber": 98,
     "nextSlot": "t1"
   },
   {
@@ -1156,7 +1156,7 @@
     "city": "Seattle",
     "team1": null,
     "team2": null,
-    "nextFixtureNumber": 99,
+    "nextFixtureNumber": 98,
     "nextSlot": "t2"
   },
   {

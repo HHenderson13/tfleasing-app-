@@ -2,7 +2,7 @@ import "server-only";
 import { updateTag } from "next/cache";
 import { db } from "@/db";
 import { wcFixtures, wcLiveScores, wcPredictions, wcResults } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { computeBestThirds, computeGroupStandings, scorePrediction } from "./world-cup-scoring";
 import { WC_CACHE_TAGS } from "./world-cup-data";
 import { resolveAnnexC } from "./wc-annex-c";
@@ -256,5 +256,102 @@ export async function maybePopulateR32(_settledByUserId: string): Promise<boolea
   }
   void _settledByUserId;
   void and;
+  return changed;
+}
+
+// Full rebuild of R16/QF/SF/Third/Final team slots from settled upstream
+// results using the CURRENT next_fixture_number / next_slot wiring on
+// wc_fixtures. Used when the seed's bracket wiring has changed and the
+// existing downstream team slots contain values written under the old
+// wiring (e.g. Match 89.team2 = Paraguay when it should be Morocco).
+//
+// Steps:
+//   1. Load every knockout fixture + every settled result.
+//   2. Snapshot current team1/team2 for each fixture into a mutable map.
+//   3. Blank the map for r16/qf/sf/third/final — those will be rebuilt.
+//      R32 team slots come from group standings via maybePopulateR32,
+//      so they're left alone.
+//   4. Walk r32 → r16 → qf → sf, propagating each settled winner into
+//      its next_slot on next_fixture_number. Also mirror sf loser into
+//      the 3rd-place playoff (fixture 103) exactly as commitFixture
+//      Result does per-match.
+//   5. Diff against the pre-snapshot; write only fixtures where the
+//      team pair actually changed.
+//
+// Idempotent — running it against an already-correct bracket is a no-op.
+// Called from ensureWorldCupTables so existing prod boxes self-heal on
+// the next boot after a seed correction ships. Also exposed as an admin
+// action so wc_admin can force a rebuild without waiting for the pipeline.
+export async function rewireKnockouts(): Promise<boolean> {
+  const knockouts = await db
+    .select()
+    .from(wcFixtures)
+    .where(sql`${wcFixtures.stage} IN ('r32','r16','qf','sf','third','final')`);
+  if (knockouts.length === 0) return false;
+
+  const results = await db.select().from(wcResults);
+  const resultByFx = new Map(results.map((r) => [r.fixtureNumber, r]));
+
+  // Snapshot current team pairs so we can diff at the end.
+  const before = new Map<number, { team1: string | null; team2: string | null }>();
+  const after = new Map<number, { team1: string | null; team2: string | null }>();
+  for (const fx of knockouts) {
+    before.set(fx.fixtureNumber, { team1: fx.team1, team2: fx.team2 });
+    // r16 onwards gets rebuilt from scratch; r32 keeps its group-derived
+    // team names in place (population is maybePopulateR32's job).
+    after.set(fx.fixtureNumber, fx.stage === "r32"
+      ? { team1: fx.team1, team2: fx.team2 }
+      : { team1: null, team2: null });
+  }
+
+  // Propagate settled winners forward, one stage at a time. Because the
+  // walk is topologically ordered, by the time we process a fixture its
+  // team1/team2 in `after` are already set to whatever the previous
+  // rounds' propagation produced — which means the SF-loser lookup for
+  // the 3rd-place playoff sees the correct QF winners.
+  const stageOrder = ["r32", "r16", "qf", "sf"] as const;
+  for (const stage of stageOrder) {
+    for (const fx of knockouts) {
+      if (fx.stage !== stage) continue;
+      const r = resultByFx.get(fx.fixtureNumber);
+      if (!r || !fx.nextFixtureNumber || !fx.nextSlot) continue;
+      if (r.winnerTeam === "Draw") continue;
+      const target = after.get(fx.nextFixtureNumber);
+      if (!target) continue;
+      if (fx.nextSlot === "t1") target.team1 = r.winnerTeam;
+      else if (fx.nextSlot === "t2") target.team2 = r.winnerTeam;
+
+      // SF loser feeds the 3rd-place playoff. Read team1/team2 from the
+      // rebuilt `after` map so we don't rely on the pre-rebuild snapshot
+      // (which might contain stale names under the old wiring).
+      if (fx.stage === "sf") {
+        const sfState = after.get(fx.fixtureNumber);
+        if (sfState?.team1 && sfState?.team2) {
+          const loser = r.winnerTeam === sfState.team1 ? sfState.team2 : sfState.team1;
+          const third = after.get(103);
+          if (third) {
+            if (fx.fixtureNumber === 101) third.team1 = loser;
+            else if (fx.fixtureNumber === 102) third.team2 = loser;
+          }
+        }
+      }
+    }
+  }
+
+  // Diff and apply.
+  let changed = false;
+  for (const [fixtureNumber, next] of after) {
+    const prev = before.get(fixtureNumber);
+    if (!prev) continue;
+    if (prev.team1 === next.team1 && prev.team2 === next.team2) continue;
+    await db
+      .update(wcFixtures)
+      .set({ team1: next.team1, team2: next.team2 })
+      .where(eq(wcFixtures.fixtureNumber, fixtureNumber));
+    changed = true;
+  }
+  if (changed) {
+    try { updateTag(WC_CACHE_TAGS.fixtures); } catch { /* no-op outside render */ }
+  }
   return changed;
 }

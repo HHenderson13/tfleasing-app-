@@ -13,7 +13,7 @@ import {
   scorePrediction,
   winnerForGroup,
 } from "@/lib/world-cup-scoring";
-import { commitFixtureResult, maybePopulateR32 } from "@/lib/world-cup-settle";
+import { commitFixtureResult, maybePopulateR32, rewireKnockouts } from "@/lib/world-cup-settle";
 
 const resultSchema = z.object({
   fixtureNumber: z.number().int().min(1).max(104),
@@ -469,6 +469,26 @@ export async function populateR32Action() {
     return { ok: true as const, changed };
   } catch (e) {
     logError("world-cup/admin/populateR32Action", e);
+    return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
+  }
+}
+
+// Rebuild every R16/QF/SF/Third/Final team slot from settled upstream
+// results under the current wc_fixtures.next_fixture_number wiring.
+// Use when the bracket structure was corrected mid-tournament and
+// downstream cards are showing teams that came out of the old, wrong
+// pairings. Idempotent — safe to spam.
+export async function rewireKnockoutsAction() {
+  await requireWcAdmin();
+  try {
+    const changed = await rewireKnockouts();
+    updateTag(WC_CACHE_TAGS.fixtures);
+    revalidatePath("/world-cup/groups");
+    revalidatePath("/world-cup/predictions");
+    revalidatePath("/world-cup");
+    return { ok: true as const, changed };
+  } catch (e) {
+    logError("world-cup/admin/rewireKnockoutsAction", e);
     return { ok: false as const, error: e instanceof Error ? e.message : "Failed" };
   }
 }
