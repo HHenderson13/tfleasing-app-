@@ -27,6 +27,7 @@ export const CONTACT_TARGET_MINS = 15;     // sales exec: transfer → first con
 
 const MS_PER_MIN = 60_000;
 const MS_PER_DAY = 86_400_000;
+const REPORT_TIME_ZONE = "Europe/London";
 
 /**
  * True when the given wall-clock epoch falls on a working weekday.
@@ -85,6 +86,51 @@ export function businessMinutesBetween(startMs: number, endMs: number): number {
     cursor += MS_PER_DAY;
   }
   return Math.round(total);
+}
+
+/**
+ * Start of the UK-local calendar day on which a report was uploaded,
+ * encoded in the same wall-clock epoch format as enquiry timestamps.
+ *
+ * The MotorComplete export is one day behind. Treating its upload day as
+ * an exclusive data horizon means a Monday upload contains completed
+ * activity only up to Monday 00:00. Weekend enquiries have accrued no
+ * working time by then, so their blank transfer/contact fields are still
+ * pending until a later upload. Deriving this from the upload instant (not
+ * the page-view time) also prevents a stale dashboard ageing overnight.
+ */
+export function reportingHorizonFromInstant(instant: Date | number): number {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) return Number.NaN;
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: REPORT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value);
+  const year = part("year");
+  const month = part("month");
+  const day = part("day");
+  if (!year || !month || !day) return Number.NaN;
+  return Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+}
+
+/**
+ * Whether a blank outcome has had enough completed reporting time to be
+ * treated as a genuine miss rather than data still due in the next export.
+ * Exactly-at-target is not overdue; the target must have been exceeded.
+ */
+export function isOutcomeDueByHorizon(
+  startWallMs: number,
+  reportHorizonWallMs: number | null,
+  targetMins: number,
+): boolean {
+  if (reportHorizonWallMs == null) return true;
+  if (!Number.isFinite(reportHorizonWallMs)) return true;
+  return businessMinutesBetween(startWallMs, reportHorizonWallMs) > targetMins;
 }
 
 /**

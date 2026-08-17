@@ -143,11 +143,6 @@ async function ensureForecastTables() {
   await ensureColumns("forecast_dealbook_uploads", [
     { name: "settings_snapshot", sqlType: "TEXT" },
   ]);
-  // Old test rows used the previous 3-source enum (lease_new_cars /
-  // lease_new_commercial / salary_sacrifice). Map both lease values to
-  // the consolidated "lease" tag so we don't strand them.
-  await db.run(sql.raw(`UPDATE forecast_dealbook_uploads SET source = 'lease' WHERE source IN ('lease_new_cars', 'lease_new_commercial', 'leasing')`));
-  await db.run(sql.raw(`UPDATE forecast_dealbook_lines SET source = 'lease' WHERE source IN ('lease_new_cars', 'lease_new_commercial', 'leasing')`));
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS forecast_dealbook_lines (
       id TEXT PRIMARY KEY,
@@ -193,6 +188,12 @@ async function ensureForecastTables() {
       created_at INTEGER NOT NULL
     )
   `));
+  // Old test rows used the previous 3-source enum (lease_new_cars /
+  // lease_new_commercial / salary_sacrifice). Map both lease values to
+  // the consolidated "lease" tag so we don't strand them. Both tables
+  // must exist before these backfills run on a fresh local database.
+  await db.run(sql.raw(`UPDATE forecast_dealbook_uploads SET source = 'lease' WHERE source IN ('lease_new_cars', 'lease_new_commercial', 'leasing')`));
+  await db.run(sql.raw(`UPDATE forecast_dealbook_lines SET source = 'lease' WHERE source IN ('lease_new_cars', 'lease_new_commercial', 'leasing')`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_upload ON forecast_dealbook_lines(upload_id)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_month ON forecast_dealbook_lines(effective_month)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_forecast_lines_source ON forecast_dealbook_lines(source)`));

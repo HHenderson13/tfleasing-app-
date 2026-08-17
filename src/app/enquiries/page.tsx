@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-guard";
-import { loadDataBounds, loadEnquiries } from "@/lib/enquiries";
+import { reportingHorizonFromInstant } from "@/lib/business-hours";
+import { loadDataBounds, loadEnquiries, loadLatestEnquiryUploadAt } from "@/lib/enquiries";
 import { EnquiriesClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ export default async function EnquiriesPage({
 }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const bounds = await loadDataBounds();
+  const [bounds, latestUploadAt] = await Promise.all([
+    loadDataBounds(),
+    loadLatestEnquiryUploadAt(),
+  ]);
 
   // Default to everything stored. The range is a plain date filter on the
   // enquiry day, so a bookmarked ?from=&to= keeps working as new uploads
@@ -20,6 +24,9 @@ export default async function EnquiriesPage({
   const from = sp.from || bounds.min || "";
   const to = sp.to || bounds.max || "";
   const rows = await loadEnquiries({ from: from || undefined, to: to || undefined });
+  const reportHorizon = latestUploadAt == null
+    ? null
+    : reportingHorizonFromInstant(latestUploadAt);
 
   const isAdmin = user.roles.includes("admin");
 
@@ -77,7 +84,14 @@ export default async function EnquiriesPage({
             )}
           </div>
         ) : (
-          <EnquiriesClient rows={rows} from={from} to={to} min={bounds.min} max={bounds.max} />
+          <EnquiriesClient
+            rows={rows}
+            from={from}
+            to={to}
+            min={bounds.min}
+            max={bounds.max}
+            reportHorizon={reportHorizon}
+          />
         )}
       </main>
     </div>

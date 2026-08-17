@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { db } from "@/db";
-import { enquiries, enquiryUploads } from "@/db/schema";
+import { enquiryUploads } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import {
   ALLOCATION_TARGET_MINS,
@@ -13,6 +13,12 @@ import {
   parseExportTimestamp,
   wasContactedSameDay,
 } from "./business-hours";
+import {
+  isContactMissing,
+  isReportDataPending,
+  isSameDayReportable,
+  isTransferMissing,
+} from "./enquiry-reporting";
 
 export { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS };
 
@@ -384,6 +390,8 @@ export interface Summary {
   contactAvg: number | null;
   contactMedian: number | null;
   neverContacted: number;
+  awaitingTransfer: number;
+  reportPending: number;
   // Same-day rule
   sameDayExpected: number;
   sameDayMet: number;
@@ -398,10 +406,13 @@ function median(xs: number[]): number | null {
 }
 
 /** Roll a set of rows into the headline numbers. Pure — no DB access. */
-export function summarise(rows: EnquiryRow[]): Summary {
+export function summarise(
+  rows: EnquiryRow[],
+  reportHorizonWallMs: number | null = null,
+): Summary {
   const alloc = rows.map((r) => r.allocMins).filter((n): n is number => n != null);
   const contact = rows.map((r) => r.contactMins).filter((n): n is number => n != null);
-  const sameDayExpected = rows.filter((r) => r.sameDayExpected);
+  const sameDayExpected = rows.filter((r) => isSameDayReportable(r, reportHorizonWallMs));
   return {
     total: rows.length,
     allocMeasured: alloc.length,
@@ -414,7 +425,9 @@ export function summarise(rows: EnquiryRow[]): Summary {
     contactMissed: contact.filter((n) => n > CONTACT_TARGET_MINS).length,
     contactAvg: contact.length ? Math.round(contact.reduce((a, b) => a + b, 0) / contact.length) : null,
     contactMedian: median(contact),
-    neverContacted: rows.filter((r) => r.contactedAt == null).length,
+    neverContacted: rows.filter((r) => isContactMissing(r, reportHorizonWallMs)).length,
+    awaitingTransfer: rows.filter((r) => isTransferMissing(r, reportHorizonWallMs)).length,
+    reportPending: rows.filter((r) => isReportDataPending(r, reportHorizonWallMs)).length,
     sameDayExpected: sameDayExpected.length,
     sameDayMet: sameDayExpected.filter((r) => r.sameDayMet).length,
     sameDayMissed: sameDayExpected.filter((r) => !r.sameDayMet).length,
@@ -424,7 +437,10 @@ export function summarise(rows: EnquiryRow[]): Summary {
 export interface ExecSummary extends Summary { salesExec: string }
 
 /** Per-exec breakdown, worst allocation hit-rate first. */
-export function summariseByExec(rows: EnquiryRow[]): ExecSummary[] {
+export function summariseByExec(
+  rows: EnquiryRow[],
+  reportHorizonWallMs: number | null = null,
+): ExecSummary[] {
   const byExec = new Map<string, EnquiryRow[]>();
   for (const r of rows) {
     const list = byExec.get(r.salesExec) ?? [];
@@ -432,14 +448,17 @@ export function summariseByExec(rows: EnquiryRow[]): ExecSummary[] {
     byExec.set(r.salesExec, list);
   }
   return [...byExec.entries()]
-    .map(([salesExec, rs]) => ({ salesExec, ...summarise(rs) }))
+    .map(([salesExec, rs]) => ({ salesExec, ...summarise(rs, reportHorizonWallMs) }))
     .sort((a, b) => b.total - a.total || a.salesExec.localeCompare(b.salesExec));
 }
 
 export interface DaySummary extends Summary { day: string }
 
 /** Per-day breakdown, newest first — the daily same-day-contact log. */
-export function summariseByDay(rows: EnquiryRow[]): DaySummary[] {
+export function summariseByDay(
+  rows: EnquiryRow[],
+  reportHorizonWallMs: number | null = null,
+): DaySummary[] {
   const byDay = new Map<string, EnquiryRow[]>();
   for (const r of rows) {
     const list = byDay.get(r.enquiryDay) ?? [];
@@ -447,7 +466,7 @@ export function summariseByDay(rows: EnquiryRow[]): DaySummary[] {
     byDay.set(r.enquiryDay, list);
   }
   return [...byDay.entries()]
-    .map(([day, rs]) => ({ day, ...summarise(rs) }))
+    .map(([day, rs]) => ({ day, ...summarise(rs, reportHorizonWallMs) }))
     .sort((a, b) => b.day.localeCompare(a.day));
 }
 
@@ -473,6 +492,23 @@ export async function loadDataBounds(): Promise<{ min: string | null; max: strin
     return { min: row?.min_day ?? null, max: row?.max_day ?? null };
   } catch (e) {
     if (isMissingTable(e)) return { min: null, max: null };
+    throw e;
+  }
+}
+
+/**
+ * Timestamp of the freshest source upload. Reporting freshness is anchored
+ * here rather than to the current page-view time, so an old dashboard does
+ * not turn pending rows into failures just because another day has passed.
+ */
+export async function loadLatestEnquiryUploadAt(): Promise<Date | null> {
+  try {
+    const [row] = await db.all<{ uploaded_at: number | null }>(
+      sql`SELECT MAX(uploaded_at) AS uploaded_at FROM enquiry_uploads`,
+    );
+    return row?.uploaded_at == null ? null : new Date(Number(row.uploaded_at) * 1000);
+  } catch (e) {
+    if (isMissingTable(e)) return null;
     throw e;
   }
 }

@@ -3,9 +3,11 @@ import {
   businessMinutesBetween,
   dayKey,
   formatMins,
+  isOutcomeDueByHorizon,
   isSameDayContactExpected,
   isWorkingDay,
   parseExportTimestamp,
+  reportingHorizonFromInstant,
   wasContactedSameDay,
   WORKING_DAY_MINS,
 } from "./business-hours";
@@ -103,6 +105,34 @@ describe("businessMinutesBetween — edges", () => {
     // Fri 23 Oct 17:00 → Mon 26 Oct 10:00, straddling the change: still 90.
     expect(businessMinutesBetween(at(2026, 10, 23, 17, 0), at(2026, 10, 26, 10, 0)))
       .toBe(90);
+  });
+});
+
+describe("one-day reporting horizon", () => {
+  it("uses the upload's UK-local day across BST", () => {
+    // 23:05 UTC on Sunday is already 00:05 Monday in the UK during BST.
+    expect(reportingHorizonFromInstant(new Date("2026-08-16T23:05:00Z")))
+      .toBe(at(2026, 8, 17));
+    expect(reportingHorizonFromInstant(new Date("2026-01-05T09:00:00Z")))
+      .toBe(at(2026, 1, 5));
+  });
+
+  it("keeps weekend enquiries pending in a Monday upload", () => {
+    const mondayHorizon = at(2026, 8, 10);
+    expect(isOutcomeDueByHorizon(at(2026, 8, 8, 10), mondayHorizon, 5)).toBe(false);
+    expect(isOutcomeDueByHorizon(at(2026, 8, 9, 18), mondayHorizon, 20)).toBe(false);
+  });
+
+  it("makes the same weekend enquiries assessable in Tuesday's upload", () => {
+    const tuesdayHorizon = at(2026, 8, 11);
+    expect(isOutcomeDueByHorizon(at(2026, 8, 8, 10), tuesdayHorizon, 5)).toBe(true);
+    expect(isOutcomeDueByHorizon(at(2026, 8, 9, 18), tuesdayHorizon, 20)).toBe(true);
+  });
+
+  it("does not call a blank overdue until its target has been exceeded", () => {
+    const mondayHorizon = at(2026, 8, 10);
+    expect(isOutcomeDueByHorizon(at(2026, 8, 7, 17, 25), mondayHorizon, 5)).toBe(false);
+    expect(isOutcomeDueByHorizon(at(2026, 8, 7, 17, 24), mondayHorizon, 5)).toBe(true);
   });
 });
 

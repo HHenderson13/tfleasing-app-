@@ -9,6 +9,12 @@ import {
   formatMins,
   formatWall,
 } from "@/lib/business-hours";
+import {
+  isContactMissing,
+  isReportDataPending,
+  isSameDayReportable,
+  isTransferMissing,
+} from "@/lib/enquiry-reporting";
 
 type Tab = "department" | "exec" | "daily";
 
@@ -19,13 +25,18 @@ interface Drill {
   title: string;
   subtitle?: string;
   rows: EnquiryRow[];
-  focus: "alloc" | "contact" | "sameday";
+  focus: "alloc" | "contact" | "sameday" | "pending";
 }
 
-function summarise(rows: EnquiryRow[]): Summary {
+type DashboardSummary = Summary;
+
+function summarise(
+  rows: EnquiryRow[],
+  reportHorizon: number | null,
+): DashboardSummary {
   const alloc = rows.map((r) => r.allocMins).filter((n): n is number => n != null);
   const contact = rows.map((r) => r.contactMins).filter((n): n is number => n != null);
-  const sde = rows.filter((r) => r.sameDayExpected);
+  const sde = rows.filter((r) => isSameDayReportable(r, reportHorizon));
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
   return {
     total: rows.length,
@@ -39,7 +50,9 @@ function summarise(rows: EnquiryRow[]): Summary {
     contactMissed: contact.filter((n) => n > CONTACT_TARGET_MINS).length,
     contactAvg: avg(contact),
     contactMedian: null,
-    neverContacted: rows.filter((r) => r.contactedAt == null).length,
+    neverContacted: rows.filter((r) => isContactMissing(r, reportHorizon)).length,
+    awaitingTransfer: rows.filter((r) => isTransferMissing(r, reportHorizon)).length,
+    reportPending: rows.filter((r) => isReportDataPending(r, reportHorizon)).length,
     sameDayExpected: sde.length,
     sameDayMet: sde.filter((r) => r.sameDayMet).length,
     sameDayMissed: sde.filter((r) => !r.sameDayMet).length,
@@ -52,17 +65,23 @@ const pct = (hit: number, of: number) => (of === 0 ? null : Math.round((hit / of
 const timeTone = (avg: number | null, target: number) =>
   avg == null ? "text-slate-400" : avg <= target ? "text-emerald-600" : "text-red-600";
 
-/** Same-day contact: green ONLY at a clean sweep. Any miss is red. */
-const missTone = (missed: number) => (missed === 0 ? "text-emerald-600" : "text-red-600");
-const missBadge = (missed: number) =>
-  missed === 0 ? "bg-emerald-100 text-emerald-900" : "bg-red-100 text-red-900";
+/** Same-day contact: neutral with no completed data, green only at a clean sweep. */
+const missTone = (missed: number, expected: number) =>
+  expected === 0 ? "text-slate-400" : missed === 0 ? "text-emerald-600" : "text-red-600";
+const missBadge = (missed: number, expected: number) =>
+  expected === 0
+    ? "bg-slate-100 text-slate-500"
+    : missed === 0
+      ? "bg-emerald-100 text-emerald-900"
+      : "bg-red-100 text-red-900";
 
 export function EnquiriesClient({
-  rows, from, to, min, max,
+  rows, from, to, min, max, reportHorizon,
 }: {
   rows: EnquiryRow[];
   from: string; to: string;
   min: string | null; max: string | null;
+  reportHorizon: number | null;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("department");
@@ -70,7 +89,7 @@ export function EnquiriesClient({
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
 
-  const dept = useMemo(() => summarise(rows), [rows]);
+  const dept = useMemo(() => summarise(rows, reportHorizon), [rows, reportHorizon]);
   const byExec = useMemo(() => {
     const m = new Map<string, EnquiryRow[]>();
     for (const r of rows) {
@@ -79,12 +98,12 @@ export function EnquiriesClient({
       m.set(r.salesExec, l);
     }
     return [...m.entries()]
-      .map(([exec, rs]) => ({ exec, rows: rs, s: summarise(rs) }))
+      .map(([exec, rs]) => ({ exec, rows: rs, s: summarise(rs, reportHorizon) }))
       // Worst first: most same-day misses, then slowest average response.
       .sort((a, b) =>
         b.s.sameDayMissed - a.s.sameDayMissed ||
         (b.s.contactAvg ?? -1) - (a.s.contactAvg ?? -1));
-  }, [rows]);
+  }, [rows, reportHorizon]);
   const byDay = useMemo(() => {
     const m = new Map<string, EnquiryRow[]>();
     for (const r of rows) {
@@ -93,9 +112,9 @@ export function EnquiriesClient({
       m.set(r.enquiryDay, l);
     }
     return [...m.entries()]
-      .map(([day, rs]) => ({ day, rows: rs, s: summarise(rs) }))
+      .map(([day, rs]) => ({ day, rows: rs, s: summarise(rs, reportHorizon) }))
       .sort((a, b) => b.day.localeCompare(a.day));
-  }, [rows]);
+  }, [rows, reportHorizon]);
 
   function applyRange() {
     const p = new URLSearchParams();
@@ -153,19 +172,50 @@ export function EnquiriesClient({
         </nav>
       </div>
 
-      {tab === "department" && <DepartmentView s={dept} rows={rows} onDrill={setDrill} />}
-      {tab === "exec" && <ExecView data={byExec} onDrill={setDrill} />}
-      {tab === "daily" && <DailyView data={byDay} onDrill={setDrill} />}
+      {dept.reportPending > 0 && (
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+          <span className="font-semibold">
+            {dept.reportPending} recent {dept.reportPending === 1 ? "enquiry has" : "enquiries have"} data awaiting the next daily export.
+          </span>{" "}
+          Each blank field is only counted as a failure once its own reporting grace window has elapsed.
+        </div>
+      )}
 
-      {drill && <DrillPanel drill={drill} onClose={() => setDrill(null)} />}
+      {tab === "department" && (
+        <DepartmentView
+          s={dept}
+          rows={rows}
+          reportHorizon={reportHorizon}
+          onDrill={setDrill}
+        />
+      )}
+      {tab === "exec" && (
+        <ExecView data={byExec} reportHorizon={reportHorizon} onDrill={setDrill} />
+      )}
+      {tab === "daily" && (
+        <DailyView data={byDay} reportHorizon={reportHorizon} onDrill={setDrill} />
+      )}
+
+      {drill && (
+        <DrillPanel
+          drill={drill}
+          reportHorizon={reportHorizon}
+          onClose={() => setDrill(null)}
+        />
+      )}
     </div>
   );
 }
 
 // ── Department ────────────────────────────────────────────────────────
 function DepartmentView({
-  s, rows, onDrill,
-}: { s: Summary; rows: EnquiryRow[]; onDrill: (d: Drill) => void }) {
+  s, rows, reportHorizon, onDrill,
+}: {
+  s: DashboardSummary;
+  rows: EnquiryRow[];
+  reportHorizon: number | null;
+  onDrill: (d: Drill) => void;
+}) {
   return (
     <div className="mt-6 space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
@@ -220,26 +270,28 @@ function DepartmentView({
           <button
             onClick={() => onDrill({
               title: "NOT contacted same day",
-              subtitle: "Enquired before 17:30 on a working day",
-              rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
+              subtitle: "Completed report days; enquired before 17:30 on a working day",
+              rows: rows.filter((r) => isSameDayReportable(r, reportHorizon) && !r.sameDayMet),
               focus: "sameday",
             })}
             className="mt-2 block w-full text-left"
           >
-            <span className={`text-4xl font-extrabold tabular-nums ${missTone(s.sameDayMissed)} hover:underline`}>
+            <span className={`text-4xl font-extrabold tabular-nums ${missTone(s.sameDayMissed, s.sameDayExpected)} hover:underline`}>
               {s.sameDayMissed}
             </span>
           </button>
           <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
             <span>out of {s.sameDayExpected} in scope</span>
-            <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed)}`}>
-              {pct(s.sameDayMet, s.sameDayExpected) ?? "—"}% same day
+            <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed, s.sameDayExpected)}`}>
+              {pct(s.sameDayMet, s.sameDayExpected) == null
+                ? "—"
+                : `${pct(s.sameDayMet, s.sameDayExpected)}% same day`}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MiniStat
           label="Total enquiries" value={s.total.toLocaleString()}
           onClick={() => onDrill({ title: "All enquiries", rows, focus: "contact" })}
@@ -248,15 +300,23 @@ function DepartmentView({
           label="Never contacted" value={s.neverContacted.toLocaleString()}
           tone={s.neverContacted > 0 ? "red" : "slate"}
           onClick={() => onDrill({
-            title: "Never contacted", subtitle: "No first-contact recorded at all",
-            rows: rows.filter((r) => r.contactedAt == null), focus: "contact",
+            title: "Never contacted", subtitle: "No first-contact recorded after the reporting grace window",
+            rows: rows.filter((r) => isContactMissing(r, reportHorizon)), focus: "contact",
           })}
         />
         <MiniStat
-          label="Awaiting transfer" value={rows.filter((r) => r.transferredAt == null).length.toLocaleString()}
+          label="No transfer recorded" value={s.awaitingTransfer.toLocaleString()}
           onClick={() => onDrill({
-            title: "Awaiting transfer", subtitle: "No transfer recorded",
-            rows: rows.filter((r) => r.transferredAt == null), focus: "alloc",
+            title: "No transfer recorded", subtitle: "Blank after the reporting grace window",
+            rows: rows.filter((r) => isTransferMissing(r, reportHorizon)), focus: "alloc",
+          })}
+        />
+        <MiniStat
+          label="Awaiting report update" value={s.reportPending.toLocaleString()}
+          onClick={() => onDrill({
+            title: "Awaiting report update",
+            subtitle: "Recent blank outcomes expected in the next daily export",
+            rows: rows.filter((r) => isReportDataPending(r, reportHorizon)), focus: "pending",
           })}
         />
       </div>
@@ -328,9 +388,10 @@ function MiniStat({
 // reached them. Two things only: how fast they respond once it lands,
 // and how many customers they left waiting overnight.
 function ExecView({
-  data, onDrill,
+  data, reportHorizon, onDrill,
 }: {
-  data: Array<{ exec: string; rows: EnquiryRow[]; s: Summary }>;
+  data: Array<{ exec: string; rows: EnquiryRow[]; s: DashboardSummary }>;
+  reportHorizon: number | null;
   onDrill: (d: Drill) => void;
 }) {
   return (
@@ -349,7 +410,7 @@ function ExecView({
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold">Sales exec</th>
@@ -361,6 +422,7 @@ function ExecView({
                 <th className="px-3 py-2.5 text-right font-semibold">Over target</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Missed same day</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Never contacted</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Pending update</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -390,10 +452,10 @@ function ExecView({
                     <button
                       onClick={() => onDrill({
                         title: exec, subtitle: "Not contacted same day",
-                        rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
+                        rows: rows.filter((r) => isSameDayReportable(r, reportHorizon) && !r.sameDayMet),
                         focus: "sameday",
                       })}
-                      className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
+                      className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed, s.sameDayExpected)}`}
                     >
                       {s.sameDayMissed}
                     </button>
@@ -401,9 +463,19 @@ function ExecView({
                   <td className="px-3 py-3 text-right">
                     <Cell tone={s.neverContacted > 0 ? "red" : "slate"} onClick={() => onDrill({
                       title: exec, subtitle: "Never contacted",
-                      rows: rows.filter((r) => r.contactedAt == null), focus: "contact",
+                      rows: rows.filter((r) => isContactMissing(r, reportHorizon)), focus: "contact",
                     })}>
                       {s.neverContacted}
+                    </Cell>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <Cell onClick={() => onDrill({
+                      title: exec,
+                      subtitle: "Awaiting the next daily export",
+                      rows: rows.filter((r) => isReportDataPending(r, reportHorizon)),
+                      focus: "pending",
+                    })}>
+                      {s.reportPending}
                     </Cell>
                   </td>
                 </tr>
@@ -433,9 +505,10 @@ function Cell({
 
 // ── Daily log ─────────────────────────────────────────────────────────
 function DailyView({
-  data, onDrill,
+  data, reportHorizon, onDrill,
 }: {
-  data: Array<{ day: string; rows: EnquiryRow[]; s: Summary }>;
+  data: Array<{ day: string; rows: EnquiryRow[]; s: DashboardSummary }>;
+  reportHorizon: number | null;
   onDrill: (d: Drill) => void;
 }) {
   const dow = (d: string) =>
@@ -447,11 +520,11 @@ function DailyView({
         <h2 className="text-sm font-semibold text-slate-900">Daily missed same-day contact</h2>
         <p className="mt-0.5 text-xs text-slate-500">
           Enquiries in before 17:30 that were not contacted that day. Click a number for the
-          customers behind it. Green only when the day is a clean sweep.
+          customers behind it. Green only when the completed report day is a clean sweep.
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-2.5 text-left font-semibold">Date</th>
@@ -460,6 +533,7 @@ function DailyView({
               <th className="px-4 py-2.5 text-right font-semibold">Missed</th>
               <th className="px-3 py-2.5 text-right font-semibold">Same day</th>
               <th className="px-3 py-2.5 text-right font-semibold">Avg response</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Pending update</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -483,22 +557,34 @@ function DailyView({
                   <button
                     onClick={() => onDrill({
                       title: day, subtitle: "NOT contacted same day",
-                      rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet), focus: "sameday",
+                      rows: rows.filter((r) => isSameDayReportable(r, reportHorizon) && !r.sameDayMet), focus: "sameday",
                     })}
-                    className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
+                    className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed, s.sameDayExpected)}`}
                   >
                     {s.sameDayMissed}
                   </button>
                 </td>
                 <td className="px-3 py-3 text-right">
-                  <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed)}`}>
-                    {pct(s.sameDayMet, s.sameDayExpected) ?? "—"}%
+                  <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed, s.sameDayExpected)}`}>
+                    {pct(s.sameDayMet, s.sameDayExpected) == null
+                      ? "—"
+                      : `${pct(s.sameDayMet, s.sameDayExpected)}%`}
                   </span>
                 </td>
                 <td className="px-3 py-3 text-right">
                   <span className={`font-bold tabular-nums ${timeTone(s.contactAvg, CONTACT_TARGET_MINS)}`}>
                     {formatMins(s.contactAvg)}
                   </span>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <Cell onClick={() => onDrill({
+                    title: day,
+                    subtitle: "Awaiting the next daily export",
+                    rows: rows.filter((r) => isReportDataPending(r, reportHorizon)),
+                    focus: "pending",
+                  })}>
+                    {s.reportPending}
+                  </Cell>
                 </td>
               </tr>
             ))}
@@ -510,7 +596,13 @@ function DailyView({
 }
 
 // ── Drill-down ────────────────────────────────────────────────────────
-function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
+function DrillPanel({
+  drill, reportHorizon, onClose,
+}: {
+  drill: Drill;
+  reportHorizon: number | null;
+  onClose: () => void;
+}) {
   const [q, setQ] = useState("");
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -534,7 +626,9 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
         esc(r.customer), esc(r.salesExec), esc(formatWall(r.enquiryAt)),
         esc(formatWall(r.transferredAt)), esc(formatWall(r.contactedAt)),
         String(r.contactMins ?? ""),
-        r.sameDayExpected ? (r.sameDayMet ? "yes" : "NO") : "n/a",
+        isSameDayReportable(r, reportHorizon)
+          ? (r.sameDayMet ? "yes" : "NO")
+          : "n/a",
       ].join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -616,7 +710,10 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
                     </td>
                     <td className="px-3 py-2 text-right">
                       <MinsBadge mins={r.contactMins} target={CONTACT_TARGET_MINS} />
-                      {r.sameDayExpected && !r.sameDayMet && (
+                      {isReportDataPending(r, reportHorizon) && (
+                        <div className="mt-0.5 text-[10px] font-bold uppercase text-sky-700">awaiting report</div>
+                      )}
+                      {isSameDayReportable(r, reportHorizon) && !r.sameDayMet && (
                         <div className="mt-0.5 text-[10px] font-bold uppercase text-red-600">not same day</div>
                       )}
                     </td>
