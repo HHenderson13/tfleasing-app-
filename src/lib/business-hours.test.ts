@@ -87,6 +87,15 @@ describe("businessMinutesBetween — edges", () => {
       .toBe(5 * WORKING_DAY_MINS);
   });
 
+  it("starts a weekend enquiry's clock at 09:00 Monday", () => {
+    // Aug 2026: Sat 8th, Sun 9th, Mon 10th. An enquiry that lands at the
+    // weekend accrues nothing until the office opens on Monday — the
+    // exec is not charged for the two days nobody was in.
+    expect(businessMinutesBetween(at(2026, 8, 8, 14, 0), at(2026, 8, 10, 10, 0))).toBe(60);
+    expect(businessMinutesBetween(at(2026, 8, 8, 9, 0), at(2026, 8, 10, 9, 0))).toBe(0);
+    expect(businessMinutesBetween(at(2026, 8, 9, 23, 0), at(2026, 8, 10, 9, 30))).toBe(30);
+  });
+
   it("is unaffected by the BST→GMT change (wall-clock maths)", () => {
     // UK clocks go back on Sun 25 Oct 2026. Mon 26th is a normal day.
     expect(businessMinutesBetween(at(2026, 10, 26, 9, 0), at(2026, 10, 26, 10, 0)))
@@ -104,6 +113,9 @@ describe("same-day contact rule", () => {
   });
 
   it("is not expected at or after 17:30, nor at the weekend", () => {
+    // Weekend enquiries are still measured for allocation and response
+    // (clock starts Monday 09:00) — they are only out of scope for the
+    // same-day rule, since there is no working day left to contact in.
     expect(isSameDayContactExpected(at(2026, 8, 3, 17, 30))).toBe(false);
     expect(isSameDayContactExpected(at(2026, 8, 3, 20, 0))).toBe(false);
     expect(isSameDayContactExpected(at(2026, 8, 8, 10, 0))).toBe(false); // Sat

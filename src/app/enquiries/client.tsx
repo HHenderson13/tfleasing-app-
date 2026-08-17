@@ -162,64 +162,12 @@ export function EnquiriesClient({
   );
 }
 
-// ── Plain-English verdict ─────────────────────────────────────────────
-// One sentence the sales floor can read at a glance without decoding a
-// table. Says what is wrong, by how much, and what to do about it.
-function Verdict({ s }: { s: Summary }) {
-  const contactOk = s.contactAvg != null && s.contactAvg <= CONTACT_TARGET_MINS;
-  const cleanSweep = s.sameDayMissed === 0;
-
-  if (contactOk && cleanSweep) {
-    return (
-      <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-5 py-4">
-        <p className="text-lg font-bold text-emerald-900">
-          On target. Every enquiry answered the same day, average response{" "}
-          {formatMins(s.contactAvg)} against a {CONTACT_TARGET_MINS} minute target.
-        </p>
-        <p className="mt-1 text-sm text-emerald-800">Keep doing exactly this.</p>
-      </div>
-    );
-  }
-
-  const bits: string[] = [];
-  if (s.contactAvg != null && s.contactAvg > CONTACT_TARGET_MINS) {
-    const over = Math.round(s.contactAvg / CONTACT_TARGET_MINS);
-    bits.push(
-      `we are taking ${formatMins(s.contactAvg)} on average to make first contact — about ${over}× the ${CONTACT_TARGET_MINS} minute target`,
-    );
-  }
-  if (!cleanSweep) {
-    bits.push(
-      `${s.sameDayMissed} ${s.sameDayMissed === 1 ? "customer" : "customers"} who enquired before 17:30 never heard from us that day`,
-    );
-  }
-  if (s.neverContacted > 0) {
-    bits.push(`${s.neverContacted} have never been contacted at all`);
-  }
-
-  return (
-    <div className="rounded-2xl border-2 border-red-300 bg-red-50 px-5 py-4">
-      <p className="text-lg font-bold text-red-900">
-        {bits.length > 0
-          ? bits.join("; ").replace(/^./, (c) => c.toUpperCase()) + "."
-          : "Off target."}
-      </p>
-      <p className="mt-1 text-sm text-red-800">
-        Every enquiry needs a call, text or email within {CONTACT_TARGET_MINS} minutes of it
-        landing with you — and nothing should go home unanswered.
-      </p>
-    </div>
-  );
-}
-
 // ── Department ────────────────────────────────────────────────────────
 function DepartmentView({
   s, rows, onDrill,
 }: { s: Summary; rows: EnquiryRow[]; onDrill: (d: Drill) => void }) {
   return (
     <div className="mt-6 space-y-4">
-      <Verdict s={s} />
-
       <div className="grid gap-4 md:grid-cols-3">
         {/* Sales support — allocation */}
         <AvgCard
@@ -278,7 +226,7 @@ function DepartmentView({
             })}
             className="mt-2 block w-full text-left"
           >
-            <span className={`text-6xl font-extrabold tabular-nums ${missTone(s.sameDayMissed)} hover:underline`}>
+            <span className={`text-4xl font-extrabold tabular-nums ${missTone(s.sameDayMissed)} hover:underline`}>
               {s.sameDayMissed}
             </span>
           </button>
@@ -333,7 +281,7 @@ function AvgCard({
         </span>
       </div>
       <div className="mt-0.5 text-xs text-slate-500">{hint}</div>
-      <div className={`mt-2 text-6xl font-extrabold tabular-nums ${timeTone(avg, target)}`}>
+      <div className={`mt-2 text-4xl font-extrabold tabular-nums ${timeTone(avg, target)}`}>
         {formatMins(avg)}
       </div>
       <div className="mt-1 text-[11px] font-medium text-slate-500">average</div>
@@ -425,7 +373,7 @@ function ExecView({
                     </Cell>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`text-2xl font-extrabold tabular-nums ${timeTone(s.contactAvg, CONTACT_TARGET_MINS)}`}>
+                    <span className={`text-xl font-bold tabular-nums ${timeTone(s.contactAvg, CONTACT_TARGET_MINS)}`}>
                       {formatMins(s.contactAvg)}
                     </span>
                   </td>
@@ -445,7 +393,7 @@ function ExecView({
                         rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
                         focus: "sameday",
                       })}
-                      className={`text-2xl font-extrabold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
+                      className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
                     >
                       {s.sameDayMissed}
                     </button>
@@ -537,7 +485,7 @@ function DailyView({
                       title: day, subtitle: "NOT contacted same day",
                       rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet), focus: "sameday",
                     })}
-                    className={`text-2xl font-extrabold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
+                    className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
                   >
                     {s.sameDayMissed}
                   </button>
