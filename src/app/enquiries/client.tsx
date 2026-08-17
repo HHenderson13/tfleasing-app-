@@ -19,15 +19,7 @@ interface Drill {
   title: string;
   subtitle?: string;
   rows: EnquiryRow[];
-  /** Which timing column to emphasise in the table. */
   focus: "alloc" | "contact" | "sameday";
-}
-
-function median(xs: number[]): number | null {
-  if (xs.length === 0) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2);
 }
 
 function summarise(rows: EnquiryRow[]): Summary {
@@ -41,12 +33,12 @@ function summarise(rows: EnquiryRow[]): Summary {
     allocHit: alloc.filter((n) => n <= ALLOCATION_TARGET_MINS).length,
     allocMissed: alloc.filter((n) => n > ALLOCATION_TARGET_MINS).length,
     allocAvg: avg(alloc),
-    allocMedian: median(alloc),
+    allocMedian: null,
     contactMeasured: contact.length,
     contactHit: contact.filter((n) => n <= CONTACT_TARGET_MINS).length,
     contactMissed: contact.filter((n) => n > CONTACT_TARGET_MINS).length,
     contactAvg: avg(contact),
-    contactMedian: median(contact),
+    contactMedian: null,
     neverContacted: rows.filter((r) => r.contactedAt == null).length,
     sameDayExpected: sde.length,
     sameDayMet: sde.filter((r) => r.sameDayMet).length,
@@ -56,19 +48,14 @@ function summarise(rows: EnquiryRow[]): Summary {
 
 const pct = (hit: number, of: number) => (of === 0 ? null : Math.round((hit / of) * 100));
 
-/** Green at/above 90%, amber 70–89%, red below. Null → neutral. */
-function rateTone(p: number | null): string {
-  if (p == null) return "text-slate-400";
-  if (p >= 90) return "text-emerald-700";
-  if (p >= 70) return "text-amber-700";
-  return "text-red-700";
-}
-function rateBg(p: number | null): string {
-  if (p == null) return "bg-slate-100 text-slate-500";
-  if (p >= 90) return "bg-emerald-100 text-emerald-900";
-  if (p >= 70) return "bg-amber-100 text-amber-900";
-  return "bg-red-100 text-red-900";
-}
+/** Average time against target: green when at or under, red when over. */
+const timeTone = (avg: number | null, target: number) =>
+  avg == null ? "text-slate-400" : avg <= target ? "text-emerald-600" : "text-red-600";
+
+/** Same-day contact: green ONLY at a clean sweep. Any miss is red. */
+const missTone = (missed: number) => (missed === 0 ? "text-emerald-600" : "text-red-600");
+const missBadge = (missed: number) =>
+  missed === 0 ? "bg-emerald-100 text-emerald-900" : "bg-red-100 text-red-900";
 
 export function EnquiriesClient({
   rows, from, to, min, max,
@@ -93,7 +80,10 @@ export function EnquiriesClient({
     }
     return [...m.entries()]
       .map(([exec, rs]) => ({ exec, rows: rs, s: summarise(rs) }))
-      .sort((a, b) => b.s.total - a.s.total);
+      // Worst first: most same-day misses, then slowest average response.
+      .sort((a, b) =>
+        b.s.sameDayMissed - a.s.sameDayMissed ||
+        (b.s.contactAvg ?? -1) - (a.s.contactAvg ?? -1));
   }, [rows]);
   const byDay = useMemo(() => {
     const m = new Map<string, EnquiryRow[]>();
@@ -116,7 +106,6 @@ export function EnquiriesClient({
 
   return (
     <div className="mt-6">
-      {/* Range + tabs */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs font-medium text-slate-600">
@@ -164,17 +153,61 @@ export function EnquiriesClient({
         </nav>
       </div>
 
-      {tab === "department" && (
-        <DepartmentView s={dept} rows={rows} onDrill={setDrill} />
-      )}
-      {tab === "exec" && (
-        <ExecView data={byExec} onDrill={setDrill} />
-      )}
-      {tab === "daily" && (
-        <DailyView data={byDay} onDrill={setDrill} />
-      )}
+      {tab === "department" && <DepartmentView s={dept} rows={rows} onDrill={setDrill} />}
+      {tab === "exec" && <ExecView data={byExec} onDrill={setDrill} />}
+      {tab === "daily" && <DailyView data={byDay} onDrill={setDrill} />}
 
       {drill && <DrillPanel drill={drill} onClose={() => setDrill(null)} />}
+    </div>
+  );
+}
+
+// ── Plain-English verdict ─────────────────────────────────────────────
+// One sentence the sales floor can read at a glance without decoding a
+// table. Says what is wrong, by how much, and what to do about it.
+function Verdict({ s }: { s: Summary }) {
+  const contactOk = s.contactAvg != null && s.contactAvg <= CONTACT_TARGET_MINS;
+  const cleanSweep = s.sameDayMissed === 0;
+
+  if (contactOk && cleanSweep) {
+    return (
+      <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-5 py-4">
+        <p className="text-lg font-bold text-emerald-900">
+          On target. Every enquiry answered the same day, average response{" "}
+          {formatMins(s.contactAvg)} against a {CONTACT_TARGET_MINS} minute target.
+        </p>
+        <p className="mt-1 text-sm text-emerald-800">Keep doing exactly this.</p>
+      </div>
+    );
+  }
+
+  const bits: string[] = [];
+  if (s.contactAvg != null && s.contactAvg > CONTACT_TARGET_MINS) {
+    const over = Math.round(s.contactAvg / CONTACT_TARGET_MINS);
+    bits.push(
+      `we are taking ${formatMins(s.contactAvg)} on average to make first contact — about ${over}× the ${CONTACT_TARGET_MINS} minute target`,
+    );
+  }
+  if (!cleanSweep) {
+    bits.push(
+      `${s.sameDayMissed} ${s.sameDayMissed === 1 ? "customer" : "customers"} who enquired before 17:30 never heard from us that day`,
+    );
+  }
+  if (s.neverContacted > 0) {
+    bits.push(`${s.neverContacted} have never been contacted at all`);
+  }
+
+  return (
+    <div className="rounded-2xl border-2 border-red-300 bg-red-50 px-5 py-4">
+      <p className="text-lg font-bold text-red-900">
+        {bits.length > 0
+          ? bits.join("; ").replace(/^./, (c) => c.toUpperCase()) + "."
+          : "Off target."}
+      </p>
+      <p className="mt-1 text-sm text-red-800">
+        Every enquiry needs a call, text or email within {CONTACT_TARGET_MINS} minutes of it
+        landing with you — and nothing should go home unanswered.
+      </p>
     </div>
   );
 }
@@ -183,86 +216,77 @@ export function EnquiriesClient({
 function DepartmentView({
   s, rows, onDrill,
 }: { s: Summary; rows: EnquiryRow[]; onDrill: (d: Drill) => void }) {
-  const allocPct = pct(s.allocHit, s.allocMeasured);
-  const contactPct = pct(s.contactHit, s.contactMeasured);
-  const sameDayPct = pct(s.sameDayMet, s.sameDayExpected);
-
   return (
     <div className="mt-6 space-y-4">
+      <Verdict s={s} />
+
       <div className="grid gap-4 md:grid-cols-3">
-        <TargetCard
+        {/* Sales support — allocation */}
+        <AvgCard
           title="Sales support — allocation"
-          target={`Target ${ALLOCATION_TARGET_MINS} min`}
-          hint="Enquiry raised → transferred to an exec"
-          pctValue={allocPct}
-          hit={s.allocHit} missed={s.allocMissed} measured={s.allocMeasured}
-          avg={s.allocAvg} med={s.allocMedian}
+          hint="Enquiry raised → passed to an exec"
+          target={ALLOCATION_TARGET_MINS}
+          avg={s.allocAvg}
+          measured={s.allocMeasured}
+          hit={s.allocHit} missed={s.allocMissed}
           onHit={() => onDrill({
             title: `Allocated within ${ALLOCATION_TARGET_MINS} min`,
-            subtitle: "Sales support hit target",
             rows: rows.filter((r) => r.allocMins != null && r.allocMins <= ALLOCATION_TARGET_MINS),
             focus: "alloc",
           })}
           onMiss={() => onDrill({
             title: `Allocation over ${ALLOCATION_TARGET_MINS} min`,
-            subtitle: "Sales support missed target",
             rows: rows.filter((r) => r.allocMins != null && r.allocMins > ALLOCATION_TARGET_MINS),
             focus: "alloc",
           })}
         />
-        <TargetCard
+
+        {/* Sales exec — first contact */}
+        <AvgCard
           title="Sales exec — first contact"
-          target={`Target ${CONTACT_TARGET_MINS} min`}
-          hint="Transferred → exec's first contact"
-          pctValue={contactPct}
-          hit={s.contactHit} missed={s.contactMissed} measured={s.contactMeasured}
-          avg={s.contactAvg} med={s.contactMedian}
+          hint="Passed to exec → first contact made"
+          target={CONTACT_TARGET_MINS}
+          avg={s.contactAvg}
+          measured={s.contactMeasured}
+          hit={s.contactHit} missed={s.contactMissed}
           onHit={() => onDrill({
             title: `Contacted within ${CONTACT_TARGET_MINS} min`,
-            subtitle: "Sales exec hit target",
             rows: rows.filter((r) => r.contactMins != null && r.contactMins <= CONTACT_TARGET_MINS),
             focus: "contact",
           })}
           onMiss={() => onDrill({
             title: `First contact over ${CONTACT_TARGET_MINS} min`,
-            subtitle: "Sales exec missed target",
             rows: rows.filter((r) => r.contactMins != null && r.contactMins > CONTACT_TARGET_MINS),
             focus: "contact",
           })}
         />
+
+        {/* Same-day — misses are the headline number */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Same-day contact
+            Missed same-day contact
           </div>
-          <div className="mt-0.5 text-xs text-slate-500">Raised before 17:30, contacted that day</div>
-          <div className={`mt-3 text-4xl font-semibold tabular-nums ${rateTone(sameDayPct)}`}>
-            {sameDayPct == null ? "—" : `${sameDayPct}%`}
+          <div className="mt-0.5 text-xs text-slate-500">
+            Enquired before 17:30, not contacted that day
           </div>
-          <div className="mt-3 flex gap-2 text-xs">
-            <button
-              onClick={() => onDrill({
-                title: "Contacted same day",
-                rows: rows.filter((r) => r.sameDayExpected && r.sameDayMet),
-                focus: "sameday",
-              })}
-              className="flex-1 rounded-lg bg-emerald-50 px-2 py-1.5 font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
-            >
-              {s.sameDayMet} met
-            </button>
-            <button
-              onClick={() => onDrill({
-                title: "NOT contacted same day",
-                subtitle: "Raised before 17:30 on a working day",
-                rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
-                focus: "sameday",
-              })}
-              className="flex-1 rounded-lg bg-red-50 px-2 py-1.5 font-semibold text-red-800 ring-1 ring-red-200 hover:bg-red-100"
-            >
-              {s.sameDayMissed} missed
-            </button>
-          </div>
-          <div className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
-            {s.sameDayExpected} of {s.total} enquiries in scope
+          <button
+            onClick={() => onDrill({
+              title: "NOT contacted same day",
+              subtitle: "Enquired before 17:30 on a working day",
+              rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
+              focus: "sameday",
+            })}
+            className="mt-2 block w-full text-left"
+          >
+            <span className={`text-6xl font-extrabold tabular-nums ${missTone(s.sameDayMissed)} hover:underline`}>
+              {s.sameDayMissed}
+            </span>
+          </button>
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+            <span>out of {s.sameDayExpected} in scope</span>
+            <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed)}`}>
+              {pct(s.sameDayMet, s.sameDayExpected) ?? "—"}% same day
+            </span>
           </div>
         </div>
       </div>
@@ -270,20 +294,20 @@ function DepartmentView({
       <div className="grid gap-4 sm:grid-cols-3">
         <MiniStat
           label="Total enquiries" value={s.total.toLocaleString()}
-          onClick={() => onDrill({ title: "All enquiries", rows, focus: "alloc" })}
+          onClick={() => onDrill({ title: "All enquiries", rows, focus: "contact" })}
         />
         <MiniStat
           label="Never contacted" value={s.neverContacted.toLocaleString()}
           tone={s.neverContacted > 0 ? "red" : "slate"}
           onClick={() => onDrill({
-            title: "Never contacted", subtitle: "No first-contact timestamp recorded",
+            title: "Never contacted", subtitle: "No first-contact recorded at all",
             rows: rows.filter((r) => r.contactedAt == null), focus: "contact",
           })}
         />
         <MiniStat
           label="Awaiting transfer" value={rows.filter((r) => r.transferredAt == null).length.toLocaleString()}
           onClick={() => onDrill({
-            title: "Awaiting transfer", subtitle: "No transfer timestamp recorded",
+            title: "Awaiting transfer", subtitle: "No transfer recorded",
             rows: rows.filter((r) => r.transferredAt == null), focus: "alloc",
           })}
         />
@@ -292,12 +316,12 @@ function DepartmentView({
   );
 }
 
-function TargetCard({
-  title, target, hint, pctValue, hit, missed, measured, avg, med, onHit, onMiss,
+/** Average response time as the headline, bold and colour-coded. */
+function AvgCard({
+  title, hint, target, avg, measured, hit, missed, onHit, onMiss,
 }: {
-  title: string; target: string; hint: string;
-  pctValue: number | null; hit: number; missed: number; measured: number;
-  avg: number | null; med: number | null;
+  title: string; hint: string; target: number;
+  avg: number | null; measured: number; hit: number; missed: number;
   onHit: () => void; onMiss: () => void;
 }) {
   return (
@@ -305,13 +329,14 @@ function TargetCard({
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
         <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-          {target}
+          Target {target}m
         </span>
       </div>
       <div className="mt-0.5 text-xs text-slate-500">{hint}</div>
-      <div className={`mt-3 text-4xl font-semibold tabular-nums ${rateTone(pctValue)}`}>
-        {pctValue == null ? "—" : `${pctValue}%`}
+      <div className={`mt-2 text-6xl font-extrabold tabular-nums ${timeTone(avg, target)}`}>
+        {formatMins(avg)}
       </div>
+      <div className="mt-1 text-[11px] font-medium text-slate-500">average</div>
       <div className="mt-3 flex gap-2 text-xs">
         <button
           onClick={onHit}
@@ -326,10 +351,8 @@ function TargetCard({
           {missed} over
         </button>
       </div>
-      <div className="mt-3 flex justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
-        <span>avg <span className="font-mono text-slate-800">{formatMins(avg)}</span></span>
-        <span>median <span className="font-mono text-slate-800">{formatMins(med)}</span></span>
-        <span>{measured} measured</span>
+      <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+        {measured} measured
       </div>
     </div>
   );
@@ -344,7 +367,7 @@ function MiniStat({
       className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-400 hover:shadow"
     >
       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${tone === "red" ? "text-red-700" : "text-slate-900"}`}>
+      <div className={`mt-1 text-2xl font-bold tabular-nums ${tone === "red" ? "text-red-600" : "text-slate-900"}`}>
         {value}
       </div>
     </button>
@@ -352,6 +375,10 @@ function MiniStat({
 }
 
 // ── By exec ───────────────────────────────────────────────────────────
+// Allocation is sales support's job, not the exec's, so it is not shown
+// here at all — an exec can't influence how long a lead sat before it
+// reached them. Two things only: how fast they respond once it lands,
+// and how many customers they left waiting overnight.
 function ExecView({
   data, onDrill,
 }: {
@@ -359,80 +386,83 @@ function ExecView({
   onDrill: (d: Drill) => void;
 }) {
   return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-2.5 text-left font-semibold">Sales exec</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Enquiries</th>
-              <th className="px-3 py-2.5 text-right font-semibold" colSpan={2}>
-                Allocation ≤{ALLOCATION_TARGET_MINS}m
-              </th>
-              <th className="px-3 py-2.5 text-right font-semibold">Avg</th>
-              <th className="px-3 py-2.5 text-right font-semibold" colSpan={2}>
-                Contact ≤{CONTACT_TARGET_MINS}m
-              </th>
-              <th className="px-3 py-2.5 text-right font-semibold">Avg</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Same-day miss</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.map(({ exec, rows, s }) => {
-              const ap = pct(s.allocHit, s.allocMeasured);
-              const cp = pct(s.contactHit, s.contactMeasured);
-              return (
+    <div className="mt-6 space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-slate-100/70 px-5 py-3">
+        <p className="text-sm font-semibold text-slate-900">
+          Two things count here: answer within {CONTACT_TARGET_MINS} minutes, and never let a
+          customer go home unanswered.
+        </p>
+        <p className="mt-0.5 text-xs text-slate-600">
+          The clock starts when the enquiry reaches you, and only runs 09:00–17:30 Mon–Fri —
+          you are never charged for evenings or weekends. Time before it was passed to you is
+          sales support&apos;s to answer for, so it is not counted against you.
+        </p>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-semibold">Sales exec</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Enquiries</th>
+                <th className="px-4 py-2.5 text-right font-semibold">
+                  Average response
+                  <span className="ml-1 font-normal text-slate-400">(target {CONTACT_TARGET_MINS}m)</span>
+                </th>
+                <th className="px-3 py-2.5 text-right font-semibold">Over target</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Missed same day</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Never contacted</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.map(({ exec, rows, s }) => (
                 <tr key={exec} className="hover:bg-slate-50/70">
-                  <td className="px-4 py-2.5 font-medium text-slate-900">{exec}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Cell onClick={() => onDrill({ title: exec, subtitle: "All enquiries", rows, focus: "alloc" })}>
+                  <td className="px-4 py-3 font-semibold text-slate-900">{exec}</td>
+                  <td className="px-3 py-3 text-right">
+                    <Cell onClick={() => onDrill({ title: exec, subtitle: "All enquiries", rows, focus: "contact" })}>
                       {s.total}
                     </Cell>
                   </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${rateBg(ap)}`}>
-                      {ap == null ? "—" : `${ap}%`}
+                  <td className="px-4 py-3 text-right">
+                    <span className={`text-2xl font-extrabold tabular-nums ${timeTone(s.contactAvg, CONTACT_TARGET_MINS)}`}>
+                      {formatMins(s.contactAvg)}
                     </span>
                   </td>
-                  <td className="px-1 py-2.5 text-right text-xs">
-                    <Cell tone="red" onClick={() => onDrill({
-                      title: exec, subtitle: `Allocation over ${ALLOCATION_TARGET_MINS} min`,
-                      rows: rows.filter((r) => r.allocMins != null && r.allocMins > ALLOCATION_TARGET_MINS),
-                      focus: "alloc",
-                    })}>
-                      {s.allocMissed} over
-                    </Cell>
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-600">{formatMins(s.allocAvg)}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${rateBg(cp)}`}>
-                      {cp == null ? "—" : `${cp}%`}
-                    </span>
-                  </td>
-                  <td className="px-1 py-2.5 text-right text-xs">
-                    <Cell tone="red" onClick={() => onDrill({
+                  <td className="px-3 py-3 text-right">
+                    <Cell tone={s.contactMissed > 0 ? "red" : "slate"} onClick={() => onDrill({
                       title: exec, subtitle: `First contact over ${CONTACT_TARGET_MINS} min`,
                       rows: rows.filter((r) => r.contactMins != null && r.contactMins > CONTACT_TARGET_MINS),
                       focus: "contact",
                     })}>
-                      {s.contactMissed} over
+                      {s.contactMissed}
                     </Cell>
                   </td>
-                  <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-600">{formatMins(s.contactAvg)}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Cell tone={s.sameDayMissed > 0 ? "red" : "slate"} onClick={() => onDrill({
-                      title: exec, subtitle: "Not contacted same day",
-                      rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
-                      focus: "sameday",
-                    })}>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => onDrill({
+                        title: exec, subtitle: "Not contacted same day",
+                        rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet),
+                        focus: "sameday",
+                      })}
+                      className={`text-2xl font-extrabold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
+                    >
                       {s.sameDayMissed}
+                    </button>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <Cell tone={s.neverContacted > 0 ? "red" : "slate"} onClick={() => onDrill({
+                      title: exec, subtitle: "Never contacted",
+                      rows: rows.filter((r) => r.contactedAt == null), focus: "contact",
+                    })}>
+                      {s.neverContacted}
                     </Cell>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -444,8 +474,8 @@ function Cell({
   return (
     <button
       onClick={onClick}
-      className={`rounded px-1.5 py-0.5 font-semibold tabular-nums underline-offset-2 hover:underline ${
-        tone === "red" ? "text-red-700 hover:bg-red-50" : "text-slate-900 hover:bg-slate-100"
+      className={`rounded px-1.5 py-0.5 font-bold tabular-nums underline-offset-2 hover:underline ${
+        tone === "red" ? "text-red-600 hover:bg-red-50" : "text-slate-900 hover:bg-slate-100"
       }`}
     >
       {children}
@@ -466,71 +496,64 @@ function DailyView({
   return (
     <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-5 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">Daily same-day contact log</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Daily missed same-day contact</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Enquiries raised before 17:30 on a working day, and whether the exec made contact
-          that same day. Click a red number for the customers who were missed.
+          Enquiries in before 17:30 that were not contacted that day. Click a number for the
+          customers behind it. Green only when the day is a clean sweep.
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[680px] text-sm">
           <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-2.5 text-left font-semibold">Date</th>
               <th className="px-3 py-2.5 text-right font-semibold">Enquiries</th>
               <th className="px-3 py-2.5 text-right font-semibold">In scope</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Contacted same day</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Missed</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Rate</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Alloc avg</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Contact avg</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Missed</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Same day</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Avg response</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {data.map(({ day, rows, s }) => {
-              const p = pct(s.sameDayMet, s.sameDayExpected);
-              return (
-                <tr key={day} className="hover:bg-slate-50/70">
-                  <td className="px-4 py-2.5">
-                    <span className="font-medium text-slate-900">
-                      {new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", {
-                        day: "2-digit", month: "short", timeZone: "UTC",
-                      })}
-                    </span>
-                    <span className="ml-1.5 text-[11px] text-slate-400">{dow(day)}</span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Cell onClick={() => onDrill({ title: day, subtitle: "All enquiries raised", rows, focus: "sameday" })}>
-                      {s.total}
-                    </Cell>
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-600">{s.sameDayExpected}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Cell onClick={() => onDrill({
-                      title: day, subtitle: "Contacted same day",
-                      rows: rows.filter((r) => r.sameDayExpected && r.sameDayMet), focus: "sameday",
-                    })}>
-                      {s.sameDayMet}
-                    </Cell>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Cell tone={s.sameDayMissed > 0 ? "red" : "slate"} onClick={() => onDrill({
+            {data.map(({ day, rows, s }) => (
+              <tr key={day} className="hover:bg-slate-50/70">
+                <td className="px-4 py-3">
+                  <span className="font-medium text-slate-900">
+                    {new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", {
+                      day: "2-digit", month: "short", timeZone: "UTC",
+                    })}
+                  </span>
+                  <span className="ml-1.5 text-[11px] text-slate-400">{dow(day)}</span>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <Cell onClick={() => onDrill({ title: day, subtitle: "All enquiries raised", rows, focus: "sameday" })}>
+                    {s.total}
+                  </Cell>
+                </td>
+                <td className="px-3 py-3 text-right font-mono text-xs text-slate-600">{s.sameDayExpected}</td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => onDrill({
                       title: day, subtitle: "NOT contacted same day",
                       rows: rows.filter((r) => r.sameDayExpected && !r.sameDayMet), focus: "sameday",
-                    })}>
-                      {s.sameDayMissed}
-                    </Cell>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${rateBg(p)}`}>
-                      {p == null ? "—" : `${p}%`}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-600">{formatMins(s.allocAvg)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-600">{formatMins(s.contactAvg)}</td>
-                </tr>
-              );
-            })}
+                    })}
+                    className={`text-2xl font-extrabold tabular-nums hover:underline ${missTone(s.sameDayMissed)}`}
+                  >
+                    {s.sameDayMissed}
+                  </button>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed)}`}>
+                    {pct(s.sameDayMet, s.sameDayExpected) ?? "—"}%
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <span className={`font-bold tabular-nums ${timeTone(s.contactAvg, CONTACT_TARGET_MINS)}`}>
+                    {formatMins(s.contactAvg)}
+                  </span>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -547,7 +570,6 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
       ? drill.rows.filter((r) =>
           r.customer.toLowerCase().includes(needle) || r.salesExec.toLowerCase().includes(needle))
       : drill.rows;
-    // Worst first on the focused metric, so the problem cases lead.
     return [...rs].sort((a, b) => {
       if (drill.focus === "alloc") return (b.allocMins ?? -1) - (a.allocMins ?? -1);
       if (drill.focus === "contact") return (b.contactMins ?? -1) - (a.contactMins ?? -1);
@@ -556,15 +578,15 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   }, [drill, q]);
 
   function exportCsv() {
-    const head = ["Customer", "Sales exec", "Enquiry", "Transferred", "First contact", "Alloc mins", "Contact mins", "Same day"];
+    const head = ["Customer", "Sales exec", "Enquiry", "Transferred", "First contact", "Response mins", "Same day"];
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const lines = [head.map(esc).join(",")];
     for (const r of shown) {
       lines.push([
         esc(r.customer), esc(r.salesExec), esc(formatWall(r.enquiryAt)),
         esc(formatWall(r.transferredAt)), esc(formatWall(r.contactedAt)),
-        String(r.allocMins ?? ""), String(r.contactMins ?? ""),
-        r.sameDayExpected ? (r.sameDayMet ? "yes" : "no") : "n/a",
+        String(r.contactMins ?? ""),
+        r.sameDayExpected ? (r.sameDayMet ? "yes" : "NO") : "n/a",
       ].join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -623,9 +645,8 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
                 <tr>
                   <th className="px-4 py-2 text-left font-semibold">Customer</th>
                   <th className="px-3 py-2 text-left font-semibold">Exec</th>
-                  <th className="px-3 py-2 text-left font-semibold">Enquiry</th>
-                  <th className="px-3 py-2 text-right font-semibold">Alloc</th>
-                  <th className="px-3 py-2 text-right font-semibold">Contact</th>
+                  <th className="px-3 py-2 text-left font-semibold">Timeline</th>
+                  <th className="px-3 py-2 text-right font-semibold">Response</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -637,18 +658,18 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-600">{r.salesExec}</td>
                     <td className="px-3 py-2 font-mono text-[11px] text-slate-600">
-                      <div>{formatWall(r.enquiryAt)}</div>
+                      <div>in {formatWall(r.enquiryAt)}</div>
                       <div className="text-slate-400">
-                        → {formatWall(r.transferredAt)} → {formatWall(r.contactedAt)}
+                        → passed {formatWall(r.transferredAt)}
                       </div>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <MinsBadge mins={r.allocMins} target={ALLOCATION_TARGET_MINS} />
+                      <div className="text-slate-400">
+                        → contact {formatWall(r.contactedAt)}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <MinsBadge mins={r.contactMins} target={CONTACT_TARGET_MINS} />
                       {r.sameDayExpected && !r.sameDayMet && (
-                        <div className="mt-0.5 text-[10px] font-bold uppercase text-red-700">not same day</div>
+                        <div className="mt-0.5 text-[10px] font-bold uppercase text-red-600">not same day</div>
                       )}
                     </td>
                   </tr>

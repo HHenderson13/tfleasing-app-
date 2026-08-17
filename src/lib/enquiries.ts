@@ -16,18 +16,37 @@ import {
 
 export { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS };
 
-// Names that must never appear in any report. Matched case-insensitively
-// against column B ("Created By") only — per explicit direction, rows
-// these two merely *own* (column Q) still count under whoever created
-// them. Stored normalised so "harry henderson" / "Harry  Henderson" both
-// match.
-const EXCLUDED_EXECS = new Set(["joseph rustigini", "harry henderson"]);
+// Names that must never appear in any report, anywhere.
+//
+// Matched case-insensitively against EVERY column of the source row, not
+// just "Created By" — an enquiry these two created, own, or are named on
+// in any other field is dropped at ingest so it can never surface in a
+// report. Full names only: matching on "harry" alone would take out
+// unrelated customers.
+const EXCLUDED_NAMES = ["joseph rustigini", "harry henderson"] as const;
 
 const norm = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
 const normKey = (s: unknown) => norm(s).toLowerCase();
 
+/** True when this single value is one of the excluded names. */
 export function isExcludedExec(name: unknown): boolean {
-  return EXCLUDED_EXECS.has(normKey(name));
+  const k = normKey(name);
+  return EXCLUDED_NAMES.some((n) => k === n);
+}
+
+/**
+ * True when an excluded name appears anywhere in the row. Substring match
+ * (not equality) so " Harry Henderson" in a free-text cell, or a name
+ * embedded in a longer string, is still caught.
+ */
+export function rowMentionsExcluded(cells: readonly unknown[]): boolean {
+  for (const c of cells) {
+    if (c == null) continue;
+    const k = normKey(c);
+    if (!k) continue;
+    if (EXCLUDED_NAMES.some((n) => k.includes(n))) return true;
+  }
+  return false;
 }
 
 // Zero-based column indices, fixed by the MotorComplete export layout.
@@ -119,8 +138,10 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
     const enquiryAt = parseExportTimestamp(raw[COL.enquiryAt]);
 
     if (!salesExec && !customer && enquiryAt == null) continue; // blank filler row
+    // Exclusion is checked against the whole row before the parse gate, so
+    // an excluded row is never counted as "unreadable" on a technicality.
+    if (rowMentionsExcluded(raw)) { skippedExcluded++; continue; }
     if (!salesExec || !customer || enquiryAt == null) { skippedUnparseable++; continue; }
-    if (isExcludedExec(salesExec)) { skippedExcluded++; continue; }
 
     const transferredAt = parseExportTimestamp(raw[COL.transferredAt]);
     const contactedAt = parseExportTimestamp(raw[COL.contactedAt]);
@@ -484,4 +505,42 @@ export async function listUploads(limit = 20): Promise<UploadRecord[]> {
     uploadedAt: new Date(Number(r.uploaded_at) * 1000),
     uploadedByUserId: String(r.uploaded_by_user_id),
   }));
+}
+
+/**
+ * Delete stored enquiries that mention an excluded name in any of the
+ * text columns we persist (exec, owner, customer, dealer, source, status).
+ *
+ * Ingest already filters on the *full* source row, so this only matters
+ * for rows written under the earlier column-B-only rule. Runs from the
+ * schema-ensure pipeline, and is a no-op once clean.
+ *
+ * Note this can only see the columns we store — a row where an excluded
+ * name appeared solely in a column the tracker doesn't keep would need a
+ * re-upload to be caught. Re-uploading is safe and idempotent.
+ */
+export async function purgeExcludedEnquiries(): Promise<number> {
+  const cols = ["sales_exec", "enquiry_owner", "customer", "dealer", "source", "status"];
+  let removed = 0;
+  try {
+    for (const name of EXCLUDED_NAMES) {
+      const pattern = `%${name}%`;
+      const predicate = sql.join(
+        cols.map((c) => sql`LOWER(COALESCE(${sql.raw(c)}, '')) LIKE ${pattern}`),
+        sql` OR `,
+      );
+      const before = await db.all<{ n: number }>(
+        sql`SELECT COUNT(*) AS n FROM enquiries WHERE ${predicate}`,
+      );
+      const n = Number(before[0]?.n ?? 0);
+      if (n > 0) {
+        await db.run(sql`DELETE FROM enquiries WHERE ${predicate}`);
+        removed += n;
+      }
+    }
+  } catch (e) {
+    if (isMissingTable(e)) return 0;
+    throw e;
+  }
+  return removed;
 }

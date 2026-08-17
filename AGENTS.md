@@ -143,9 +143,12 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   contact" is by definition the earliest seen — a later export reporting
   a subsequent touchpoint in column L must not overwrite it.
 - **Joseph Rustigini and Harry Henderson are stripped from enquiry
-  reports** on column B ("Created By") only, per explicit direction —
-  rows they merely *own* (column Q) still count under the creator.
-  Filtering happens at ingest, so excluded rows never reach the DB.
+  reports entirely** — an excluded name appearing in *any* column of the
+  source row drops that row at ingest, so it can never reach the DB or a
+  report. Substring match on the full name (matching "harry" alone would
+  take out unrelated customers). `purgeExcludedEnquiries()` runs from the
+  ensure pipeline to clear anything stored under the earlier
+  column-B-only rule.
 
 ## Local development
 

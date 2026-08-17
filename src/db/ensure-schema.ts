@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 40;
+const SCHEMA_VERSION = 41;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1112,6 +1112,16 @@ async function ensureEnquiryTables() {
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_enquiries_day ON enquiries(enquiry_day)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_enquiries_exec ON enquiries(sales_exec)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_enquiries_enquiry_at ON enquiries(enquiry_at)`));
+
+  // Sweep out anything ingested under the earlier column-B-only exclusion
+  // rule. Idempotent — a no-op once there is nothing left to remove.
+  try {
+    const { purgeExcludedEnquiries } = await import("@/lib/enquiries");
+    const n = await purgeExcludedEnquiries();
+    if (n > 0) console.warn(`enquiries: purged ${n} row(s) mentioning an excluded name`);
+  } catch (e) {
+    console.warn("enquiries purge skipped:", e instanceof Error ? e.message : e);
+  }
 
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS enquiry_uploads (
