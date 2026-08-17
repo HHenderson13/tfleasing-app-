@@ -8,7 +8,7 @@ import { ensureAppSchema } from "@/db/ensure-schema";
 import { sessions, users } from "@/db/schema";
 import { and, eq, gt } from "drizzle-orm";
 
-export const ROLES = ["admin", "exec", "quote", "stock", "wc", "wc_admin"] as const;
+export const ROLES = ["admin", "exec", "quote", "stock"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const SESSION_COOKIE = "tf_session";
@@ -103,7 +103,7 @@ export async function clearSessionCookie() {
 }
 
 // Wrapped in React's cache() so repeated calls within a single request
-// (e.g. requireWcAccess() + PaymentBanner running in parallel + auth-gated
+// (e.g. several auth-gated server components running in parallel
 // API routes called inside server components) share one DB lookup instead
 // of doing the session-join multiple times. The cache is request-scoped —
 // no risk of leaking user data across requests.
@@ -153,17 +153,6 @@ export function canSeeProposals(u: CurrentUser | null): boolean {
 export function canSeeOrders(u: CurrentUser | null): boolean {
   return isAdmin(u) || isExec(u);
 }
-// World Cup access is its own silo — global site admins do NOT automatically
-// get WC roles. You need explicit 'wc' (play) or 'wc_admin' (play + manage)
-// to participate. The bootstrap (see ensureWorldCupTables) grants wc_admin
-// to a configured email so there's at least one WC admin from day one.
-export function canPlayWc(u: CurrentUser | null): boolean {
-  return !!u && (u.roles.includes("wc") || u.roles.includes("wc_admin"));
-}
-export function isWcAdmin(u: CurrentUser | null): boolean {
-  return !!u && u.roles.includes("wc_admin");
-}
-
 export interface SectionAccess {
   quote: boolean;
   stock: boolean;
@@ -175,12 +164,15 @@ export interface SectionAccess {
   // numbers feed into formal accounts; future iterations may open this to
   // a dedicated finance role.
   forecast: boolean;
-  wc: boolean;
   leaderboard: boolean;
   // Personal scorecard tile — only relevant when the user has a sales_exec
   // record linked to their account, regardless of leaderboard participation
   // (the /me page handles the "not a participant yet" case itself).
   myScorecard: boolean;
+  // Enquiry Tracker is readable by anyone signed in — the numbers are the
+  // department's own performance, not customer or commercial data. Only the
+  // upload route is admin-gated.
+  enquiries: boolean;
 }
 
 export function sectionAccess(u: CurrentUser | null): SectionAccess {
@@ -192,10 +184,10 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     reports: isAdmin(u),
     admin: isAdmin(u),
     forecast: isAdmin(u),
-    wc: canPlayWc(u),
     // Leaderboard is visible to anyone in sales — admins manage participation
     // separately from view access.
     leaderboard: isAdmin(u) || isExec(u),
     myScorecard: !!u?.salesExecId,
+    enquiries: !!u,
   };
 }

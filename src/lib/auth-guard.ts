@@ -1,14 +1,12 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import {
-  canPlayWc,
   canQuote,
   canSeeOrders,
   canSeeProposals,
   canStock,
   getCurrentUser,
   isAdmin,
-  isWcAdmin,
   type CurrentUser,
 } from "./auth";
 
@@ -51,18 +49,6 @@ export async function requireStockAccess(): Promise<CurrentUser> {
 export async function requireLeaderboardAccess(): Promise<CurrentUser> {
   const u = await requireUser();
   if (!isAdmin(u) && !(u.roles.includes("exec"))) redirect("/forbidden");
-  return u;
-}
-
-export async function requireWcAccess(): Promise<CurrentUser> {
-  const u = await requireUser();
-  if (!canPlayWc(u)) redirect("/forbidden");
-  return u;
-}
-
-export async function requireWcAdmin(): Promise<CurrentUser> {
-  const u = await requireUser();
-  if (!isWcAdmin(u)) redirect("/forbidden");
   return u;
 }
 

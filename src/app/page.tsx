@@ -23,7 +23,7 @@ const TILES: Tile[] = [
   { key: "admin",     href: "/admin/brokers", title: "Brokers", desc: "Add brokers and provision their users for the broker portal.", tone: "from-sky-600 to-indigo-700" },
   { key: "myScorecard", href: "/sales-leaderboard/me", title: "My Scorecard", desc: "Your rank, your badges, your numbers — month and year to date.", tone: "from-rose-500 to-pink-600" },
   { key: "leaderboard", href: "/sales-leaderboard", title: "Pole Position", desc: "Who's leading the pack — orders, deliveries, insurance and conversion.", tone: "from-pink-500 to-rose-600" },
-  { key: "wc",        href: "/world-cup", title: "World Cup",  desc: "Predict scores, climb the leaderboard — the office World Cup game.", tone: "from-emerald-500 to-teal-700" },
+  { key: "enquiries", href: "/enquiries", title: "Enquiry Tracker", desc: "Allocation and first-contact speed against target, by department and exec.", tone: "from-emerald-500 to-teal-700" },
 ];
 
 export const dynamic = "force-dynamic";

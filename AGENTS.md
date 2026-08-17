@@ -48,6 +48,8 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/cron/stock-match-debug`      | `requireAdmin` |
 | `/api/email/test`                  | `requireAdmin` |
 | `/api/blob/upload`                 | session + admin role check on token issue |
+| `/enquiries`                       | `requireUser`                  |
+| `/enquiries/upload`                | `requireAdmin`                 |
 
 If you add a route, add it here.
 
@@ -124,6 +126,26 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   The handler exits early unless `ukHour === 7`, so exactly one tick runs
   per day depending on BST/GMT. Don't "fix" this to a single schedule.
 - **No drizzle migrations.** See Database section above.
+- **Enquiry Tracker working day is Mon–Fri 09:00–17:30.** Confirmed by the
+  user against the worked example "enquiry 17:00, transferred 10:00 next
+  day = 90 mins" (30 mins to close + 60 mins next morning). The 17:30
+  close doubles as the same-day-contact cut-off, so both rules key off
+  one number. Targets: allocation (enquiry → transfer) 5 mins, first
+  contact (transfer → contact) 15 mins, both in *business* minutes.
+- **Enquiry timestamps are stored as wall-clock epochs** — local office
+  time re-encoded via `Date.UTC(...)`, never a real instant. This makes
+  the business-hours maths immune to BST/GMT: 09:00 is 09:00 year round.
+  Everything must go through `src/lib/business-hours.ts` helpers so the
+  encoding stays consistent. Tests cover the October clock change.
+- **Enquiry uploads stack, never replace.** Rows merge on a natural-key
+  hash (exec + customer ref/name + enquiry timestamp). On conflict the
+  *earliest* known transfer/contact timestamps win, because "first
+  contact" is by definition the earliest seen — a later export reporting
+  a subsequent touchpoint in column L must not overwrite it.
+- **Joseph Rustigini and Harry Henderson are stripped from enquiry
+  reports** on column B ("Created By") only, per explicit direction —
+  rows they merely *own* (column Q) still count under the creator.
+  Filtering happens at ingest, so excluded rows never reach the DB.
 
 ## Local development
 

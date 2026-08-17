@@ -115,10 +115,10 @@ async function runEnsureAppSchema() {
   await ensureFunderInterestRatesTable();
   await ensureScraperTables();
   await ensureLoginAttemptsTable();
-  await ensureWorldCupTables();
   await ensureSalesLeaderboardTables();
   await ensureBrokerPortalTables();
   await ensureForecastTables();
+  await ensureEnquiryTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await ensureHotPathIndexes();
@@ -978,248 +978,6 @@ async function ensureFunderInterestRatesTable() {
     }
   }
 }
-
-// Creates the three World Cup tables and idempotently seeds wc_fixtures with
-// the 104 matches from the template. Re-running on boot is safe:
-//   - CREATE TABLE IF NOT EXISTS
-//   - INSERT OR IGNORE on the seed (admins can edit dates/stadiums/etc later
-//     without those edits being overwritten on the next deploy).
-async function ensureWorldCupTables() {
-  await db.run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS wc_fixtures (
-      fixture_number INTEGER PRIMARY KEY,
-      stage TEXT NOT NULL,
-      group_name TEXT,
-      kickoff_at INTEGER NOT NULL,
-      stadium TEXT,
-      city TEXT,
-      team1 TEXT,
-      team2 TEXT,
-      next_fixture_number INTEGER,
-      next_slot TEXT
-    )
-  `));
-  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_fixtures_stage ON wc_fixtures(stage)`));
-  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_fixtures_kickoff ON wc_fixtures(kickoff_at)`));
-  // Seed strings for auto-population from group standings (R32 only;
-  // R16 onwards already chains via next_fixture_number on settlement).
-  await ensureColumns("wc_fixtures", [
-    { name: "team1_seed", sqlType: "TEXT" },
-    { name: "team2_seed", sqlType: "TEXT" },
-  ]);
-
-  await db.run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS wc_results (
-      fixture_number INTEGER PRIMARY KEY,
-      team1_goals INTEGER NOT NULL,
-      team2_goals INTEGER NOT NULL,
-      et_team1_goals INTEGER,
-      et_team2_goals INTEGER,
-      pen_team1 INTEGER,
-      pen_team2 INTEGER,
-      winner_team TEXT NOT NULL,
-      settled_at INTEGER NOT NULL,
-      settled_by_user_id TEXT NOT NULL
-    )
-  `));
-
-  await db.run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS wc_predictions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      fixture_number INTEGER NOT NULL,
-      team1_goals INTEGER NOT NULL,
-      team2_goals INTEGER NOT NULL,
-      predicted_winner TEXT NOT NULL,
-      points INTEGER,
-      submitted_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `));
-  await db.run(sql.raw(
-    `CREATE UNIQUE INDEX IF NOT EXISTS uniq_wc_predictions_user_fixture ON wc_predictions(user_id, fixture_number)`,
-  ));
-  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_wc_predictions_user ON wc_predictions(user_id)`));
-
-  await db.run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS wc_payments (
-      user_id TEXT PRIMARY KEY,
-      paid_at INTEGER NOT NULL,
-      marked_by_user_id TEXT NOT NULL
-    )
-  `));
-
-  await db.run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS wc_live_scores (
-      fixture_number INTEGER PRIMARY KEY,
-      team1_goals INTEGER NOT NULL,
-      team2_goals INTEGER NOT NULL,
-      minute INTEGER,
-      status TEXT,
-      first_final_at INTEGER,
-      updated_at INTEGER NOT NULL,
-      updated_by_user_id TEXT NOT NULL
-    )
-  `));
-  // Migrations for existing wc_live_scores rows from before the ESPN feed.
-  await ensureColumns("wc_live_scores", [
-    { name: "status", sqlType: "TEXT" },
-    { name: "first_final_at", sqlType: "INTEGER" },
-  ]);
-
-  await seedWcFixturesIfEmpty();
-  await bootstrapWcAdmin();
-  await backfillR32FromGroupsIfNeeded();
-}
-
-// One-shot backfill for the case where group results were settled
-// BEFORE the auto-propagation code shipped. Idempotent: maybePopulateR32
-// short-circuits when the group stage isn't complete, or when all R32
-// slots are already filled. Then rewireKnockouts rebuilds R16 / QF / SF
-// / third / final team slots from settled upstream winners under the
-// CURRENT next_fixture_number wiring — self-heals whenever the seed's
-// bracket structure has been corrected mid-tournament.
-async function backfillR32FromGroupsIfNeeded() {
-  try {
-    const { maybePopulateR32, rewireKnockouts } = await import("@/lib/world-cup-settle");
-    await maybePopulateR32("system:backfill");
-    await rewireKnockouts();
-  } catch (e) {
-    // Never let the backfill break boot — the worst case is admin has
-    // to re-enter a group result to re-trigger propagation manually.
-    // eslint-disable-next-line no-console
-    console.warn("world-cup R32 backfill skipped:", e instanceof Error ? e.message : e);
-  }
-}
-
-// Self-healing wc_admin bootstrap. Three strategies, tried in order:
-//   1. The email in WC_BOOTSTRAP_ADMIN_EMAIL (or the hard-coded default).
-//   2. If that user doesn't exist OR has a different email casing — search
-//      for any existing wc_admin in the system. If at least one exists,
-//      we're good; stop.
-//   3. Last resort: if no wc_admin exists ANYWHERE, promote the first user
-//      with the global 'admin' role so the office sweepstake can be set
-//      up after deploy. This *is* a one-time auto-grant but only fires
-//      when nobody else can administer the game (deliberate safety net).
-const DEFAULT_WC_ADMIN_EMAIL = "harry.edward.henderson@gmail.com";
-async function bootstrapWcAdmin() {
-  const targetEmail = (process.env.WC_BOOTSTRAP_ADMIN_EMAIL ?? DEFAULT_WC_ADMIN_EMAIL).toLowerCase().trim();
-
-  // Strategy 1: explicit email match.
-  if (targetEmail) {
-    const rows = await db.all<{ id: string; roles: string }>(sql`
-      SELECT id, roles FROM users WHERE LOWER(email) = ${targetEmail} LIMIT 1
-    `);
-    if (rows[0]) {
-      await ensureWcAdminForUser(rows[0].id, rows[0].roles);
-      return;
-    }
-  }
-
-  // Strategy 2: is there ANY wc_admin in the system? If so we're done.
-  const existing = await db.all<{ id: string }>(sql`
-    SELECT id FROM users WHERE roles LIKE '%"wc_admin"%' LIMIT 1
-  `);
-  if (existing.length > 0) return;
-
-  // Strategy 3 (safety net): no wc_admin exists, so promote the first site
-  // admin we find. Logs prominently so it shows up in operational alerts.
-  const firstAdmin = await db.all<{ id: string; roles: string }>(sql`
-    SELECT id, roles FROM users WHERE roles LIKE '%"admin"%' ORDER BY created_at ASC LIMIT 1
-  `);
-  if (firstAdmin[0]) {
-    await ensureWcAdminForUser(firstAdmin[0].id, firstAdmin[0].roles);
-  }
-}
-
-async function ensureWcAdminForUser(userId: string, rolesJson: string) {
-  let parsed: string[] = [];
-  try { parsed = JSON.parse(rolesJson || "[]"); } catch { parsed = []; }
-  if (parsed.includes("wc_admin")) return;
-  // Drop a pre-existing 'wc' so we don't have both 'wc' and 'wc_admin'.
-  const next = Array.from(new Set([...parsed.filter((r) => r !== "wc"), "wc_admin"]));
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  await db.run(sql`
-    UPDATE users SET roles = ${JSON.stringify(next)}, updated_at = ${nowSeconds}
-    WHERE id = ${userId}
-  `);
-}
-
-async function seedWcFixturesIfEmpty() {
-  // Seed-syncs the 104 fixtures from src/lib/wc-fixtures-seed.json. Static
-  // metadata (kickoff time, stage, group, stadium, next-match wiring) is
-  // force-synced on every boot — corrections in the seed file propagate to
-  // already-deployed rows without needing a one-shot migration.
-  //
-  // Team names are NOT force-synced: admins may have manually advanced
-  // bracket teams, and we don't want to clobber those edits. New rows get
-  // teams from the seed (groups have the 48 known teams; knockouts start
-  // blank).
-  type Seed = {
-    fixtureNumber: number;
-    stage: string;
-    groupName: string | null;
-    kickoffAt: string;
-    stadium: string | null;
-    city: string | null;
-    team1: string | null;
-    team2: string | null;
-    nextFixtureNumber: number | null;
-    nextSlot: string | null;
-    team1Seed?: string | null;
-    team2Seed?: string | null;
-  };
-  const seed: Seed[] = (await import("@/lib/wc-fixtures-seed.json")).default as Seed[];
-  for (const f of seed) {
-    const kickoffMs = Math.floor(new Date(f.kickoffAt).getTime() / 1000);
-    const t1Seed = f.team1Seed ?? null;
-    const t2Seed = f.team2Seed ?? null;
-    // Insert if missing (first boot).
-    await db.run(sql`
-      INSERT OR IGNORE INTO wc_fixtures
-        (fixture_number, stage, group_name, kickoff_at, stadium, city, team1, team2, next_fixture_number, next_slot, team1_seed, team2_seed)
-      VALUES
-        (${f.fixtureNumber}, ${f.stage}, ${f.groupName}, ${kickoffMs}, ${f.stadium}, ${f.city}, ${f.team1}, ${f.team2}, ${f.nextFixtureNumber}, ${f.nextSlot}, ${t1Seed}, ${t2Seed})
-    `);
-    // When a seed string moves between boots (e.g. R32 scheme tweak),
-    // clear the corresponding auto-populated team field so the next
-    // propagation pass writes the new placement. We only do this when
-    // the OLD seed was set AND the row currently has a result row —
-    // wait, no: blank the slot whenever the seed differs. We're not
-    // touching wc_results, so settled matches are untouched even if
-    // the seed-driven name disappears for a moment.
-    await db.run(sql`
-      UPDATE wc_fixtures
-      SET team1 = NULL
-      WHERE fixture_number = ${f.fixtureNumber}
-        AND team1_seed IS NOT NULL
-        AND team1_seed != ${t1Seed ?? ""}
-    `);
-    await db.run(sql`
-      UPDATE wc_fixtures
-      SET team2 = NULL
-      WHERE fixture_number = ${f.fixtureNumber}
-        AND team2_seed IS NOT NULL
-        AND team2_seed != ${t2Seed ?? ""}
-    `);
-    // Force-sync static metadata on every boot (cheap; UPDATE is a no-op
-    // when the values already match). Doesn't touch team1/team2 itself.
-    await db.run(sql`
-      UPDATE wc_fixtures
-      SET stage = ${f.stage},
-          group_name = ${f.groupName},
-          kickoff_at = ${kickoffMs},
-          stadium = ${f.stadium},
-          city = ${f.city},
-          next_fixture_number = ${f.nextFixtureNumber},
-          next_slot = ${f.nextSlot},
-          team1_seed = ${t1Seed},
-          team2_seed = ${t2Seed}
-      WHERE fixture_number = ${f.fixtureNumber}
-    `);
-  }
-}
-
 // Sales-exec leaderboard tables — created idempotently per usual.
 async function ensureSalesLeaderboardTables() {
   await db.run(sql.raw(`
@@ -1322,4 +1080,49 @@ async function ensureColumns(
     await db.run(sql.raw(`ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.sqlType}`));
     names.add(column.name);
   }
+}
+
+// ─── Enquiry Tracker ───────────────────────────────────────────────────
+// Stores the MotorComplete enquiry export. Uploads stack rather than
+// replace: `id` is a stable hash of the natural key so re-uploading an
+// overlapping day merges instead of duplicating.
+async function ensureEnquiryTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS enquiries (
+      id TEXT PRIMARY KEY,
+      dealer TEXT,
+      sales_exec TEXT NOT NULL,
+      customer TEXT NOT NULL,
+      customer_ref TEXT,
+      enquiry_at INTEGER NOT NULL,
+      contacted_at INTEGER,
+      transferred_at INTEGER,
+      enquiry_owner TEXT,
+      source TEXT,
+      status TEXT,
+      alloc_mins INTEGER,
+      contact_mins INTEGER,
+      same_day_expected INTEGER NOT NULL DEFAULT 0,
+      same_day_met INTEGER NOT NULL DEFAULT 0,
+      enquiry_day TEXT NOT NULL,
+      uploaded_at INTEGER NOT NULL,
+      uploaded_by_user_id TEXT
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_enquiries_day ON enquiries(enquiry_day)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_enquiries_exec ON enquiries(sales_exec)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_enquiries_enquiry_at ON enquiries(enquiry_at)`));
+
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS enquiry_uploads (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      rows_in_file INTEGER NOT NULL,
+      rows_inserted INTEGER NOT NULL,
+      rows_updated INTEGER NOT NULL,
+      rows_skipped INTEGER NOT NULL,
+      uploaded_at INTEGER NOT NULL,
+      uploaded_by_user_id TEXT NOT NULL
+    )
+  `));
 }

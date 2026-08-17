@@ -484,109 +484,6 @@ export const salesLeaderboardUploads = sqliteTable("sales_leaderboard_uploads", 
   // change without the admin having to re-upload the file.
   parsedData: text("parsed_data"),
 });
-
-// ─── World Cup prediction game ─────────────────────────────────────────────
-// Live (in-progress) match score. Updated by admin during a match — or by a
-// future feed integration; the table is shape-compatible. Cleared when the
-// final result is recorded via wc_results (the live snapshot was a
-// projection; the wc_results row is the canonical truth once full-time hits).
-export const wcLiveScores = sqliteTable("wc_live_scores", {
-  fixtureNumber: integer("fixture_number").primaryKey(),
-  team1Goals: integer("team1_goals").notNull(),
-  team2Goals: integer("team2_goals").notNull(),
-  minute: integer("minute"), // optional, e.g. 32 = "32' played"
-  // 'live' | 'halftime' | 'final' — mirrors what the ESPN feed reports.
-  // Used by the auto-record path to track when a fixture has been in FT
-  // long enough for us to trust the score.
-  status: text("status"),
-  // First time we observed ESPN reporting status='final'. Group games where
-  // this is >=30 min old auto-settle via the live API route.
-  firstFinalAt: integer("first_final_at", { mode: "timestamp" }),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  updatedByUserId: text("updated_by_user_id").notNull(),
-});
-
-// Office sweepstake payment tracking — one row per paid player. Admin marks
-// paid via the Players tab; non-paid players see a deadline banner until
-// they're marked.
-export const wcPayments = sqliteTable("wc_payments", {
-  userId: text("user_id").primaryKey(),
-  paidAt: integer("paid_at", { mode: "timestamp" }).notNull(),
-  markedByUserId: text("marked_by_user_id").notNull(),
-});
-
-// Fixtures table is the 104 matches (12 groups × 6 + 16 R32 + 8 R16 + 4 QF + 2 SF + 1 3rd + 1 final).
-// Seeded idempotently from the spreadsheet template; admins can edit the
-// teams on a fixture (knockouts start blank and get filled by auto-advance).
-// nextFixtureNumber + nextSlot describe where the winner of this match
-// propagates to (null for group games, third-place, and the final).
-export const wcFixtures = sqliteTable(
-  "wc_fixtures",
-  {
-    fixtureNumber: integer("fixture_number").primaryKey(),
-    stage: text("stage").notNull(), // group | r32 | r16 | qf | sf | third | final
-    groupName: text("group_name"),   // 'A'..'L' for group games
-    kickoffAt: integer("kickoff_at", { mode: "timestamp" }).notNull(),
-    stadium: text("stadium"),
-    city: text("city"),
-    team1: text("team1"),
-    team2: text("team2"),
-    nextFixtureNumber: integer("next_fixture_number"),
-    nextSlot: text("next_slot"), // 't1' | 't2'
-    // Source placement that fills each team slot when previous results
-    // settle. Encoded as "<group><place>" for group placers ("A1",
-    // "B2", …, "L2") or "T1"…"T8" for the eight best third-place
-    // finishers. NULL for group games and for knockouts after R32
-    // (which already chain via nextFixtureNumber).
-    team1Seed: text("team1_seed"),
-    team2Seed: text("team2_seed"),
-  },
-  (t) => ({
-    byStage: index("idx_wc_fixtures_stage").on(t.stage),
-    byKickoff: index("idx_wc_fixtures_kickoff").on(t.kickoffAt),
-  }),
-);
-
-// One row per settled match. winnerTeam stores the team name that progresses
-// (or 'Draw' for group games). Stored separately from wc_fixtures so editing
-// a result doesn't risk clobbering the match metadata.
-export const wcResults = sqliteTable(
-  "wc_results",
-  {
-    fixtureNumber: integer("fixture_number").primaryKey(),
-    team1Goals: integer("team1_goals").notNull(),
-    team2Goals: integer("team2_goals").notNull(),
-    etTeam1Goals: integer("et_team1_goals"),
-    etTeam2Goals: integer("et_team2_goals"),
-    penTeam1: integer("pen_team1"),
-    penTeam2: integer("pen_team2"),
-    winnerTeam: text("winner_team").notNull(), // team name or 'Draw'
-    settledAt: integer("settled_at", { mode: "timestamp" }).notNull(),
-    settledByUserId: text("settled_by_user_id").notNull(),
-  },
-);
-
-// One row per (user, fixture). points is cached after the result lands; null
-// while the match is still pending. Predictions are read-only after kickoff.
-export const wcPredictions = sqliteTable(
-  "wc_predictions",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    userId: text("user_id").notNull(),
-    fixtureNumber: integer("fixture_number").notNull(),
-    team1Goals: integer("team1_goals").notNull(),
-    team2Goals: integer("team2_goals").notNull(),
-    predictedWinner: text("predicted_winner").notNull(),
-    points: integer("points"),
-    submittedAt: integer("submitted_at", { mode: "timestamp" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  },
-  (t) => ({
-    uniqUserFixture: index("uniq_wc_predictions_user_fixture").on(t.userId, t.fixtureNumber),
-    byUser: index("idx_wc_predictions_user").on(t.userId),
-  }),
-);
-
 // Each failed sign-in records one row. We rate-limit by IP over a sliding 15
 // minute window — older rows are ignored, fresh rows count toward the limit.
 // Stored as an append-only log; no purge job needed (volume is tiny).
@@ -1279,4 +1176,60 @@ export const modelDiscounts = sqliteTable("model_discounts", {
   customerSavingGbp: real("customer_saving_gbp"),
   notes: text("notes"),
   sortOrder: integer("sort_order").notNull().default(0),
+});
+
+// ─── Enquiry Tracker ───────────────────────────────────────────────────
+//
+// One row per enquiry, ingested from the MotorComplete "ag-grid" export.
+// Uploads stack: each daily export is merged in rather than replacing what
+// is already stored, keyed on `id` (a stable hash of the natural key —
+// see makeEnquiryId in src/lib/enquiries.ts). Re-uploading a row that has
+// since been contacted updates the timestamps in place instead of
+// creating a duplicate.
+//
+// All timestamps are *wall-clock* epochs (see src/lib/business-hours.ts):
+// the local office time re-encoded as UTC, so business-hours maths is
+// immune to BST/GMT transitions.
+export const enquiries = sqliteTable(
+  "enquiries",
+  {
+    id: text("id").primaryKey(),
+    dealer: text("dealer"),                                  // col A
+    salesExec: text("sales_exec").notNull(),                 // col B "Created By"
+    customer: text("customer").notNull(),                    // col C
+    customerRef: text("customer_ref"),                       // col D "Customer Id"
+    enquiryAt: integer("enquiry_at").notNull(),              // col E "Date Raised"
+    contactedAt: integer("contacted_at"),                    // col L "2nd Contact"
+    transferredAt: integer("transferred_at"),                // col P "Date Transferred"
+    enquiryOwner: text("enquiry_owner"),                     // col Q
+    source: text("source"),                                  // col G
+    status: text("status"),                                  // col AC
+    // Derived on ingest so the dashboards can aggregate in SQL without
+    // replaying the business-hours walk for every row on every request.
+    allocMins: integer("alloc_mins"),                        // E → P, business mins
+    contactMins: integer("contact_mins"),                    // P → L, business mins
+    sameDayExpected: integer("same_day_expected", { mode: "boolean" }).notNull().default(false),
+    sameDayMet: integer("same_day_met", { mode: "boolean" }).notNull().default(false),
+    enquiryDay: text("enquiry_day").notNull(),               // "YYYY-MM-DD" grouping key
+    uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+    uploadedByUserId: text("uploaded_by_user_id"),
+  },
+  (t) => ({
+    byDay: index("idx_enquiries_day").on(t.enquiryDay),
+    byExec: index("idx_enquiries_exec").on(t.salesExec),
+    byEnquiryAt: index("idx_enquiries_enquiry_at").on(t.enquiryAt),
+  }),
+);
+
+// One row per upload, so the admin page can show what landed when and
+// the ingest can report "142 new, 38 updated, 400 unchanged".
+export const enquiryUploads = sqliteTable("enquiry_uploads", {
+  id: text("id").primaryKey(),
+  filename: text("filename").notNull(),
+  rowsInFile: integer("rows_in_file").notNull(),
+  rowsInserted: integer("rows_inserted").notNull(),
+  rowsUpdated: integer("rows_updated").notNull(),
+  rowsSkipped: integer("rows_skipped").notNull(),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+  uploadedByUserId: text("uploaded_by_user_id").notNull(),
 });
