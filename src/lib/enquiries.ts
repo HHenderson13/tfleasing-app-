@@ -301,18 +301,36 @@ function rangeClause(range: DateRange) {
   return sql.join(parts, sql` AND `);
 }
 
+/**
+ * True when the failure is "the table isn't there yet" rather than a real
+ * error. The tables are created by the ensure-schema pipeline on the first
+ * authenticated request; a page rendering in the window before that (or on
+ * a code path that skipped the pipeline) should show its empty state, not
+ * a 500.
+ */
+function isMissingTable(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /no such table/i.test(msg);
+}
+
 /** Every stored enquiry in range, newest first. Drives all drill-downs. */
 export async function loadEnquiries(range: DateRange = {}, exec?: string): Promise<EnquiryRow[]> {
   const where = exec
     ? sql`${rangeClause(range)} AND sales_exec = ${exec}`
     : rangeClause(range);
-  const rows = await db.all<Record<string, unknown>>(sql`
-    SELECT id, sales_exec, customer, enquiry_at, transferred_at, contacted_at,
-           alloc_mins, contact_mins, same_day_expected, same_day_met,
-           enquiry_day, source, status
-    FROM enquiries WHERE ${where}
-    ORDER BY enquiry_at DESC
-  `);
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await db.all<Record<string, unknown>>(sql`
+      SELECT id, sales_exec, customer, enquiry_at, transferred_at, contacted_at,
+             alloc_mins, contact_mins, same_day_expected, same_day_met,
+             enquiry_day, source, status
+      FROM enquiries WHERE ${where}
+      ORDER BY enquiry_at DESC
+    `);
+  } catch (e) {
+    if (isMissingTable(e)) return [];
+    throw e;
+  }
   return rows.map((r) => ({
     id: String(r.id),
     salesExec: String(r.sales_exec),
@@ -414,18 +432,28 @@ export function summariseByDay(rows: EnquiryRow[]): DaySummary[] {
 
 /** Distinct sales execs present in the store, alphabetical. */
 export async function listExecs(): Promise<string[]> {
-  const rows = await db.all<{ sales_exec: string }>(
-    sql`SELECT DISTINCT sales_exec FROM enquiries ORDER BY sales_exec`,
-  );
-  return rows.map((r) => r.sales_exec);
+  try {
+    const rows = await db.all<{ sales_exec: string }>(
+      sql`SELECT DISTINCT sales_exec FROM enquiries ORDER BY sales_exec`,
+    );
+    return rows.map((r) => r.sales_exec);
+  } catch (e) {
+    if (isMissingTable(e)) return [];
+    throw e;
+  }
 }
 
 /** Earliest and latest enquiry day stored, for the date-range defaults. */
 export async function loadDataBounds(): Promise<{ min: string | null; max: string | null }> {
-  const [row] = await db.all<{ min_day: string | null; max_day: string | null }>(
-    sql`SELECT MIN(enquiry_day) AS min_day, MAX(enquiry_day) AS max_day FROM enquiries`,
-  );
-  return { min: row?.min_day ?? null, max: row?.max_day ?? null };
+  try {
+    const [row] = await db.all<{ min_day: string | null; max_day: string | null }>(
+      sql`SELECT MIN(enquiry_day) AS min_day, MAX(enquiry_day) AS max_day FROM enquiries`,
+    );
+    return { min: row?.min_day ?? null, max: row?.max_day ?? null };
+  } catch (e) {
+    if (isMissingTable(e)) return { min: null, max: null };
+    throw e;
+  }
 }
 
 export interface UploadRecord {
@@ -435,11 +463,17 @@ export interface UploadRecord {
 }
 
 export async function listUploads(limit = 20): Promise<UploadRecord[]> {
-  const rows = await db.all<Record<string, unknown>>(sql`
-    SELECT id, filename, rows_in_file, rows_inserted, rows_updated,
-           rows_skipped, uploaded_at, uploaded_by_user_id
-    FROM enquiry_uploads ORDER BY uploaded_at DESC LIMIT ${limit}
-  `);
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await db.all<Record<string, unknown>>(sql`
+      SELECT id, filename, rows_in_file, rows_inserted, rows_updated,
+             rows_skipped, uploaded_at, uploaded_by_user_id
+      FROM enquiry_uploads ORDER BY uploaded_at DESC LIMIT ${limit}
+    `);
+  } catch (e) {
+    if (isMissingTable(e)) return [];
+    throw e;
+  }
   return rows.map((r) => ({
     id: String(r.id),
     filename: String(r.filename),
