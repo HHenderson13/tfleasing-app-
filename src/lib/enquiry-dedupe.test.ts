@@ -15,6 +15,7 @@ const { parseEnquiryWorkbook } = await import("./enquiries");
 function sheet(rows: Array<Partial<Record<string, unknown>> & {
   exec: string; customer: string; ref?: string | null;
   raised: string; transferred?: string | null; contacted?: string | null;
+  lostSaleReason?: string | null;
 }>) {
   const header = Array.from({ length: 29 }, (_, i) => `col${i}`);
   const body = rows.map((r) => {
@@ -26,6 +27,7 @@ function sheet(rows: Array<Partial<Record<string, unknown>> & {
     a[4] = r.raised;        // E Date Raised
     a[11] = r.contacted ?? null;    // L first contact
     a[15] = r.transferred ?? null;  // P transferred
+    a[29] = r.lostSaleReason ?? null; // AD Lost Sale Reason
     return a;
   });
   const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
@@ -102,5 +104,53 @@ describe.skipIf(SAMPLES.length === 0)("real sample exports", () => {
   it.each(SAMPLES)("%s parses to unique ids", (f) => {
     const p = parseEnquiryWorkbook(readFileSync(`${DL}/${f}`));
     expect(new Set(p.rows.map((r) => r.id)).size).toBe(p.rows.length);
+  });
+});
+
+describe("Lost Sale Reason exclusion (column AD)", () => {
+  const withReason = (reason: string | null) => sheet([
+    { exec: "Douglas James", customer: "Merged Person", ref: "1",
+      raised: "17 August 2026 09:00", lostSaleReason: reason },
+    { exec: "Douglas James", customer: "Real Person", ref: "2",
+      raised: "17 August 2026 09:00", lostSaleReason: "Unable to Contact" },
+  ]);
+
+  it("drops rows merged into an existing customer", () => {
+    const p = parseEnquiryWorkbook(withReason("Lead Merged into Existing Customer"));
+    expect(p.rows).toHaveLength(1);
+    expect(p.rows[0].customer).toBe("Real Person");
+    expect(p.skippedLostSaleReason).toBe(1);
+  });
+
+  it("matches regardless of case, spacing and punctuation drift", () => {
+    for (const variant of [
+      "lead merged into existing customer",
+      "LEAD MERGED INTO EXISTING CUSTOMER",
+      "  Lead  Merged   into Existing Customer  ",
+      "Lead-Merged into Existing Customer",
+    ]) {
+      expect(parseEnquiryWorkbook(withReason(variant)).skippedLostSaleReason).toBe(1);
+    }
+  });
+
+  it("leaves every other lost-sale reason alone", () => {
+    for (const keep of [
+      "Unable to Contact", "Bought elsewhere", "Duplicate",
+      "Other Future purchase", "Unable To Get Finance", null,
+    ]) {
+      const p = parseEnquiryWorkbook(withReason(keep));
+      expect(p.rows).toHaveLength(2);
+      expect(p.skippedLostSaleReason).toBe(0);
+    }
+  });
+
+  it("reports the excluded row's id so ingest can delete a stored copy", () => {
+    const p = parseEnquiryWorkbook(withReason("Lead Merged into Existing Customer"));
+    expect(p.excludedIds).toHaveLength(1);
+    // The id must match what the surviving-row path would have produced,
+    // otherwise the retroactive delete would miss.
+    const same = parseEnquiryWorkbook(withReason("Unable to Contact"));
+    const mergedRow = same.rows.find((r) => r.customer === "Merged Person")!;
+    expect(p.excludedIds[0]).toBe(mergedRow.id);
   });
 });

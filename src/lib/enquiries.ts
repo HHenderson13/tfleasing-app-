@@ -54,6 +54,24 @@ export function rowMentionsExcluded(cells: readonly unknown[]): boolean {
   return false;
 }
 
+// Lost Sale Reasons (column AD) that take the enquiry out of reporting
+// entirely. A lead merged into an existing customer is not a real enquiry
+// — it is bookkeeping — so counting it would inflate volumes and, because
+// merged records rarely carry their own contact timestamps, drag the
+// response figures down for work that was never anyone's to do.
+//
+// Compared on letters only, so spacing, case and punctuation drift in the
+// source cannot let one through.
+const EXCLUDED_LOST_SALE_REASONS = ["leadmergedintoexistingcustomer"];
+
+const lettersOnly = (s: unknown) => normKey(s).replace(/[^a-z]/g, "");
+
+export function isExcludedLostSaleReason(reason: unknown): boolean {
+  const k = lettersOnly(reason);
+  if (!k) return false;
+  return EXCLUDED_LOST_SALE_REASONS.some((r) => k === r);
+}
+
 // Zero-based column indices, fixed by the MotorComplete export layout.
 // Addressed positionally (not by header text) because that is how the
 // mapping was specified and the headers are not guaranteed stable.
@@ -68,6 +86,7 @@ const COL = {
   transferredAt: 15,// P  Date Transferred
   enquiryOwner: 16, // Q
   status: 28,       // AC
+  lostSaleReason: 29, // AD
 } as const;
 
 export interface ParsedEnquiry {
@@ -113,6 +132,14 @@ export interface ParseOutcome {
   skippedUnparseable: number;
   /** Rows collapsed into an earlier row sharing the same natural key. */
   duplicatesCollapsed: number;
+  /** Rows dropped because of their Lost Sale Reason (column AD). */
+  skippedLostSaleReason: number;
+  /**
+   * Natural-key ids of every row this file excluded. Ingest deletes these
+   * from the store, so re-uploading a file retroactively clears rows that
+   * were saved before the exclusion rule existed.
+   */
+  excludedIds: string[];
 }
 
 /**
@@ -127,15 +154,17 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
-  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0 };
+  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, excludedIds: [] };
 
   // header:1 → array-of-arrays, so columns stay positional.
   const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: null });
   const body = grid.slice(1); // drop the header row
 
   const rows: ParsedEnquiry[] = [];
+  const excludedIds: string[] = [];
   let skippedExcluded = 0;
   let skippedUnparseable = 0;
+  let skippedLostSaleReason = 0;
 
   for (const raw of body) {
     if (!Array.isArray(raw)) { skippedUnparseable++; continue; }
@@ -147,12 +176,28 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
     if (!salesExec && !customer && enquiryAt == null) continue; // blank filler row
     // Exclusion is checked against the whole row before the parse gate, so
     // an excluded row is never counted as "unreadable" on a technicality.
-    if (rowMentionsExcluded(raw)) { skippedExcluded++; continue; }
+    const customerRefEarly = norm(raw[COL.customerRef]) || null;
+    // Identify the row before any exclusion so ingest can delete a copy
+    // stored under an earlier ruleset.
+    const idIfUsable = salesExec && customer && enquiryAt != null
+      ? makeEnquiryId(salesExec, customerRefEarly, customer, enquiryAt)
+      : null;
+
+    if (rowMentionsExcluded(raw)) {
+      skippedExcluded++;
+      if (idIfUsable) excludedIds.push(idIfUsable);
+      continue;
+    }
+    if (isExcludedLostSaleReason(raw[COL.lostSaleReason])) {
+      skippedLostSaleReason++;
+      if (idIfUsable) excludedIds.push(idIfUsable);
+      continue;
+    }
     if (!salesExec || !customer || enquiryAt == null) { skippedUnparseable++; continue; }
 
     const transferredAt = parseExportTimestamp(raw[COL.transferredAt]);
     const contactedAt = parseExportTimestamp(raw[COL.contactedAt]);
-    const customerRef = norm(raw[COL.customerRef]) || null;
+    const customerRef = customerRefEarly;
 
     // Allocation: enquiry raised → transferred to an exec (sales support).
     const allocMins = transferredAt != null
@@ -208,6 +253,8 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
     skippedExcluded,
     skippedUnparseable,
     duplicatesCollapsed,
+    skippedLostSaleReason,
+    excludedIds,
   };
 }
 
@@ -218,6 +265,9 @@ export interface IngestResult {
   skippedExcluded: number;
   skippedUnparseable: number;
   duplicatesCollapsed: number;
+  skippedLostSaleReason: number;
+  /** Previously-stored rows deleted because they are now excluded. */
+  removedRetroactively: number;
   rowsInFile: number;
 }
 
@@ -240,7 +290,25 @@ export async function ingestEnquiries(
   meta: { filename: string; userId: string },
 ): Promise<IngestResult> {
   const now = new Date();
-  let inserted = 0, updated = 0, unchanged = 0;
+  let inserted = 0, updated = 0, unchanged = 0, removedRetroactively = 0;
+
+  // Rows this file excludes may already be in the store from an upload
+  // made before the rule existed. Delete them, so re-uploading is all it
+  // takes to clear historic data that should never have been counted.
+  if (parsed.excludedIds.length > 0) {
+    for (let i = 0; i < parsed.excludedIds.length; i += 400) {
+      const slice = parsed.excludedIds.slice(i, i + 400);
+      const list = sql.join(slice.map((v) => sql`${v}`), sql`, `);
+      const [before] = await db.all<{ n: number }>(
+        sql`SELECT COUNT(*) AS n FROM enquiries WHERE id IN (${list})`,
+      );
+      const n = Number(before?.n ?? 0);
+      if (n > 0) {
+        await db.run(sql`DELETE FROM enquiries WHERE id IN (${list})`);
+        removedRetroactively += n;
+      }
+    }
+  }
 
   if (parsed.rows.length > 0) {
     const ids = parsed.rows.map((r) => r.id);
@@ -325,7 +393,7 @@ export async function ingestEnquiries(
     rowsInFile: parsed.rowsInFile,
     rowsInserted: inserted,
     rowsUpdated: updated,
-    rowsSkipped: parsed.skippedExcluded + parsed.skippedUnparseable,
+    rowsSkipped: parsed.skippedExcluded + parsed.skippedUnparseable + parsed.skippedLostSaleReason,
     uploadedAt: now,
     uploadedByUserId: meta.userId,
   });
@@ -335,6 +403,8 @@ export async function ingestEnquiries(
     skippedExcluded: parsed.skippedExcluded,
     skippedUnparseable: parsed.skippedUnparseable,
     duplicatesCollapsed: parsed.duplicatesCollapsed,
+    skippedLostSaleReason: parsed.skippedLostSaleReason,
+    removedRetroactively,
     rowsInFile: parsed.rowsInFile,
   };
 }

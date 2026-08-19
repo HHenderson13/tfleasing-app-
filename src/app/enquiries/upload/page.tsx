@@ -28,7 +28,9 @@ export default async function EnquiryUploadPage() {
           appears in more than one export is matched and updated instead of duplicated.
           Where they disagree the <strong>newest upload wins</strong>, so a corrected timestamp
           in MotorComplete carries through. Any row mentioning Joseph Rustigini or Harry
-          Henderson is stripped out on the way in.
+          Henderson is stripped out on the way in, as is anything whose Lost Sale Reason is
+          &ldquo;Lead Merged into Existing Customer&rdquo; — and re-uploading a file also
+          removes those rows if an earlier upload had already saved them.
         </p>
 
         {bounds.min && (

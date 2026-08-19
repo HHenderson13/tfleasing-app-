@@ -165,6 +165,15 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   month, with "today" resolved server-side in Europe/London so SSR and the
   client agree. If volumes ever outgrow a single payload, move the period
   range into the query instead.
+- **Lost Sale Reason "Lead Merged into Existing Customer" (column AD) is
+  excluded from enquiry reporting.** A merged lead is bookkeeping, not an
+  enquiry: counting it inflates volume and, since merged records rarely
+  carry their own contact timestamps, drags response figures down for work
+  nobody owed. Matched on letters only so spacing/case/punctuation drift
+  cannot slip one through. `parseEnquiryWorkbook` returns `excludedIds`
+  and ingest DELETEs them, so re-uploading a file also clears rows saved
+  under an earlier ruleset — the same mechanism covers any future
+  exclusion rule.
 - **Joseph Rustigini and Harry Henderson are stripped from enquiry
   reports entirely** — an excluded name appearing in *any* column of the
   source row drops that row at ingest, so it can never reach the DB or a

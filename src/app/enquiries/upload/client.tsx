@@ -25,7 +25,7 @@ export function UploadClient() {
       // files — two exports of the same day processed in parallel could
       // both read "not present" and race on the same enquiry.
       let last: UploadOutcome | null = null;
-      const totals = { inserted: 0, updated: 0, unchanged: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, rowsInFile: 0 };
+      const totals = { inserted: 0, updated: 0, unchanged: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, removedRetroactively: 0, rowsInFile: 0 };
       for (const file of queued) {
         const fd = new FormData();
         fd.set("file", file);
@@ -38,6 +38,8 @@ export function UploadClient() {
           totals.skippedExcluded += last.result.skippedExcluded;
           totals.skippedUnparseable += last.result.skippedUnparseable;
           totals.duplicatesCollapsed += last.result.duplicatesCollapsed;
+          totals.skippedLostSaleReason += last.result.skippedLostSaleReason;
+          totals.removedRetroactively += last.result.removedRetroactively;
           totals.rowsInFile += last.result.rowsInFile;
         }
       }
@@ -131,6 +133,8 @@ export function UploadClient() {
             <Stat label="Excluded (Joseph/Harry)" value={outcome.result.skippedExcluded} />
             <Stat label="Unreadable rows" value={outcome.result.skippedUnparseable} />
             <Stat label="Duplicates in file" value={outcome.result.duplicatesCollapsed} />
+            <Stat label="Merged into existing" value={outcome.result.skippedLostSaleReason} />
+            <Stat label="Removed retroactively" value={outcome.result.removedRetroactively} />
           </dl>
         </div>
       )}
