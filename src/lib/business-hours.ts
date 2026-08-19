@@ -119,18 +119,55 @@ export function reportingHorizonFromInstant(instant: Date | number): number {
 }
 
 /**
- * Whether a blank outcome has had enough completed reporting time to be
- * treated as a genuine miss rather than data still due in the next export.
- * Exactly-at-target is not overdue; the target must have been exceeded.
+ * The moment an enquiry becomes reportable: the close (17:30) of the
+ * working day in which its clock starts.
+ *
+ * An enquiry's clock starts at the first working minute at or after it was
+ * raised — same rule the elapsed-time maths uses. So:
+ *
+ *   raised Fri 10:00  → clock starts Fri 10:00 → reportable after Fri 17:30
+ *   raised Fri 19:00  → clock starts Mon 09:00 → reportable after Mon 17:30
+ *   raised Sat 14:00  → clock starts Mon 09:00 → reportable after Mon 17:30
+ *   raised Mon 07:00  → clock starts Mon 09:00 → reportable after Mon 17:30
+ *
+ * The effect is that the team always gets a complete working day to action
+ * an enquiry before it is judged, and the report sits one working day
+ * behind the current day. A weekend enquiry looked at on Monday morning is
+ * not yet due — nobody has had a day to work it.
  */
-export function isOutcomeDueByHorizon(
-  startWallMs: number,
+export function reportableAfter(enquiryWallMs: number): number {
+  if (!Number.isFinite(enquiryWallMs)) return Number.NaN;
+
+  let day = startOfDay(enquiryWallMs);
+  const mins = minutesIntoDay(enquiryWallMs);
+
+  // If it landed outside a working window, roll to the next working day.
+  const landedInsideOpenDay = isWorkingDay(enquiryWallMs) && mins < DAY_CLOSE_MIN;
+  if (!landedInsideOpenDay) {
+    day += MS_PER_DAY;
+    let guard = 0;
+    while (!isWorkingDay(day) && guard++ < 14) day += MS_PER_DAY;
+  }
+  return day + DAY_CLOSE_MIN * MS_PER_MIN;
+}
+
+/**
+ * Has this enquiry had a full working day to be actioned, as at the report
+ * horizon? Only reportable enquiries appear in any metric — the rest are
+ * held back until the next upload, so today's half-worked leads never land
+ * in the numbers as failures.
+ *
+ * A null/invalid horizon means "no lag information", in which case
+ * everything is reportable rather than nothing.
+ */
+export function isEnquiryReportable(
+  enquiryWallMs: number,
   reportHorizonWallMs: number | null,
-  targetMins: number,
 ): boolean {
-  if (reportHorizonWallMs == null) return true;
-  if (!Number.isFinite(reportHorizonWallMs)) return true;
-  return businessMinutesBetween(startWallMs, reportHorizonWallMs) > targetMins;
+  if (reportHorizonWallMs == null || !Number.isFinite(reportHorizonWallMs)) return true;
+  const due = reportableAfter(enquiryWallMs);
+  if (!Number.isFinite(due)) return false;
+  return due <= reportHorizonWallMs;
 }
 
 /**

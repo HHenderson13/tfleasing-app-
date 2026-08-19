@@ -15,7 +15,6 @@ import {
 } from "./business-hours";
 import {
   isContactMissing,
-  isReportDataPending,
   isSameDayReportable,
   isTransferMissing,
 } from "./enquiry-reporting";
@@ -391,7 +390,6 @@ export interface Summary {
   contactMedian: number | null;
   neverContacted: number;
   awaitingTransfer: number;
-  reportPending: number;
   // Same-day rule
   sameDayExpected: number;
   sameDayMet: number;
@@ -406,13 +404,10 @@ function median(xs: number[]): number | null {
 }
 
 /** Roll a set of rows into the headline numbers. Pure — no DB access. */
-export function summarise(
-  rows: EnquiryRow[],
-  reportHorizonWallMs: number | null = null,
-): Summary {
+export function summarise(rows: EnquiryRow[]): Summary {
   const alloc = rows.map((r) => r.allocMins).filter((n): n is number => n != null);
   const contact = rows.map((r) => r.contactMins).filter((n): n is number => n != null);
-  const sameDayExpected = rows.filter((r) => isSameDayReportable(r, reportHorizonWallMs));
+  const sameDayExpected = rows.filter((r) => isSameDayReportable(r));
   return {
     total: rows.length,
     allocMeasured: alloc.length,
@@ -425,9 +420,8 @@ export function summarise(
     contactMissed: contact.filter((n) => n > CONTACT_TARGET_MINS).length,
     contactAvg: contact.length ? Math.round(contact.reduce((a, b) => a + b, 0) / contact.length) : null,
     contactMedian: median(contact),
-    neverContacted: rows.filter((r) => isContactMissing(r, reportHorizonWallMs)).length,
-    awaitingTransfer: rows.filter((r) => isTransferMissing(r, reportHorizonWallMs)).length,
-    reportPending: rows.filter((r) => isReportDataPending(r, reportHorizonWallMs)).length,
+    neverContacted: rows.filter((r) => isContactMissing(r)).length,
+    awaitingTransfer: rows.filter((r) => isTransferMissing(r)).length,
     sameDayExpected: sameDayExpected.length,
     sameDayMet: sameDayExpected.filter((r) => r.sameDayMet).length,
     sameDayMissed: sameDayExpected.filter((r) => !r.sameDayMet).length,
@@ -437,10 +431,7 @@ export function summarise(
 export interface ExecSummary extends Summary { salesExec: string }
 
 /** Per-exec breakdown, worst allocation hit-rate first. */
-export function summariseByExec(
-  rows: EnquiryRow[],
-  reportHorizonWallMs: number | null = null,
-): ExecSummary[] {
+export function summariseByExec(rows: EnquiryRow[]): ExecSummary[] {
   const byExec = new Map<string, EnquiryRow[]>();
   for (const r of rows) {
     const list = byExec.get(r.salesExec) ?? [];
@@ -448,17 +439,14 @@ export function summariseByExec(
     byExec.set(r.salesExec, list);
   }
   return [...byExec.entries()]
-    .map(([salesExec, rs]) => ({ salesExec, ...summarise(rs, reportHorizonWallMs) }))
+    .map(([salesExec, rs]) => ({ salesExec, ...summarise(rs) }))
     .sort((a, b) => b.total - a.total || a.salesExec.localeCompare(b.salesExec));
 }
 
 export interface DaySummary extends Summary { day: string }
 
 /** Per-day breakdown, newest first — the daily same-day-contact log. */
-export function summariseByDay(
-  rows: EnquiryRow[],
-  reportHorizonWallMs: number | null = null,
-): DaySummary[] {
+export function summariseByDay(rows: EnquiryRow[]): DaySummary[] {
   const byDay = new Map<string, EnquiryRow[]>();
   for (const r of rows) {
     const list = byDay.get(r.enquiryDay) ?? [];
@@ -466,7 +454,7 @@ export function summariseByDay(
     byDay.set(r.enquiryDay, list);
   }
   return [...byDay.entries()]
-    .map(([day, rs]) => ({ day, ...summarise(rs, reportHorizonWallMs) }))
+    .map(([day, rs]) => ({ day, ...summarise(rs) }))
     .sort((a, b) => b.day.localeCompare(a.day));
 }
 

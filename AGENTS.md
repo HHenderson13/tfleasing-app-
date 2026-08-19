@@ -137,6 +137,17 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   the business-hours maths immune to BST/GMT: 09:00 is 09:00 year round.
   Everything must go through `src/lib/business-hours.ts` helpers so the
   encoding stays consistent. Tests cover the October clock change.
+- **Enquiry reporting always sits one working day behind.** An enquiry is
+  only reportable once the working day its clock starts in has *closed*
+  (`reportableAfter` / `isEnquiryReportable` in `business-hours.ts`).
+  A Saturday enquiry's clock starts Monday 09:00, so it is held until
+  Monday 17:30 and first appears in Tuesday's report — likewise Friday
+  evening. The current day is always held. This is deliberately blunter
+  than grading each field against its own target: the export is a daily
+  snapshot, so a blank contact on a lead raised this morning means "not
+  finished yet", not "missed". Holding the whole enquiry back keeps every
+  published figure final instead of drifting all day. Held rows are
+  surfaced as a count with a drill-down, never silently dropped.
 - **Enquiry uploads stack, never replace.** Rows merge on a natural-key
   hash (exec + customer ref/name + enquiry timestamp). On conflict the
   *earliest* known transfer/contact timestamps win, because "first

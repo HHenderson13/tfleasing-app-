@@ -3,7 +3,7 @@ import {
   businessMinutesBetween,
   dayKey,
   formatMins,
-  isOutcomeDueByHorizon,
+  isEnquiryReportable,
   isSameDayContactExpected,
   isWorkingDay,
   parseExportTimestamp,
@@ -117,22 +117,24 @@ describe("one-day reporting horizon", () => {
       .toBe(at(2026, 1, 5));
   });
 
-  it("keeps weekend enquiries pending in a Monday upload", () => {
+  it("holds a weekend enquiry back in a Monday upload", () => {
+    // Its clock only starts Monday 09:00, and Monday has not closed.
     const mondayHorizon = at(2026, 8, 10);
-    expect(isOutcomeDueByHorizon(at(2026, 8, 8, 10), mondayHorizon, 5)).toBe(false);
-    expect(isOutcomeDueByHorizon(at(2026, 8, 9, 18), mondayHorizon, 20)).toBe(false);
+    expect(isEnquiryReportable(at(2026, 8, 8, 10, 0), mondayHorizon)).toBe(false);
+    expect(isEnquiryReportable(at(2026, 8, 9, 18, 0), mondayHorizon)).toBe(false);
   });
 
-  it("makes the same weekend enquiries assessable in Tuesday's upload", () => {
+  it("reports the same weekend enquiries in Tuesday's upload", () => {
     const tuesdayHorizon = at(2026, 8, 11);
-    expect(isOutcomeDueByHorizon(at(2026, 8, 8, 10), tuesdayHorizon, 5)).toBe(true);
-    expect(isOutcomeDueByHorizon(at(2026, 8, 9, 18), tuesdayHorizon, 20)).toBe(true);
+    expect(isEnquiryReportable(at(2026, 8, 8, 10, 0), tuesdayHorizon)).toBe(true);
+    expect(isEnquiryReportable(at(2026, 8, 9, 18, 0), tuesdayHorizon)).toBe(true);
   });
 
-  it("does not call a blank overdue until its target has been exceeded", () => {
-    const mondayHorizon = at(2026, 8, 10);
-    expect(isOutcomeDueByHorizon(at(2026, 8, 7, 17, 25), mondayHorizon, 5)).toBe(false);
-    expect(isOutcomeDueByHorizon(at(2026, 8, 7, 17, 24), mondayHorizon, 5)).toBe(true);
+  it("holds back the current day right through the week", () => {
+    // Wed upload: Tue and earlier report, Wed itself is held.
+    const wedHorizon = at(2026, 8, 12);
+    expect(isEnquiryReportable(at(2026, 8, 11, 15, 0), wedHorizon)).toBe(true);
+    expect(isEnquiryReportable(at(2026, 8, 12, 9, 30), wedHorizon)).toBe(false);
   });
 });
 

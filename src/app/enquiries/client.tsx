@@ -11,9 +11,9 @@ import {
 } from "@/lib/business-hours";
 import {
   isContactMissing,
-  isReportDataPending,
   isSameDayReportable,
   isTransferMissing,
+  partitionByReportability,
 } from "@/lib/enquiry-reporting";
 
 type Tab = "department" | "exec" | "daily";
@@ -25,18 +25,18 @@ interface Drill {
   title: string;
   subtitle?: string;
   rows: EnquiryRow[];
-  focus: "alloc" | "contact" | "sameday" | "pending";
+  focus: "alloc" | "contact" | "sameday";
 }
 
 type DashboardSummary = Summary;
 
-function summarise(
-  rows: EnquiryRow[],
-  reportHorizon: number | null,
-): DashboardSummary {
+// Every row reaching here has already had a full working day to be
+// actioned (see partitionByReportability), so a blank transfer or contact
+// is a genuine miss rather than data still in flight.
+function summarise(rows: EnquiryRow[]): DashboardSummary {
   const alloc = rows.map((r) => r.allocMins).filter((n): n is number => n != null);
   const contact = rows.map((r) => r.contactMins).filter((n): n is number => n != null);
-  const sde = rows.filter((r) => isSameDayReportable(r, reportHorizon));
+  const sde = rows.filter((r) => isSameDayReportable(r));
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
   return {
     total: rows.length,
@@ -50,9 +50,8 @@ function summarise(
     contactMissed: contact.filter((n) => n > CONTACT_TARGET_MINS).length,
     contactAvg: avg(contact),
     contactMedian: null,
-    neverContacted: rows.filter((r) => isContactMissing(r, reportHorizon)).length,
-    awaitingTransfer: rows.filter((r) => isTransferMissing(r, reportHorizon)).length,
-    reportPending: rows.filter((r) => isReportDataPending(r, reportHorizon)).length,
+    neverContacted: rows.filter((r) => isContactMissing(r)).length,
+    awaitingTransfer: rows.filter((r) => isTransferMissing(r)).length,
     sameDayExpected: sde.length,
     sameDayMet: sde.filter((r) => r.sameDayMet).length,
     sameDayMissed: sde.filter((r) => !r.sameDayMet).length,
@@ -81,6 +80,12 @@ export function EnquiriesClient({
   rows: EnquiryRow[];
   from: string; to: string;
   min: string | null; max: string | null;
+  /**
+   * Exclusive data horizon (midnight of the latest upload day). Anything
+   * that has not had a full working day to be actioned by this point is
+   * held back rather than counted as a miss. Null when nothing has been
+   * uploaded yet, in which case everything is reportable.
+   */
   reportHorizon: number | null;
 }) {
   const router = useRouter();
@@ -89,32 +94,40 @@ export function EnquiriesClient({
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
 
-  const dept = useMemo(() => summarise(rows, reportHorizon), [rows, reportHorizon]);
+  // Hold back anything that has not yet had a full working day. Doing the
+  // split once here means every tab, total and drill-down below is working
+  // from the same settled set.
+  const { reportable, held } = useMemo(
+    () => partitionByReportability(rows, reportHorizon),
+    [rows, reportHorizon],
+  );
+
+  const dept = useMemo(() => summarise(reportable), [reportable]);
   const byExec = useMemo(() => {
     const m = new Map<string, EnquiryRow[]>();
-    for (const r of rows) {
+    for (const r of reportable) {
       const l = m.get(r.salesExec) ?? [];
       l.push(r);
       m.set(r.salesExec, l);
     }
     return [...m.entries()]
-      .map(([exec, rs]) => ({ exec, rows: rs, s: summarise(rs, reportHorizon) }))
+      .map(([exec, rs]) => ({ exec, rows: rs, s: summarise(rs) }))
       // Worst first: most same-day misses, then slowest average response.
       .sort((a, b) =>
         b.s.sameDayMissed - a.s.sameDayMissed ||
         (b.s.contactAvg ?? -1) - (a.s.contactAvg ?? -1));
-  }, [rows, reportHorizon]);
+  }, [reportable]);
   const byDay = useMemo(() => {
     const m = new Map<string, EnquiryRow[]>();
-    for (const r of rows) {
+    for (const r of reportable) {
       const l = m.get(r.enquiryDay) ?? [];
       l.push(r);
       m.set(r.enquiryDay, l);
     }
     return [...m.entries()]
-      .map(([day, rs]) => ({ day, rows: rs, s: summarise(rs, reportHorizon) }))
+      .map(([day, rs]) => ({ day, rows: rs, s: summarise(rs) }))
       .sort((a, b) => b.day.localeCompare(a.day));
-  }, [rows, reportHorizon]);
+  }, [reportable]);
 
   function applyRange() {
     const p = new URLSearchParams();
@@ -172,34 +185,46 @@ export function EnquiriesClient({
         </nav>
       </div>
 
-      {dept.reportPending > 0 && (
-        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
-          <span className="font-semibold">
-            {dept.reportPending} recent {dept.reportPending === 1 ? "enquiry has" : "enquiries have"} data awaiting the next daily export.
-          </span>{" "}
-          Each blank field is only counted as a failure once its own reporting grace window has elapsed.
+      {held.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5">
+          <p className="text-xs text-slate-600">
+            <span className="font-semibold text-slate-900">
+              {held.length} {held.length === 1 ? "enquiry is" : "enquiries are"} not shown yet
+            </span>
+            {" — "}raised too recently to have had a full working day to be actioned. They
+            appear once that day has closed, so every figure below is settled.
+          </p>
+          <button
+            onClick={() => setDrill({
+              title: "Not yet reportable",
+              subtitle: "Still inside their first working day",
+              rows: held,
+              focus: "contact",
+            })}
+            className="shrink-0 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900"
+          >
+            See them
+          </button>
         </div>
       )}
 
       {tab === "department" && (
         <DepartmentView
           s={dept}
-          rows={rows}
-          reportHorizon={reportHorizon}
+          rows={reportable}
           onDrill={setDrill}
         />
       )}
       {tab === "exec" && (
-        <ExecView data={byExec} reportHorizon={reportHorizon} onDrill={setDrill} />
+        <ExecView data={byExec} onDrill={setDrill} />
       )}
       {tab === "daily" && (
-        <DailyView data={byDay} reportHorizon={reportHorizon} onDrill={setDrill} />
+        <DailyView data={byDay} onDrill={setDrill} />
       )}
 
       {drill && (
         <DrillPanel
           drill={drill}
-          reportHorizon={reportHorizon}
           onClose={() => setDrill(null)}
         />
       )}
@@ -209,11 +234,10 @@ export function EnquiriesClient({
 
 // ── Department ────────────────────────────────────────────────────────
 function DepartmentView({
-  s, rows, reportHorizon, onDrill,
+  s, rows, onDrill,
 }: {
   s: DashboardSummary;
   rows: EnquiryRow[];
-  reportHorizon: number | null;
   onDrill: (d: Drill) => void;
 }) {
   return (
@@ -271,7 +295,7 @@ function DepartmentView({
             onClick={() => onDrill({
               title: "NOT contacted same day",
               subtitle: "Completed report days; enquired before 17:30 on a working day",
-              rows: rows.filter((r) => isSameDayReportable(r, reportHorizon) && !r.sameDayMet),
+              rows: rows.filter((r) => isSameDayReportable(r) && !r.sameDayMet),
               focus: "sameday",
             })}
             className="mt-2 block w-full text-left"
@@ -301,22 +325,14 @@ function DepartmentView({
           tone={s.neverContacted > 0 ? "red" : "slate"}
           onClick={() => onDrill({
             title: "Never contacted", subtitle: "No first-contact recorded after the reporting grace window",
-            rows: rows.filter((r) => isContactMissing(r, reportHorizon)), focus: "contact",
+            rows: rows.filter((r) => isContactMissing(r)), focus: "contact",
           })}
         />
         <MiniStat
           label="No transfer recorded" value={s.awaitingTransfer.toLocaleString()}
           onClick={() => onDrill({
             title: "No transfer recorded", subtitle: "Blank after the reporting grace window",
-            rows: rows.filter((r) => isTransferMissing(r, reportHorizon)), focus: "alloc",
-          })}
-        />
-        <MiniStat
-          label="Awaiting report update" value={s.reportPending.toLocaleString()}
-          onClick={() => onDrill({
-            title: "Awaiting report update",
-            subtitle: "Recent blank outcomes expected in the next daily export",
-            rows: rows.filter((r) => isReportDataPending(r, reportHorizon)), focus: "pending",
+            rows: rows.filter((r) => isTransferMissing(r)), focus: "alloc",
           })}
         />
       </div>
@@ -388,10 +404,9 @@ function MiniStat({
 // reached them. Two things only: how fast they respond once it lands,
 // and how many customers they left waiting overnight.
 function ExecView({
-  data, reportHorizon, onDrill,
+  data, onDrill,
 }: {
   data: Array<{ exec: string; rows: EnquiryRow[]; s: DashboardSummary }>;
-  reportHorizon: number | null;
   onDrill: (d: Drill) => void;
 }) {
   return (
@@ -452,7 +467,7 @@ function ExecView({
                     <button
                       onClick={() => onDrill({
                         title: exec, subtitle: "Not contacted same day",
-                        rows: rows.filter((r) => isSameDayReportable(r, reportHorizon) && !r.sameDayMet),
+                        rows: rows.filter((r) => isSameDayReportable(r) && !r.sameDayMet),
                         focus: "sameday",
                       })}
                       className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed, s.sameDayExpected)}`}
@@ -463,19 +478,9 @@ function ExecView({
                   <td className="px-3 py-3 text-right">
                     <Cell tone={s.neverContacted > 0 ? "red" : "slate"} onClick={() => onDrill({
                       title: exec, subtitle: "Never contacted",
-                      rows: rows.filter((r) => isContactMissing(r, reportHorizon)), focus: "contact",
+                      rows: rows.filter((r) => isContactMissing(r)), focus: "contact",
                     })}>
                       {s.neverContacted}
-                    </Cell>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <Cell onClick={() => onDrill({
-                      title: exec,
-                      subtitle: "Awaiting the next daily export",
-                      rows: rows.filter((r) => isReportDataPending(r, reportHorizon)),
-                      focus: "pending",
-                    })}>
-                      {s.reportPending}
                     </Cell>
                   </td>
                 </tr>
@@ -505,10 +510,9 @@ function Cell({
 
 // ── Daily log ─────────────────────────────────────────────────────────
 function DailyView({
-  data, reportHorizon, onDrill,
+  data, onDrill,
 }: {
   data: Array<{ day: string; rows: EnquiryRow[]; s: DashboardSummary }>;
-  reportHorizon: number | null;
   onDrill: (d: Drill) => void;
 }) {
   const dow = (d: string) =>
@@ -557,7 +561,7 @@ function DailyView({
                   <button
                     onClick={() => onDrill({
                       title: day, subtitle: "NOT contacted same day",
-                      rows: rows.filter((r) => isSameDayReportable(r, reportHorizon) && !r.sameDayMet), focus: "sameday",
+                      rows: rows.filter((r) => isSameDayReportable(r) && !r.sameDayMet), focus: "sameday",
                     })}
                     className={`text-xl font-bold tabular-nums hover:underline ${missTone(s.sameDayMissed, s.sameDayExpected)}`}
                   >
@@ -576,16 +580,6 @@ function DailyView({
                     {formatMins(s.contactAvg)}
                   </span>
                 </td>
-                <td className="px-3 py-3 text-right">
-                  <Cell onClick={() => onDrill({
-                    title: day,
-                    subtitle: "Awaiting the next daily export",
-                    rows: rows.filter((r) => isReportDataPending(r, reportHorizon)),
-                    focus: "pending",
-                  })}>
-                    {s.reportPending}
-                  </Cell>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -596,13 +590,7 @@ function DailyView({
 }
 
 // ── Drill-down ────────────────────────────────────────────────────────
-function DrillPanel({
-  drill, reportHorizon, onClose,
-}: {
-  drill: Drill;
-  reportHorizon: number | null;
-  onClose: () => void;
-}) {
+function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   const [q, setQ] = useState("");
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -626,7 +614,7 @@ function DrillPanel({
         esc(r.customer), esc(r.salesExec), esc(formatWall(r.enquiryAt)),
         esc(formatWall(r.transferredAt)), esc(formatWall(r.contactedAt)),
         String(r.contactMins ?? ""),
-        isSameDayReportable(r, reportHorizon)
+        isSameDayReportable(r)
           ? (r.sameDayMet ? "yes" : "NO")
           : "n/a",
       ].join(","));
@@ -710,10 +698,7 @@ function DrillPanel({
                     </td>
                     <td className="px-3 py-2 text-right">
                       <MinsBadge mins={r.contactMins} target={CONTACT_TARGET_MINS} />
-                      {isReportDataPending(r, reportHorizon) && (
-                        <div className="mt-0.5 text-[10px] font-bold uppercase text-sky-700">awaiting report</div>
-                      )}
-                      {isSameDayReportable(r, reportHorizon) && !r.sameDayMet && (
+                      {isSameDayReportable(r) && !r.sameDayMet && (
                         <div className="mt-0.5 text-[10px] font-bold uppercase text-red-600">not same day</div>
                       )}
                     </td>
