@@ -6,24 +6,25 @@ import { EnquiriesClient } from "./client";
 
 export const dynamic = "force-dynamic";
 
-export default async function EnquiriesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ from?: string; to?: string }>;
-}) {
+export default async function EnquiriesPage() {
   const user = await requireUser();
-  const sp = await searchParams;
   const [bounds, latestUploadAt] = await Promise.all([
     loadDataBounds(),
     loadLatestEnquiryUploadAt(),
   ]);
 
-  // Default to everything stored. The range is a plain date filter on the
-  // enquiry day, so a bookmarked ?from=&to= keeps working as new uploads
-  // extend the data.
-  const from = sp.from || bounds.min || "";
-  const to = sp.to || bounds.max || "";
-  const rows = await loadEnquiries({ from: from || undefined, to: to || undefined });
+  // Everything stored is sent once and sliced client-side, so moving
+  // between days, weeks and months is instant rather than a round trip
+  // per step. Volumes are a few hundred rows a month, well within budget.
+  const rows = await loadEnquiries();
+
+  // "Today" is resolved here, in UK time, so the default period matches
+  // the office's date rather than the browser's — and so server and client
+  // agree on first render.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/London",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
   const reportHorizon = latestUploadAt == null
     ? null
     : reportingHorizonFromInstant(latestUploadAt);
@@ -86,11 +87,10 @@ export default async function EnquiriesPage({
         ) : (
           <EnquiriesClient
             rows={rows}
-            from={from}
-            to={to}
             min={bounds.min}
             max={bounds.max}
             reportHorizon={reportHorizon}
+            today={today}
           />
         )}
       </main>

@@ -26,7 +26,9 @@ export default async function EnquiryUploadPage() {
           Drop in the daily MotorComplete export. Uploads <strong>stack</strong> — each file is
           merged into what&apos;s already stored rather than replacing it, and an enquiry that
           appears in more than one export is matched and updated instead of duplicated.
-          Rows created by Joseph Rustigini or Harry Henderson are stripped out on the way in.
+          Where they disagree the <strong>newest upload wins</strong>, so a corrected timestamp
+          in MotorComplete carries through. Any row mentioning Joseph Rustigini or Harry
+          Henderson is stripped out on the way in.
         </p>
 
         {bounds.min && (

@@ -150,9 +150,16 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   surfaced as a count with a drill-down, never silently dropped.
 - **Enquiry uploads stack, never replace.** Rows merge on a natural-key
   hash (exec + customer ref/name + enquiry timestamp). On conflict the
-  *earliest* known transfer/contact timestamps win, because "first
-  contact" is by definition the earliest seen — a later export reporting
-  a subsequent touchpoint in column L must not overwrite it.
+  **newest upload wins** — the incoming row replaces what is stored,
+  including clearing a value, so a correction made in MotorComplete
+  carries through. Uploads apply in processing order, so within a
+  multi-file batch the last file selected is the one that sticks.
+- **The enquiry dashboard slices client-side.** The page ships every
+  stored row once and `src/lib/period.ts` slices it by day / week / month,
+  so stepping between periods is instant. Default view is the current
+  month, with "today" resolved server-side in Europe/London so SSR and the
+  client agree. If volumes ever outgrow a single payload, move the period
+  range into the query instead.
 - **Enquiry outcome data runs one day behind.** Reporting freshness is
   anchored to the latest upload's UK-local run date, not the page-view
   date. That run date is an exclusive horizon: on a Monday upload,

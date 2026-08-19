@@ -203,12 +203,16 @@ export interface IngestResult {
 /**
  * Merge parsed rows into the store.
  *
- * Insert-or-update on the natural-key id. On conflict the *earliest*
- * known transfer and contact timestamps win: an enquiry's first contact
- * is by definition the earliest one seen, and a later export that
- * re-reports the same enquiry with a subsequent touchpoint in column L
- * must not overwrite the genuine first contact. Everything derived from
- * those timestamps is recomputed from the merged values.
+ * Insert-or-update on the natural-key id. On conflict the *newest upload
+ * wins*: the incoming row replaces what is stored, because a later export
+ * reflects any correction made in MotorComplete since. Uploads are applied
+ * in the order they are processed, so within a multi-file batch the last
+ * file selected is the one that sticks — worth knowing if you ever pick
+ * them out of date order.
+ *
+ * Everything derived from those timestamps is recomputed from the
+ * incoming values, so an amended transfer or contact time immediately
+ * re-grades the enquiry against target.
  */
 export async function ingestEnquiries(
   parsed: ParseOutcome,
@@ -236,10 +240,11 @@ export async function ingestEnquiries(
       const prev = existing.get(r.id);
 
       // Earliest-wins merge for the two timestamps that drive every metric.
-      const minOf = (a: number | null, b: number | null) =>
-        a == null ? b : b == null ? a : Math.min(a, b);
-      const transferredAt = prev ? minOf(prev.transferredAt, r.transferredAt) : r.transferredAt;
-      const contactedAt = prev ? minOf(prev.contactedAt, r.contactedAt) : r.contactedAt;
+      // Newest upload wins outright — including a value being cleared,
+      // since the source system having blanked a timestamp is itself the
+      // correction we want to reflect.
+      const transferredAt = r.transferredAt;
+      const contactedAt = r.contactedAt;
 
       const allocMins = transferredAt != null
         ? businessMinutesBetween(r.enquiryAt, transferredAt) : null;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { EnquiryRow, Summary } from "@/lib/enquiries";
 import {
   ALLOCATION_TARGET_MINS,
@@ -15,6 +14,14 @@ import {
   isTransferMissing,
   partitionByReportability,
 } from "@/lib/enquiry-reporting";
+import {
+  buildPeriod,
+  canStep,
+  clampAnchor,
+  inPeriod,
+  shiftAnchor,
+  type Granularity,
+} from "@/lib/period";
 
 type Tab = "department" | "exec" | "daily";
 
@@ -75,11 +82,12 @@ const missBadge = (missed: number, expected: number) =>
       : "bg-red-100 text-red-900";
 
 export function EnquiriesClient({
-  rows, from, to, min, max, reportHorizon,
+  rows, min, max, reportHorizon, today,
 }: {
   rows: EnquiryRow[];
-  from: string; to: string;
   min: string | null; max: string | null;
+  /** Today in Europe/London, resolved server-side to avoid a hydration mismatch. */
+  today: string;
   /**
    * Exclusive data horizon (midnight of the latest upload day). Anything
    * that has not had a full working day to be actioned by this point is
@@ -88,18 +96,23 @@ export function EnquiriesClient({
    */
   reportHorizon: number | null;
 }) {
-  const router = useRouter();
   const [tab, setTab] = useState<Tab>("department");
   const [drill, setDrill] = useState<Drill | null>(null);
-  const [f, setF] = useState(from);
-  const [t, setT] = useState(to);
+  // Default to the current month, as that is the view people open the page
+  // wanting. Clamped into the data we hold so an empty month never greets
+  // someone who has not uploaded this month yet.
+  const [granularity, setGranularity] = useState<Granularity>("month");
+  const [anchor, setAnchor] = useState<string>(() => clampAnchor(today, min, max) ?? today);
+
+  const period = useMemo(() => buildPeriod(granularity, anchor), [granularity, anchor]);
+  const periodRows = useMemo(() => inPeriod(rows, period), [rows, period]);
 
   // Hold back anything that has not yet had a full working day. Doing the
   // split once here means every tab, total and drill-down below is working
   // from the same settled set.
   const { reportable, held } = useMemo(
-    () => partitionByReportability(rows, reportHorizon),
-    [rows, reportHorizon],
+    () => partitionByReportability(periodRows, reportHorizon),
+    [periodRows, reportHorizon],
   );
 
   const dept = useMemo(() => summarise(reportable), [reportable]);
@@ -129,49 +142,59 @@ export function EnquiriesClient({
       .sort((a, b) => b.day.localeCompare(a.day));
   }, [reportable]);
 
-  function applyRange() {
-    const p = new URLSearchParams();
-    if (f) p.set("from", f);
-    if (t) p.set("to", t);
-    router.push(`/enquiries?${p.toString()}`);
-  }
-
   return (
     <div className="mt-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="text-xs font-medium text-slate-600">
-            From
-            <input
-              type="date" value={f} min={min ?? undefined} max={max ?? undefined}
-              onChange={(e) => setF(e.target.value)}
-              className="ml-2 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900"
-            />
-          </label>
-          <label className="text-xs font-medium text-slate-600">
-            To
-            <input
-              type="date" value={t} min={min ?? undefined} max={max ?? undefined}
-              onChange={(e) => setT(e.target.value)}
-              className="ml-2 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900"
-            />
-          </label>
-          <button
-            onClick={applyRange}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
-          >
-            Apply
-          </button>
-          {(from !== (min ?? "") || to !== (max ?? "")) && (
+      {/* Period bar: granularity on the left, the period itself in the
+          middle with arrows either side, view tabs on the right. One row
+          on desktop, wrapping cleanly on a phone. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
+          {([["day", "Day"], ["week", "Week"], ["month", "Month"]] as const).map(([g, label]) => (
             <button
-              onClick={() => { setF(min ?? ""); setT(max ?? ""); router.push("/enquiries"); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              key={g}
+              onClick={() => {
+                setGranularity(g);
+                // Keep the anchor, so switching Month → Week lands on the
+                // week you were already looking at rather than jumping.
+                setAnchor((a) => clampAnchor(a, min, max) ?? a);
+              }}
+              className={`rounded-lg px-3 py-1.5 transition ${
+                granularity === g ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              }`}
             >
-              Reset
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <StepButton
+            dir="prev"
+            disabled={!canStep(granularity, anchor, -1, min, max)}
+            onClick={() => setAnchor(shiftAnchor(granularity, anchor, -1))}
+          />
+          <div className="min-w-[168px] px-2 text-center">
+            <div className="text-sm font-semibold text-slate-900">{period.label}</div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              {periodRows.length} {periodRows.length === 1 ? "enquiry" : "enquiries"}
+            </div>
+          </div>
+          <StepButton
+            dir="next"
+            disabled={!canStep(granularity, anchor, 1, min, max)}
+            onClick={() => setAnchor(shiftAnchor(granularity, anchor, 1))}
+          />
+          {anchor !== (clampAnchor(today, min, max) ?? today) && (
+            <button
+              onClick={() => setAnchor(clampAnchor(today, min, max) ?? today)}
+              className="ml-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              {granularity === "day" ? "Today" : granularity === "week" ? "This week" : "This month"}
             </button>
           )}
         </div>
-        <nav className="flex gap-1 rounded-xl bg-slate-200/70 p-1 text-xs font-semibold">
+
+        <nav className="flex gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
           {([["department", "Department"], ["exec", "By exec"], ["daily", "Daily log"]] as const).map(([k, label]) => (
             <button
               key={k} onClick={() => setTab(k)}
@@ -229,6 +252,23 @@ export function EnquiriesClient({
         />
       )}
     </div>
+  );
+}
+
+function StepButton({
+  dir, disabled, onClick,
+}: { dir: "prev" | "next"; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === "prev" ? "Previous period" : "Next period"}
+      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:hover:bg-white"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {dir === "prev" ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+      </svg>
+    </button>
   );
 }
 
