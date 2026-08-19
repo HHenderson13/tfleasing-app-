@@ -154,6 +154,11 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   including clearing a value, so a correction made in MotorComplete
   carries through. Uploads apply in processing order, so within a
   multi-file batch the last file selected is the one that sticks.
+  A single export can also list the same enquiry twice (MotorComplete
+  emits a row per touchpoint in some views), so `parseEnquiryWorkbook`
+  collapses same-key rows before ingest, keeping the last. The write is
+  an upsert as well — a bare INSERT against a pre-loop existence snapshot
+  is what caused the "UNIQUE constraint failed" upload failure.
 - **The enquiry dashboard slices client-side.** The page ships every
   stored row once and `src/lib/period.ts` slices it by day / week / month,
   so stepping between periods is instant. Default view is the current

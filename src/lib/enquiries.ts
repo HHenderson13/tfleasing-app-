@@ -111,6 +111,8 @@ export interface ParseOutcome {
   rowsInFile: number;
   skippedExcluded: number;
   skippedUnparseable: number;
+  /** Rows collapsed into an earlier row sharing the same natural key. */
+  duplicatesCollapsed: number;
 }
 
 /**
@@ -125,7 +127,7 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
-  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0 };
+  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0 };
 
   // header:1 → array-of-arrays, so columns stay positional.
   const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: null });
@@ -188,7 +190,25 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
     });
   }
 
-  return { rows, rowsInFile: body.length, skippedExcluded, skippedUnparseable };
+  // A single export can list the same enquiry twice — MotorComplete emits
+  // one row per touchpoint in some views. Collapse them here, keeping the
+  // LAST occurrence to match the newest-wins merge rule. Without this the
+  // ingest would try to INSERT the same primary key twice and the whole
+  // upload would fail on a constraint violation.
+  const byId = new Map<string, ParsedEnquiry>();
+  let duplicatesCollapsed = 0;
+  for (const r of rows) {
+    if (byId.has(r.id)) duplicatesCollapsed++;
+    byId.set(r.id, r);
+  }
+
+  return {
+    rows: [...byId.values()],
+    rowsInFile: body.length,
+    skippedExcluded,
+    skippedUnparseable,
+    duplicatesCollapsed,
+  };
 }
 
 export interface IngestResult {
@@ -197,6 +217,7 @@ export interface IngestResult {
   unchanged: number;
   skippedExcluded: number;
   skippedUnparseable: number;
+  duplicatesCollapsed: number;
   rowsInFile: number;
 }
 
@@ -268,6 +289,10 @@ export async function ingestEnquiries(
         `);
         updated++;
       } else {
+        // Upsert rather than a bare INSERT: the existence check above is a
+        // snapshot taken before the loop, so anything that lands in the
+        // table concurrently (or any key that slips through de-duplication)
+        // updates instead of blowing up the whole upload.
         await db.run(sql`
           INSERT INTO enquiries (
             id, dealer, sales_exec, customer, customer_ref, enquiry_at,
@@ -280,6 +305,14 @@ export async function ingestEnquiries(
             ${allocMins}, ${contactMins}, ${r.sameDayExpected ? 1 : 0}, ${sameDayMet ? 1 : 0},
             ${r.enquiryDay}, ${Math.floor(now.getTime() / 1000)}, ${meta.userId}
           )
+          ON CONFLICT(id) DO UPDATE SET
+            transferred_at = excluded.transferred_at,
+            contacted_at = excluded.contacted_at,
+            alloc_mins = excluded.alloc_mins,
+            contact_mins = excluded.contact_mins,
+            same_day_met = excluded.same_day_met,
+            status = excluded.status,
+            enquiry_owner = excluded.enquiry_owner
         `);
         inserted++;
       }
@@ -301,6 +334,7 @@ export async function ingestEnquiries(
     inserted, updated, unchanged,
     skippedExcluded: parsed.skippedExcluded,
     skippedUnparseable: parsed.skippedUnparseable,
+    duplicatesCollapsed: parsed.duplicatesCollapsed,
     rowsInFile: parsed.rowsInFile,
   };
 }
