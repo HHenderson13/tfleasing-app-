@@ -160,12 +160,6 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   month, with "today" resolved server-side in Europe/London so SSR and the
   client agree. If volumes ever outgrow a single payload, move the period
   range into the query instead.
-- **Enquiry outcome data runs one day behind.** Reporting freshness is
-  anchored to the latest upload's UK-local run date, not the page-view
-  date. That run date is an exclusive horizon: on a Monday upload,
-  Saturday/Sunday blank transfer/contact fields are pending rather than
-  failures because no business time had elapsed by Monday 00:00. A later
-  upload advances the horizon and makes unchanged blanks assessable.
 - **Joseph Rustigini and Harry Henderson are stripped from enquiry
   reports entirely** — an excluded name appearing in *any* column of the
   source row drops that row at ingest, so it can never reach the DB or a
