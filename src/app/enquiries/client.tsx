@@ -291,6 +291,12 @@ function DepartmentView({
           avg={s.allocAvg}
           measured={s.allocMeasured}
           hit={s.allocHit} missed={s.allocMissed}
+          onAll={() => onDrill({
+            title: "Allocation — all enquiries",
+            subtitle: `On target and over, against the ${ALLOCATION_TARGET_MINS} minute target`,
+            rows: rows.filter((r) => r.allocMins != null),
+            focus: "alloc",
+          })}
           onHit={() => onDrill({
             title: `Allocated within ${ALLOCATION_TARGET_MINS} min`,
             rows: rows.filter((r) => r.allocMins != null && r.allocMins <= ALLOCATION_TARGET_MINS),
@@ -311,6 +317,12 @@ function DepartmentView({
           avg={s.contactAvg}
           measured={s.contactMeasured}
           hit={s.contactHit} missed={s.contactMissed}
+          onAll={() => onDrill({
+            title: "First contact — all enquiries",
+            subtitle: `On target and over, against the ${CONTACT_TARGET_MINS} minute target`,
+            rows: rows.filter((r) => r.contactMins != null),
+            focus: "contact",
+          })}
           onHit={() => onDrill({
             title: `Contacted within ${CONTACT_TARGET_MINS} min`,
             rows: rows.filter((r) => r.contactMins != null && r.contactMins <= CONTACT_TARGET_MINS),
@@ -333,17 +345,45 @@ function DepartmentView({
           </div>
           <button
             onClick={() => onDrill({
-              title: "NOT contacted same day",
-              subtitle: "Completed report days; enquired before 17:30 on a working day",
-              rows: rows.filter((r) => isSameDayReportable(r) && !r.sameDayMet),
+              title: "Same-day contact — all enquiries",
+              subtitle: "Everything in scope: contacted same day and not",
+              rows: rows.filter((r) => isSameDayReportable(r)),
               focus: "sameday",
             })}
-            className="mt-2 block w-full text-left"
+            disabled={s.sameDayExpected === 0}
+            title="Show every enquiry in scope for the same-day rule"
+            className="mt-2 block w-full text-left disabled:cursor-default"
           >
-            <span className={`text-4xl font-extrabold tabular-nums ${missTone(s.sameDayMissed, s.sameDayExpected)} hover:underline`}>
+            <span className={`text-4xl font-extrabold tabular-nums ${missTone(s.sameDayMissed, s.sameDayExpected)} ${s.sameDayExpected > 0 ? "hover:underline" : ""}`}>
               {s.sameDayMissed}
             </span>
+            <span className="mt-1 block text-[11px] font-medium text-slate-500">
+              missed{s.sameDayExpected > 0 ? " — tap for all" : ""}
+            </span>
           </button>
+          <div className="mt-3 flex gap-2 text-xs">
+            <button
+              onClick={() => onDrill({
+                title: "Contacted same day",
+                rows: rows.filter((r) => isSameDayReportable(r) && r.sameDayMet),
+                focus: "sameday",
+              })}
+              className="flex-1 rounded-lg bg-emerald-50 px-2 py-1.5 font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+            >
+              {s.sameDayMet} same day
+            </button>
+            <button
+              onClick={() => onDrill({
+                title: "NOT contacted same day",
+                subtitle: "Enquired before 17:30 on a working day",
+                rows: rows.filter((r) => isSameDayReportable(r) && !r.sameDayMet),
+                focus: "sameday",
+              })}
+              className="flex-1 rounded-lg bg-red-50 px-2 py-1.5 font-semibold text-red-800 ring-1 ring-red-200 hover:bg-red-100"
+            >
+              {s.sameDayMissed} missed
+            </button>
+          </div>
           <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
             <span>out of {s.sameDayExpected} in scope</span>
             <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${missBadge(s.sameDayMissed, s.sameDayExpected)}`}>
@@ -382,10 +422,12 @@ function DepartmentView({
 
 /** Average response time as the headline, bold and colour-coded. */
 function AvgCard({
-  title, hint, target, avg, measured, hit, missed, onHit, onMiss,
+  title, hint, target, avg, measured, hit, missed, onAll, onHit, onMiss,
 }: {
   title: string; hint: string; target: number;
   avg: number | null; measured: number; hit: number; missed: number;
+  /** The headline average opens everything measured — on target and over. */
+  onAll: () => void;
   onHit: () => void; onMiss: () => void;
 }) {
   return (
@@ -397,10 +439,19 @@ function AvgCard({
         </span>
       </div>
       <div className="mt-0.5 text-xs text-slate-500">{hint}</div>
-      <div className={`mt-2 text-4xl font-extrabold tabular-nums ${timeTone(avg, target)}`}>
-        {formatMins(avg)}
-      </div>
-      <div className="mt-1 text-[11px] font-medium text-slate-500">average</div>
+      <button
+        onClick={onAll}
+        disabled={measured === 0}
+        title="Show every enquiry behind this average"
+        className="mt-2 block w-full text-left disabled:cursor-default"
+      >
+        <span className={`text-4xl font-extrabold tabular-nums ${timeTone(avg, target)} ${measured > 0 ? "hover:underline" : ""}`}>
+          {formatMins(avg)}
+        </span>
+        <span className="mt-1 block text-[11px] font-medium text-slate-500">
+          average{measured > 0 ? " — tap for all" : ""}
+        </span>
+      </button>
       <div className="mt-3 flex gap-2 text-xs">
         <button
           onClick={onHit}
@@ -646,7 +697,11 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   }, [drill, q]);
 
   function exportCsv() {
-    const head = ["Customer", "Sales exec", "Enquiry", "Transferred", "First contact", "Response mins", "Same day"];
+    const isAlloc = drill.focus === "alloc";
+    const head = [
+      "Customer", "Sales exec", "Enquiry", "Transferred", "First contact",
+      isAlloc ? "Allocation mins" : "Response mins", "Same day",
+    ];
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const lines = [head.map(esc).join(",")];
     for (const r of shown) {
@@ -716,7 +771,9 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
                   <th className="px-4 py-2 text-left font-semibold">Customer</th>
                   <th className="px-3 py-2 text-left font-semibold">Exec</th>
                   <th className="px-3 py-2 text-left font-semibold">Timeline</th>
-                  <th className="px-3 py-2 text-right font-semibold">Response</th>
+                  <th className="px-3 py-2 text-right font-semibold">
+                    {drill.focus === "alloc" ? "Allocation" : "Response"}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -737,7 +794,15 @@ function DrillPanel({ drill, onClose }: { drill: Drill; onClose: () => void }) {
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <MinsBadge mins={r.contactMins} target={CONTACT_TARGET_MINS} />
+                      {/* Allocation drill-downs are about sales support's
+                          clock (enquiry → transfer); everything else is the
+                          exec's (transfer → contact). Showing the wrong one
+                          would have people arguing about the wrong number. */}
+                      {drill.focus === "alloc" ? (
+                        <MinsBadge mins={r.allocMins} target={ALLOCATION_TARGET_MINS} />
+                      ) : (
+                        <MinsBadge mins={r.contactMins} target={CONTACT_TARGET_MINS} />
+                      )}
                       {isSameDayReportable(r) && !r.sameDayMet && (
                         <div className="mt-0.5 text-[10px] font-bold uppercase text-red-600">not same day</div>
                       )}
