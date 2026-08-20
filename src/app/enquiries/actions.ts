@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
-import { ingestEnquiries, parseEnquiryWorkbook, type IngestResult } from "@/lib/enquiries";
+import {
+  NotAnEnquiryExportError,
+  ingestEnquiries,
+  parseEnquiryWorkbook,
+  type IngestResult,
+} from "@/lib/enquiries";
 
 export interface UploadOutcome {
   ok: boolean;
@@ -59,6 +64,11 @@ export async function uploadEnquiriesAction(formData: FormData): Promise<UploadO
     revalidatePath("/enquiries/upload");
     return { ok: true, filename: file.name, result };
   } catch (e) {
+    // A wrong-file upload is operator error, not a fault — report the
+    // guard's own message rather than burying it in a generic failure.
+    if (e instanceof NotAnEnquiryExportError) {
+      return { ok: false, error: `${file.name}: ${e.message}` };
+    }
     logError("enquiries/uploadEnquiriesAction", e, { filename: file.name });
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
   }

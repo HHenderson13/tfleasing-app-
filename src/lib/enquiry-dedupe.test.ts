@@ -16,15 +16,22 @@ function sheet(rows: Array<Partial<Record<string, unknown>> & {
   exec: string; customer: string; ref?: string | null;
   raised: string; transferred?: string | null; contacted?: string | null;
   lostSaleReason?: string | null;
+  type?: string | null;
 }>) {
-  const header = Array.from({ length: 29 }, (_, i) => `col${i}`);
+  const header = Array.from({ length: 30 }, (_, i) => `col${i}`);
+  header[1] = "Created By";
+  header[2] = "Customer";
+  header[4] = "Date Raised";
+  header[5] = "Type";
+  header[15] = "Date Transferred";
   const body = rows.map((r) => {
-    const a = new Array<unknown>(29).fill(null);
+    const a = new Array<unknown>(30).fill(null);
     a[0] = "TrustFord LCV Lease";
     a[1] = r.exec;          // B Created By
     a[2] = r.customer;      // C Customer
     a[3] = r.ref ?? null;   // D Customer Id
     a[4] = r.raised;        // E Date Raised
+    a[5] = r.type === undefined ? "Lead" : r.type; // F Type
     a[11] = r.contacted ?? null;    // L first contact
     a[15] = r.transferred ?? null;  // P transferred
     a[29] = r.lostSaleReason ?? null; // AD Lost Sale Reason
@@ -152,5 +159,68 @@ describe("Lost Sale Reason exclusion (column AD)", () => {
     const same = parseEnquiryWorkbook(withReason("Unable to Contact"));
     const mergedRow = same.rows.find((r) => r.customer === "Merged Person")!;
     expect(p.excludedIds[0]).toBe(mergedRow.id);
+  });
+});
+
+describe("enquiry type (column F)", () => {
+  const withType = (type: string | null) => sheet([
+    { exec: "Douglas James", customer: "Typed Person", ref: "1",
+      raised: "17 August 2026 09:00", type },
+  ]);
+
+  it("keeps Lead, Phone and Email — all are inbound enquiries", () => {
+    for (const keep of ["Lead", "Phone", "Email"]) {
+      const p = parseEnquiryWorkbook(withType(keep));
+      expect(p.rows, keep).toHaveLength(1);
+      expect(p.skippedNotLead, keep).toBe(0);
+    }
+  });
+
+  it("strips Prospect Call and Showroom — outbound or walk-in", () => {
+    for (const drop of ["Prospect Call", "Showroom"]) {
+      const p = parseEnquiryWorkbook(withType(drop));
+      expect(p.rows, drop).toHaveLength(0);
+      expect(p.skippedNotLead, drop).toBe(1);
+    }
+  });
+
+  it("strips a blank or unrecognised type rather than guessing", () => {
+    for (const drop of [null, "", "Something New"]) {
+      expect(parseEnquiryWorkbook(withType(drop)).rows).toHaveLength(0);
+    }
+  });
+
+  it("is insensitive to case and spacing", () => {
+    for (const keep of ["lead", "  LEAD  ", "E-mail", "phone"]) {
+      expect(parseEnquiryWorkbook(withType(keep)).rows, keep).toHaveLength(1);
+    }
+  });
+
+  it("reports the excluded id so a stored copy is deleted on re-upload", () => {
+    const p = parseEnquiryWorkbook(withType("Showroom"));
+    expect(p.excludedIds).toHaveLength(1);
+    const kept = parseEnquiryWorkbook(withType("Lead"));
+    expect(p.excludedIds[0]).toBe(kept.rows[0].id);
+  });
+});
+
+describe("wrong-file guard", () => {
+  it("rejects a workbook whose columns are laid out differently", () => {
+    // Shape of the other MotorComplete reports sitting in the same folder.
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["SE", "Sales Type", "Order Date", "Vehicle Details", "Delivery Date"],
+      ["A Exec", "Retail", "1 August 2026", "Puma", "14 Aug 2026"],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ag-grid");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+
+    expect(() => parseEnquiryWorkbook(buf)).toThrow(/not the MotorComplete enquiry export/i);
+  });
+
+  it("accepts the real layout", () => {
+    expect(() => parseEnquiryWorkbook(sheet([
+      { exec: "A", customer: "B", raised: "17 August 2026 09:00" },
+    ]))).not.toThrow();
   });
 });

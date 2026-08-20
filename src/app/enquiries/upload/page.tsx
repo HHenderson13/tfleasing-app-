@@ -27,10 +27,11 @@ export default async function EnquiryUploadPage() {
           merged into what&apos;s already stored rather than replacing it, and an enquiry that
           appears in more than one export is matched and updated instead of duplicated.
           Where they disagree the <strong>newest upload wins</strong>, so a corrected timestamp
-          in MotorComplete carries through. Any row mentioning Joseph Rustigini or Harry
-          Henderson is stripped out on the way in, as is anything whose Lost Sale Reason is
-          &ldquo;Lead Merged into Existing Customer&rdquo; — and re-uploading a file also
-          removes those rows if an earlier upload had already saved them.
+          in MotorComplete carries through. Only Lead, Phone and Email enquiry types are measured — Prospect Call and
+          Showroom are outbound or walk-in activity, so they are stripped out. Rows mentioning
+          Joseph Rustigini or Harry Henderson go too, as does anything whose Lost Sale Reason
+          is &ldquo;Lead Merged into Existing Customer&rdquo;. Re-uploading a file also removes
+          those rows if an earlier upload had already saved them.
         </p>
 
         {bounds.min && (

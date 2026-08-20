@@ -32,6 +32,7 @@ const EXCLUDED_NAMES = ["joseph rustigini", "harry henderson"] as const;
 
 const norm = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
 const normKey = (s: unknown) => norm(s).toLowerCase();
+const lettersOnly = (s: unknown) => normKey(s).replace(/[^a-z]/g, "");
 
 /** True when this single value is one of the excluded names. */
 export function isExcludedExec(name: unknown): boolean {
@@ -64,12 +65,27 @@ export function rowMentionsExcluded(cells: readonly unknown[]): boolean {
 // source cannot let one through.
 const EXCLUDED_LOST_SALE_REASONS = ["leadmergedintoexistingcustomer"];
 
-const lettersOnly = (s: unknown) => normKey(s).replace(/[^a-z]/g, "");
-
 export function isExcludedLostSaleReason(reason: unknown): boolean {
   const k = lettersOnly(reason);
   if (!k) return false;
   return EXCLUDED_LOST_SALE_REASONS.some((r) => k === r);
+}
+
+// Enquiry types (column F) that count as an inbound enquiry to be
+// allocated and worked. Lead, Phone and Email all arrive needing a
+// response, so all three are measured.
+//
+// Everything else is excluded: "Prospect Call" and "Showroom" are
+// outbound or walk-in activity, where nobody is waiting on us to call
+// back, so holding them to the allocation and response targets would be
+// measuring the wrong process. An unrecognised or blank type is excluded
+// too — safer to leave a row out than to grade it against a target that
+// may not apply.
+const ALLOWED_TYPES = new Set(["lead", "phone", "email"]);
+
+/** True unless column F is one of the enquiry types we measure. */
+export function isExcludedType(type: unknown): boolean {
+  return !ALLOWED_TYPES.has(lettersOnly(type));
 }
 
 // Zero-based column indices, fixed by the MotorComplete export layout.
@@ -81,6 +97,7 @@ const COL = {
   customer: 2,      // C
   customerRef: 3,   // D  Customer Id
   enquiryAt: 4,     // E  Date Raised
+  type: 5,          // F  Type
   source: 6,        // G
   contactedAt: 11,  // L  2nd Contact  → sales exec's first contact
   transferredAt: 15,// P  Date Transferred
@@ -134,12 +151,55 @@ export interface ParseOutcome {
   duplicatesCollapsed: number;
   /** Rows dropped because of their Lost Sale Reason (column AD). */
   skippedLostSaleReason: number;
+  /** Rows dropped because column F was not "Lead". */
+  skippedNotLead: number;
   /**
    * Natural-key ids of every row this file excluded. Ingest deletes these
    * from the store, so re-uploading a file retroactively clears rows that
    * were saved before the exclusion rule existed.
    */
   excludedIds: string[];
+}
+
+/**
+ * Header cells that identify the MotorComplete enquiry export, checked
+ * before anything is read positionally.
+ *
+ * This matters in practice: the operator's downloads folder holds a
+ * dozen other MotorComplete reports saved as "export (N).xlsx", several
+ * of which also use an "ag-grid" sheet but a completely different column
+ * layout ("SE", "Sales Type", "Order Date", …). Without this check,
+ * uploading one by mistake would read whatever happened to sit in those
+ * positions and silently ingest nonsense.
+ */
+const REQUIRED_HEADERS: ReadonlyArray<readonly [number, string]> = [
+  [COL.salesExec, "created by"],
+  [COL.customer, "customer"],
+  [COL.enquiryAt, "date raised"],
+  [COL.type, "type"],
+  [COL.transferredAt, "date transferred"],
+];
+
+export class NotAnEnquiryExportError extends Error {
+  constructor(readonly found: string) {
+    super(
+      "That file is not the MotorComplete enquiry export — its columns are " +
+      `laid out differently (found ${found}). Check you have exported the ` +
+      "enquiry view rather than another report.",
+    );
+    this.name = "NotAnEnquiryExportError";
+  }
+}
+
+function assertEnquiryExport(header: readonly unknown[]): void {
+  const mismatches = REQUIRED_HEADERS.filter(
+    ([idx, expected]) => normKey(header[idx]) !== expected,
+  );
+  if (mismatches.length === 0) return;
+  const found = REQUIRED_HEADERS
+    .map(([idx]) => `${String.fromCharCode(65 + idx)}=${JSON.stringify(norm(header[idx]) || null)}`)
+    .join(", ");
+  throw new NotAnEnquiryExportError(found);
 }
 
 /**
@@ -154,10 +214,11 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
-  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, excludedIds: [] };
+  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, skippedNotLead: 0, excludedIds: [] };
 
   // header:1 → array-of-arrays, so columns stay positional.
   const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: null });
+  assertEnquiryExport(Array.isArray(grid[0]) ? grid[0] : []);
   const body = grid.slice(1); // drop the header row
 
   const rows: ParsedEnquiry[] = [];
@@ -165,6 +226,7 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
   let skippedExcluded = 0;
   let skippedUnparseable = 0;
   let skippedLostSaleReason = 0;
+  let skippedNotLead = 0;
 
   for (const raw of body) {
     if (!Array.isArray(raw)) { skippedUnparseable++; continue; }
@@ -185,6 +247,11 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
 
     if (rowMentionsExcluded(raw)) {
       skippedExcluded++;
+      if (idIfUsable) excludedIds.push(idIfUsable);
+      continue;
+    }
+    if (isExcludedType(raw[COL.type])) {
+      skippedNotLead++;
       if (idIfUsable) excludedIds.push(idIfUsable);
       continue;
     }
@@ -254,6 +321,7 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
     skippedUnparseable,
     duplicatesCollapsed,
     skippedLostSaleReason,
+    skippedNotLead,
     excludedIds,
   };
 }
@@ -266,6 +334,7 @@ export interface IngestResult {
   skippedUnparseable: number;
   duplicatesCollapsed: number;
   skippedLostSaleReason: number;
+  skippedNotLead: number;
   /** Previously-stored rows deleted because they are now excluded. */
   removedRetroactively: number;
   rowsInFile: number;
@@ -393,7 +462,8 @@ export async function ingestEnquiries(
     rowsInFile: parsed.rowsInFile,
     rowsInserted: inserted,
     rowsUpdated: updated,
-    rowsSkipped: parsed.skippedExcluded + parsed.skippedUnparseable + parsed.skippedLostSaleReason,
+    rowsSkipped: parsed.skippedExcluded + parsed.skippedUnparseable +
+      parsed.skippedLostSaleReason + parsed.skippedNotLead,
     uploadedAt: now,
     uploadedByUserId: meta.userId,
   });
@@ -404,6 +474,7 @@ export async function ingestEnquiries(
     skippedUnparseable: parsed.skippedUnparseable,
     duplicatesCollapsed: parsed.duplicatesCollapsed,
     skippedLostSaleReason: parsed.skippedLostSaleReason,
+    skippedNotLead: parsed.skippedNotLead,
     removedRetroactively,
     rowsInFile: parsed.rowsInFile,
   };

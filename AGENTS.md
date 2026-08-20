@@ -165,6 +165,22 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   month, with "today" resolved server-side in Europe/London so SSR and the
   client agree. If volumes ever outgrow a single payload, move the period
   range into the query instead.
+- **Only Lead / Phone / Email enquiry types (column F) are measured.**
+  "Prospect Call" and "Showroom" are outbound or walk-in activity where
+  nobody is waiting on a call back, so grading them against the
+  allocation and response targets would measure the wrong process. Blank
+  or unrecognised types are excluded too — safer to omit a row than to
+  grade it against a target that may not apply. Allow-list, not a
+  block-list, so a new type appearing in the export cannot quietly slip
+  into the figures.
+- **Uploads are guarded against the wrong file.** The operator's
+  downloads folder holds ~20 other MotorComplete reports saved as
+  "export (N).xlsx", several using an `ag-grid` sheet with a completely
+  different column layout ("SE", "Sales Type", "Order Date", …). Since
+  the parser reads positionally, `assertEnquiryExport` checks five header
+  cells first and throws `NotAnEnquiryExportError`, which the upload
+  action surfaces verbatim. Without it, a mis-picked file ingests
+  nonsense silently.
 - **Lost Sale Reason "Lead Merged into Existing Customer" (column AD) is
   excluded from enquiry reporting.** A merged lead is bookkeeping, not an
   enquiry: counting it inflates volume and, since merged records rarely
