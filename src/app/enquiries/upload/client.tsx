@@ -10,51 +10,72 @@ export function UploadClient() {
   const [outcome, setOutcome] = useState<UploadOutcome | null>(null);
   const [dragging, setDragging] = useState(false);
   const [queued, setQueued] = useState<File[]>([]);
+  const [failures, setFailures] = useState<Array<{ name: string; error: string }>>([]);
+  const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function pick(files: FileList | null) {
     if (!files || files.length === 0) return;
     setQueued(Array.from(files));
     setOutcome(null);
+    setFailures([]);
   }
 
   function submit() {
     if (queued.length === 0) return;
     start(async () => {
-      // Upload sequentially so the merge sees a consistent store between
-      // files — two exports of the same day processed in parallel could
-      // both read "not present" and race on the same enquiry.
-      let last: UploadOutcome | null = null;
+      // Sequential, so the merge sees a consistent store between files —
+      // two exports of the same day processed in parallel could both read
+      // "not present" and race on the same enquiry.
+      //
+      // A file that fails no longer abandons the batch. It is far too easy
+      // to sweep up one of the other MotorComplete reports that share the
+      // "export (N).xlsx" naming, and losing the whole run to a single bad
+      // pick is a miserable way to find that out. Failures are collected
+      // and reported alongside whatever did land.
       const totals = { inserted: 0, updated: 0, unchanged: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, skippedNotLead: 0, removedRetroactively: 0, rowsInFile: 0 };
+      const failures: Array<{ name: string; error: string }> = [];
+      let succeeded = 0;
+
       for (const file of queued) {
+        setProgress({ done: succeeded + failures.length, total: queued.length, current: file.name });
         const fd = new FormData();
         fd.set("file", file);
-        last = await uploadEnquiriesAction(fd);
-        if (!last.ok) break;
-        if (last.result) {
-          totals.inserted += last.result.inserted;
-          totals.updated += last.result.updated;
-          totals.unchanged += last.result.unchanged;
-          totals.skippedExcluded += last.result.skippedExcluded;
-          totals.skippedUnparseable += last.result.skippedUnparseable;
-          totals.duplicatesCollapsed += last.result.duplicatesCollapsed;
-          totals.skippedLostSaleReason += last.result.skippedLostSaleReason;
-          totals.skippedNotLead += last.result.skippedNotLead;
-          totals.removedRetroactively += last.result.removedRetroactively;
-          totals.rowsInFile += last.result.rowsInFile;
+        const res = await uploadEnquiriesAction(fd);
+        if (!res.ok) {
+          failures.push({ name: file.name, error: res.error ?? "Upload failed." });
+          continue;
+        }
+        succeeded++;
+        if (res.result) {
+          totals.inserted += res.result.inserted;
+          totals.updated += res.result.updated;
+          totals.unchanged += res.result.unchanged;
+          totals.skippedExcluded += res.result.skippedExcluded;
+          totals.skippedUnparseable += res.result.skippedUnparseable;
+          totals.duplicatesCollapsed += res.result.duplicatesCollapsed;
+          totals.skippedLostSaleReason += res.result.skippedLostSaleReason;
+          totals.skippedNotLead += res.result.skippedNotLead;
+          totals.removedRetroactively += res.result.removedRetroactively;
+          totals.rowsInFile += res.result.rowsInFile;
         }
       }
-      if (last?.ok) {
+
+      setProgress(null);
+      setFailures(failures);
+      if (succeeded > 0) {
         setOutcome({
           ok: true,
-          filename: queued.length === 1 ? queued[0].name : `${queued.length} files`,
+          filename: succeeded === 1
+            ? queued.find((f) => !failures.some((x) => x.name === f.name))?.name ?? "1 file"
+            : `${succeeded} files`,
           result: totals,
         });
         setQueued([]);
         if (inputRef.current) inputRef.current.value = "";
         router.refresh();
       } else {
-        setOutcome(last);
+        setOutcome({ ok: false, error: "Nothing could be uploaded." });
       }
     });
   }
@@ -102,7 +123,11 @@ export function UploadClient() {
               onClick={submit} disabled={pending}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              {pending ? "Uploading…" : `Upload ${queued.length} file${queued.length > 1 ? "s" : ""}`}
+              {pending
+                ? progress
+                  ? `Uploading ${progress.done + 1} of ${progress.total}…`
+                  : "Uploading…"
+                : `Upload ${queued.length} file${queued.length > 1 ? "s" : ""}`}
             </button>
             <button
               onClick={() => { setQueued([]); if (inputRef.current) inputRef.current.value = ""; }}
@@ -118,6 +143,22 @@ export function UploadClient() {
       {outcome && !outcome.ok && (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {outcome.error}
+        </div>
+      )}
+
+      {failures.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {failures.length} {failures.length === 1 ? "file was" : "files were"} skipped
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-amber-900">
+            {failures.map((f) => (
+              <li key={f.name}>
+                <span className="font-medium">{f.name}</span>
+                <span className="text-amber-800/80"> — {f.error}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
