@@ -238,11 +238,19 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   `/admin/broker-data` feeding it. All deleted at the user's direction;
   it's in git history if it's ever wanted back. Kept: the broker auth
   stack, `/admin/brokers`, and `/broker-ratebooks` (which is an *admin*
-  tool and unrelated to the portal despite the name). The quote-engine
-  **tables were left in the database** — schema changes are additive only,
-  so the code went and the tables stay, inert, until someone drops them
-  deliberately. Their Drizzle definitions and `ensure-schema` blocks are
-  gone, so they will not be recreated.
+  tool and unrelated to the portal despite the name). Their Drizzle
+  definitions and `ensure-schema` blocks are gone, so nothing recreates
+  them.
+- **The quote-engine tables are dropped by a script, not by migration.**
+  Schema changes here are additive only, so the rebuild left 16 orphaned
+  tables behind — including `broker_settings`, which held the old engine's
+  first-reg-fee / PDI / RFL defaults and read like live config. Clean them
+  up with `npx tsx scripts/drop-legacy-broker-tables.ts` (dry run by
+  default; `--commit` to apply, and `--force` as well before it will drop
+  a table holding rows). `brokers` / `broker_users` / `broker_sessions`
+  are on an explicit never-drop list. Applied to local dev on 2026-09-03;
+  **production still has them** — run it against Turso deliberately, after
+  a `.dump` backup.
 - **Enquiry Tracker working day is Mon–Fri 09:00–17:30.** Confirmed by the
   user against the worked example "enquiry 17:00, transferred 10:00 next
   day = 90 mins" (30 mins to close + 60 mins next morning). The 17:30
