@@ -169,9 +169,15 @@ const SORTS: { id: SortKey; label: string; only?: StockAudience }[] = [
 
 // Facets opened by default. Availability leads the broker view because
 // "when can I get one" is the first question they ask.
-const DEFAULT_OPEN: Partial<Record<FacetId, boolean>> = {
-  availability: true, model: true, variant: true, derivative: true, colour: true, option: true, status: true,
-};
+// Every facet starts closed, on both audiences. Seven were open by default,
+// which pushed the vehicles themselves below the fold on a laptop and meant
+// scrolling past filters nobody had asked for. A collapsed list of headings
+// is readable at a glance and opens in one click.
+//
+// The call site still opens any facet with an active selection, so a filter
+// that is doing something is never hidden behind a heading. Put an id back in
+// here to have it open on load.
+const DEFAULT_OPEN: Partial<Record<FacetId, boolean>> = {};
 
 function forAudience<T extends { only?: StockAudience }>(items: T[], audience: StockAudience): T[] {
   return items.filter((i) => !i.only || i.only === audience);
@@ -799,8 +805,15 @@ function FacetGroup({
       >
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">{title}</span>
-          {selected.size > 0 && (
+          {selected.size > 0 ? (
             <span className="rounded-full bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">{selected.size}</span>
+          ) : (
+            // With everything collapsed the headings are all a reader has to
+            // go on, so say how much is behind each one — "Derivative" hiding
+            // three options is a different proposition from forty.
+            !open && unioned.length > 0 && (
+              <span className="text-[10px] tabular-nums text-slate-400">{unioned.length}</span>
+            )
           )}
         </div>
         <span className="text-xs text-slate-400">{open ? "▾" : "▸"}</span>

@@ -97,6 +97,11 @@ When you touch either of these, run `npm test` before pushing.
   (re-exported from `src/app/orders/order-row.tsx` for back-compat).
 - `<BackLink fallback />` — `src/components/back-link.tsx`. History-aware
   back button; falls back to the provided path on direct loads.
+- **Facets start closed** on both audiences (`DEFAULT_OPEN` is empty). Seven
+  were open, which pushed the vehicles below the fold on a laptop. A facet
+  with an active selection still opens, so a filter that is doing something
+  is never hidden behind a heading; collapsed headings show how many options
+  they hold, since that is all a reader has to go on.
 - `<StockBrowser rows audience />` — `src/components/stock-browser.tsx`.
   The faceted stock list. Rendered by BOTH `/stock` and `/broker/stock`;
   read the Broker portal section before changing it. `src/app/stock/browser.tsx`
