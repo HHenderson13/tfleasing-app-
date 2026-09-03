@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 45;
+const SCHEMA_VERSION = 46;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -122,6 +122,7 @@ async function runEnsureAppSchema() {
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await ensureStockAvailabilityRules();
+  await ensureStockReferenceSecret();
   await ensureHotPathIndexes();
 }
 
@@ -621,6 +622,18 @@ async function ensureScraperTables() {
 //
 // Seeded with the two rules TF asked for and then left alone: INSERT OR
 // IGNORE so switching one off, or changing its value, survives every boot.
+// Table only. The secret itself is generated lazily on first mint, so a
+// migration running in a throwaway environment never creates one.
+async function ensureStockReferenceSecret() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS stock_reference_secret (
+      id INTEGER PRIMARY KEY,
+      secret TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `));
+}
+
 async function ensureStockAvailabilityRules() {
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS stock_availability_rules (

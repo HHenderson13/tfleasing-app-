@@ -44,6 +44,9 @@ export type StockRow = {
   eta: string | null;
   inStock: boolean;      // derived server-side from the mapped status
   // ── TF-only. Absent from the broker payload, hence optional. ──────────
+  // A second reference the same vehicle also answers to, so a quote a broker
+  // wrote down before the vehicle was built still resolves afterwards.
+  altRef?: string | null;
   // This vehicle is in the list only because an availability rule matched —
   // column H or E overrode the customer-assigned exclusion. Shown so whoever
   // set the rule up can see what it caught.
@@ -322,7 +325,10 @@ export function StockBrowser({
   const refQuery = useMemo(() => {
     const norm = normaliseReferenceQuery(q);
     if (!norm) return null;
-    return rows.some((r) => r.ref === norm) ? norm : null;
+    // altRef too: a vehicle referenced by dealer+order before it was built
+    // switches to its VIN reference once Ford assigns one, and a broker may
+    // still be holding the earlier quote. Both resolve to the same vehicle.
+    return rows.some((r) => r.ref === norm || r.altRef === norm) ? norm : null;
   }, [q, rows]);
 
   function haystack(r: StockRow) {
@@ -335,7 +341,7 @@ export function StockBrowser({
   }
 
   function matchesSearch(r: StockRow) {
-    if (refQuery) return r.ref === refQuery;
+    if (refQuery) return r.ref === refQuery || r.altRef === refQuery;
     const needle = q.trim().toLowerCase();
     if (!needle) return true;
     return haystack(r).includes(needle);

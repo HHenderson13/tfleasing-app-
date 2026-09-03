@@ -8,6 +8,7 @@ import { redactForBroker, type MappedStockRow } from "./stock-list";
 
 const FULL_ROW: MappedStockRow = {
   ref: "TF-2GG495H9",
+  altRef: "TF-ALT12345",
   vin: "WF0AXXTTRAPY12345",
   bucket: "Puma",
   variant: "ST-Line X",
@@ -40,6 +41,8 @@ const FORBIDDEN_KEYS = [
   "modelYear", "gateRelease", "interestBearing", "adopted", "delivered",
   // How we classify our own stock is not a broker's business.
   "includedByRule",
+  // A TF-side search key, not a handle a broker needs.
+  "altRef",
 ] as const;
 
 describe("redactForBroker", () => {

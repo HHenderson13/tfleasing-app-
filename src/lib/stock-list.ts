@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { stockAvailabilityRules, stockMappings, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { availableByRule, type AvailabilityRule } from "./stock-availability";
-import { vehicleReferenceFromVin } from "./stock-reference-mint";
+import { getStockReferenceSecret, vehicleIdentityKey, vehicleReferenceFromIdentity, vehicleReferenceFromVin } from "./stock-reference-mint";
 
 // Cache tags so the mapped-stock cache can be invalidated when admin
 // uploads a new stock file or edits the mapping table. Both tags are
@@ -30,6 +30,15 @@ export interface MappedStockRow {
   // it back to us, and TF pastes it into /stock search to find the
   // vehicle. See lib/stock-reference.ts.
   ref: string;
+  // A second reference the SAME vehicle also answers to, so a reference a
+  // broker wrote down still resolves after the vehicle changes state.
+  //
+  // A VIN-less vehicle is referenced by its specification; once Ford builds
+  // it and assigns a VIN, its reference becomes the VIN hash and the old one
+  // would point at nothing. Carrying the spec-derived reference alongside
+  // keeps the earlier quote working. TF-only — it is a search key, not
+  // something a broker needs.
+  altRef: string | null;
   // Internal identifier. Redacted before the broker payload is built —
   // it must never reach a broker's browser.
   vin: string | null;
@@ -113,8 +122,15 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
     ? or(eq(stockVehicles.customerAssigned, false), ...ruleClauses)
     : eq(stockVehicles.customerAssigned, false);
 
+  // A vehicle needs either a VIN (it exists) or an ETA (it is coming). With
+  // neither it is an orderbank line with no arrival date — nothing anyone
+  // can sell, and nothing worth a reference.
+  const sellable = or(isNotNull(stockVehicles.vin), isNotNull(stockVehicles.etaAt));
+
+  const secret = await getStockReferenceSecret();
+
   const [rows, mappings, latestUploadRows] = await Promise.all([
-    db.select().from(stockVehicles).where(and(inScope, isNotNull(stockVehicles.vin))),
+    db.select().from(stockVehicles).where(and(inScope, sellable)),
     db.select().from(stockMappings),
     db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
   ]);
@@ -173,11 +189,22 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
     }
     if (dem.hidden) derivative = null;
 
-    const vin = v.vin ?? `row-${v.id}`;
+    // Dealer code + order number identifies the vehicle whether or not it
+    // has been built yet — see vehicleIdentityKey.
+    const identity = vehicleIdentityKey(v.dealerRaw, v.orderNo);
+    const identityRef = identity ? vehicleReferenceFromIdentity(identity, secret) : null;
+
+    // No VIN and no identity means nothing durable to quote. Rather than
+    // publish a reference that dies at the next upload, leave the row out.
+    if (!v.vin && !identityRef) continue;
+
     const status = sm.hidden ? null : sm.value;
     out.push({
-      ref: vehicleReferenceFromVin(vin),
-      vin,
+      // A VIN, when there is one, stays the reference — brokers hold those
+      // and they must not move. Otherwise the spec reference is it.
+      ref: v.vin ? vehicleReferenceFromVin(v.vin, secret) : identityRef!,
+      altRef: v.vin ? identityRef : null,
+      vin: v.vin,
       bucket: v.sourceSheet ?? "—",
       variant,
       derivative,
@@ -230,6 +257,7 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //   adopted                 form, including as a filter or a tag.
 //   gateRelease           — a build milestone, and a back door to the
 //                           ageing figure we're deliberately not showing.
+//   altRef                — a TF-side search key, not a broker's handle.
 //   includedByRule        — how we classify our own stock is our business.
 //   delivered             — the arrival date. A broker needs to know a
 //                           vehicle is HERE, not when it landed: a date
@@ -239,7 +267,7 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //                           the date does not travel.
 export type BrokerStockRow = Omit<
   MappedStockRow,
-  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule"
+  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule" | "altRef"
 >;
 
 export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {

@@ -490,7 +490,36 @@ lands on that exact vehicle.
   Split because `node:crypto` can't be bundled into a client component and
   the search box needs the reading rules on the client.
 
-Truncated SHA-256 of the VIN, so it's stable across stock uploads (the
+**The hash is KEYED (HMAC), and must stay keyed.** A plain hash here is
+reversible — not because SHA-256 is weak, but because the inputs are
+guessable: dealer codes and order numbers are short and enumerable, and the
+whole reference space maps in under a second on a laptop, handing anyone who
+worked out the scheme the dealer code behind any reference. That is one of
+the things brokers are deliberately not shown. The key lives in
+`stock_reference_secret` in the DATABASE, generated once on first mint —
+not an env var, because it must survive forever (change it and every
+reference in circulation stops resolving) and so belongs where the backups
+are.
+
+**Vehicles with no VIN.** ORDERBANK stock has no VIN until Ford builds it,
+but it is real sellable stock. A vehicle is listed when it has a VIN *or* an
+ETA; with neither it is an orderbank line nobody can sell and it is left out
+(user's rule, 2026-09-03). VIN-less vehicles are referenced by
+**dealer code (column B) + order number (column AF)** — verified unique
+across all 25,066 rows of a real upload, with zero duplicates.
+
+Two things that do NOT work as the key, both tried:
+  • The order number alone. It is a batch code — `C0057` covers sixteen
+    vehicles including a Capri, a Puma, a Ranger and a Transit.
+  • A hash of the specification. A colour correction or an added option
+    would mint a new reference and silently break one a broker was holding.
+
+When Ford assigns a VIN the reference becomes the VIN hash, so the vehicle
+carries `altRef` — its former identity reference — and TF-side search matches
+either. Without that, every reference quoted before a vehicle was built would
+stop resolving the moment it was. `altRef` is TF-only and redacted.
+
+Truncated HMAC-SHA-256, so it's stable across stock uploads (the
 `stock_vehicles` autoincrement id is replaced every upload — the VIN hash
 is the only durable handle), opaque, and needs no table or round trip.
 **Never change the alphabet or the length** — a broker may be holding a

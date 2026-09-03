@@ -298,6 +298,24 @@ export const stockAvailabilityRules = sqliteTable("stock_availability_rules", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// The key the vehicle reference hash is built with.
+//
+// Without it the scheme is reversible: dealer codes and order numbers are
+// short and enumerable, and the whole reference space can be mapped in under
+// a second on a laptop — handing anyone who worked out the algorithm the
+// dealer code behind any reference, which is one of the things brokers are
+// deliberately not shown.
+//
+// Kept in the DATABASE rather than an env var on purpose. It has to survive
+// forever — change it and every reference in circulation stops resolving —
+// so it lives where the backups are, rather than somewhere it can be lost or
+// mismatched between environments. Generated once, on first use.
+export const stockReferenceSecret = sqliteTable("stock_reference_secret", {
+  id: integer("id").primaryKey(),
+  secret: text("secret").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const stockUploads = sqliteTable("stock_uploads", {
   id: text("id").primaryKey(),
   filename: text("filename").notNull(),
