@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 44;
+const SCHEMA_VERSION = 45;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -121,6 +121,7 @@ async function runEnsureAppSchema() {
   await ensureEnquiryTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
+  await ensureStockAvailabilityRules();
   await ensureHotPathIndexes();
 }
 
@@ -614,6 +615,37 @@ async function ensureScraperTables() {
       created_at INTEGER NOT NULL
     )
   `));
+}
+
+// Availability rules — see the note in db/schema.ts for what they do.
+//
+// Seeded with the two rules TF asked for and then left alone: INSERT OR
+// IGNORE so switching one off, or changing its value, survives every boot.
+async function ensureStockAvailabilityRules() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS stock_availability_rules (
+      column_letter TEXT PRIMARY KEY,
+      match_value TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  // Raw spreadsheet values the rules match against. Nullable: rows uploaded
+  // before this existed simply do not match, and the next upload fills them.
+  await ensureColumns("stock_vehicles", [
+    { name: "raw_col_e", sqlType: "TEXT" },
+    { name: "raw_col_h", sqlType: "TEXT" },
+  ]);
+  const now = Math.floor(Date.now() / 1000);
+  for (const r of [
+    { col: "H", value: "CO" },
+    { col: "E", value: "66170" },
+  ]) {
+    await db.run(sql`
+      INSERT OR IGNORE INTO stock_availability_rules (column_letter, match_value, enabled, updated_at)
+      VALUES (${r.col}, ${r.value}, 1, ${now})
+    `);
+  }
 }
 
 async function seedKugaEngineMappings() {

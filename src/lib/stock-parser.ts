@@ -24,6 +24,13 @@ export interface ParsedStockVehicle {
   interestBearingAt: Date | null; // input col AQ
   adoptedAt: Date | null;         // input col AR (overrides interest-bearing)
   customerAssigned: boolean;       // true when row should be excluded from /stock — customer/fleet assigned, excluded branch, or model not in our bucket list. Kept in DB for awaiting-delivery VIN/order matching.
+  // Raw values of spreadsheet columns E and H, kept verbatim for the
+  // availability rules (see stockAvailabilityRules in db/schema.ts). Read by
+  // POSITION in both layouts — the header sheet and the fixed-column sheet
+  // disagree about what these columns are called, but an operator reading
+  // their own file just sees "column H".
+  rawColE: string | null;
+  rawColH: string | null;
   sourceSheet: string | null; // model bucket e.g. "Puma" — null when model isn't one we sell
 }
 
@@ -424,6 +431,10 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       seen.add(vin);
     }
 
+    // Positional, not by header: the rule is written in terms of column
+    // letters because that is what the operator sees in Excel.
+    const rawColE = toStr(row[4]);
+    const rawColH = toStr(row[7]);
     const branchRaw = toStr(pick(row, "DEALER"));
     const modelRawUpper = (toStr(pick(row, "WERS_MODEL_NAME")) ?? "").toUpperCase();
     const bucket = modelRawUpper ? sheetForModel(modelRawUpper) : null;
@@ -475,6 +486,8 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       interestBearingAt: toDate(pickIdx(row, intBearingIdx)),
       adoptedAt: toDate(pickIdx(row, adoptedIdx)),
       customerAssigned,
+      rawColE,
+      rawColH,
       sourceSheet: bucket,
     });
   }
@@ -487,6 +500,7 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
 
   const C = {
     branch: col("B"),
+    colE: col("E"),
     colH: col("H"),
     modelYear: col("K"),
     model: col("L"),
@@ -525,6 +539,8 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       seen.add(vin);
     }
 
+    const rawColE = toStr(row[C.colE]);
+    const rawColH = toStr(row[C.colH]);
     const branchRaw = toStr(row[C.branch]);
     const modelRawUpper = (toStr(row[C.model]) ?? "").toUpperCase();
     const bucket = modelRawUpper ? sheetForModel(modelRawUpper) : null;
@@ -575,6 +591,8 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       interestBearingAt: toDate(row[C.interestBearing]),
       adoptedAt: toDate(row[C.adopted]),
       customerAssigned,
+      rawColE,
+      rawColH,
       sourceSheet: bucket,
     });
   }

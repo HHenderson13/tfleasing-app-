@@ -2,8 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
-import { stockMappings, stockUploads, stockVehicles } from "@/db/schema";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { stockAvailabilityRules, stockMappings, stockUploads, stockVehicles } from "@/db/schema";
+import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
+import { availableByRule, type AvailabilityRule } from "./stock-availability";
 import { vehicleReferenceFromVin } from "./stock-reference-mint";
 
 // Cache tags so the mapped-stock cache can be invalidated when admin
@@ -52,6 +53,12 @@ export interface MappedStockRow {
   adopted: string | null;
   dealer: string;
   destination: string | null;
+  // True when this row is only in the list because an availability rule
+  // matched — i.e. column H or E overrode the customer-assigned exclusion.
+  // TF-only: it tells whoever set the rule up which vehicles it caught,
+  // which is the only way to check it is doing what was intended. Redacted
+  // for brokers, who have no business knowing how we classify our own stock.
+  includedByRule: boolean;
   // "The vehicle is physically here." Derived from the mapped status once,
   // server-side, so the browser never has to re-parse status text — and so
   // brokers can be shown availability without being shown status at all.
@@ -79,8 +86,35 @@ const cachedMappedStock = unstable_cache(
 export const loadMappedStock = cache(cachedMappedStock);
 
 async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploadedAt: Date | null }> {
+  // Availability rules first — they widen which rows we ask for. Fetched
+  // rather than hardcoded so toggling one in admin takes effect on the next
+  // cache miss, with no re-upload.
+  const rules: AvailabilityRule[] = (await db.select().from(stockAvailabilityRules)).map((r) => ({
+    columnLetter: r.columnLetter,
+    matchValue: r.matchValue,
+    enabled: !!r.enabled,
+  }));
+  const enabled = rules.filter((r) => r.enabled && r.matchValue.trim() !== "");
+
+  // Normally "not customer-assigned". An enabled rule pulls its matches back
+  // in — done in SQL rather than by loading all 25k rows and filtering in JS.
+  // Compared case-insensitively because the cell may be padded or lower-cased.
+  const ruleClauses = enabled.flatMap((r) => {
+    const letter = r.columnLetter.trim().toUpperCase();
+    const column =
+      letter === "E" ? stockVehicles.rawColE :
+      letter === "H" ? stockVehicles.rawColH :
+      null;
+    if (!column) return [];
+    return [sql`upper(trim(${column})) = ${r.matchValue.trim().toUpperCase()}`];
+  });
+
+  const inScope = ruleClauses.length
+    ? or(eq(stockVehicles.customerAssigned, false), ...ruleClauses)
+    : eq(stockVehicles.customerAssigned, false);
+
   const [rows, mappings, latestUploadRows] = await Promise.all([
-    db.select().from(stockVehicles).where(and(eq(stockVehicles.customerAssigned, false), isNotNull(stockVehicles.vin))),
+    db.select().from(stockVehicles).where(and(inScope, isNotNull(stockVehicles.vin))),
     db.select().from(stockMappings),
     db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
   ]);
@@ -164,6 +198,9 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       adopted: v.adoptedAt ? v.adoptedAt.toISOString() : null,
       dealer: dm.hidden ? "—" : (dm.value ?? "—"),
       destination: zm.hidden ? null : zm.value,
+      // Only flagged when the row would otherwise have been excluded —
+      // a rule matching a normal in-scope vehicle changes nothing.
+      includedByRule: v.customerAssigned && availableByRule(rules, v),
       inStock: IN_STOCK_STATUS.test(status ?? ""),
     });
   }
@@ -193,6 +230,7 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //   adopted                 form, including as a filter or a tag.
 //   gateRelease           — a build milestone, and a back door to the
 //                           ageing figure we're deliberately not showing.
+//   includedByRule        — how we classify our own stock is our business.
 //   delivered             — the arrival date. A broker needs to know a
 //                           vehicle is HERE, not when it landed: a date
 //                           three months old prices the car for them. The
@@ -201,7 +239,7 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //                           the date does not travel.
 export type BrokerStockRow = Omit<
   MappedStockRow,
-  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered"
+  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule"
 >;
 
 export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {

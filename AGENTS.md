@@ -102,6 +102,40 @@ When you touch either of these, run `npm test` before pushing.
   read the Broker portal section before changing it. `src/app/stock/browser.tsx`
   re-exports it for back-compat.
 
+## Stock availability rules
+
+Column H of the stock export is the customer / fleet-assigned marker, and
+**any** value in it hides a vehicle from `/stock` — which is why ~86% of an
+upload (21,504 of 25,066 rows at the time of writing) is excluded. Some
+values in it, and some values of column E, mark stock that is genuinely ours
+to sell.
+
+- `stock_availability_rules` holds one row per column letter, seeded `H = CO`
+  and `E = 66170`, both enabled. Admin edits the value or toggles it at
+  `/admin/stock` → **Availability rules**.
+- **A rule decides whether a vehicle APPEARS, not what its badge says.** A
+  matched vehicle keeps its normal status: `DELIVERED` still reads "in
+  stock", `CRAIOVA` still reads as an ETA. A rule asserts ownership, not
+  location. (User's explicit choice, 2026-09-03.)
+- Matching is **positional** — `rawColE` / `rawColH` are captured by index
+  (4 and 7) in *both* parser paths. The header sheet and the fixed-column
+  sheet disagree about what those columns are called, but an operator
+  reading their own file just sees "column H". Raw values are stored so a
+  rule can be re-valued or switched off **without re-uploading stock**.
+- Comparison is trimmed and case-insensitive, and **exact, never a prefix**:
+  `CO` must not catch `CORP`. An empty value never matches — otherwise
+  blanking the field with the rule left on would match every empty cell and
+  drag the whole excluded set into the list. `stock-availability.test.ts`
+  pins all of that.
+- Row inclusion is done in **SQL** (`stock-list.ts` builds the OR clauses
+  from the enabled rules), not by loading 25k rows and filtering in JS.
+- `includedByRule` marks rows that only appear because a rule matched. It is
+  **TF-only** — redacted for brokers, who have no business knowing how we
+  classify our own stock — and drives a `Rule` tag plus an "Included by"
+  facet so whoever set a rule up can see what it caught. A typo that matches
+  nothing otherwise looks identical to a correct rule, which is also why the
+  settings screen shows a live match count per rule.
+
 ## Broker portal
 
 A second, self-contained portal at `/broker`. Brokers see **one tab —

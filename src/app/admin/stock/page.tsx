@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { stockAvailabilityRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { StockUploadView } from "./view";
+import { AvailabilityRules, type RuleRow } from "./availability-rules";
 
 export const dynamic = "force-dynamic";
 // Workbook parse + DB replace can take a while; default 10s on Hobby would 504.
@@ -9,7 +10,7 @@ export const maxDuration = 300;
 
 export default async function StockUploadPage() {
   // Four independent reads in parallel — was sequential.
-  const [latestRows, countRow, bySheet, settingsRows] = await Promise.all([
+  const [latestRows, countRow, bySheet, settingsRows, availabilityRules] = await Promise.all([
     db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
     db.select({ n: sql<number>`count(*)` }).from(stockVehicles),
     db
@@ -17,9 +18,41 @@ export default async function StockUploadPage() {
       .from(stockVehicles)
       .groupBy(stockVehicles.sourceSheet),
     db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1),
+    db.select().from(stockAvailabilityRules),
   ]);
   const [latest] = latestRows;
   const [settings] = settingsRows;
+
+  // How many vehicles each rule actually catches, counted against the current
+  // upload. Without this the settings screen is a pair of text boxes and no
+  // way to tell whether the value is right — a typo would silently match
+  // nothing and look identical to a correct rule.
+  const ruleRows: RuleRow[] = await Promise.all(
+    availabilityRules
+      .slice()
+      .sort((a, b) => a.columnLetter.localeCompare(b.columnLetter))
+      .map(async (r) => {
+        const letter = r.columnLetter.trim().toUpperCase();
+        const column =
+          letter === "E" ? stockVehicles.rawColE :
+          letter === "H" ? stockVehicles.rawColH :
+          null;
+        let matchedCount = 0;
+        if (column && r.matchValue.trim()) {
+          const [row] = await db
+            .select({ n: sql<number>`count(*)` })
+            .from(stockVehicles)
+            .where(sql`upper(trim(${column})) = ${r.matchValue.trim().toUpperCase()}`);
+          matchedCount = Number(row?.n ?? 0);
+        }
+        return {
+          columnLetter: r.columnLetter,
+          matchValue: r.matchValue,
+          enabled: !!r.enabled,
+          matchedCount,
+        };
+      }),
+  );
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">Stock upload</h1>
@@ -33,6 +66,7 @@ export default async function StockUploadPage() {
         perSheet={bySheet.map((r) => ({ sheet: r.sheet ?? "—", count: Number(r.n) }))}
         password={settings?.workbookPassword ?? "Ftru"}
       />
+      <AvailabilityRules rules={ruleRows} />
     </div>
   );
 }

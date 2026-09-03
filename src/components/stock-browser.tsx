@@ -44,6 +44,10 @@ export type StockRow = {
   eta: string | null;
   inStock: boolean;      // derived server-side from the mapped status
   // ── TF-only. Absent from the broker payload, hence optional. ──────────
+  // This vehicle is in the list only because an availability rule matched —
+  // column H or E overrode the customer-assigned exclusion. Shown so whoever
+  // set the rule up can see what it caught.
+  includedByRule?: boolean;
   delivered?: string | null;
   vin?: string | null;
   orderNo?: string | null;
@@ -59,7 +63,7 @@ export type StockRow = {
 type SortKey = "eta-asc" | "eta-desc" | "gate-desc" | "model" | "dealer";
 
 type FacetId =
-  | "model" | "variant" | "derivative" | "availability" | "year" | "body" | "engine"
+  | "model" | "variant" | "derivative" | "availability" | "year" | "body" | "engine" | "included"
   | "transmission" | "drive" | "colour" | "option" | "status" | "funding" | "dealer" | "destination";
 
 // Only flag funding when the date has actually passed — a future "interest bearing date"
@@ -141,6 +145,9 @@ const FACETS: Facet[] = [
   { id: "option",       label: "Factory options", get: (r) => r.options },
   { id: "status",       label: "Status",       only: "tf", get: (r) => r.status ?? null },
   { id: "funding",      label: "Funding",      only: "tf", get: fundingState },
+  // Lets whoever set a rule up filter down to only what it caught, which is
+  // the quickest way to sanity-check a value before trusting it.
+  { id: "included",     label: "Included by",   only: "tf", get: (r) => (r.includedByRule ? "Availability rule" : "Normal stock") },
   { id: "dealer",       label: "Dealer",       only: "tf", get: (r) => r.dealer ?? null },
   { id: "destination",  label: "Destination",  only: "tf", get: (r) => r.destination ?? null },
 ];
@@ -616,6 +623,14 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
                 <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">{r.derivative}</span>
               )}
               {!isBroker && r.modelYear && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{r.modelYear}</span>}
+              {!isBroker && r.includedByRule && (
+                <span
+                  className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                  title="Column H or E matched an availability rule — this vehicle would otherwise be hidden as customer/fleet assigned"
+                >
+                  Rule
+                </span>
+              )}
             </div>
             <div className="mt-1 text-sm">
               <span className="font-medium text-slate-800">{r.colour}</span>

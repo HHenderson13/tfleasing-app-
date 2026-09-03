@@ -29,6 +29,7 @@ const FULL_ROW: MappedStockRow = {
   adopted: "2026-08-01T00:00:00.000Z",
   dealer: "TrustFord Enfield",
   destination: "Enfield",
+  includedByRule: false,
   inStock: false,
 };
 
@@ -37,6 +38,8 @@ const FULL_ROW: MappedStockRow = {
 const FORBIDDEN_KEYS = [
   "vin", "orderNo", "dealer", "destination", "status",
   "modelYear", "gateRelease", "interestBearing", "adopted", "delivered",
+  // How we classify our own stock is not a broker's business.
+  "includedByRule",
 ] as const;
 
 describe("redactForBroker", () => {

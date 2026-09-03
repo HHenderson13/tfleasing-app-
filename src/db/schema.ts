@@ -279,6 +279,25 @@ export const stockSettings = sqliteTable("stock_settings", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Vehicles that column H or column E says are available, whatever the rest of
+// the row implies.
+//
+// Column H is normally the customer/fleet-assigned marker: ANY value in it
+// hides the vehicle from /stock. Certain codes in it ("CO") and certain
+// values of column E ("66170") mark stock that is genuinely ours to sell, so
+// a matching row is pulled back into the list. It keeps its normal status —
+// the rule decides whether a vehicle APPEARS, not whether it reads as
+// in-stock or as an ETA.
+//
+// One row per column letter, seeded and then edited by admin, so a rule can
+// be switched off or re-valued from the UI rather than in code.
+export const stockAvailabilityRules = sqliteTable("stock_availability_rules", {
+  columnLetter: text("column_letter").primaryKey(), // "E" | "H"
+  matchValue: text("match_value").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export const stockUploads = sqliteTable("stock_uploads", {
   id: text("id").primaryKey(),
   filename: text("filename").notNull(),
@@ -309,6 +328,13 @@ export const stockVehicles = sqliteTable("stock_vehicles", {
   interestBearingAt: integer("interest_bearing_at", { mode: "timestamp" }),
   adoptedAt: integer("adopted_at", { mode: "timestamp" }),
   customerAssigned: integer("customer_assigned", { mode: "boolean" }).notNull().default(false),
+  // Raw spreadsheet values, kept verbatim so the availability rules in
+  // stock_availability_rules can be toggled or re-valued without re-uploading
+  // stock. Positional (E = 5th column, H = 8th) because that is what an
+  // operator reads off their own sheet, and the two parser layouts disagree
+  // about what those columns are called.
+  rawColE: text("raw_col_e"),
+  rawColH: text("raw_col_h"),
   sourceSheet: text("source_sheet"),
   uploadId: text("upload_id").notNull(),
 });
