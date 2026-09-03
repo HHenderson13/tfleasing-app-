@@ -2,9 +2,10 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
-import { stockAvailabilityRules, stockMappings, stockUploads, stockVehicles } from "@/db/schema";
+import { stockAvailabilityRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { availableByRule, type AvailabilityRule } from "./stock-availability";
+import { matchModelDealerRule, parseDealerCodes, type ModelDealerRule } from "./stock-model-rules";
 import { getStockReferenceSecret, vehicleIdentityKey, vehicleReferenceFromIdentity, vehicleReferenceFromVin } from "./stock-reference-mint";
 
 // Cache tags so the mapped-stock cache can be invalidated when admin
@@ -71,6 +72,14 @@ export interface MappedStockRow {
   // "The vehicle is physically here." Derived from the mapped status once,
   // server-side, so the browser never has to re-parse status text — and so
   // brokers can be shown availability without being shown status at all.
+  // A warning to show alongside the vehicle. By the time a row reaches the
+  // browser this already holds the text for THAT audience — TF is told to
+  // check with Fleet, a broker to check with us — so the component never has
+  // to choose, and the TF wording cannot reach a broker by accident.
+  offerNote: string | null;
+  // The broker's version, carried only as far as redactForBroker, which
+  // swaps it into offerNote and drops this. TF-only.
+  offerNoteBroker: string | null;
   inStock: boolean;
 }
 
@@ -128,6 +137,18 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
   const sellable = or(isNotNull(stockVehicles.vin), isNotNull(stockVehicles.etaAt));
 
   const secret = await getStockReferenceSecret();
+
+  // Vehicles the feed misnames, identified by their dealer — see
+  // lib/stock-model-rules.ts.
+  const modelRules: ModelDealerRule[] = (await db.select().from(stockModelDealerRules)).map((r) => ({
+    id: r.id,
+    modelRaw: r.modelRaw,
+    dealerCodes: parseDealerCodes(r.dealerCodes),
+    displayName: r.displayName,
+    tfNote: r.tfNote,
+    brokerNote: r.brokerNote,
+    enabled: !!r.enabled,
+  }));
 
   const [rows, mappings, latestUploadRows] = await Promise.all([
     db.select().from(stockVehicles).where(and(inScope, sellable)),
@@ -206,6 +227,10 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
     // publish a reference that dies at the next upload, leave the row out.
     if (!v.vin && !identityRef) continue;
 
+    // Matched on the FEED's model and dealer, before any display tidying, so
+    // renaming something in mappings cannot quietly stop a rule applying.
+    const modelRule = matchModelDealerRule(modelRules, v.modelRaw, v.dealerRaw);
+
     const status = sm.hidden ? null : sm.value;
     out.push({
       // A VIN, when there is one, stays the reference — brokers hold those
@@ -213,7 +238,9 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       ref: v.vin ? vehicleReferenceFromVin(v.vin, secret) : identityRef!,
       altRef: v.vin ? identityRef : null,
       vin: v.vin,
-      bucket: v.sourceSheet ?? "—",
+      // The rule renames the model itself, so an Explorer Van reads as one
+      // everywhere — including as its own entry in the Model filter.
+      bucket: modelRule?.displayName ?? v.sourceSheet ?? "—",
       variant,
       derivative,
       series: srm.hidden ? null : srm.value,
@@ -236,6 +263,8 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       // Only flagged when the row would otherwise have been excluded —
       // a rule matching a normal in-scope vehicle changes nothing.
       includedByRule: v.customerAssigned && availableByRule(rules, v),
+      offerNote: modelRule?.tfNote ?? null,
+      offerNoteBroker: modelRule?.brokerNote ?? null,
       inStock: IN_STOCK_STATUS.test(status ?? ""),
     });
   }
@@ -265,6 +294,8 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //   adopted                 form, including as a filter or a tag.
 //   gateRelease           — a build milestone, and a back door to the
 //                           ageing figure we're deliberately not showing.
+//   offerNoteBroker       — folded into offerNote above; carrying both would
+//                           put the TF wording on the wire.
 //   altRef                — a TF-side search key, not a broker's handle.
 //   includedByRule        — how we classify our own stock is our business.
 //   delivered             — the arrival date. A broker needs to know a
@@ -275,7 +306,7 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //                           the date does not travel.
 export type BrokerStockRow = Omit<
   MappedStockRow,
-  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule" | "altRef"
+  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule" | "altRef" | "offerNoteBroker"
 >;
 
 export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
@@ -292,6 +323,9 @@ export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
     colour: r.colour,
     options: r.options,
     eta: r.eta,
+    // The broker's wording replaces TF's. Done here, at the boundary, so the
+    // internal instruction ("check with Fleet") cannot reach a broker.
+    offerNote: r.offerNoteBroker,
     inStock: r.inStock,
   }));
 }

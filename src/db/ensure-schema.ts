@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 47;
+const SCHEMA_VERSION = 48;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -124,6 +124,7 @@ async function runEnsureAppSchema() {
   await seedSeriesMappings();
   await ensureStockAvailabilityRules();
   await ensureStockReferenceSecret();
+  await ensureStockModelDealerRules();
   await ensureHotPathIndexes();
 }
 
@@ -623,6 +624,31 @@ async function ensureScraperTables() {
 //
 // Seeded with the two rules TF asked for and then left alone: INSERT OR
 // IGNORE so switching one off, or changing its value, survives every boot.
+// Model-by-dealer rules — see the note in db/schema.ts. Seeded with the
+// Explorer Van sites and then left alone: INSERT OR IGNORE, so adding or
+// removing a dealer code in the UI survives every boot.
+async function ensureStockModelDealerRules() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS stock_model_dealer_rules (
+      id TEXT PRIMARY KEY,
+      model_raw TEXT NOT NULL,
+      dealer_codes TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      tf_note TEXT,
+      broker_note TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  const now = Math.floor(Date.now() / 1000);
+  await db.run(sql`
+    INSERT OR IGNORE INTO stock_model_dealer_rules
+      (id, model_raw, dealer_codes, display_name, tf_note, broker_note, enabled, updated_at)
+    VALUES ('explorer-van', 'EXPLORER', '97706, 97709, 97714, 97726', 'Explorer Van',
+            'Check with Fleet before offering', 'Check with Dealer before offering', 1, ${now})
+  `);
+}
+
 // Table only. The secret itself is generated lazily on first mint, so a
 // migration running in a throwaway environment never creates one.
 async function ensureStockReferenceSecret() {

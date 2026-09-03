@@ -31,6 +31,8 @@ const FULL_ROW: MappedStockRow = {
   dealer: "TrustFord Enfield",
   destination: "Enfield",
   includedByRule: false,
+  offerNote: "Check with Fleet before offering",
+  offerNoteBroker: "Check with Dealer before offering",
   inStock: false,
 };
 
@@ -43,6 +45,9 @@ const FORBIDDEN_KEYS = [
   "includedByRule",
   // A TF-side search key, not a handle a broker needs.
   "altRef",
+  // Folded into offerNote at the boundary; carrying it would put the TF
+  // wording on the wire alongside the broker's.
+  "offerNoteBroker",
 ] as const;
 
 describe("redactForBroker", () => {
@@ -83,6 +88,7 @@ describe("redactForBroker", () => {
       colour: "Agate Black",
       options: ["Panoramic roof", "Winter pack"],
       eta: "2026-10-14T00:00:00.000Z",
+      offerNote: "Check with Dealer before offering",
       inStock: false,
     });
   });
@@ -106,6 +112,15 @@ describe("redactForBroker", () => {
     const [here] = redactForBroker([{ ...FULL_ROW, inStock: true, status: "Delivered" }]);
     expect(here.inStock).toBe(true);
     expect(here).not.toHaveProperty("status");
+  });
+
+  it("gives a broker the broker wording, never the internal one", () => {
+    // "Check with Fleet" is an instruction to TF staff. A broker seeing it
+    // would be told to contact a department they have no relationship with,
+    // and it leaks how we are organised internally.
+    const [row] = redactForBroker([FULL_ROW]);
+    expect(row.offerNote).toBe("Check with Dealer before offering");
+    expect(JSON.stringify(row)).not.toContain("Fleet");
   });
 
   it("withholds the arrival date even from a vehicle that is in stock", () => {

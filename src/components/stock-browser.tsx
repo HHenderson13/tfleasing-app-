@@ -42,6 +42,10 @@ export type StockRow = {
   colour: string;
   options: string[];
   eta: string | null;
+  // A warning to show with the vehicle. Already the right text for this
+  // audience by the time it arrives — TF is told to check with Fleet, a
+  // broker to check with us — so this renders it without choosing.
+  offerNote?: string | null;
   inStock: boolean;      // derived server-side from the mapped status
   // ── TF-only. Absent from the broker payload, hence optional. ──────────
   // A second reference the same vehicle also answers to, so a quote a broker
@@ -638,6 +642,16 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
                 </span>
               )}
             </div>
+            {/* Loud on purpose: the whole reason the rule exists is that
+                offering one of these as an ordinary car is the mistake. */}
+            {r.offerNote && (
+              <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                <svg viewBox="0 0 20 20" aria-hidden className="h-3.5 w-3.5 shrink-0 fill-amber-600">
+                  <path d="M10 1.6 1.3 17.2h17.4L10 1.6Zm0 5.1c.5 0 .9.4.9.9v4a.9.9 0 0 1-1.8 0v-4c0-.5.4-.9.9-.9Zm0 8.6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" />
+                </svg>
+                {r.offerNote}
+              </div>
+            )}
             <div className="mt-1 text-sm">
               <span className="font-medium text-slate-800">{r.colour}</span>
               {specBits.length > 0 && <span className="text-slate-500"> · {specBits.join(" · ")}</span>}

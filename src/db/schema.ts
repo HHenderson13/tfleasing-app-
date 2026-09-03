@@ -298,6 +298,28 @@ export const stockAvailabilityRules = sqliteTable("stock_availability_rules", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Vehicles the feed calls one thing that are really another, identified by
+// the dealer they sit at.
+//
+// An Explorer on a van dealer code is an Explorer Van — Ford's export gives
+// both the same model name, and only the site tells them apart. It also
+// carries a warning, different at each end: TF checks with Fleet before
+// offering one, a broker checks with us. Offering a van as a car is the
+// mistake this exists to prevent.
+//
+// Data, not code, because dealer codes move — sites open, close and get
+// renumbered, and none of that should need a deploy.
+export const stockModelDealerRules = sqliteTable("stock_model_dealer_rules", {
+  id: text("id").primaryKey(),
+  modelRaw: text("model_raw").notNull(),         // feed's model name, e.g. "EXPLORER"
+  dealerCodes: text("dealer_codes").notNull(),   // comma-separated site codes
+  displayName: text("display_name").notNull(),   // "Explorer Van"
+  tfNote: text("tf_note"),                       // shown on /stock
+  brokerNote: text("broker_note"),               // shown on /broker/stock
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // The key the vehicle reference hash is built with.
 //
 // Without it the scheme is reversible: dealer codes and order numbers are

@@ -1,16 +1,19 @@
 import { db } from "@/db";
-import { stockMappings, stockVehicles } from "@/db/schema";
+import { stockMappings, stockModelDealerRules, stockVehicles } from "@/db/schema";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { StockMappingsView } from "./view";
 import type { MappingKind } from "./actions";
+import { ModelDealerRules, type ModelDealerRuleRow } from "./model-dealer-rules";
+import { dealerCode, parseDealerCodes } from "@/lib/stock-model-rules";
 
 export const dynamic = "force-dynamic";
 
 export type RawCount = { raw: string; count: number; buckets: string[] };
 
 export default async function StockMappingsPage() {
-  const [mappings, rows] = await Promise.all([
+  const [mappings, modelRules, rows] = await Promise.all([
     db.select().from(stockMappings),
+    db.select().from(stockModelDealerRules),
     db
       .select({
         bucket:       stockVehicles.sourceSheet,
@@ -99,6 +102,28 @@ export default async function StockMappingsPage() {
     status:       tally((r) => r.status),
   };
 
+  // How many vehicles each override actually catches. Without it a rule
+  // pointing at a dealer code that has since been renumbered looks exactly
+  // like one that is working.
+  const modelRuleRows: ModelDealerRuleRow[] = modelRules.map((r) => {
+    const codes = parseDealerCodes(r.dealerCodes);
+    const model = r.modelRaw.trim().toUpperCase();
+    const matchedCount = rows.filter((row) =>
+      (row.model ?? "").trim().toUpperCase() === model &&
+      codes.includes(dealerCode(row.dealer) ?? ""),
+    ).length;
+    return {
+      id: r.id,
+      modelRaw: r.modelRaw,
+      dealerCodes: r.dealerCodes,
+      displayName: r.displayName,
+      tfNote: r.tfNote ?? "",
+      brokerNote: r.brokerNote ?? "",
+      enabled: !!r.enabled,
+      matchedCount,
+    };
+  });
+
   const allBuckets = [...new Set(rows.map((r) => r.bucket).filter(Boolean) as string[])].sort();
 
   return (
@@ -120,6 +145,7 @@ export default async function StockMappingsPage() {
           allBuckets={allBuckets}
         />
       </div>
+      <ModelDealerRules rules={modelRuleRows} />
     </div>
   );
 }

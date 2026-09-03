@@ -124,6 +124,34 @@ Seeded `SELF → Select` via `seedSeriesMappings`, `INSERT OR IGNORE` so an
 admin edit survives every boot. Add future renames there or in the UI —
 they should not need a code change.
 
+## Model overrides by dealer
+
+Some vehicles are a different model from what Ford's feed calls them, and
+only the dealer says so: an **Explorer on a van dealer code is an Explorer
+Van**. `stock_model_dealer_rules` holds one row per override — feed model,
+dealer codes, the name to show instead, and two warning texts — edited at
+`/admin/stock-mappings` → **Model overrides by dealer**. Seeded with
+Explorer on 97706 / 97709 / 97714 / 97726.
+
+- A match renames `bucket`, so it reads as an Explorer Van everywhere
+  **including as its own entry in the Model filter** — brokers can filter
+  vans in or out.
+- **The two warnings are separate on purpose.** TF is told "Check with
+  Fleet before offering"; brokers "Check with Dealer before offering". By
+  the time a row reaches the browser, `offerNote` already holds the text for
+  that audience — `redactForBroker` swaps in `offerNoteBroker` and drops it —
+  so the component never chooses and the internal wording cannot reach a
+  broker. `stock-list.test.ts` asserts "Fleet" never appears in a broker
+  payload.
+- Matching uses the **feed's** raw model and dealer, never the tidied
+  display values, so renaming something in mappings cannot quietly stop a
+  rule applying. The dealer code is the leading digits of `dealer_raw`
+  ("97706 (Fleet Barnsley)"), matched **exactly** — `977061` must not
+  inherit `97706`'s rule.
+- An enabled rule with no dealer codes is refused at save: it would do
+  nothing while looking configured. The settings screen also shows a live
+  match count, so a rule pointing at a renumbered site is visibly dead.
+
 ## Stock availability rules
 
 Column H of the stock export is the customer / fleet-assigned marker, and
