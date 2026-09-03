@@ -7,7 +7,7 @@ import { STOCK_MAPPINGS_TAG } from "@/lib/stock-list";
 
 export type MappingKind =
   | "dealer" | "model" | "colour" | "engine" | "destination" | "option"
-  | "body" | "transmission" | "drive" | "status" | "derivative";
+  | "body" | "transmission" | "drive" | "status" | "derivative" | "series";
 
 function reval() {
   // Tag busts the cross-request mapped-stock cache (used by /stock,

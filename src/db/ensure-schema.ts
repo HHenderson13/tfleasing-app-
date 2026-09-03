@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 46;
+const SCHEMA_VERSION = 47;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -121,6 +121,7 @@ async function runEnsureAppSchema() {
   await ensureEnquiryTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
+  await seedSeriesMappings();
   await ensureStockAvailabilityRules();
   await ensureStockReferenceSecret();
   await ensureHotPathIndexes();
@@ -657,6 +658,24 @@ async function ensureStockAvailabilityRules() {
     await db.run(sql`
       INSERT OR IGNORE INTO stock_availability_rules (column_letter, match_value, enabled, updated_at)
       VALUES (${r.col}, ${r.value}, 1, ${now})
+    `);
+  }
+}
+
+// Trim codes Ford renames between model years. "SELECT" became "SELF" on the
+// 2027 Explorer, which showed on the stock list as "Explorer SELF".
+//
+// Seeded rather than left for someone to notice, because the raw code reaches
+// brokers verbatim. INSERT OR IGNORE, so an admin who edits or deletes one
+// keeps their version — these are a starting point, not policy.
+async function seedSeriesMappings() {
+  const seeds: { rawKey: string; displayName: string }[] = [
+    { rawKey: "SELF", displayName: "Select" },
+  ];
+  for (const s of seeds) {
+    await db.run(sql`
+      INSERT OR IGNORE INTO stock_mappings (kind, raw_key, display_name, group_site_id, hidden, promote_to_variant)
+      VALUES ('series', ${s.rawKey}, ${s.displayName}, NULL, 0, 0)
     `);
   }
 }

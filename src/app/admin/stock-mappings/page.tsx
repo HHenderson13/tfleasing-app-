@@ -87,6 +87,7 @@ export default async function StockMappingsPage() {
   const rawsByKind: Record<MappingKind, RawCount[]> = {
     dealer:       tally((r) => r.dealer),
     model:        variants,
+    series:       tally((r) => r.series),
     derivative:   tally((r) => r.derivative),
     colour:       tally((r) => r.colour),
     engine:       tally((r) => r.engine),

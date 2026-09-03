@@ -102,6 +102,28 @@ When you touch either of these, run `npm test` before pushing.
   read the Broker portal section before changing it. `src/app/stock/browser.tsx`
   re-exports it for back-compat.
 
+## Stock mappings
+
+`stock_mappings` tidies raw Ford feed values, one row per `kind` + `rawKey`,
+edited at `/admin/stock-mappings`. Kinds: dealer, model, **series**,
+derivative, body, engine, transmission, drive, colour, option, status,
+destination.
+
+**`series` exists because Ford renames trims between model years.** "SELECT"
+became "SELF" on the 2027 Explorer, and the raw code went straight to the
+stock list and the broker portal as "Explorer SELF". Two fields showed it —
+the Series row, which was passed through unmapped, and the Variant, which
+falls back to the raw series when there is no `MODEL · SERIES` mapping.
+
+Mapping the series fixes both: `variant` now falls back to the **mapped**
+series, so one settings entry is enough. An explicit `model` mapping
+(keyed `"EXPLORER · SELF"`) still wins where one exists, being the more
+specific of the two.
+
+Seeded `SELF → Select` via `seedSeriesMappings`, `INSERT OR IGNORE` so an
+admin edit survives every boot. Add future renames there or in the UI —
+they should not need a code change.
+
 ## Stock availability rules
 
 Column H of the stock export is the customer / fleet-assigned marker, and

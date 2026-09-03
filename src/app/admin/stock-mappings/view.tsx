@@ -14,6 +14,7 @@ type RawCount = { raw: string; count: number; buckets: string[] };
 const KINDS: { id: MappingKind; label: string }[] = [
   { id: "dealer",       label: "Dealers" },
   { id: "model",        label: "Variants" },
+  { id: "series",       label: "Series / trim" },
   { id: "derivative",   label: "Derivatives" },
   { id: "body",         label: "Body / payload" },
   { id: "engine",       label: "Engines" },

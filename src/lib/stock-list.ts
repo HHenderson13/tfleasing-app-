@@ -75,7 +75,7 @@ export interface MappedStockRow {
 }
 
 type MapEntry = { name: string; hidden: boolean; promoteToVariant: boolean };
-type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "option" | "body" | "transmission" | "drive" | "status" | "derivative";
+type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "option" | "body" | "transmission" | "drive" | "status" | "derivative" | "series";
 
 // Two-layer cache:
 //   • Outer (unstable_cache): tagged + 5-minute revalidate so the same
@@ -139,7 +139,7 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
   const byKind: Record<KindKey, Map<string, MapEntry>> = {
     dealer: new Map(), model: new Map(), colour: new Map(), engine: new Map(),
     destination: new Map(), option: new Map(), body: new Map(), transmission: new Map(),
-    drive: new Map(), status: new Map(), derivative: new Map(),
+    drive: new Map(), status: new Map(), derivative: new Map(), series: new Map(),
   };
   for (const m of mappings) {
     const bucket = byKind[m.kind as KindKey];
@@ -165,6 +165,11 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
     const drm = mapLookup(byKind.drive, v.drive);
     const sm = mapLookup(byKind.status, v.locationStatus);
     const dem = mapLookup(byKind.derivative, v.derivativeRaw);
+    // Ford renames trims between model years — "SELECT" became "SELF" on the
+    // 2027 Explorer. Mapping the series means one settings entry fixes both
+    // the Series row and the Variant that falls back to it, instead of a
+    // code change every time.
+    const srm = mapLookup(byKind.series, v.seriesRaw);
 
     const options: string[] = [];
     if (v.options) {
@@ -177,7 +182,10 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       }
     }
     const hasMapping = variantKey ? byKind.model.has(variantKey) : false;
-    let variant = hasMapping ? (mm.value ?? "") : (v.seriesRaw ?? "");
+    // An explicit "MODEL · SERIES" mapping wins, being the more specific of
+    // the two. Otherwise fall back to the MAPPED series rather than the raw
+    // one, so a series mapping alone is enough to tidy the variant.
+    let variant = hasMapping ? (mm.value ?? "") : (srm.hidden ? "" : (srm.value ?? ""));
     if (mm.hidden) variant = "";
     let derivative = dem.value;
     if (dem.promoteToVariant && dem.value) {
@@ -208,7 +216,7 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       bucket: v.sourceSheet ?? "—",
       variant,
       derivative,
-      series: v.seriesRaw,
+      series: srm.hidden ? null : srm.value,
       modelYear: v.modelYear,
       bodyStyle: bm.hidden ? null : bm.value,
       engine: em.hidden ? null : em.value,
