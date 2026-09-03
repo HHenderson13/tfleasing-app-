@@ -45,9 +45,21 @@ function xmlEscape(s: string): string {
 //
 // Cmd+Shift+3 takes the whole screen immediately and will usually catch the
 // faint one. That is what the faint one is for.
-export const WATERMARK_FAINT = { detail: 0.055, dense: 0.045 };
+// REST is what the portal wears all the time, and it has to be present all
+// the time — see the macOS note under watermarkDataUri. Tuned to sit just
+// above nothing: a texture you stop noticing while reading the list, still
+// legible when the image is opened and looked at, which is the only moment
+// it has to be legible.
+//
+// It has been 0.20, then 0.055, now 0.028. Do not raise it without being
+// asked to; it was lowered twice for being intrusive.
+export const WATERMARK_REST = { detail: 0.028, dense: 0.024 };
 export const WATERMARK_LOUD = { detail: 0.32, dense: 0.24 };
 export type WatermarkStrength = { detail: number; dense: number };
+
+// Anything at zero paints nothing, so skip the background entirely rather
+// than asking the browser to composite two invisible layers over the list.
+export const isWatermarkOff = (s: WatermarkStrength) => s.detail <= 0 && s.dense <= 0;
 
 // Two tiles, layered, because one cannot do both jobs.
 //
@@ -67,7 +79,7 @@ export type WatermarkStrength = { detail: number; dense: number };
 // The identifying string, on its own, repeated tightly. An email address is
 // the single most useful thing to recover from a leaked crop: it names one
 // person and one company at once.
-export function watermarkDenseDataUri(lines: WatermarkLines, opacity = WATERMARK_FAINT.dense): string {
+export function watermarkDenseDataUri(lines: WatermarkLines, opacity = WATERMARK_REST.dense): string {
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='100'>` +
     `<g transform='rotate(-26 100 50)' fill='rgb(15,23,42)' fill-opacity='${opacity}' ` +
@@ -82,11 +94,29 @@ export function watermarkDenseDataUri(lines: WatermarkLines, opacity = WATERMARK
 // full line is hard to make without also removing the data) and is harder
 // to paint out.
 //
-// Opacity is passed in — see WATERMARK_FAINT / WATERMARK_LOUD above. The
-// deterrent job that a permanently loud watermark used to do is now done by
-// the banner (which says, in words, that the page is watermarked) and by the
-// loud repaint landing in any snip or recording.
-export function watermarkDataUri(lines: WatermarkLines, opacity = WATERMARK_FAINT.detail): string {
+// Opacity is passed in — see WATERMARK_REST / WATERMARK_LOUD above.
+//
+// ─── Why the resting layer cannot be removed ───────────────────────────────
+//
+// "Only watermark when they screenshot" is not achievable, and macOS is the
+// proof. Tested on a Mac in Safari with both chords:
+//
+//   • Cmd+Shift+3 / +4 are system shortcuts. The OS consumes them; the page
+//     never receives the keydown, so nothing can react to it.
+//   • The screenshot overlay does NOT blur the page either. Confirmed
+//     empirically: the shield never appeared in the captures.
+//
+// So on macOS there is no event, at any point, before or during a capture.
+// Nothing can be painted in response to something we are never told about.
+// The same applies to every phone screenshot on every OS.
+//
+// A consequence worth remembering: the capture ALERTS are driven by that
+// same keydown, so they do not fire on macOS either. On a Mac this faint
+// layer is the only trace a screenshot leaves. That is what it is for.
+//
+// LOUD still escalates for the signals that do exist — printing, and a tab
+// share started from this page — where it genuinely lands in the output.
+export function watermarkDataUri(lines: WatermarkLines, opacity = WATERMARK_REST.detail): string {
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='430' height='215'>` +
     `<g transform='rotate(-26 215 107)' fill='rgb(15,23,42)' fill-opacity='${opacity}' ` +
@@ -99,7 +129,8 @@ export function watermarkDataUri(lines: WatermarkLines, opacity = WATERMARK_FAIN
 }
 
 // Both layers, in paint order: dense email on top, full detail behind.
-export function watermarkBackground(lines: WatermarkLines, strength: WatermarkStrength = WATERMARK_FAINT): string {
+export function watermarkBackground(lines: WatermarkLines, strength: WatermarkStrength = WATERMARK_REST): string {
+  if (isWatermarkOff(strength)) return "none";
   return `${watermarkDenseDataUri(lines, strength.dense)}, ${watermarkDataUri(lines, strength.detail)}`;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { WATERMARK_FAINT, WATERMARK_LOUD, watermarkBackground, watermarkStamp, type WatermarkStrength } from "@/lib/broker-watermark-tile";
+import { WATERMARK_LOUD, WATERMARK_REST, watermarkBackground, watermarkStamp, type WatermarkStrength } from "@/lib/broker-watermark-tile";
 import { BROKER_SECURITY_EVENT_ENDPOINT } from "@/lib/broker-endpoints";
 
 // ─── Capture deterrence for the broker portal ──────────────────────────────
@@ -128,9 +128,10 @@ export function ScreenGuard({
       }
     };
 
-    // Faint all day; loud the moment a capture chord is seen — see
-    // WATERMARK_FAINT / WATERMARK_LOUD in lib/broker-watermark-tile.ts.
-    let strength: WatermarkStrength = WATERMARK_FAINT;
+    // Faint at rest, loud for the few capture signals that actually reach a
+    // web page — see the macOS note in lib/broker-watermark-tile.ts for why
+    // the resting layer has to exist at all.
+    let strength: WatermarkStrength = WATERMARK_REST;
     let loudTimer: ReturnType<typeof setTimeout> | null = null;
 
     // ── Ticking timestamp ─────────────────────────────────────────────────
@@ -160,7 +161,7 @@ export function ScreenGuard({
       refreshWatermark();
       if (loudTimer) clearTimeout(loudTimer);
       loudTimer = setTimeout(() => {
-        strength = WATERMARK_FAINT;
+        strength = WATERMARK_REST;
         refreshWatermark();
       }, holdMs);
     };
@@ -170,6 +171,12 @@ export function ScreenGuard({
     const wmTimer = setInterval(checkWatermark, 2000);
 
     // ── 2. The shield ─────────────────────────────────────────────────────
+    //
+    // Shield only, deliberately not goLoud(): the macOS screenshot overlay
+    // does not blur the page (tested), so this fires on ordinary app
+    // switching rather than on captures. Escalating here would leave a loud
+    // watermark sitting on screen for 20 seconds after every alt-tab, and
+    // buy nothing — the shield already covers the content.
     const hide = () => setShielded(true);
     const show = () => setShielded(false);
     const onVisibility = () => (document.hidden ? hide() : show());

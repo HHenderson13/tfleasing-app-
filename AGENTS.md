@@ -283,19 +283,32 @@ What we do instead, in descending order of what it actually achieves:
    Opacity is deliberately high enough to be unmissable — a watermark
    tuned down until it stops being distracting still identifies a leaker
    afterwards, but no longer deters the leak, which is the point.
-   **Two strengths.** `WATERMARK_FAINT` is worn all day (detail 0.055,
-   dense 0.045) — a faint texture in use, perfectly legible once the image
-   is opened, which is the only moment it needs to be. `WATERMARK_LOUD`
-   (0.32 / 0.24) is repainted the instant a capture chord is detected. That
-   is not decoration: a region snip (Cmd+Shift+4, Win+Shift+S) and a screen
-   recording (Cmd+Shift+5) both work in two steps — press the chord, THEN
-   drag the box or start recording — and the gap is long enough to repaint,
-   so the snip and the recording capture the loud version. Cmd+Shift+3 takes
-   the whole screen at once and will usually catch the faint one; that is
-   what the faint one is for, along with every capture we cannot see at all
-   (phone screenshots, a photo of the screen, OBS). **The watermark can never
-   be *only* on captures** — nothing can be added to an image after the OS
-   has taken it, so a floor has to be present the whole time.
+   **Two strengths, and the resting one cannot be removed.**
+   `WATERMARK_REST` (0.028 / 0.024) is worn all the time; `WATERMARK_LOUD`
+   (0.32 / 0.24) escalates for the few capture signals a web page actually
+   receives — printing, and a tab share started from the page.
+
+   **"Only watermark when they screenshot" is not achievable, and macOS is
+   the proof.** Tested on a Mac in Safari with both chords: `Cmd+Shift+3`
+   and `Cmd+Shift+4` are system shortcuts, so the OS consumes them and the
+   page never sees the keydown — and the screenshot overlay does **not**
+   blur the page either, confirmed by the shield never appearing in the
+   captures. There is no event, at any point, before or during a macOS
+   capture. Same for every phone screenshot on every OS. Nothing can be
+   painted in response to something we are never told about.
+
+   A consequence worth remembering: the capture **alerts** are driven by
+   that same keydown, so they do not fire on macOS either. `PrintScreen` on
+   Windows does reach the browser; macOS gives us nothing. On a Mac the
+   resting layer is the only trace a screenshot leaves — that is what it is
+   for. It has been 0.20, then 0.055, now 0.028; it was lowered twice for
+   being intrusive, so do not raise it unasked.
+
+   Note also that focus loss raises the **shield only**, deliberately not
+   the loud watermark: it fires on ordinary app switching rather than on
+   captures, so escalating there would leave a loud watermark on screen for
+   20 seconds after every alt-tab and buy nothing, the shield having already
+   covered the content.
    **Two layers, and both are needed.** A background tile repeats every
    WxH, so a crop only certainly contains a complete watermark when the
    tile is smaller than the crop in both axes. The detail tile is 430x215,

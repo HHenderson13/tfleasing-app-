@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { BROKER_SESSION_COOKIE, type CurrentBrokerUser } from "@/lib/broker-auth";
-import { sessionTag, watermarkBackground, watermarkLines } from "@/lib/broker-watermark";
+import { WATERMARK_REST, sessionTag, watermarkBackground, watermarkLines } from "@/lib/broker-watermark";
 import { ScreenGuard } from "./screen-guard";
 import { IdleTimeout } from "./idle-timeout";
 import { SESSION_IDLE_MINUTES } from "@/lib/broker-auth";
@@ -21,7 +21,9 @@ export async function WatermarkFrame({
   const jar = await cookies();
   const sid = jar.get(BROKER_SESSION_COOKIE)?.value ?? "";
   const lines = watermarkLines(me, sid);
-  const background = watermarkBackground(lines);
+  // Server-rendered so the mark is in the delivered HTML and survives JS
+  // being off. ScreenGuard escalates it for print and tab-share.
+  const background = watermarkBackground(lines, WATERMARK_REST);
   const tag = sessionTag(sid);
 
   return (
@@ -91,9 +93,8 @@ export async function WatermarkFrame({
             inset: 0,
             zIndex: 2147483000,
             pointerEvents: "none",
-            // Dense email tile first (on top), detail tile behind it. Two
-            // layers of one background so a small area snip still contains a
-            // complete identifier — see lib/broker-watermark-tile.ts.
+            // Dense email tile on top, detail tile behind, so even a small
+            // crop carries a complete identifier — see broker-watermark-tile.ts.
             backgroundImage: background,
             backgroundRepeat: "repeat, repeat",
             opacity: 1,

@@ -43,5 +43,5 @@ export function watermarkLines(me: CurrentBrokerUser, sessionId: string, now = n
   };
 }
 
-export { WATERMARK_FAINT, WATERMARK_LOUD, watermarkBackground, watermarkDataUri, watermarkDenseDataUri, watermarkStamp } from "./broker-watermark-tile";
+export { WATERMARK_LOUD, WATERMARK_REST, watermarkBackground, watermarkDataUri, watermarkDenseDataUri, watermarkStamp } from "./broker-watermark-tile";
 export type { WatermarkLines } from "./broker-watermark-tile";
