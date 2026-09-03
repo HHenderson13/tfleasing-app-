@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normaliseReferenceQuery } from "@/lib/stock-reference";
+import { buildEnquiryMailto, type EnquirySender } from "@/lib/broker-enquiry";
 
 // ─── One browser, two audiences ────────────────────────────────────────────
 //
@@ -246,7 +247,17 @@ function tally<T>(rows: T[], f: Facet, pick: (r: T) => string | string[] | null)
   return [...m.entries()].sort((a, b) => naturalCompare(key(a[0]), key(b[0])));
 }
 
-export function StockBrowser({ rows, audience = "tf" }: { rows: StockRow[]; audience?: StockAudience }) {
+export function StockBrowser({
+  rows,
+  audience = "tf",
+  enquiryFrom,
+}: {
+  rows: StockRow[];
+  audience?: StockAudience;
+  // Who the enquiry buttons sign the email from. Broker view only — the TF
+  // view has no enquiry buttons, because TF is the other end of them.
+  enquiryFrom?: EnquirySender;
+}) {
   const isBroker = audience === "broker";
   const facets = useMemo(() => forAudience(FACETS, audience), [audience]);
   const sorts = useMemo(() => forAudience(SORTS, audience), [audience]);
@@ -547,6 +558,7 @@ export function StockBrowser({ rows, audience = "tf" }: { rows: StockRow[]; audi
               key={r.ref}
               row={r}
               audience={audience}
+              enquiryFrom={enquiryFrom}
               open={expanded === r.ref}
               onToggle={() => setExpanded(expanded === r.ref ? null : r.ref)}
             />
@@ -576,7 +588,13 @@ export function StockBrowser({ rows, audience = "tf" }: { rows: StockRow[]; audi
   );
 }
 
-function Card({ row: r, audience, open, onToggle }: { row: StockRow; audience: StockAudience; open: boolean; onToggle: () => void }) {
+function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
+  row: StockRow;
+  audience: StockAudience;
+  open: boolean;
+  onToggle: () => void;
+  enquiryFrom?: EnquirySender;
+}) {
   const isBroker = audience === "broker";
   const tone = statusTone(r.status);
   const etaDays = daysUntil(r.eta);
@@ -666,6 +684,12 @@ function Card({ row: r, audience, open, onToggle }: { row: StockRow; audience: S
           <span className="text-slate-500">{open ? "Hide details ▾" : "More details ▸"}</span>
         </div>
       </button>
+
+      {/* Enquiry buttons. OUTSIDE the toggle button on purpose — a link
+          nested inside a button is invalid, and browsers disagree about
+          which one a click belongs to. Broker view only: TF is the other
+          end of these emails. */}
+      {isBroker && <EnquiryButtons row={r} availability={brokerAvailability(r)} from={enquiryFrom} />}
 
       {open && (
         <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
@@ -788,6 +812,54 @@ function FacetGroup({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// Two ways out of the stock list, on every tile.
+//
+// mailto: rather than a form of our own, because the mail has to open in
+// whatever the broker actually uses — Outlook desktop, Outlook web, Apple
+// Mail, Gmail on a phone — and mailto is the only thing all of them honour.
+// See lib/broker-enquiry.ts for the template and why it is length-capped.
+//
+// stopPropagation on the click: these sit inside the card, and without it a
+// click would also toggle the details panel open behind the mail window.
+function EnquiryButtons({ row, availability, from }: {
+  row: StockRow;
+  availability: string;
+  from?: EnquirySender;
+}) {
+  const vehicle = {
+    ref: row.ref,
+    model: row.bucket,
+    variant: row.variant,
+    derivative: row.derivative,
+    bodyStyle: row.bodyStyle,
+    engine: row.engine,
+    transmission: row.transmission,
+    drive: row.drive,
+    colour: row.colour,
+    options: row.options,
+    availability,
+  };
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  return (
+    <div className="flex gap-2 border-t border-slate-100 px-4 py-3">
+      <a
+        href={buildEnquiryMailto("quote", vehicle, from)}
+        onClick={stop}
+        className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+      >
+        Get a quote
+      </a>
+      <a
+        href={buildEnquiryMailto("secure", vehicle, from)}
+        onClick={stop}
+        className="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+      >
+        Secure this vehicle
+      </a>
     </div>
   );
 }

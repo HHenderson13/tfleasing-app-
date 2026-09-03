@@ -315,6 +315,33 @@ login — the endpoint silently did nothing. Note the trailing slash:
 `/api/broker-ratebooks/*` is an **admin** route and deliberately does not
 match.
 
+### Enquiry buttons
+
+Every broker tile carries **Get a quote** and **Secure this vehicle**, both
+`mailto:broker@trustford.co.uk` links built by `lib/broker-enquiry.ts`.
+
+- **mailto, not a form of ours.** The mail has to open in whatever the
+  broker actually uses — Outlook desktop, Outlook web, Apple Mail, Gmail on
+  a phone — and mailto is the only thing all of them honour. The cost is
+  that we cannot validate what they type, so the body is a template with
+  labelled blanks and a person checks it at our end.
+- Both routes carry the full broker-visible spec **and the reference**,
+  which is how the vehicle is found on our side. Quote asks for upfront,
+  term, mileage and desired commission (+VAT). Secure asks the same four
+  plus **rental sold at**, and says we cannot proceed without the full
+  finance proposal form attached or sent separately.
+- **`MAILTO_MAX` is not decoration.** Outlook on Windows truncates a mailto
+  around 2,048 characters and gives no warning — the mail just opens with
+  the end missing, which on the secure route would silently drop the
+  finance-proposal instruction. `buildEnquiryMailto` trims the options list
+  (the only unbounded field, and the least load-bearing — the reference
+  identifies the vehicle regardless) until the URL fits, and marks the trim
+  with `…`. `broker-enquiry.test.ts` pins that the instructions survive.
+- Broker view only, via `isBroker` — TF is the other end of these emails.
+  The buttons render **outside** the card's toggle `<button>`: a link
+  nested in a button is invalid and browsers disagree about which one owns
+  the click.
+
 ### Vehicle references
 
 `TF-2GG495H9` — the only handle on a vehicle that exists outside TF. A

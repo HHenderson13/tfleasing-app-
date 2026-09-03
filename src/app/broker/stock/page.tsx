@@ -36,7 +36,7 @@ export default async function BrokerStockPage() {
             </div>
           </div>
           <div className="mt-6">
-            <StockBrowser rows={out} audience="broker" />
+            <StockBrowser rows={out} audience="broker" enquiryFrom={{ name: me.name, brokerName: me.brokerName }} />
           </div>
         </main>
       </div>

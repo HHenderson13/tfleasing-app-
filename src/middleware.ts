@@ -47,9 +47,18 @@ export function middleware(req: NextRequest) {
 
   // Pre-empt the static/system paths first so they bypass both cookie
   // checks regardless of which portal they nominally belong to.
+  //
+  // The manifest and the generated icon routes belong here for the same
+  // reason /favicon does: they carry nothing private, and the browser asks
+  // for them on pages a signed-out person is allowed to see. Gated, they
+  // answered a redirect to /login, so the login page rendered without its
+  // icon and the PWA install prompt had no manifest to read.
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/icon" ||
+    pathname === "/apple-icon" ||
     pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/blob")
