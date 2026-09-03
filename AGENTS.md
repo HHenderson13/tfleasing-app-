@@ -52,6 +52,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/enquiries/upload`                | `requireAdmin`                 |
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
 | `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
+| `/api/broker/*`                    | broker session (middleware) + `getCurrentBrokerUser` in the handler |
 
 If you add a route, add it here.
 
@@ -188,6 +189,58 @@ date. A vehicle sits past its ETA when it's late or when the feed hasn't
 caught up, and "Arriving 02 May" read in September looks broken. The facet
 still buckets it under its original month — that's a filter, not a claim
 about today.
+
+### Capture deterrence
+
+**Start here: a web page cannot stop a screenshot.** Print Screen, macOS
+Cmd+Shift+4, the Windows Snipping Tool and the button combo on every phone
+capture the OS framebuffer. The browser is not consulted and has no API to
+object. Nothing in this codebase changes that, and any change that claims
+to is wrong. Phone photographs and phone screenshots are not detectable
+at all.
+
+What we do instead, in descending order of what it actually achieves:
+
+1. **Watermark** — `lib/broker-watermark.ts` builds a rotated, tiled SVG
+   carrying the viewer's name, email, broker, timestamp and a session tag,
+   inlined as a `background-image` on a fixed overlay by
+   `broker/watermark-frame.tsx`. **Server-rendered**, so it is in the
+   delivered HTML and paints without JS. This is the only measure that
+   survives a successful capture, because it travels inside the picture.
+   Opacity is deliberately high enough to be unmissable — a watermark
+   tuned down until it stops being distracting still identifies a leaker
+   afterwards, but no longer deters the leak, which is the point.
+2. **A banner that says so, in words**, naming the viewer. Deterrence only
+   works if they have read it.
+3. **The confrontation dialog** — on a detected capture the broker gets a
+   modal they must dismiss: what they did, that the image carries their
+   name, that TF has been told.
+4. **Shield** — content is hidden whenever the page is not focused or not
+   visible. Defeats the mobile app-switcher snapshot, screen sharing while
+   tabbed away, and focus-stealing capture tools. Does **not** defeat
+   Cmd+Shift+4, which never blurs the window.
+5. **Print blocking** — `@media print` blanks the page. Unlike a
+   screenshot, printing and print-to-PDF genuinely are blockable.
+6. **Copy / selection / context-menu / drag** blocking, and
+   `frame-ancestors 'none'` so the portal cannot be embedded and captured
+   server-side by someone else's page.
+7. **Audit + alert** — everything observable is written to
+   `broker_security_events` against a named user by
+   `/api/broker/security-event`, and the serious kinds email
+   `BROKER_SECURITY_ALERT_TO` (comma-separated). One email per user per 30
+   minutes, counted over alertable kinds only so a right-click cannot
+   suppress the alert for a screenshot.
+
+`ScreenGuard` also re-applies the watermark if it is removed in DevTools,
+and blanks the page on a second attempt. Treat any change that weakens the
+watermark as weakening the only thing here that really works.
+
+**`/api/broker/*` must stay inside the broker branch of `src/middleware.ts`.**
+It was originally outside it, so those routes fell through to the TF branch,
+demanded a TF cookie no broker has, and redirected the reporter to the TF
+login — the endpoint silently did nothing. Note the trailing slash:
+`/api/broker-ratebooks/*` is an **admin** route and deliberately does not
+match.
 
 ### Vehicle references
 

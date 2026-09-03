@@ -24,6 +24,24 @@ const BROKER_COOKIE = "tf_broker_session";
 // The broker cookie is also Path-scoped to /broker (see
 // setBrokerSessionCookie) so a stray broker cookie physically cannot be
 // sent to non-broker paths. The middleware below is defence in depth.
+// Response hardening for the broker portal.
+//
+//   • no-store        — the stock list must not sit in a disk cache where a
+//                       later viewer, or a shared machine, can retrieve it.
+//   • frame-ancestors — stops the portal being embedded in someone else's
+//                       page, which is a capture route that needs no
+//                       screenshot at all: iframe it, render it server-side,
+//                       keep the picture.
+//   • no referrer     — the URL should not travel to anything a broker
+//                       clicks through to.
+function harden(res: NextResponse): NextResponse {
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.headers.set("Content-Security-Policy", "frame-ancestors 'none'");
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("Referrer-Policy", "no-referrer");
+  return res;
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -40,16 +58,23 @@ export function middleware(req: NextRequest) {
   }
 
   // ── Broker portal ───────────────────────────────────────────────────
-  if (pathname === "/broker" || pathname.startsWith("/broker/")) {
+  // /api/broker/* belongs to this portal too. Without it those routes fall
+  // through to the TF branch below, which demands a TF cookie a broker will
+  // never have, and the request is redirected to the TF login — so the
+  // endpoint silently stops working for exactly the people meant to use it.
+  if (pathname === "/broker" || pathname.startsWith("/broker/") || pathname.startsWith("/api/broker/")) {
     if (BROKER_PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
       return NextResponse.next();
     }
     const sid = req.cookies.get(BROKER_COOKIE)?.value;
     if (!sid) {
+      // An API caller wants a status code, not a login page. Redirecting a
+      // fetch() to HTML turns a clean 401 into a confusing parse error.
+      if (pathname.startsWith("/api/")) return harden(new NextResponse(null, { status: 401 }));
       const url = req.nextUrl.clone();
       url.pathname = "/broker/login";
       url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
+      return harden(NextResponse.redirect(url));
     }
     // Stock is the whole portal, so /broker is just a door onto it. Done
     // here rather than with redirect() in the page: a redirect() from a
@@ -59,9 +84,9 @@ export function middleware(req: NextRequest) {
     if (pathname === "/broker") {
       const url = req.nextUrl.clone();
       url.pathname = "/broker/stock";
-      return NextResponse.redirect(url);
+      return harden(NextResponse.redirect(url));
     }
-    return NextResponse.next();
+    return harden(NextResponse.next());
   }
 
   // ── TF leasing app ──────────────────────────────────────────────────

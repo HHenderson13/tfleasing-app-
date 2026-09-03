@@ -31,6 +31,33 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   serverExternalPackages: ["basic-ftp", "ssh2", "ssh2-sftp-client"],
+  // Broker portal hardening, declared here as well as in middleware so it
+  // holds even if a route ever stops passing through that branch.
+  //
+  // frame-ancestors closes the capture route that needs no screenshot at
+  // all: embed the portal in another page, render it server-side, keep the
+  // picture. Referrer-Policy keeps the URL out of anything a broker clicks
+  // through to.
+  //
+  // Cache-Control is deliberately NOT set here. Next writes its own onto a
+  // dynamic page response after both this and middleware, and wins — but
+  // what it writes in production is already
+  // `private, no-cache, no-store, max-age=0, must-revalidate` (verified
+  // against the deployed site), so the page is not written to a disk cache
+  // regardless. Middleware still sets no-store on the /broker redirects,
+  // where its response IS the final one.
+  async headers() {
+    return [
+      {
+        source: "/broker/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+    ];
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",

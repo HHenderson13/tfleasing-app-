@@ -556,6 +556,29 @@ export const brokerSessions = sqliteTable("broker_sessions", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+// Capture-attempt audit trail for the broker portal. No browser can stop a
+// screenshot, so the deterrent is that every attempt we CAN see is recorded
+// against a named user, and every rendered page carries their identity as a
+// watermark. This table is the "we noticed" half.
+//
+// `kind` is a short slug — print-screen-key, print, watermark-tamper,
+// devtools, copy, context-menu. `detail` is free-form JSON for anything
+// worth keeping (user agent, screen size, how many times).
+export const brokerSecurityEvents = sqliteTable("broker_security_events", {
+  id: text("id").primaryKey(),
+  brokerUserId: text("broker_user_id").notNull(),
+  brokerId: text("broker_id").notNull(),
+  kind: text("kind").notNull(),
+  path: text("path"),
+  detail: text("detail"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byUser: index("idx_broker_sec_events_user").on(t.brokerUserId),
+  byCreated: index("idx_broker_sec_events_created").on(t.createdAt),
+}));
+
 // ─── Forecast calculator ───────────────────────────────────────────────────
 // Monthly financial forecast built on top of dealbook CSV extracts. Two
 // upload sources (Leasing + Salary Sacrifice) feed the same line table;
