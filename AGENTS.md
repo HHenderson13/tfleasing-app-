@@ -156,7 +156,10 @@ Completely parallel to the TF app, never overlapping:
     entirely in the browser, so a broker can work for half an hour without
     making a single request; `lastSeenAt` would go stale while they were
     busy and the server would idle them out mid-use. The client reports
-    real input (pointer, keys, scroll) and only that bumps the clock.
+    deliberate interaction and only that bumps the clock —
+    `ACTIVITY_EVENTS` is click/key/scroll/wheel/touch, and **mousemove is
+    deliberately absent**: a nudged desk or someone walking past a laptop
+    would otherwise hold an unattended screen open forever.
     A heartbeat that always bumped would keep an abandoned tab signed in
     for as long as it stayed open, defeating the idle timeout entirely —
     so `active` must never be hardcoded true.

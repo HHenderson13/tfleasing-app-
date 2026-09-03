@@ -21,6 +21,17 @@ import { useEffect, useRef, useState } from "react";
 //      instead of sitting on stale stock.
 //
 // Warns a minute out rather than dropping them mid-sentence.
+// What counts as "still using it". Deliberate interaction only —
+// mousemove is deliberately NOT here. A nudged desk, a jittery trackpad or
+// someone walking past a laptop would otherwise hold a session open on an
+// unattended screen indefinitely, which is the exact thing the idle timeout
+// exists to prevent. Clicking, typing, scrolling and tapping are things a
+// person does on purpose.
+//
+// wheel is listed alongside scroll because a trackpad over an inner
+// scrolling panel (the facet lists) does not always fire a window scroll.
+const ACTIVITY_EVENTS = ["pointerdown", "keydown", "scroll", "wheel", "touchstart"] as const;
+
 export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   // Set when the heartbeat comes back 401. Covers the stock list at once —
@@ -42,11 +53,9 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
       activeSinceBeat = true;
       setSecondsLeft(null);
     };
-    // Passive: these fire constantly and must never delay a scroll.
+    // Passive: these fire often and must never delay a scroll.
     const opts = { passive: true } as const;
-    for (const ev of ["pointerdown", "keydown", "scroll", "touchstart", "mousemove"]) {
-      window.addEventListener(ev, bump, opts);
-    }
+    for (const ev of ACTIVITY_EVENTS) window.addEventListener(ev, bump, opts);
 
     const signOut = (reason: "timeout" | "elsewhere") => {
       window.location.href = `/broker/login?${reason === "timeout" ? "timeout=1" : "elsewhere=1"}`;
@@ -89,9 +98,7 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
     }, 1000);
 
     return () => {
-      for (const ev of ["pointerdown", "keydown", "scroll", "touchstart", "mousemove"]) {
-        window.removeEventListener(ev, bump);
-      }
+      for (const ev of ACTIVITY_EVENTS) window.removeEventListener(ev, bump);
       clearInterval(tick);
       clearInterval(beat);
     };
@@ -120,7 +127,7 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
   return (
     <div className="fixed inset-x-0 bottom-4 z-[2147483646] flex justify-center px-4">
       <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-lg">
-        <span>Signing you out in {secondsLeft}s — move the mouse to stay.</span>
+        <span>Signing you out in {secondsLeft}s — click or scroll to stay.</span>
       </div>
     </div>
   );
