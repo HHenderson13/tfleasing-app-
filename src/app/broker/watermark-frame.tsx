@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { BROKER_SESSION_COOKIE, type CurrentBrokerUser } from "@/lib/broker-auth";
-import { sessionTag, watermarkDataUri, watermarkDenseDataUri, watermarkLines } from "@/lib/broker-watermark";
+import { sessionTag, watermarkBackground, watermarkLines } from "@/lib/broker-watermark";
 import { ScreenGuard } from "./screen-guard";
 
 const WATERMARK_ID = "tf-broker-wm";
@@ -19,8 +19,7 @@ export async function WatermarkFrame({
   const jar = await cookies();
   const sid = jar.get(BROKER_SESSION_COOKIE)?.value ?? "";
   const lines = watermarkLines(me, sid);
-  const tile = watermarkDataUri(lines);
-  const denseTile = watermarkDenseDataUri(lines);
+  const background = watermarkBackground(lines);
   const tag = sessionTag(sid);
 
   return (
@@ -92,8 +91,8 @@ export async function WatermarkFrame({
             pointerEvents: "none",
             // Dense email tile first (on top), detail tile behind it. Two
             // layers of one background so a small area snip still contains a
-            // complete identifier — see lib/broker-watermark.ts.
-            backgroundImage: `${denseTile}, ${tile}`,
+            // complete identifier — see lib/broker-watermark-tile.ts.
+            backgroundImage: background,
             backgroundRepeat: "repeat, repeat",
             opacity: 1,
             display: "block",
@@ -119,6 +118,10 @@ export async function WatermarkFrame({
         viewerName={me.name}
         viewerEmail={me.email}
         brokerName={me.brokerName}
+        watermarkPrefix={`${me.brokerName} · `}
+        watermarkSuffix={` · ${tag}`}
+        watermarkPrimary={lines.primary}
+        watermarkDense={lines.dense}
       />
     </>
   );

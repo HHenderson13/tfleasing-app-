@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { watermarkBackground, watermarkStamp } from "@/lib/broker-watermark-tile";
 
 // ─── Capture deterrence for the broker portal ──────────────────────────────
 //
@@ -36,11 +37,21 @@ export function ScreenGuard({
   viewerName,
   viewerEmail,
   brokerName,
+  watermarkPrefix,
+  watermarkSuffix,
+  watermarkPrimary,
+  watermarkDense,
 }: {
   watermarkId: string;
   viewerName: string;
   viewerEmail: string;
   brokerName: string;
+  // The detail line is rebuilt here as `prefix + <now> + suffix` so the
+  // timestamp can tick. See the refresh block below for why.
+  watermarkPrefix: string;
+  watermarkSuffix: string;
+  watermarkPrimary: string;
+  watermarkDense: string;
 }) {
   // Shield state is the only thing that needs to re-render.
   const [shielded, setShielded] = useState(false);
@@ -85,6 +96,9 @@ export function ScreenGuard({
     // Two strikes and the content goes instead: if someone is editing the
     // DOM to strip attribution, they have told us what they are doing.
     let tamperCount = 0;
+    // Captured once, before any tampering, and used to restore the layer.
+    // The timestamp refresh writes backgroundImage directly, so restoring
+    // this and then refreshing puts back a current tile, not a stale one.
     const wmSnapshot = (() => {
       const el = document.getElementById(watermarkId);
       return el ? el.getAttribute("style") ?? "" : "";
@@ -108,9 +122,29 @@ export function ScreenGuard({
         tamperCount++;
         report("watermark-tamper", { reason: "styled-out", count: tamperCount });
         el.setAttribute("style", wmSnapshot);
+        refreshWatermark();
         if (tamperCount >= 2) setShielded(true);
       }
     };
+
+    // ── Ticking timestamp ─────────────────────────────────────────────────
+    // On iOS and Android a screenshot uses hardware buttons the browser
+    // never sees: no event, no alert, no dialog. The watermark is the only
+    // trace, so the time it carries is the only forensic anchor there is —
+    // and a page left open all morning would otherwise stamp every capture
+    // with the time the tab was opened. Repainting once a minute pins a
+    // leaked mobile screenshot to the minute it was actually taken.
+    const refreshWatermark = () => {
+      const el = document.getElementById(watermarkId);
+      if (!el) return;
+      const lines = {
+        primary: watermarkPrimary,
+        secondary: `${watermarkPrefix}${watermarkStamp(new Date())}${watermarkSuffix}`,
+        dense: watermarkDense,
+      };
+      el.style.backgroundImage = watermarkBackground(lines);
+    };
+    const stampTimer = setInterval(refreshWatermark, 60_000);
 
     const observer = new MutationObserver(checkWatermark);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
@@ -148,9 +182,13 @@ export function ScreenGuard({
         confront("You have just taken a screenshot.");
         return;
       }
-      // Windows snipping tool: Win+Shift+S. The OS usually swallows this
-      // before the browser sees it, so treat catching it as a bonus.
-      if (e.shiftKey && (e.key === "S" || e.key === "s") && (e.getModifierState?.("Meta") || e.getModifierState?.("OS"))) {
+      // Windows snipping tool: Win+Shift+S. Windows normally swallows this
+      // before the page sees it, so catching it is a bonus rather than
+      // something to rely on — the watermark is what covers the snip either
+      // way. metaKey is the Windows key in Chrome/Edge; "OS" is the older
+      // Firefox spelling.
+      const winKey = e.metaKey || e.getModifierState?.("Meta") || e.getModifierState?.("OS");
+      if (winKey && e.shiftKey && k.toUpperCase() === "S") {
         report("capture-shortcut", { chord: "Win+Shift+S" });
         confront("You have just opened the screen snipping tool.");
         return;
@@ -229,6 +267,7 @@ export function ScreenGuard({
     return () => {
       observer.disconnect();
       clearInterval(wmTimer);
+      clearInterval(stampTimer);
       clearInterval(devtoolsTimer);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", hide);
@@ -245,7 +284,7 @@ export function ScreenGuard({
       if (md && originalGdm) md.getDisplayMedia = originalGdm;
       if (noticeTimer.current) clearTimeout(noticeTimer.current);
     };
-  }, [watermarkId]);
+  }, [watermarkId, watermarkPrefix, watermarkSuffix, watermarkPrimary, watermarkDense]);
 
   return (
     <>

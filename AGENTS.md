@@ -239,6 +239,15 @@ Trusted Web Activity around this site), which stops screenshots *and*
 screen recording at the OS level; iOS has no equivalent. That needs a
 native shell and store distribution, so it is a deliberate decision, not
 something to add quietly.
+
+Because a phone capture leaves no event, **the watermark timestamp ticks
+once a minute** (`refreshWatermark` in `screen-guard.tsx`). Without it a
+page left open all morning would stamp every capture with the time the tab
+was opened; with it, a leaked mobile screenshot names the minute it was
+actually taken. That is the entire reason the tile builders live in
+`lib/broker-watermark-tile.ts` — client-safe — while `lib/broker-watermark.ts`
+stays `server-only` for `sessionTag` (`node:crypto`). Same split, and the
+same reason, as `stock-reference.ts` vs `stock-reference-mint.ts`.
 5. **Print blocking** — `@media print` blanks the page. Unlike a
    screenshot, printing and print-to-PDF genuinely are blockable.
 6. **Copy / selection / context-menu / drag** blocking, and
