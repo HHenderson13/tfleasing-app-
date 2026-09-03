@@ -7,7 +7,13 @@ export interface RuleRow {
   columnLetter: string;
   matchValue: string;
   enabled: boolean;
-  matchedCount: number;
+  // Split three ways on purpose. A single "N match" figure disagreed with
+  // the stock list's own filter — the list only tags what the rule RESCUED,
+  // so a rule matching 66 rows could show 32 in the filter and look like
+  // lost stock. Each number now says which group it counts.
+  pulledIn: number;        // hidden without this rule; what the filter shows
+  alreadyVisible: number;  // in the list regardless
+  noVin: number;           // never reaches the list — /stock requires a VIN
 }
 
 function Rule({ rule }: { rule: RuleRow }) {
@@ -75,10 +81,30 @@ function Rule({ rule }: { rule: RuleRow }) {
             {pending ? "Saving…" : "Save value"}
           </button>
         )}
-        <span className="pb-2 text-xs text-slate-500">
-          {rule.matchedCount.toLocaleString()} vehicle{rule.matchedCount === 1 ? "" : "s"} in the current upload match
-        </span>
       </div>
+      <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+        <div>
+          <dt className="inline text-slate-500">Pulled into the list by this rule: </dt>
+          <dd className="inline font-semibold tabular-nums text-slate-900">{rule.pulledIn.toLocaleString()}</dd>
+          <span className="ml-1 text-slate-400">
+            (filter the stock list by <span className="font-medium">Included by → Availability rule</span> to see these)
+          </span>
+        </div>
+        {rule.alreadyVisible > 0 && (
+          <div>
+            <dt className="inline text-slate-500">Matched but already visible: </dt>
+            <dd className="inline font-semibold tabular-nums text-slate-700">{rule.alreadyVisible.toLocaleString()}</dd>
+            <span className="ml-1 text-slate-400">(the rule changes nothing for these)</span>
+          </div>
+        )}
+        {rule.noVin > 0 && (
+          <div>
+            <dt className="inline text-slate-500">Matched but skipped: </dt>
+            <dd className="inline font-semibold tabular-nums text-amber-700">{rule.noVin.toLocaleString()}</dd>
+            <span className="ml-1 text-slate-400">(no VIN — the stock list has always required one)</span>
+          </div>
+        )}
+      </dl>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       {saved && !error && !dirty && <p className="mt-2 text-xs text-emerald-700">Saved. Stock list updated.</p>}
     </div>
@@ -87,7 +113,8 @@ function Rule({ rule }: { rule: RuleRow }) {
 
 export function AvailabilityRules({ rules }: { rules: RuleRow[] }) {
   const on = rules.filter((r) => r.enabled);
-  const total = on.reduce((a, r) => a + r.matchedCount, 0);
+  const total = on.reduce((a, r) => a + r.pulledIn, 0);
+  const skipped = on.reduce((a, r) => a + r.noVin, 0);
   return (
     <section className="mt-10">
       <h2 className="text-sm font-medium text-slate-700">Availability rules</h2>
@@ -108,7 +135,10 @@ export function AvailabilityRules({ rules }: { rules: RuleRow[] }) {
       <p className="mt-2 text-xs text-slate-500">
         {on.length === 0
           ? "All rules are off — only vehicles with an empty column H appear."
-          : `${total.toLocaleString()} vehicle${total === 1 ? "" : "s"} currently pulled in by ${on.length === 1 ? "this rule" : "these rules"}.`}
+          : `${total.toLocaleString()} vehicle${total === 1 ? "" : "s"} currently pulled into the stock list by ${on.length === 1 ? "this rule" : "these rules"}.`}
+        {skipped > 0 && (
+          <> {skipped.toLocaleString()} further match{skipped === 1 ? "" : "es"} {skipped === 1 ? "was" : "were"} skipped for having no VIN.</>
+        )}
       </p>
     </section>
   );

@@ -133,8 +133,18 @@ to sell.
   **TF-only** — redacted for brokers, who have no business knowing how we
   classify our own stock — and drives a `Rule` tag plus an "Included by"
   facet so whoever set a rule up can see what it caught. A typo that matches
-  nothing otherwise looks identical to a correct rule, which is also why the
-  settings screen shows a live match count per rule.
+  nothing otherwise looks identical to a correct rule, which is why the
+  settings screen counts what each rule catches.
+- **That count is split three ways, and must stay split.** A single "N
+  vehicles match" figure disagreed with the stock list's own filter and read
+  as lost stock: the filter only shows rows the rule RESCUED, so a rule
+  matching 66 rows could show 32 and look broken. The groups are
+  `pulledIn` (hidden without the rule — what the filter shows),
+  `alreadyVisible` (in the list regardless; the rule changes nothing), and
+  `noVin` (never reaches the list at all — `/stock` has always required a
+  VIN, because the `TF-xxxx` reference is a hash of it). If a rule's numbers
+  ever look wrong again, check which group is being counted before assuming
+  rows are being dropped.
 
 ## Broker portal
 

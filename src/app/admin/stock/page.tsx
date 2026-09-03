@@ -23,10 +23,16 @@ export default async function StockUploadPage() {
   const [latest] = latestRows;
   const [settings] = settingsRows;
 
-  // How many vehicles each rule actually catches, counted against the current
-  // upload. Without this the settings screen is a pair of text boxes and no
-  // way to tell whether the value is right — a typo would silently match
-  // nothing and look identical to a correct rule.
+  // What each rule catches, broken into the three groups a match can fall
+  // into. A single "N vehicles match" number was actively misleading: it
+  // counted every matching row, while the stock list's "Included by:
+  // Availability rule" filter shows only the rows the rule RESCUED. The two
+  // numbers disagreed (66 vs 32) and looked like lost stock.
+  //
+  //   pulledIn       — hidden without the rule. What the filter shows.
+  //   alreadyVisible — in the list regardless; the rule changes nothing.
+  //   noVin          — never reaches the list: /stock has always required a
+  //                    VIN, because the TF-xxxx reference is derived from it.
   const ruleRows: RuleRow[] = await Promise.all(
     availabilityRules
       .slice()
@@ -37,19 +43,31 @@ export default async function StockUploadPage() {
           letter === "E" ? stockVehicles.rawColE :
           letter === "H" ? stockVehicles.rawColH :
           null;
-        let matchedCount = 0;
+        let pulledIn = 0;
+        let alreadyVisible = 0;
+        let noVin = 0;
         if (column && r.matchValue.trim()) {
+          const value = r.matchValue.trim().toUpperCase();
+          const matches = sql`upper(trim(${column})) = ${value}`;
           const [row] = await db
-            .select({ n: sql<number>`count(*)` })
+            .select({
+              pulledIn: sql<number>`sum(case when ${stockVehicles.vin} is not null and ${stockVehicles.customerAssigned} = 1 then 1 else 0 end)`,
+              alreadyVisible: sql<number>`sum(case when ${stockVehicles.vin} is not null and ${stockVehicles.customerAssigned} = 0 then 1 else 0 end)`,
+              noVin: sql<number>`sum(case when ${stockVehicles.vin} is null then 1 else 0 end)`,
+            })
             .from(stockVehicles)
-            .where(sql`upper(trim(${column})) = ${r.matchValue.trim().toUpperCase()}`);
-          matchedCount = Number(row?.n ?? 0);
+            .where(matches);
+          pulledIn = Number(row?.pulledIn ?? 0);
+          alreadyVisible = Number(row?.alreadyVisible ?? 0);
+          noVin = Number(row?.noVin ?? 0);
         }
         return {
           columnLetter: r.columnLetter,
           matchValue: r.matchValue,
           enabled: !!r.enabled,
-          matchedCount,
+          pulledIn,
+          alreadyVisible,
+          noVin,
         };
       }),
   );
