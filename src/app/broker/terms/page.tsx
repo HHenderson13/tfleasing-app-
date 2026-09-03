@@ -31,7 +31,7 @@ export default async function BrokerTermsPage() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-2xl font-semibold text-slate-900">Stock access terms</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Before you can see TrustFord stock, please read and accept these terms. They apply to you personally,
+          Before you can see the stock list, please read and accept these terms. They apply to you personally,
           as <strong>{me.name}</strong> ({me.email}) at <strong>{me.brokerName}</strong>.
         </p>
 

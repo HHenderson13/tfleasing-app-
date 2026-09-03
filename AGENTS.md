@@ -214,6 +214,19 @@ What we do instead, in descending order of what it actually achieves:
    Opacity is deliberately high enough to be unmissable — a watermark
    tuned down until it stops being distracting still identifies a leaker
    afterwards, but no longer deters the leak, which is the point.
+   **Two strengths.** `WATERMARK_FAINT` is worn all day (detail 0.055,
+   dense 0.045) — a faint texture in use, perfectly legible once the image
+   is opened, which is the only moment it needs to be. `WATERMARK_LOUD`
+   (0.32 / 0.24) is repainted the instant a capture chord is detected. That
+   is not decoration: a region snip (Cmd+Shift+4, Win+Shift+S) and a screen
+   recording (Cmd+Shift+5) both work in two steps — press the chord, THEN
+   drag the box or start recording — and the gap is long enough to repaint,
+   so the snip and the recording capture the loud version. Cmd+Shift+3 takes
+   the whole screen at once and will usually catch the faint one; that is
+   what the faint one is for, along with every capture we cannot see at all
+   (phone screenshots, a photo of the screen, OBS). **The watermark can never
+   be *only* on captures** — nothing can be added to an image after the OS
+   has taken it, so a floor has to be present the whole time.
    **Two layers, and both are needed.** A background tile repeats every
    WxH, so a crop only certainly contains a complete watermark when the
    tile is smaller than the crop in both axes. The detail tile is 430x215,
@@ -270,7 +283,10 @@ same reason, as `stock-reference.ts` vs `stock-reference-mint.ts`.
    wording changes materially rather than claiming they agreed to text they
    never saw. **The clauses are not legal advice** — they name the specific
    acts we can detect or prove, and should be reviewed before being relied
-   on in a dispute.
+   on in a dispute. They deliberately carry **no party name** ("we", "us"),
+   so the same wording drops into a paper agreement that names the parties
+   in its own preamble, and survives a trading-name change. Don't
+   reintroduce a company name there.
 8. **Audit + alert** — everything observable is written to
    `broker_security_events` against a named user by
    `/api/broker/security-event`, and the serious kinds email

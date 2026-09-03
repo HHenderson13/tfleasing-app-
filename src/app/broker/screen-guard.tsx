@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { watermarkBackground, watermarkStamp } from "@/lib/broker-watermark-tile";
+import { WATERMARK_FAINT, WATERMARK_LOUD, watermarkBackground, watermarkStamp, type WatermarkStrength } from "@/lib/broker-watermark-tile";
 
 // ─── Capture deterrence for the broker portal ──────────────────────────────
 //
@@ -127,6 +127,11 @@ export function ScreenGuard({
       }
     };
 
+    // Faint all day; loud the moment a capture chord is seen — see
+    // WATERMARK_FAINT / WATERMARK_LOUD in lib/broker-watermark-tile.ts.
+    let strength: WatermarkStrength = WATERMARK_FAINT;
+    let loudTimer: ReturnType<typeof setTimeout> | null = null;
+
     // ── Ticking timestamp ─────────────────────────────────────────────────
     // On iOS and Android a screenshot uses hardware buttons the browser
     // never sees: no event, no alert, no dialog. The watermark is the only
@@ -142,9 +147,22 @@ export function ScreenGuard({
         secondary: `${watermarkPrefix}${watermarkStamp(new Date())}${watermarkSuffix}`,
         dense: watermarkDense,
       };
-      el.style.backgroundImage = watermarkBackground(lines);
+      el.style.backgroundImage = watermarkBackground(lines, strength);
     };
     const stampTimer = setInterval(refreshWatermark, 60_000);
+
+    // A region snip and a screen recording both take a beat between the
+    // chord and the actual capture, so this repaint lands inside them.
+    // Held afterwards because a recording keeps running.
+    const goLoud = (holdMs = 12_000) => {
+      strength = WATERMARK_LOUD;
+      refreshWatermark();
+      if (loudTimer) clearTimeout(loudTimer);
+      loudTimer = setTimeout(() => {
+        strength = WATERMARK_FAINT;
+        refreshWatermark();
+      }, holdMs);
+    };
 
     const observer = new MutationObserver(checkWatermark);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
@@ -162,7 +180,7 @@ export function ScreenGuard({
     // ── 3. Print ──────────────────────────────────────────────────────────
     // The CSS in the server component blanks the page for print media; this
     // is the belt to that braces, plus the report.
-    const onBeforePrint = () => { hide(); report("print"); confront("You have just tried to print this page."); };
+    const onBeforePrint = () => { hide(); goLoud(); report("print"); confront("You have just tried to print this page."); };
     window.addEventListener("beforeprint", onBeforePrint);
     const printMq = window.matchMedia("print");
     const onPrintMq = (e: MediaQueryListEvent) => { if (e.matches) { hide(); report("print"); } };
@@ -179,7 +197,9 @@ export function ScreenGuard({
       // a screenshot almost certainly just happened.
       if (e.metaKey && e.shiftKey && ["3", "4", "5", "6"].includes(k)) {
         report("capture-shortcut", { chord: `Cmd+Shift+${k}` });
-        confront("You have just taken a screenshot.");
+        // 5 is the recorder / region toolbar and can run for minutes.
+        goLoud(k === "5" ? 60_000 : 12_000);
+        confront(k === "5" ? "You have just started a screen recording." : "You have just taken a screenshot.");
         return;
       }
       // Windows snipping tool: Win+Shift+S. Windows normally swallows this
@@ -190,6 +210,7 @@ export function ScreenGuard({
       const winKey = e.metaKey || e.getModifierState?.("Meta") || e.getModifierState?.("OS");
       if (winKey && e.shiftKey && k.toUpperCase() === "S") {
         report("capture-shortcut", { chord: "Win+Shift+S" });
+        goLoud();
         confront("You have just opened the screen snipping tool.");
         return;
       }
@@ -197,6 +218,7 @@ export function ScreenGuard({
       // keydown, and never at all in some browsers.
       if (k === "PrintScreen" || k === "Snapshot") {
         report("print-screen-key");
+        goLoud();
         confront("You have just taken a screenshot.");
         return;
       }
@@ -247,7 +269,9 @@ export function ScreenGuard({
     if (md && originalGdm) {
       md.getDisplayMedia = ((...args: Parameters<MediaDevices["getDisplayMedia"]>) => {
         report("screen-share");
-        hide();
+        // A share runs until they stop it, so hold the loud watermark for
+        // as long as we plausibly can rather than the usual few seconds.
+        goLoud(10 * 60_000);
         return originalGdm(...args);
       }) as MediaDevices["getDisplayMedia"];
     }
@@ -268,6 +292,7 @@ export function ScreenGuard({
       observer.disconnect();
       clearInterval(wmTimer);
       clearInterval(stampTimer);
+      if (loudTimer) clearTimeout(loudTimer);
       clearInterval(devtoolsTimer);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", hide);

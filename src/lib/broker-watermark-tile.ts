@@ -26,6 +26,29 @@ function xmlEscape(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
+// ─── Two strengths ─────────────────────────────────────────────────────────
+//
+// FAINT is what the portal wears all day. It has to be present always,
+// because the captures we cannot detect — every phone screenshot, a photo
+// of the screen, OBS — take whatever is on screen at that moment, and a
+// watermark that is not already there cannot be added afterwards. At this
+// opacity it reads as a faint texture in normal use and is perfectly
+// legible when the image is opened and looked at, which is the only moment
+// it has to be legible.
+//
+// LOUD is raised the instant we detect a capture chord. It is not decoration:
+// a region snip (Cmd+Shift+4, Win+Shift+S) and a screen recording
+// (Cmd+Shift+5) both work in two steps — press the chord, THEN drag the box
+// or start recording — and that gap is long enough to repaint. So the snip
+// and the recording capture the loud version, which is the whole point of
+// having two strengths rather than one compromise.
+//
+// Cmd+Shift+3 takes the whole screen immediately and will usually catch the
+// faint one. That is what the faint one is for.
+export const WATERMARK_FAINT = { detail: 0.055, dense: 0.045 };
+export const WATERMARK_LOUD = { detail: 0.32, dense: 0.24 };
+export type WatermarkStrength = { detail: number; dense: number };
+
 // Two tiles, layered, because one cannot do both jobs.
 //
 // A background tile repeats every WxH, so a crop is only GUARANTEED to
@@ -44,7 +67,7 @@ function xmlEscape(s: string): string {
 // The identifying string, on its own, repeated tightly. An email address is
 // the single most useful thing to recover from a leaked crop: it names one
 // person and one company at once.
-export function watermarkDenseDataUri(lines: WatermarkLines, opacity = 0.16): string {
+export function watermarkDenseDataUri(lines: WatermarkLines, opacity = WATERMARK_FAINT.dense): string {
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='100'>` +
     `<g transform='rotate(-26 100 50)' fill='rgb(15,23,42)' fill-opacity='${opacity}' ` +
@@ -59,15 +82,11 @@ export function watermarkDenseDataUri(lines: WatermarkLines, opacity = 0.16): st
 // full line is hard to make without also removing the data) and is harder
 // to paint out.
 //
-// On the opacity: this is deliberately set where you cannot miss it. A
-// watermark works by being SEEN — the deterrent is the broker knowing,
-// while they look at the page, that their name is on anything they capture.
-// One tuned down until it stopped being distracting would still identify a
-// leaker after the fact, but it would no longer stop the leak, which is the
-// point. 0.2 is legible over white without stopping anyone reading the
-// vehicle underneath; the banner in watermark-frame.tsx says the same thing
-// in words for anyone who still hasn't noticed.
-export function watermarkDataUri(lines: WatermarkLines, opacity = 0.2): string {
+// Opacity is passed in — see WATERMARK_FAINT / WATERMARK_LOUD above. The
+// deterrent job that a permanently loud watermark used to do is now done by
+// the banner (which says, in words, that the page is watermarked) and by the
+// loud repaint landing in any snip or recording.
+export function watermarkDataUri(lines: WatermarkLines, opacity = WATERMARK_FAINT.detail): string {
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='430' height='215'>` +
     `<g transform='rotate(-26 215 107)' fill='rgb(15,23,42)' fill-opacity='${opacity}' ` +
@@ -80,8 +99,8 @@ export function watermarkDataUri(lines: WatermarkLines, opacity = 0.2): string {
 }
 
 // Both layers, in paint order: dense email on top, full detail behind.
-export function watermarkBackground(lines: WatermarkLines): string {
-  return `${watermarkDenseDataUri(lines)}, ${watermarkDataUri(lines)}`;
+export function watermarkBackground(lines: WatermarkLines, strength: WatermarkStrength = WATERMARK_FAINT): string {
+  return `${watermarkDenseDataUri(lines, strength.dense)}, ${watermarkDataUri(lines, strength.detail)}`;
 }
 
 // The wall-clock half of the detail line, kept here so the server render and

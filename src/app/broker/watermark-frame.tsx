@@ -63,13 +63,13 @@ export async function WatermarkFrame({
           <svg viewBox="0 0 20 20" aria-hidden className="h-4 w-4 shrink-0 fill-amber-600">
             <path d="M10 1.6 1.3 17.2h17.4L10 1.6Zm0 5.1c.5 0 .9.4.9.9v4a.9.9 0 0 1-1.8 0v-4c0-.5.4-.9.9-.9Zm0 8.6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" />
           </svg>
-          <span className="font-semibold">
-            This page is watermarked with your name.
-          </span>
+          {/* One line. The watermark itself is faint now, so this is what
+              carries the deterrent day to day — it has to be readable, not
+              a wall of text people stop seeing. */}
           <span>
-            Every screen on this portal is stamped <strong>{me.name}</strong> · <strong>{me.email}</strong> ({me.brokerName}),
-            so any screenshot, photo or recording identifies you as the source. Sharing it outside {me.brokerName} breaches
-            your stock access agreement.
+            <span className="font-semibold">Watermarked to you.</span>{" "}
+            Any screenshot, photo or recording of this page carries <strong>{me.email}</strong> and identifies you as
+            the source. Not to be shared outside {me.brokerName}.
           </span>
           <span className="ml-auto whitespace-nowrap font-mono text-[11px] text-amber-700">ref {tag}</span>
         </div>
