@@ -1,7 +1,7 @@
 import { StockBrowser } from "@/components/stock-browser";
 import { BrokerHeader } from "../header";
 import { WatermarkFrame } from "../watermark-frame";
-import { requireBrokerUser } from "@/lib/auth-guard";
+import { requireBrokerTermsAccepted } from "@/lib/auth-guard";
 import { loadMappedStock, redactForBroker } from "@/lib/stock-list";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 // viewer's identity and carries the capture deterrents. See
 // lib/broker-watermark.ts for what that does and does not achieve.
 export default async function BrokerStockPage() {
-  const me = await requireBrokerUser();
+  const me = await requireBrokerTermsAccepted();
   const { rows, latestUploadedAt } = await loadMappedStock();
   const out = redactForBroker(rows);
   return (

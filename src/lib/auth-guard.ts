@@ -69,3 +69,18 @@ export async function requireBrokerUser(): Promise<CurrentBrokerUser> {
   if (!u) redirect("/broker/login");
   return u;
 }
+
+// Use this on any page that SHOWS STOCK. requireBrokerUser only proves who
+// they are; this also proves they have accepted the current stock-access
+// terms, which is what turns "their name was on the screenshot" into a
+// record of what they agreed not to do with it.
+//
+// Kept separate rather than folded into requireBrokerUser because
+// /broker/terms has to be reachable by someone who has not accepted yet —
+// gating it on acceptance would redirect the page to itself forever.
+export async function requireBrokerTermsAccepted(): Promise<CurrentBrokerUser> {
+  const u = await requireBrokerUser();
+  const { hasAcceptedCurrentTerms } = await import("./broker-terms");
+  if (!await hasAcceptedCurrentTerms(u.id)) redirect("/broker/terms");
+  return u;
+}

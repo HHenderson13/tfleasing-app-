@@ -556,6 +556,25 @@ export const brokerSessions = sqliteTable("broker_sessions", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+// Who has accepted the stock-access terms, and which version.
+//
+// The watermark identifies a leaker; this is what makes that mean
+// something. "Their name was on it" is an accusation — "their name was on
+// it and they accepted these terms at 09:14 on 3 September from this IP"
+// is a record. Versioned so tightened wording can be re-accepted rather
+// than silently applied to people who never saw it.
+export const brokerTermsAcceptances = sqliteTable("broker_terms_acceptances", {
+  id: text("id").primaryKey(),
+  brokerUserId: text("broker_user_id").notNull(),
+  brokerId: text("broker_id").notNull(),
+  version: text("version").notNull(),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  acceptedAt: integer("accepted_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byUser: index("idx_broker_terms_user").on(t.brokerUserId),
+}));
+
 // Capture-attempt audit trail for the broker portal. No browser can stop a
 // screenshot, so the deterrent is that every attempt we CAN see is recorded
 // against a named user, and every rendered page carries their identity as a

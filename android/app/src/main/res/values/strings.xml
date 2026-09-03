@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TrustFord Stock</string>
+    <string name="offline_title">No connection</string>
+    <string name="offline_body">TrustFord stock needs an internet connection. Check your signal and try again.</string>
+    <string name="retry">Try again</string>
+</resources>

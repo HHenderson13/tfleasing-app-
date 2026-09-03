@@ -51,6 +51,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/enquiries`                       | `requireUser`                  |
 | `/enquiries/upload`                | `requireAdmin`                 |
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
+| `/broker/terms`                    | `requireBrokerUser` (must be reachable BEFORE acceptance) |
 | `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
 | `/api/broker/*`                    | broker session (middleware) + `getCurrentBrokerUser` in the handler |
 
@@ -114,8 +115,11 @@ Completely parallel to the TF app, never overlapping:
   `broker_sessions`). A TF session can never satisfy a `/broker` route and
   a broker session can never satisfy a TF route; `src/middleware.ts`
   enforces this and the cookie path is defence in depth.
-- Guard: `requireBrokerUser()` in `auth-guard.ts`. **Every `/broker` page
-  must call it.** There is no `/broker/layout.tsx` guard because
+- Guards: `requireBrokerUser()` proves who they are.
+  **`requireBrokerTermsAccepted()` is the one to use on any page that shows
+  stock** — it also proves they accepted the current terms. `/broker/terms`
+  deliberately uses the weaker guard, because gating it on acceptance would
+  redirect it to itself forever. **Every `/broker` page must call one.** There is no `/broker/layout.tsx` guard because
   `/broker/login` and `/broker/setup` live under the same segment and must
   stay public.
 - **Brokers have no self-service and no privilege tiers.** Everything —
@@ -234,11 +238,15 @@ they are the whole of it. A phone screenshot uses hardware buttons the
 browser never sees — there is no web API on iOS or Android to block or
 even detect one, so no alert fires and no dialog appears. The capture is
 watermarked, which is the only thing that was ever going to survive it.
-The one real block is `FLAG_SECURE` in a native **Android** wrapper (a
-Trusted Web Activity around this site), which stops screenshots *and*
-screen recording at the OS level; iOS has no equivalent. That needs a
-native shell and store distribution, so it is a deliberate decision, not
-something to add quietly.
+The one real block is `FLAG_SECURE`, and `android/` now holds a minimal
+WebView shell that sets it: the OS refuses the screenshot, a screen
+recording comes out black, and the app-switcher thumbnail is blank. **It
+must stay a WebView, not a Trusted Web Activity** — a TWA renders inside
+Chrome's own window and process, so the flag on our activity would protect
+nothing. iOS exposes no equivalent, so there is no iOS counterpart and
+there cannot be one. See `android/README.md` for building, signing and
+distribution; it has never been compiled here (no JDK or Android SDK on
+this machine).
 
 Because a phone capture leaves no event, **the watermark timestamp ticks
 once a minute** (`refreshWatermark` in `screen-guard.tsx`). Without it a
@@ -253,7 +261,17 @@ same reason, as `stock-reference.ts` vs `stock-reference-mint.ts`.
 6. **Copy / selection / context-menu / drag** blocking, and
    `frame-ancestors 'none'` so the portal cannot be embedded and captured
    server-side by someone else's page.
-7. **Audit + alert** — everything observable is written to
+7. **Terms acceptance** — `lib/broker-terms.ts` holds the clauses as data
+   and a `BROKER_TERMS_VERSION`; `/broker/terms` gates the stock list until
+   accepted, and the acceptance is stored with version, time, IP and device.
+   This is what turns the watermark from an accusation into a record:
+   "their name was on it" versus "their name was on it and they accepted
+   these terms at 09:14 from this address". Bump the version when the
+   wording changes materially rather than claiming they agreed to text they
+   never saw. **The clauses are not legal advice** — they name the specific
+   acts we can detect or prove, and should be reviewed before being relied
+   on in a dispute.
+8. **Audit + alert** — everything observable is written to
    `broker_security_events` against a named user by
    `/api/broker/security-event`, and the serious kinds email
    `BROKER_SECURITY_ALERT_TO` (comma-separated). One email per user per 30
