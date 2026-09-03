@@ -138,7 +138,7 @@ async function maybeAlert(input: {
   ];
 
   const text = [
-    `${HUMAN_KIND[input.kind]} on the TrustFord broker portal.`,
+    `${HUMAN_KIND[input.kind]} on the broker portal.`,
     "",
     ...rows.map(([k, v]) => `${k}: ${v}`),
     "",

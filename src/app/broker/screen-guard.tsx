@@ -240,7 +240,7 @@ export function ScreenGuard({
         // Overwriting the clipboard is the one lever we have on Windows:
         // the capture went to the clipboard, so replace it before it can be
         // pasted anywhere. Fails silently without clipboard permission.
-        navigator.clipboard?.writeText("Screenshots of TrustFord broker stock are not permitted.").catch(() => {});
+        navigator.clipboard?.writeText("Screenshots of this stock list are not permitted.").catch(() => {});
         confront("You have just taken a screenshot.");
       }
     };
@@ -250,7 +250,7 @@ export function ScreenGuard({
     // ── 5. Copy, context menu, drag ───────────────────────────────────────
     const onCopy = (e: ClipboardEvent) => {
       e.preventDefault();
-      e.clipboardData?.setData("text/plain", "Copied from the TrustFord broker portal. Contact your TrustFord account manager for stock details.");
+      e.clipboardData?.setData("text/plain", "Copied from the stock portal. Contact your account manager for stock details.");
       report("copy");
       flash("Copying is disabled. Quote the vehicle reference instead.");
     };
@@ -328,7 +328,7 @@ export function ScreenGuard({
               Stock details are hidden while this window is inactive. Click anywhere to continue.
             </p>
             <p className="mt-4 text-[11px] text-slate-500">
-              This page is watermarked with your name and TrustFord records attempts to capture it.
+              This page is watermarked with your name, and attempts to capture it are recorded.
             </p>
           </div>
         </div>
@@ -365,7 +365,7 @@ export function ScreenGuard({
                 </p>
                 <p className="mt-3 text-sm leading-relaxed text-slate-600">
                   Whatever you have captured is stamped with your name, <strong>{viewerEmail}</strong>, and the time
-                  you took it. TrustFord has been notified.
+                  you took it. This has been reported.
                 </p>
               </div>
             </div>

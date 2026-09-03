@@ -93,7 +93,7 @@ export function watermarkDataUri(lines: WatermarkLines, opacity = WATERMARK_FAIN
     `font-family='ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif' font-size='16' font-weight='700'>` +
     `<text x='10' y='96'>${xmlEscape(lines.primary)}</text>` +
     `<text x='10' y='118' font-size='12.5' font-weight='600'>${xmlEscape(lines.secondary)}</text>` +
-    `<text x='10' y='138' font-size='11' font-weight='600' fill-opacity='${opacity * 0.85}'>TrustFord confidential · do not share</text>` +
+    `<text x='10' y='138' font-size='11' font-weight='600' fill-opacity='${opacity * 0.85}'>Confidential · do not share</text>` +
     `</g></svg>`;
   return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
 }

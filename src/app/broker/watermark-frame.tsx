@@ -105,7 +105,7 @@ export async function WatermarkFrame({
         <div>
           <div style={{ fontSize: 20, fontWeight: 700 }}>Printing is disabled</div>
           <div style={{ marginTop: 12, fontSize: 13 }}>
-            TrustFord broker stock cannot be printed or saved to PDF.
+            This stock list cannot be printed or saved to PDF.
           </div>
           <div style={{ marginTop: 20, fontSize: 12 }}>
             Requested by {me.name} ({me.email}) — {me.brokerName} · ref {tag}

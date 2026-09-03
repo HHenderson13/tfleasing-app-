@@ -14,7 +14,7 @@ export default async function BrokerLoginPage() {
         <p className="mt-1 text-sm text-slate-500">Sign in to view available stock.</p>
         <BrokerLoginForm />
         <p className="mt-4 text-[11px] text-slate-400">
-          Looking for the TrustFord Leasing app? <a href="/login" className="text-slate-600 underline">Sign in here</a>.
+          Looking for the staff app? <a href="/login" className="text-slate-600 underline">Sign in here</a>.
         </p>
       </div>
     </div>

@@ -115,6 +115,16 @@ Completely parallel to the TF app, never overlapping:
   `broker_sessions`). A TF session can never satisfy a `/broker` route and
   a broker session can never satisfy a TF route; `src/middleware.ts`
   enforces this and the cookie path is defence in depth.
+- **The portal is unbranded, deliberately.** Nothing a broker can reach
+  says "TrustFord" — not the watermark, the print notice, the capture
+  dialogs, the clipboard replacement text, nor the browser tab.
+  `src/app/broker/layout.tsx` exists solely to retitle the segment
+  ("Stock Portal") so the tab, bookmarks and any screenshot including the
+  tab bar stay clean; the root layout still titles the staff app. **That
+  layout must never gain a guard** — `/broker/login` and
+  `/broker/setup/[token]` live under the same segment and have to stay
+  reachable without a session. Check with:
+  `grep -rIn "TrustFord" src/app/broker src/lib/broker-*.ts` — expect zero.
 - Guards: `requireBrokerUser()` proves who they are.
   **`requireBrokerTermsAccepted()` is the one to use on any page that shows
   stock** — it also proves they accepted the current terms. `/broker/terms`
