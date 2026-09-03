@@ -12,6 +12,24 @@ const bundleAnalyzer = withBundleAnalyzer({
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  turbopack: {
+    // Pin the workspace root to this project.
+    //
+    // Without it Next walks up looking for a lockfile, finds
+    // ~/package-lock.json, and treats the home directory as the root — so
+    // every chunk name is built from a path containing the curly
+    // apostrophe in "Harry’s MacBook Pro". Turbopack slices those names at
+    // a byte offset and panics when the cut lands inside the multi-byte
+    // character:
+    //
+    //   start byte index 25 is not a char boundary; it is inside '’'
+    //
+    // which kills `next build` outright. Rooting here makes chunk names
+    // relative to the project ("src/app/…"), which is plain ASCII. It also
+    // silences the "multiple lockfiles detected" warning and stops
+    // Turbopack watching the whole home directory.
+    root: __dirname,
+  },
   serverExternalPackages: ["basic-ftp", "ssh2", "ssh2-sftp-client"],
   experimental: {
     serverActions: {

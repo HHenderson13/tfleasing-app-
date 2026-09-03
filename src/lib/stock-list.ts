@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { stockMappings, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { vehicleReferenceFromVin } from "./stock-reference-mint";
 
 // Cache tags so the mapped-stock cache can be invalidated when admin
 // uploads a new stock file or edits the mapping table. Both tags are
@@ -13,18 +14,24 @@ export const STOCK_VEHICLES_TAG = "stock-vehicles";
 export const STOCK_MAPPINGS_TAG = "stock-mappings";
 
 // Single source of truth for the mapped-stock pipeline. Used by:
-//   • /stock (TF leasing-app full view — every field, every facet)
-//   • /broker/search/* (broker-portal view — hides VIN, dealer, etc.
-//     and substitutes a stable reference; see lib/broker-vehicle.ts)
+//   • /stock        — TF view. Every field, every facet.
+//   • /broker/stock — broker view. Same rows, same component, run
+//     through redactForBroker() first.
 //
-// Keeping the raw-row → mapped-row work in one place stops the two views
-// drifting on tag/mapping logic.
+// Both views render the SAME component (components/stock-browser.tsx),
+// so a change to the stock UI lands on both without being written twice.
+// The broker differences are expressed in two places only: the fields
+// redactForBroker() strips below, and the `audience` prop the browser
+// takes. Nothing else forks.
 
 export interface MappedStockRow {
-  // Internal identifier — same VIN that's hidden from brokers but used
-  // by TF-side rendering and by the broker quote lookup to resolve the
-  // unique reference back to a real vehicle.
-  vin: string;
+  // Opaque, stable public handle. Present on BOTH views: a broker quotes
+  // it back to us, and TF pastes it into /stock search to find the
+  // vehicle. See lib/stock-reference.ts.
+  ref: string;
+  // Internal identifier. Redacted before the broker payload is built —
+  // it must never reach a broker's browser.
+  vin: string | null;
   bucket: string;
   variant: string;
   derivative: string | null;
@@ -45,6 +52,10 @@ export interface MappedStockRow {
   adopted: string | null;
   dealer: string;
   destination: string | null;
+  // "The vehicle is physically here." Derived from the mapped status once,
+  // server-side, so the browser never has to re-parse status text — and so
+  // brokers can be shown availability without being shown status at all.
+  inStock: boolean;
 }
 
 type MapEntry = { name: string; hidden: boolean; promoteToVariant: boolean };
@@ -128,8 +139,11 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
     }
     if (dem.hidden) derivative = null;
 
+    const vin = v.vin ?? `row-${v.id}`;
+    const status = sm.hidden ? null : sm.value;
     out.push({
-      vin: v.vin ?? `row-${v.id}`,
+      ref: vehicleReferenceFromVin(vin),
+      vin,
       bucket: v.sourceSheet ?? "—",
       variant,
       derivative,
@@ -142,7 +156,7 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       colour: cm.hidden ? "—" : (cm.value ?? "—"),
       options,
       orderNo: v.orderNo,
-      status: sm.hidden ? null : sm.value,
+      status,
       gateRelease: v.gateReleaseAt ? v.gateReleaseAt.toISOString() : null,
       eta: v.etaAt ? v.etaAt.toISOString() : null,
       delivered: v.deliveredAt ? v.deliveredAt.toISOString() : null,
@@ -150,67 +164,55 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       adopted: v.adoptedAt ? v.adoptedAt.toISOString() : null,
       dealer: dm.hidden ? "—" : (dm.value ?? "—"),
       destination: zm.hidden ? null : zm.value,
+      inStock: IN_STOCK_STATUS.test(status ?? ""),
     });
   }
   return { rows: out, latestUploadedAt: latestUpload?.uploadedAt ?? null };
 }
 
-// ─── Vehicle category split ────────────────────────────────────────────────
+// Statuses that mean "the vehicle has landed". Kept next to the mapper
+// because it runs against the MAPPED status, i.e. after stock_mappings
+// has rewritten the raw feed value to its display name.
+const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
+
+// ─── Broker redaction ──────────────────────────────────────────────────────
 //
-// Ford UK light-commercial range — anything in these buckets is treated
-// as a van on the broker portal (drives the /new-car vs /new-van split).
-// Everything else is a passenger car. Pre-reg vans are NOT a separate
-// bucket on the source data — admin will flag them in Phase 4.
+// Everything a broker must not see is removed HERE, on the server, before
+// the row is serialised into the page. Hiding a field in the component is
+// not enough: a server-rendered payload is readable in page source, so a
+// field merely hidden in JSX would still leak. Anything commercially or
+// operationally sensitive is dropped from the object entirely.
+//
+// Dropped, and why:
+//   vin, orderNo          — internal identifiers; `ref` replaces them.
+//   dealer, destination   — reveals our network and where a unit sits.
+//   status                — internal pipeline language; the broker gets
+//                           the coarse in-stock / ETA-month split instead.
+//   modelYear             — commercially sensitive (old plate = old stock).
+//   interestBearing,      — funding. Never visible to a broker in any
+//   adopted                 form, including as a filter or a tag.
+//   gateRelease           — a build milestone, and a back door to the
+//                           ageing figure we're deliberately not showing.
+export type BrokerStockRow = Omit<
+  MappedStockRow,
+  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease"
+>;
 
-const VAN_BUCKETS = new Set([
-  "Transit",
-  "Transit Custom",
-  "Transit Connect",
-  "Transit Courier",
-  "Tourneo",
-  "Tourneo Custom",
-  "Tourneo Connect",
-  "Tourneo Courier",
-  "Ranger",
-  "E-Transit",
-  "E-Transit Custom",
-  "E-Transit Courier",
-]);
-
-// Some uploads use sourceSheet labels like "Transit (FT)" — startsWith
-// catches that without being too aggressive.
-// Ford's electric-only buckets — drives the EV Power Promise prompt
-// on the quote form. Hybrids aren't included; the offer is reserved
-// for full-EVs only. New EV launches just need adding here.
-const EV_BUCKETS = new Set([
-  "Mustang Mach-E",
-  "Mach-E",
-  "Explorer EV",
-  "Explorer",      // when sold as EV — admins can refine the bucket name later
-  "Capri",
-  "Puma Gen-E",
-  "E-Transit",
-  "E-Transit Custom",
-  "E-Transit Courier",
-]);
-export function isEvBucket(bucket: string): boolean {
-  const b = bucket.trim();
-  if (!b) return false;
-  if (EV_BUCKETS.has(b)) return true;
-  // Catch model-year suffixed variants the source uses, e.g. "E-Transit MY26".
-  for (const v of EV_BUCKETS) {
-    if (b.startsWith(v + " ") || b.startsWith(v + "(")) return true;
-  }
-  return false;
-}
-
-export function isVanBucket(bucket: string): boolean {
-  const b = bucket.trim();
-  if (!b) return false;
-  for (const v of VAN_BUCKETS) {
-    if (b === v) return true;
-    if (b.startsWith(v + " ")) return true;
-    if (b.startsWith(v + "(")) return true;
-  }
-  return false;
+export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
+  return rows.map((r) => ({
+    ref: r.ref,
+    bucket: r.bucket,
+    variant: r.variant,
+    derivative: r.derivative,
+    series: r.series,
+    bodyStyle: r.bodyStyle,
+    engine: r.engine,
+    transmission: r.transmission,
+    drive: r.drive,
+    colour: r.colour,
+    options: r.options,
+    eta: r.eta,
+    delivered: r.delivered,
+    inStock: r.inStock,
+  }));
 }

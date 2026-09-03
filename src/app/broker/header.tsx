@@ -2,11 +2,11 @@ import Link from "next/link";
 import { brokerSignOutAction } from "./login/actions";
 import type { CurrentBrokerUser } from "@/lib/broker-auth";
 
+// Stock is the whole portal. If a second tab is ever added, note that the
+// nav is the only thing standing between a broker and a page — every
+// /broker route must also guard itself with requireBrokerUser().
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
-  { href: "/broker/search/new-car",      label: "New cars",       match: (p) => p.startsWith("/broker/search/new-car") },
-  { href: "/broker/search/new-van",      label: "New vans",       match: (p) => p.startsWith("/broker/search/new-van") },
-  { href: "/broker/search/pre-reg-vans", label: "Pre-reg vans",   match: (p) => p.startsWith("/broker/search/pre-reg-vans") },
-  { href: "/broker/quotes",              label: "Saved quotes",   match: (p) => p.startsWith("/broker/quotes") },
+  { href: "/broker/stock", label: "Stock", match: (p) => p.startsWith("/broker/stock") },
 ];
 
 // Active state can't use usePathname() here because this is a server

@@ -50,6 +50,9 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/blob/upload`                 | session + admin role check on token issue |
 | `/enquiries`                       | `requireUser`                  |
 | `/enquiries/upload`                | `requireAdmin`                 |
+| `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
+| `/broker/users`                    | `requireBrokerOwner`           |
+| `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
 
 If you add a route, add it here.
 
@@ -92,6 +95,101 @@ When you touch either of these, run `npm test` before pushing.
   (re-exported from `src/app/orders/order-row.tsx` for back-compat).
 - `<BackLink fallback />` — `src/components/back-link.tsx`. History-aware
   back button; falls back to the provided path on direct loads.
+- `<StockBrowser rows audience />` — `src/components/stock-browser.tsx`.
+  The faceted stock list. Rendered by BOTH `/stock` and `/broker/stock`;
+  read the Broker portal section before changing it. `src/app/stock/browser.tsx`
+  re-exports it for back-compat.
+
+## Broker portal
+
+A second, self-contained portal at `/broker`. Brokers see **one tab —
+Stock** — and nothing else.
+
+### Auth
+
+Completely parallel to the TF app, never overlapping:
+
+- `src/lib/broker-auth.ts` — own cookie (`tf_broker_session`, Path-scoped
+  to `/broker`), own tables (`brokers`, `broker_users`,
+  `broker_sessions`). A TF session can never satisfy a `/broker` route and
+  a broker session can never satisfy a TF route; `src/middleware.ts`
+  enforces this and the cookie path is defence in depth.
+- Guards: `requireBrokerUser()` / `requireBrokerOwner()` in
+  `auth-guard.ts`. **Every `/broker` page must call one.** There is no
+  `/broker/layout.tsx` guard because `/broker/login` and `/broker/setup`
+  live under the same segment and must stay public.
+- Admin provisions broker companies and their first user at
+  `/admin/brokers`; a broker `owner` can then invite colleagues at
+  `/broker/users`. Both issue the same setup-token email flow as TF users.
+
+### One component, two audiences
+
+`/stock` and `/broker/stock` render the **same** `<StockBrowser />`, on
+purpose: work on the stock UI has to reach brokers without being written
+twice. The broker view is that view minus things, expressed in exactly
+two places:
+
+1. **`redactForBroker()` in `lib/stock-list.ts`** — strips sensitive
+   fields on the **server**, before the payload is serialised. This is the
+   real boundary. Hiding a field in JSX is *not* enough: a server-rendered
+   payload is readable in page source. It builds a fresh object rather
+   than deleting keys, so forgetting about a new field means it's
+   *missing* from the broker view (visible, harmless) rather than leaked.
+   `stock-list.test.ts` asserts the whole guarantee, including that no
+   sensitive value survives `JSON.stringify`.
+2. **The `audience` prop** on `<StockBrowser />` — presentation only. Each
+   facet / sort entry carries an optional `only: "tf" | "broker"`; no flag
+   means both audiences get it. That default matters: new stock features
+   should reach brokers automatically.
+
+Add an `only:` flag **and** a `redactForBroker` change together. The flag
+alone is cosmetic, not privacy.
+
+What brokers deliberately never see, and why:
+
+| Hidden                      | Why |
+|-----------------------------|-----|
+| VIN, order number           | Internal identifiers. The reference replaces them. |
+| Dealer, destination         | Reveals our network and where a unit sits. |
+| Status                      | Internal pipeline language — replaced by Availability (below). |
+| Model year                  | Commercially sensitive; old plate reads as old stock. |
+| Interest bearing, adopted   | Funding. Never visible in any form — no tag, no filter, no column. |
+| Gate released               | Build milestone, and a back door to the ageing figure. |
+| Days in stock               | The Delivered badge drops its relative count (`showDays`). ETA keeps "in N days" — that's forward-looking lead time. |
+| Excel export                | No export button on the broker view, and no route that would serve one. |
+
+**Availability** replaces Status for brokers: a single facet reading
+`In stock` → `Oct 2026` → `Nov 2026` → … → `ETA to be confirmed`, sorted
+chronologically via `availabilitySortKey` (not alphabetically — the
+labels sort wrong). It is derived from `inStock` + `eta`, both of which
+survive redaction; `inStock` is computed **server-side** in `stock-list.ts`
+so brokers get availability without status ever reaching the browser.
+
+### Vehicle references
+
+`TF-2GG495H9` — the only handle on a vehicle that exists outside TF. A
+broker quotes it back to us; TF pastes it into the `/stock` search box and
+lands on that exact vehicle.
+
+- `lib/stock-reference.ts` — **client-safe**: the alphabet and
+  `normaliseReferenceQuery()` (the rules for reading a reference off a
+  human — case-insensitive, spaces stripped, `TF-` optional).
+- `lib/stock-reference-mint.ts` — **server-only**: `vehicleReferenceFromVin()`.
+  Split because `node:crypto` can't be bundled into a client component and
+  the search box needs the reading rules on the client.
+
+Truncated SHA-256 of the VIN, so it's stable across stock uploads (the
+`stock_vehicles` autoincrement id is replaced every upload — the VIN hash
+is the only durable handle), opaque, and needs no table or round trip.
+**Never change the alphabet or the length** — a broker may be holding a
+reference written down weeks ago. `stock-reference.test.ts` pins the
+format with a golden value.
+
+TF-side search treats a pasted reference as an exact lookup, but only when
+it actually matches a row — eight characters of the reference alphabet is
+a shape ordinary search text can accidentally take ("PANTHER5"), and
+silently returning nothing for a real search would be worse than not
+having the feature.
 
 ## Logging
 
@@ -100,9 +198,17 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
 
 ## Tests
 
-- `npm test` runs vitest. Math libs only — no DOM, no DB.
+- `npm test` runs vitest. Pure libs only — no DOM, no live DB.
+- `vitest.config.ts` aliases the bare `server-only` specifier (Next
+  provides it at build time; the package is never installed) to an empty
+  stub, so a lib carrying that guard is still testable.
 - Add a test before changing `pmtDue`, `expandIrms`, `mergePerSlot`,
   `solveAnnualRate`, or `solveAllTerms`.
+- `stock-reference.test.ts` pins the broker reference format with a golden
+  value — if it fails, the hashing changed and every reference a broker
+  holds now points at nothing. Fix the code, not the expectation.
+- `stock-list.test.ts` pins the broker redaction. Treat a failure there as
+  a data leak, not a broken test.
 
 ## Decisions worth remembering
 
@@ -126,6 +232,17 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   The handler exits early unless `ukHour === 7`, so exactly one tick runs
   per day depending on BST/GMT. Don't "fix" this to a single schedule.
 - **No drizzle migrations.** See Database section above.
+- **The broker portal was rebuilt as stock-only (2026-09-02).** The
+  previous portal carried a full quote engine — contract hire, HP, PCP,
+  HP-balloon, outright, saved quotes — plus ~4,900 lines of
+  `/admin/broker-data` feeding it. All deleted at the user's direction;
+  it's in git history if it's ever wanted back. Kept: the broker auth
+  stack, `/admin/brokers`, and `/broker-ratebooks` (which is an *admin*
+  tool and unrelated to the portal despite the name). The quote-engine
+  **tables were left in the database** — schema changes are additive only,
+  so the code went and the tables stay, inert, until someone drops them
+  deliberately. Their Drizzle definitions and `ensure-schema` blocks are
+  gone, so they will not be recreated.
 - **Enquiry Tracker working day is Mon–Fri 09:00–17:30.** Confirmed by the
   user against the worked example "enquiry 17:00, transferred 10:00 next
   day = 90 mins" (30 mins to close + 60 mins next morning). The 17:30

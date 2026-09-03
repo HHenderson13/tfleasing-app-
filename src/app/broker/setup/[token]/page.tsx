@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { brokers, brokerUsers } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { isSetupTokenExpired } from "@/lib/broker-auth";
 import { BrokerSetupForm } from "./form";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function BrokerSetupPage({ params }: { params: Promise<{ to
     .innerJoin(brokers, eq(brokerUsers.brokerId, brokers.id))
     .where(eq(brokerUsers.setupToken, token))
     .limit(1);
-  const expired = !!row?.setupTokenExpiresAt && row.setupTokenExpiresAt.getTime() < Date.now();
+  const expired = isSetupTokenExpired(row?.setupTokenExpiresAt);
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

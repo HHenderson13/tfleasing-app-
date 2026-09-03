@@ -1,5 +1,4 @@
 import "server-only";
-import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { cache } from "react";
@@ -42,6 +41,13 @@ export function newSetupToken(): { token: string; expiresAt: Date } {
   const token = randomBytes(24).toString("base64url");
   const expiresAt = new Date(Date.now() + 7 * 86_400_000);
   return { token, expiresAt };
+}
+
+// Counterpart to newSetupToken — "is this link still good?" lives next to
+// the code that decides how long it's good for, rather than being inlined
+// as a date comparison in the setup page.
+export function isSetupTokenExpired(expiresAt: Date | null | undefined): boolean {
+  return !!expiresAt && expiresAt.getTime() < Date.now();
 }
 
 export async function createBrokerSession(brokerUserId: string): Promise<string> {

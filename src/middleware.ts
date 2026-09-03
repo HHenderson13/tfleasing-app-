@@ -51,6 +51,16 @@ export function middleware(req: NextRequest) {
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
+    // Stock is the whole portal, so /broker is just a door onto it. Done
+    // here rather than with redirect() in the page: a redirect() from a
+    // prerendered page answers 200 with a shell that hops on the client,
+    // which costs a round trip and flashes an empty page. The page still
+    // redirects too, as a backstop if this branch ever moves.
+    if (pathname === "/broker") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/broker/stock";
+      return NextResponse.redirect(url);
+    }
     return NextResponse.next();
   }
 
