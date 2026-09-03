@@ -19,6 +19,7 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
       name: brokerUsers.name,
       email: brokerUsers.email,
       active: brokerUsers.active,
+      totpEnrolledAt: brokerUsers.totpEnrolledAt,
       hasSetupToken: brokerUsers.setupToken,
       createdAt: brokerUsers.createdAt,
     })
@@ -58,6 +59,7 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
             name: u.name,
             email: u.email,
             active: !!u.active,
+            twoFactorOn: !!u.totpEnrolledAt,
             hasSetupToken: !!u.hasSetupToken,
             createdAt: u.createdAt.toISOString(),
           }))}

@@ -3,10 +3,11 @@ import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { cache } from "react";
 import { db } from "@/db";
-import { brokers, brokerSessions, brokerUsers } from "@/db/schema";
+import { brokerLoginChallenges, brokers, brokerSessions, brokerUsers } from "@/db/schema";
 import { and, eq, gt } from "drizzle-orm";
 import { ensureAppSchema } from "@/db/ensure-schema";
 import { checkPassword as checkPasswordPolicy, hashPassword, verifyPassword } from "./auth";
+import { verifyTotp } from "./totp";
 
 // Parallel auth system for the broker portal. Mirrors lib/auth.ts but uses
 // its own cookie name, session table, and user table — strict separation
@@ -15,7 +16,32 @@ import { checkPassword as checkPasswordPolicy, hashPassword, verifyPassword } fr
 // versa (see src/middleware.ts).
 
 export const BROKER_SESSION_COOKIE = "tf_broker_session";
-const SESSION_DAYS = 14;
+export const BROKER_CHALLENGE_COOKIE = "tf_broker_challenge";
+
+// ─── How long a broker stays signed in ─────────────────────────────────────
+//
+// Two clocks, because they answer different questions.
+//
+// ABSOLUTE (12h) is the ceiling. However busy they are, the session dies and
+// they sign in again — which, with a code emailed every time, is the thing
+// that actually makes a shared login painful. Set to 12 rather than 24 so a
+// morning sign-in does not still work that evening from someone else's desk.
+//
+// IDLE (30m) is the unattended-screen clock. The stock list is confidential
+// and brokers work on laptops in shared offices; a screen left open at lunch
+// should not still be showing it.
+//
+// Both are enforced server-side in getCurrentBrokerUser. The client-side
+// timer in broker/idle-timeout.tsx only makes the browser act on it — never
+// trust it to be the control.
+export const SESSION_ABSOLUTE_HOURS = 12;
+export const SESSION_IDLE_MINUTES = 30;
+
+// Writing lastSeenAt on every request would mean a DB write per page view
+// for no benefit. A minute of granularity is invisible against a 30-minute
+// idle window.
+const LAST_SEEN_WRITE_INTERVAL_MS = 60_000;
+
 
 // Broker users have no privilege tiers. TF adds and removes every one of
 // them from /admin/brokers, so a signed-in broker user is simply a broker
@@ -50,9 +76,117 @@ export function isSetupTokenExpired(expiresAt: Date | null | undefined): boolean
 export async function createBrokerSession(brokerUserId: string): Promise<string> {
   const id = randomBytes(32).toString("base64url");
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + SESSION_DAYS * 86_400_000);
-  await db.insert(brokerSessions).values({ id, brokerUserId, expiresAt, createdAt: now });
+  const expiresAt = new Date(now.getTime() + SESSION_ABSOLUTE_HOURS * 3_600_000);
+  await db.insert(brokerSessions).values({ id, brokerUserId, expiresAt, lastSeenAt: now, createdAt: now });
   return id;
+}
+
+// ─── Second factor ─────────────────────────────────────────────────────────
+//
+// TOTP — the rotating six-digit code in Microsoft Authenticator, Google
+// Authenticator, 1Password or Authy. Required on EVERY sign-in, and the code
+// changes every 30 seconds, so it is never the same twice.
+//
+// The pending record below is what sits between "password was right" and "you
+// are signed in". It is deliberately a separate table from broker_sessions:
+// until the code comes back this is NOT a session and must not be able to
+// become one by accident. It grants access to nothing.
+const CHALLENGE_TTL_MINUTES = 10;
+const CHALLENGE_MAX_ATTEMPTS = 5;
+
+export async function createBrokerChallenge(brokerUserId: string): Promise<string> {
+  // One outstanding attempt per user — starting a new sign-in must retire the
+  // old record rather than leaving a queue of live ones.
+  await db.delete(brokerLoginChallenges).where(eq(brokerLoginChallenges.brokerUserId, brokerUserId));
+  const id = randomBytes(24).toString("base64url");
+  const now = new Date();
+  await db.insert(brokerLoginChallenges).values({
+    id,
+    brokerUserId,
+    attempts: 0,
+    expiresAt: new Date(now.getTime() + CHALLENGE_TTL_MINUTES * 60_000),
+    createdAt: now,
+  });
+  return id;
+}
+
+export type ChallengeResult =
+  | { ok: true; brokerUserId: string }
+  | { ok: false; reason: "missing" | "expired" | "too-many" | "wrong" | "not-enrolled" };
+
+// Verifies the code against the user's enrolled secret and burns the pending
+// record on success. Attempts are counted so a six-digit space cannot be
+// walked through — five tries and the sign-in has to start again.
+export async function verifyBrokerChallenge(challengeId: string, code: string): Promise<ChallengeResult> {
+  const [row] = await db.select().from(brokerLoginChallenges).where(eq(brokerLoginChallenges.id, challengeId)).limit(1);
+  if (!row) return { ok: false, reason: "missing" };
+  const drop = () => db.delete(brokerLoginChallenges).where(eq(brokerLoginChallenges.id, challengeId));
+  if (row.expiresAt.getTime() < Date.now()) { await drop(); return { ok: false, reason: "expired" }; }
+  if (row.attempts >= CHALLENGE_MAX_ATTEMPTS) { await drop(); return { ok: false, reason: "too-many" }; }
+
+  const [user] = await db
+    .select({ secret: brokerUsers.totpSecret })
+    .from(brokerUsers)
+    .where(eq(brokerUsers.id, row.brokerUserId))
+    .limit(1);
+  if (!user?.secret) return { ok: false, reason: "not-enrolled" };
+
+  if (!verifyTotp(user.secret, code)) {
+    await db.update(brokerLoginChallenges)
+      .set({ attempts: row.attempts + 1 })
+      .where(eq(brokerLoginChallenges.id, challengeId));
+    return { ok: false, reason: "wrong" };
+  }
+  await drop();
+  return { ok: true, brokerUserId: row.brokerUserId };
+}
+
+// Reads the pending record without consuming it — the enrolment and verify
+// pages need to know who is half-signed-in in order to render.
+export async function pendingChallengeUser(challengeId: string | undefined | null) {
+  if (!challengeId) return null;
+  const [row] = await db.select().from(brokerLoginChallenges).where(eq(brokerLoginChallenges.id, challengeId)).limit(1);
+  if (!row || row.expiresAt.getTime() < Date.now()) return null;
+  const [user] = await db
+    .select({
+      id: brokerUsers.id,
+      name: brokerUsers.name,
+      email: brokerUsers.email,
+      totpSecret: brokerUsers.totpSecret,
+      brokerName: brokers.name,
+    })
+    .from(brokerUsers)
+    .innerJoin(brokers, eq(brokerUsers.brokerId, brokers.id))
+    .where(eq(brokerUsers.id, row.brokerUserId))
+    .limit(1);
+  return user ?? null;
+}
+
+// Enrolment. The secret is written only once the broker has proved they can
+// read a code from it — otherwise a mistyped scan locks them out of an
+// account they can no longer sign in to.
+export async function enrolBrokerTotp(brokerUserId: string, secret: string, code: string): Promise<boolean> {
+  if (!verifyTotp(secret, code)) return false;
+  await db.update(brokerUsers)
+    .set({ totpSecret: secret, totpEnrolledAt: new Date(), updatedAt: new Date() })
+    .where(eq(brokerUsers.id, brokerUserId));
+  return true;
+}
+
+export async function setBrokerChallengeCookie(challengeId: string) {
+  const jar = await cookies();
+  jar.set(BROKER_CHALLENGE_COOKIE, challengeId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/broker",
+    maxAge: CHALLENGE_TTL_MINUTES * 60,
+  });
+}
+
+export async function clearBrokerChallengeCookie() {
+  const jar = await cookies();
+  jar.delete(BROKER_CHALLENGE_COOKIE);
 }
 
 export async function deleteBrokerSession(id: string): Promise<void> {
@@ -68,7 +202,7 @@ export async function setBrokerSessionCookie(sessionId: string) {
     // Scoped to /broker only — even if a broker cookie leaks somewhere it
     // physically cannot be sent to non-broker paths.
     path: "/broker",
-    maxAge: SESSION_DAYS * 86_400,
+    maxAge: SESSION_ABSOLUTE_HOURS * 3_600,
   });
 }
 
@@ -94,6 +228,8 @@ export const getCurrentBrokerUser = cache(async function getCurrentBrokerUser():
       name: brokerUsers.name,
       email: brokerUsers.email,
       userActive: brokerUsers.active,
+      lastSeenAt: brokerSessions.lastSeenAt,
+      sessionCreatedAt: brokerSessions.createdAt,
     })
     .from(brokerSessions)
     .innerJoin(brokerUsers, eq(brokerSessions.brokerUserId, brokerUsers.id))
@@ -101,6 +237,23 @@ export const getCurrentBrokerUser = cache(async function getCurrentBrokerUser():
     .where(and(eq(brokerSessions.id, sid), gt(brokerSessions.expiresAt, now)))
     .limit(1);
   if (!row || !row.userActive || !row.brokerActive) return null;
+
+  // Idle timeout, enforced here so it applies to every route rather than
+  // whichever ones remembered to check. The session row is deleted rather
+  // than left to expire: an idled-out cookie should be dead everywhere at
+  // once, including on another device holding the same session.
+  const lastSeen = row.lastSeenAt ?? row.sessionCreatedAt;
+  const idleMs = now.getTime() - lastSeen.getTime();
+  if (idleMs > SESSION_IDLE_MINUTES * 60_000) {
+    await db.delete(brokerSessions).where(eq(brokerSessions.id, sid));
+    return null;
+  }
+  // Only write when the stored value is meaningfully stale — otherwise this
+  // is a database write on every page view for no gain.
+  if (idleMs > LAST_SEEN_WRITE_INTERVAL_MS) {
+    await db.update(brokerSessions).set({ lastSeenAt: now }).where(eq(brokerSessions.id, sid));
+  }
+
   return {
     id: row.id,
     brokerId: row.brokerId,

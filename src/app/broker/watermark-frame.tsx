@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { BROKER_SESSION_COOKIE, type CurrentBrokerUser } from "@/lib/broker-auth";
 import { sessionTag, watermarkBackground, watermarkLines } from "@/lib/broker-watermark";
 import { ScreenGuard } from "./screen-guard";
+import { IdleTimeout } from "./idle-timeout";
+import { SESSION_IDLE_MINUTES } from "@/lib/broker-auth";
 
 const WATERMARK_ID = "tf-broker-wm";
 
@@ -113,6 +115,7 @@ export async function WatermarkFrame({
         </div>
       </div>
 
+      <IdleTimeout idleMinutes={SESSION_IDLE_MINUTES} />
       <ScreenGuard
         watermarkId={WATERMARK_ID}
         viewerName={me.name}

@@ -543,6 +543,11 @@ export const brokerUsers = sqliteTable("broker_users", {
   // and chooses their password.
   setupToken: text("setup_token"),
   setupTokenExpiresAt: integer("setup_token_expires_at", { mode: "timestamp" }),
+  // TOTP second factor, required on every sign-in. Null until enrolled —
+  // the login flow sends anyone without a secret to /broker/enrol first.
+  // Admin clears it to re-enrol someone who has lost their phone.
+  totpSecret: text("totp_secret"),
+  totpEnrolledAt: integer("totp_enrolled_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 }, (t) => ({
@@ -552,9 +557,33 @@ export const brokerUsers = sqliteTable("broker_users", {
 export const brokerSessions = sqliteTable("broker_sessions", {
   id: text("id").primaryKey(),
   brokerUserId: text("broker_user_id").notNull(),
+  // Absolute ceiling — the session dies here however active they are, which
+  // is what forces a fresh 2FA code.
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  // Idle clock. Nullable because sessions created before this column existed
+  // have no value; those are treated as last seen at createdAt.
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+// A password that has been accepted but not yet second-factored.
+//
+// Deliberately a separate table from broker_sessions: until the emailed code
+// comes back this is NOT a session and must not be able to become one by
+// accident. Nothing here grants access to anything.
+//
+// No code is stored: it comes from the broker's authenticator app and is
+// checked against their enrolled secret. This record only says "this person
+// got the password right, and has ten minutes to prove the rest".
+export const brokerLoginChallenges = sqliteTable("broker_login_challenges", {
+  id: text("id").primaryKey(),
+  brokerUserId: text("broker_user_id").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  byUser: index("idx_broker_challenges_user").on(t.brokerUserId),
+}));
 
 // Who has accepted the stock-access terms, and which version.
 //

@@ -118,6 +118,22 @@ export async function deleteBrokerUserAction(input: { brokerId: string; userId: 
   return { ok: true as const, name: row.name };
 }
 
+// Lost phone, new phone, or someone who left with the authenticator still on
+// it. Clearing the secret sends them through /broker/enrol on their next
+// sign-in, and drops live sessions so the old device stops working now
+// rather than whenever its session happens to lapse.
+export async function resetBrokerTotpAction(input: { brokerId: string; userId: string }) {
+  await requireAdmin();
+  const [row] = await db.select({ name: brokerUsers.name }).from(brokerUsers).where(eq(brokerUsers.id, input.userId)).limit(1);
+  if (!row) return { ok: false as const, error: "User not found." };
+  await db.update(brokerUsers)
+    .set({ totpSecret: null, totpEnrolledAt: null, updatedAt: new Date() })
+    .where(eq(brokerUsers.id, input.userId));
+  await db.delete(brokerSessions).where(eq(brokerSessions.brokerUserId, input.userId));
+  revalidatePath(`/admin/brokers/${input.brokerId}`);
+  return { ok: true as const, name: row.name };
+}
+
 // Password reset. Brokers have no "forgot password" flow of their own — we
 // issue the link. Mints a fresh setup token and drops every live session
 // for that user, so a leaked or shared password stops working the moment

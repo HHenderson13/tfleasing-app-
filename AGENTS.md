@@ -53,6 +53,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
 | `/broker/terms`                    | `requireBrokerUser` (must be reachable BEFORE acceptance) |
 | `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
+| `/broker/verify`, `/broker/enrol`  | challenge cookie only — half-signed-in, see below |
 | `/api/broker/*`                    | broker session (middleware) + `getCurrentBrokerUser` in the handler |
 
 If you add a route, add it here.
@@ -115,6 +116,39 @@ Completely parallel to the TF app, never overlapping:
   `broker_sessions`). A TF session can never satisfy a `/broker` route and
   a broker session can never satisfy a TF route; `src/middleware.ts`
   enforces this and the cookie path is defence in depth.
+- **Two factors, every sign-in.** Password, then a TOTP code from Microsoft
+  Authenticator / Google Authenticator / 1Password. `lib/totp.ts` is a
+  hand-rolled RFC 6238 implementation (SHA-1, 6 digits, 30s, ±1 step skew) —
+  written out rather than pulled in because it is ~60 lines of HMAC and
+  base32, the algorithm has not changed since 2011, and a dependency in the
+  sign-in path is a dependency that can be compromised into seeing every
+  second factor. `totp.test.ts` pins it against the **published RFC 6238
+  vectors**; if that fails, real authenticator apps stop working.
+  - The password step creates a `broker_login_challenges` row, **not a
+    session**. That record grants access to nothing — only `/broker/verify`
+    (or `/broker/enrol` first time) can turn it into a session. Verified: a
+    challenge cookie alone renders no stock.
+  - `/broker/verify` and `/broker/enrol` are in `BROKER_PUBLIC_PATHS`
+    because there is no session yet. They validate the challenge cookie
+    themselves and render nothing without it.
+  - Enrolment does **not** save the secret until the broker types back a
+    code from it. A half-finished scan must not enrol a secret they cannot
+    produce codes for, or they are locked out of an account they can no
+    longer sign in to.
+  - Admin resets 2FA from `/admin/brokers/[id]` for a lost phone; that
+    clears the secret and drops live sessions, so the old device stops
+    working immediately.
+- **Two session clocks**, both in `lib/broker-auth.ts` and both enforced
+  server-side in `getCurrentBrokerUser`:
+  - `SESSION_ABSOLUTE_HOURS` (12) — the ceiling. However active they are,
+    they sign in again, which with a code every time is what makes a shared
+    login genuinely painful.
+  - `SESSION_IDLE_MINUTES` (30) — the unattended-screen clock. The session
+    row is **deleted**, not left to lapse, so an idled-out cookie is dead
+    everywhere at once.
+  - `broker/idle-timeout.tsx` is the client half and warns a minute out. It
+    is not the control — it exists because server-side expiry alone leaves
+    the stock list on screen until someone next navigates.
 - **The portal is unbranded, deliberately.** Nothing a broker can reach
   says "TrustFord" — not the watermark, the print notice, the capture
   dialogs, the clipboard replacement text, nor the browser tab.

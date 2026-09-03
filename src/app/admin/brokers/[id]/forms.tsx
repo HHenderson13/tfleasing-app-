@@ -5,6 +5,7 @@ import {
   createBrokerUserAction,
   deleteBrokerUserAction,
   issueBrokerPasswordResetAction,
+  resetBrokerTotpAction,
   setBrokerUserActiveAction,
 } from "../actions";
 
@@ -86,6 +87,7 @@ export interface UserRow {
   email: string;
   active: boolean;
   hasSetupToken: boolean;
+  twoFactorOn: boolean;
   createdAt: string;
 }
 
@@ -113,6 +115,14 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
       router.refresh();
     });
   }
+  function resetTotp(u: UserRow) {
+    setError(null);
+    start(async () => {
+      const res = await resetBrokerTotpAction({ brokerId, userId: u.id });
+      if (!res.ok) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
   function remove(u: UserRow) {
     setError(null);
     start(async () => {
@@ -131,6 +141,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
             <tr>
               <th className="px-4 py-3 text-left font-medium">User</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
+              <th className="px-4 py-3 text-left font-medium">2FA</th>
               <th className="px-4 py-3 text-right font-medium">Password</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -149,6 +160,13 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200">Disabled</span>
                   )}
                 </td>
+                <td className="px-4 py-3">
+                  {u.twoFactorOn ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200">On</span>
+                  ) : (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200">Not set up</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-right text-[11px] text-slate-500">
                   {u.hasSetupToken ? "Link outstanding" : "Set"}
                 </td>
@@ -164,6 +182,9 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
                   ) : (
                     <span className="space-x-3">
                       <button onClick={() => resetPassword(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50">Reset password</button>
+                      {u.twoFactorOn && (
+                        <button onClick={() => resetTotp(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50" title="Lost phone — they re-scan a new QR on next sign-in">Reset 2FA</button>
+                      )}
                       <button onClick={() => toggleActive(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50">
                         {u.active ? "Disable" : "Enable"}
                       </button>
@@ -174,7 +195,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-slate-500">No users yet — add one above.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No users yet — add one above.</td></tr>
             )}
           </tbody>
         </table>

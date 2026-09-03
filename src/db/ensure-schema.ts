@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 43;
+const SCHEMA_VERSION = 44;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -508,6 +508,24 @@ async function ensureBrokerPortalTables() {
     )
   `));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_broker_terms_user ON broker_terms_acceptances(broker_user_id)`));
+  // Idle clock on sessions — nullable, so existing rows keep working.
+  await ensureColumns("broker_sessions", [{ name: "last_seen_at", sqlType: "INTEGER" }]);
+  // TOTP second factor. Nullable: existing broker users enrol on next login.
+  await ensureColumns("broker_users", [
+    { name: "totp_secret", sqlType: "TEXT" },
+    { name: "totp_enrolled_at", sqlType: "INTEGER" },
+  ]);
+  // Password accepted, second factor outstanding. See db/schema.ts.
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS broker_login_challenges (
+      id TEXT PRIMARY KEY,
+      broker_user_id TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_broker_challenges_user ON broker_login_challenges(broker_user_id)`));
 }
 
 // Indexes for the hottest WHERE / ORDER BY clauses on the request path.

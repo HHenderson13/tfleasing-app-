@@ -7,7 +7,12 @@ import { NextResponse, type NextRequest } from "next/server";
 const TF_PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/reset-password"];
 
 // Public, unauthenticated paths inside the broker portal.
-const BROKER_PUBLIC_PATHS = ["/broker/login", "/broker/setup"];
+// Reachable without a session. /broker/verify and /broker/enrol are the
+// half-signed-in steps: the password has been accepted but the second factor
+// has not, so there is no session cookie yet — only the short-lived challenge
+// cookie, which those pages validate themselves. Guarding them on a session
+// would make it impossible to ever get one.
+const BROKER_PUBLIC_PATHS = ["/broker/login", "/broker/setup", "/broker/verify", "/broker/enrol"];
 
 const TF_COOKIE = "tf_session";
 const BROKER_COOKIE = "tf_broker_session";
