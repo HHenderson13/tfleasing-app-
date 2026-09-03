@@ -36,7 +36,7 @@ export async function savePreRegVehicleAction(form: FormData) {
   // length mismatch — see pairByPosition.
   const vinList = parseVinList(String(form.get("vins") ?? ""));
   if (vinList.invalid.length) {
-    return { ok: false as const, error: `Not a VIN: ${vinList.invalid.slice(0, 3).join(", ")}. A VIN is 17 characters.` };
+    return { ok: false as const, error: `Not a VIN: ${vinList.invalid.slice(0, 3).join(", ")}. A VIN is 11 or 17 characters.` };
   }
   const paired = pairByPosition(parsedVehicles, vinList.vins);
   if (!paired.ok) return { ok: false as const, error: paired.reason };

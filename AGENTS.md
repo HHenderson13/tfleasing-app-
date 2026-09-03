@@ -151,10 +151,15 @@ Hand-entered at `/admin/pre-reg`, merged into both stock lists at read time.
   the form disables submit, and the counts are shown while typing.
   An empty VIN box is fine; plates alone are a valid entry.
 - `parseRegNumbers` deliberately does NOT split on spaces ("AB12 CDE" is one
-  plate) and `looksLikeVin` requires exactly 17 characters — without that,
-  "AB12 CDE, EF13 GHI" on one line would read as a plate plus a VIN and
-  invent one that does not exist. Inline pairing (`REG<TAB>VIN` per line)
-  therefore also works.
+  plate), and `looksLikeVin` accepts **11 or 17 characters**. Eleven is the
+  one that matters: **every VIN in the Ford feed is the 11-character short
+  form** — all 16,251 of them — and that is what gets typed here too. An
+  earlier 17-only rule would have rejected every real VIN.
+  The length is what separates a VIN from a registration on the same line: a
+  UK plate is at most 7 characters, so neither VIN length can be confused
+  with one. Without the check, "AB12 CDE, EF13 GHI" on one line would read as
+  a plate plus a VIN and invent one that does not exist. Inline pairing
+  (`REG<TAB>VIN` per line) therefore also works.
 - Plates already on the system are skipped and named rather than failing the
   whole paste, because re-pasting an overlapping range is the obvious way to
   duplicate a car. A VIN already against another vehicle is dropped and

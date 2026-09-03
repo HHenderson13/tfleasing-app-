@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { looksLikeVin, normaliseReg, pairByPosition, parseRegNumbers, parseVinList, tidyReg } from "./reg-numbers";
 
-const VIN_A = "WF0AXXTTRAPY12345";
-const VIN_B = "WF0AXXTTRAPY99999";
+// Real shape: every VIN in the Ford feed is the 11-character short form.
+const VIN_A = "E00R5580811";
+const VIN_B = "E02R5580812";
 
 describe("tidyReg / normaliseReg", () => {
   it("tidies to a readable plate", () => {
@@ -15,15 +16,25 @@ describe("tidyReg / normaliseReg", () => {
 });
 
 describe("looksLikeVin", () => {
-  it("is exactly 17 characters", () => {
-    expect(looksLikeVin(VIN_A)).toBe(true);
-    expect(looksLikeVin("wf0axxttrapy12345")).toBe(true);
-    expect(looksLikeVin("WF0AXXTTRAPY1234")).toBe(false);   // 16
-    expect(looksLikeVin("WF0AXXTTRAPY123456")).toBe(false); // 18
+  it("accepts the 11-character short VIN the feed actually uses", () => {
+    expect(looksLikeVin("E00R5580811")).toBe(true);
+    expect(looksLikeVin("e00r5580811")).toBe(true);
+    expect(looksLikeVin(" E00R5580811 ")).toBe(true);
+  });
+
+  it("accepts a full 17-character VIN too", () => {
+    expect(looksLikeVin("WF0AXXTTRAPY12345")).toBe(true);
+  });
+
+  it("rejects lengths in between, which are typos rather than VINs", () => {
+    for (const v of ["E00R558081", "E00R55808112", "WF0AXXTTRAPY1234", "WF0AXXTTRAPY123456"]) {
+      expect(looksLikeVin(v), v).toBe(false);
+    }
   });
 
   it("does not mistake a registration for one", () => {
-    // This is what stops "AB12 CDE, EF13 GHI" inventing a VIN.
+    // A UK plate is at most 7 characters, so it can never reach 11. This is
+    // what stops "AB12 CDE, EF13 GHI" inventing a VIN.
     for (const r of ["AB12 CDE", "EF13GHI", "A1", ""]) expect(looksLikeVin(r)).toBe(false);
   });
 });
@@ -104,7 +115,7 @@ describe("parseRegNumbers — duplicates", () => {
 
   it("copes with twenty paired vehicles at once", () => {
     const input = Array.from({ length: 20 }, (_, i) =>
-      `AB12 C${String(i).padStart(2, "0")}\tWF0AXXTTRAPY${String(i).padStart(5, "0")}`).join("\n");
+      `AB12 C${String(i).padStart(2, "0")}\tE00R55808${String(i).padStart(2, "0")}`).join("\n");
     const r = parseRegNumbers(input);
     expect(r.vehicles).toHaveLength(20);
     expect(new Set(r.vehicles.map((v) => v.vin)).size).toBe(20);
@@ -145,13 +156,13 @@ describe("pairByPosition", () => {
   ];
 
   it("matches the nth VIN to the nth registration", () => {
-    const r = pairByPosition(three, ["WF0AXXTTRAPY00001", "WF0AXXTTRAPY00002", "WF0AXXTTRAPY00003"]);
+    const r = pairByPosition(three, ["E00R5580811", "E02R5580812", "E09R5581875"]);
     expect(r).toEqual({
       ok: true,
       vehicles: [
-        { reg: "AB12 CDE", vin: "WF0AXXTTRAPY00001" },
-        { reg: "EF13 GHI", vin: "WF0AXXTTRAPY00002" },
-        { reg: "JK14 LMN", vin: "WF0AXXTTRAPY00003" },
+        { reg: "AB12 CDE", vin: "E00R5580811" },
+        { reg: "EF13 GHI", vin: "E02R5580812" },
+        { reg: "JK14 LMN", vin: "E09R5581875" },
       ],
     });
   });
@@ -163,7 +174,7 @@ describe("pairByPosition", () => {
   it("refuses a mismatch rather than shifting every VIN onto the wrong car", () => {
     // The failure this exists to prevent is silent and near-impossible to
     // spot afterwards: one missing VIN moves every later one up by a car.
-    const r = pairByPosition(three, ["WF0AXXTTRAPY00001", "WF0AXXTTRAPY00002"]);
+    const r = pairByPosition(three, ["E00R5580811", "E02R5580812"]);
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toContain("3 registrations but 2 VINs");
@@ -172,6 +183,6 @@ describe("pairByPosition", () => {
   });
 
   it("refuses when there are more VINs than registrations", () => {
-    expect(pairByPosition(three, Array.from({ length: 4 }, (_, i) => `WF0AXXTTRAPY0000${i}`)).ok).toBe(false);
+    expect(pairByPosition(three, Array.from({ length: 4 }, (_, i) => `E00R558081${i}`)).ok).toBe(false);
   });
 });

@@ -23,12 +23,22 @@ export function tidyReg(reg: string): string {
   return reg.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
-// A VIN is exactly 17 characters with no spaces. That is what tells it apart
-// from a second registration on the same line — without the length check,
-// "AB12 CDE, EF13 GHI" (two plates, one line) would be read as a plate and a
-// VIN, silently inventing a VIN that does not exist.
+// A VIN is 11 or 17 characters with no spaces.
+//
+// ELEVEN is the one that matters: every VIN in the Ford feed is the short
+// form — all 16,251 of them — and short VINs are what gets typed here too.
+// Seventeen is accepted as well because a full VIN will occasionally be
+// pasted and rejecting it would be gratuitous.
+//
+// The length is what tells a VIN apart from a registration on the same line.
+// A UK plate is at most 7 characters, so neither length can be confused with
+// one; without the check, "AB12 CDE, EF13 GHI" (two plates, one line) would
+// read as a plate plus a VIN and invent one that does not exist.
+export const VIN_LENGTHS = [11, 17] as const;
+
 export function looksLikeVin(token: string): boolean {
-  return /^[A-Z0-9]{17}$/.test(token.replace(/\s+/g, "").toUpperCase());
+  const v = token.replace(/\s+/g, "").toUpperCase();
+  return /^[A-Z0-9]+$/.test(v) && (VIN_LENGTHS as readonly number[]).includes(v.length);
 }
 
 export interface ParsedVehicle {

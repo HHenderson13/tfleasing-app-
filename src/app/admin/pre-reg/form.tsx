@@ -142,13 +142,13 @@ export function PreRegForm({ choices }: { choices: Choices }) {
           />
         </label>
         <label className="flex flex-col text-xs font-medium text-slate-700">
-          VINs <span className="font-normal text-slate-400">— optional, one per line, same order</span>
+          VINs <span className="font-normal text-slate-400">— optional, one per line, same order as the registrations</span>
           <textarea
             name="vins"
             rows={6}
             value={vinsText}
             onChange={(e) => setVinsText(e.target.value)}
-            placeholder={"WF0AXXTTRAPY12345\nWF0AXXTTRAPY12346\nWF0AXXTTRAPY12347"}
+            placeholder={"E00R5580811\nE02R5580812\nE09R5581875"}
             className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 font-mono text-sm uppercase"
           />
         </label>
@@ -173,7 +173,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
           </span>
         )}
         {vinList.invalid.length > 0 && (
-          <span className="ml-1 text-red-600">Not a VIN (17 characters): {vinList.invalid.slice(0, 3).join(", ")}.</span>
+          <span className="ml-1 text-red-600">Not a VIN (11 or 17 characters): {vinList.invalid.slice(0, 3).join(", ")}.</span>
         )}
         {parsed.duplicateRegs.length > 0 && (
           <span className="ml-1 text-amber-700">Listed twice, added once: {parsed.duplicateRegs.join(", ")}.</span>
