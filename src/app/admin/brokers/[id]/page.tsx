@@ -18,7 +18,6 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
       id: brokerUsers.id,
       name: brokerUsers.name,
       email: brokerUsers.email,
-      role: brokerUsers.role,
       active: brokerUsers.active,
       hasSetupToken: brokerUsers.setupToken,
       createdAt: brokerUsers.createdAt,
@@ -44,7 +43,8 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-700">Add a user</h2>
         <p className="mb-2 text-xs text-slate-500">
-          We&apos;ll generate a one-time setup link valid for 7 days. Paste it into Teams / email so they can choose their password.
+          We&apos;ll generate a one-time setup link valid for 7 days. Paste it into Teams / email so they can choose their
+          password. Brokers can&apos;t add their own colleagues — every account on this list is one we created.
         </p>
         <AddBrokerUserForm brokerId={broker.id} />
       </section>
@@ -57,7 +57,6 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
             id: u.id,
             name: u.name,
             email: u.email,
-            role: u.role === "owner" ? "owner" : "user",
             active: !!u.active,
             hasSetupToken: !!u.hasSetupToken,
             createdAt: u.createdAt.toISOString(),

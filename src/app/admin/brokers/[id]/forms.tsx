@@ -3,14 +3,19 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createBrokerUserAction,
-  resetBrokerUserSetupTokenAction,
+  deleteBrokerUserAction,
+  issueBrokerPasswordResetAction,
   setBrokerUserActiveAction,
-  setBrokerUserRoleAction,
 } from "../actions";
 
 const inp = "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm";
 
-function SetupLinkBanner({ path, expiresAt, onDismiss }: { path: string; expiresAt: string; onDismiss: () => void }) {
+// One banner for both flows. A new user and a password reset produce the
+// same thing — a one-time link to /broker/setup — so the only difference
+// worth showing is what to call it.
+function SetupLinkBanner({
+  path, expiresAt, kind, onDismiss,
+}: { path: string; expiresAt: string; kind: "invite" | "reset"; onDismiss: () => void }) {
   const url = typeof window === "undefined" ? path : new URL(path, window.location.origin).toString();
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -18,8 +23,13 @@ function SetupLinkBanner({ path, expiresAt, onDismiss }: { path: string; expires
   }
   return (
     <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs">
-      <div className="font-semibold text-emerald-900">Setup link ready</div>
-      <div className="mt-1 text-emerald-900/80">Share this link — it expires {new Date(expiresAt).toLocaleString("en-GB")}.</div>
+      <div className="font-semibold text-emerald-900">
+        {kind === "reset" ? "Password reset link ready" : "Setup link ready"}
+      </div>
+      <div className="mt-1 text-emerald-900/80">
+        Send this to them — it expires {new Date(expiresAt).toLocaleString("en-GB")}.
+        {kind === "reset" && " They've been signed out everywhere until they use it."}
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <code className="rounded bg-white px-2 py-1 text-[11px] text-slate-800 ring-1 ring-emerald-200">{url}</code>
         <button onClick={copy} className="rounded-lg bg-emerald-700 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-800">
@@ -35,7 +45,6 @@ export function AddBrokerUserForm({ brokerId }: { brokerId: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"owner" | "user">("user");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<{ path: string; expiresAt: string } | null>(null);
@@ -43,10 +52,10 @@ export function AddBrokerUserForm({ brokerId }: { brokerId: string }) {
     e.preventDefault();
     setError(null);
     start(async () => {
-      const res = await createBrokerUserAction({ brokerId, name: name.trim(), email: email.trim(), role });
+      const res = await createBrokerUserAction({ brokerId, name: name.trim(), email: email.trim() });
       if (!res.ok) { setError(res.error); return; }
       setLink({ path: res.setupPath, expiresAt: res.expiresAt });
-      setName(""); setEmail(""); setRole("user");
+      setName(""); setEmail("");
       router.refresh();
     });
   }
@@ -61,19 +70,12 @@ export function AddBrokerUserForm({ brokerId }: { brokerId: string }) {
           Email
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} required />
         </label>
-        <label className="flex flex-col text-xs font-medium text-slate-700">
-          Role
-          <select value={role} onChange={(e) => setRole(e.target.value === "owner" ? "owner" : "user")} className={inp}>
-            <option value="user">User</option>
-            <option value="owner">Owner — can manage other users at this broker</option>
-          </select>
-        </label>
         <button type="submit" disabled={pending || !name.trim() || !email.trim()} className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
           {pending ? "Creating…" : "Create user"}
         </button>
         {error && <span className="text-xs text-red-600">{error}</span>}
       </form>
-      {link && <SetupLinkBanner path={link.path} expiresAt={link.expiresAt} onDismiss={() => setLink(null)} />}
+      {link && <SetupLinkBanner path={link.path} expiresAt={link.expiresAt} kind="invite" onDismiss={() => setLink(null)} />}
     </div>
   );
 }
@@ -82,7 +84,6 @@ export interface UserRow {
   id: string;
   name: string;
   email: string;
-  role: "owner" | "user";
   active: boolean;
   hasSetupToken: boolean;
   createdAt: string;
@@ -92,6 +93,10 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
   const router = useRouter();
   const [pending, start] = useTransition();
   const [link, setLink] = useState<{ path: string; expiresAt: string } | null>(null);
+  // Delete is two-step rather than a browser confirm(): the row itself asks,
+  // so it's obvious which user is about to go.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   function toggleActive(u: UserRow) {
     start(async () => {
@@ -99,19 +104,22 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
       if (res.ok) router.refresh();
     });
   }
-  function toggleRole(u: UserRow) {
+  function resetPassword(u: UserRow) {
+    setError(null);
     start(async () => {
-      const res = await setBrokerUserRoleAction({ brokerId, userId: u.id, role: u.role === "owner" ? "user" : "owner" });
-      if (res.ok) router.refresh();
+      const res = await issueBrokerPasswordResetAction({ brokerId, userId: u.id });
+      if (!res.ok) { setError(res.error); return; }
+      setLink({ path: res.setupPath, expiresAt: res.expiresAt });
+      router.refresh();
     });
   }
-  function regenerate(u: UserRow) {
+  function remove(u: UserRow) {
+    setError(null);
     start(async () => {
-      const res = await resetBrokerUserSetupTokenAction({ brokerId, userId: u.id });
-      if (res.ok) {
-        setLink({ path: res.setupPath, expiresAt: res.expiresAt });
-        router.refresh();
-      }
+      const res = await deleteBrokerUserAction({ brokerId, userId: u.id });
+      if (!res.ok) { setError(res.error); return; }
+      setConfirming(null);
+      router.refresh();
     });
   }
 
@@ -122,30 +130,17 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3 text-left font-medium">User</th>
-              <th className="px-4 py-3 text-left font-medium">Role</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
-              <th className="px-4 py-3 text-right font-medium">Setup</th>
+              <th className="px-4 py-3 text-right font-medium">Password</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => (
-              <tr key={u.id}>
+              <tr key={u.id} className={confirming === u.id ? "bg-red-50/60" : undefined}>
                 <td className="px-4 py-3">
                   <div className="font-medium text-slate-900">{u.name}</div>
                   <div className="text-xs text-slate-500">{u.email}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleRole(u)}
-                    disabled={pending}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
-                      u.role === "owner" ? "bg-violet-50 text-violet-700 ring-violet-200" : "bg-slate-50 text-slate-700 ring-slate-200"
-                    }`}
-                    title={u.role === "owner" ? "Click to demote to user" : "Click to promote to owner"}
-                  >
-                    {u.role === "owner" ? "Owner" : "User"}
-                  </button>
                 </td>
                 <td className="px-4 py-3">
                   {u.active ? (
@@ -155,25 +150,39 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
                   )}
                 </td>
                 <td className="px-4 py-3 text-right text-[11px] text-slate-500">
-                  {u.hasSetupToken ? "Pending password" : "Activated"}
+                  {u.hasSetupToken ? "Link outstanding" : "Set"}
                 </td>
-                <td className="px-4 py-3 text-right space-x-3 whitespace-nowrap">
-                  <button onClick={() => regenerate(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50">New setup link</button>
-                  <button onClick={() => toggleActive(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50">
-                    {u.active ? "Disable" : "Enable"}
-                  </button>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  {confirming === u.id ? (
+                    <span className="space-x-3">
+                      <span className="text-xs text-red-700">Delete {u.name} for good?</span>
+                      <button onClick={() => remove(u)} disabled={pending} className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50">
+                        {pending ? "Deleting…" : "Yes, delete"}
+                      </button>
+                      <button onClick={() => setConfirming(null)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900">Cancel</button>
+                    </span>
+                  ) : (
+                    <span className="space-x-3">
+                      <button onClick={() => resetPassword(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50">Reset password</button>
+                      <button onClick={() => toggleActive(u)} disabled={pending} className="text-xs text-slate-600 hover:text-slate-900 disabled:opacity-50">
+                        {u.active ? "Disable" : "Enable"}
+                      </button>
+                      <button onClick={() => setConfirming(u.id)} disabled={pending} className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50">Delete</button>
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No users yet — add one above.</td></tr>
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-slate-500">No users yet — add one above.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       {link && (
         <div className="mt-3">
-          <SetupLinkBanner path={link.path} expiresAt={link.expiresAt} onDismiss={() => setLink(null)} />
+          <SetupLinkBanner path={link.path} expiresAt={link.expiresAt} kind="reset" onDismiss={() => setLink(null)} />
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-guard";
-import { CreateBrokerForm, BrokerToggle } from "./forms";
+import { BrokerToggle, CreateBrokerForm, DeleteBrokerButton } from "./forms";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +70,10 @@ export default async function AdminBrokersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <BrokerToggle id={r.id} active={Number(r.active) === 1} />
+                    <div className="flex items-center justify-end gap-3">
+                      <BrokerToggle id={r.id} active={Number(r.active) === 1} />
+                      <DeleteBrokerButton id={String(r.id)} name={String(r.name)} userCount={Number(r.user_count)} />
+                    </div>
                   </td>
                 </tr>
               ))}

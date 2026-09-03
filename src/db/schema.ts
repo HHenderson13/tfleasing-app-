@@ -532,8 +532,10 @@ export const brokerUsers = sqliteTable("broker_users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  // 'owner' can manage other broker_users under the same broker;
-  // 'user' can only sign in and browse stock.
+  // Vestigial. Broker self-service was removed — TF adds and removes every
+  // broker user from /admin/brokers — so nothing reads this. The column
+  // stays because schema changes here are additive only; new rows are
+  // written as 'user'.
   role: text("role").notNull().default("user"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   // Mirror of the TF user setup-token flow — admin (or broker owner)

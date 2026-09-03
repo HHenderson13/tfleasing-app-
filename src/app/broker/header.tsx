@@ -24,13 +24,8 @@ export function BrokerHeader({ me, pathname }: { me: CurrentBrokerUser; pathname
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <div className="text-right hidden sm:block">
             <div className="font-medium text-slate-700">{me.name}</div>
-            <div className="text-[11px] uppercase tracking-wide text-slate-400">{me.role}</div>
+            <div className="text-[11px] text-slate-400">{me.email}</div>
           </div>
-          {me.role === "owner" && (
-            <Link href="/broker/users" className="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
-              Team
-            </Link>
-          )}
           <form action={brokerSignOutAction}>
             <button className="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
               Sign out

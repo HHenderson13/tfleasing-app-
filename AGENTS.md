@@ -51,7 +51,6 @@ explicitly — see `daily-summary/route.ts`.
 | `/enquiries`                       | `requireUser`                  |
 | `/enquiries/upload`                | `requireAdmin`                 |
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
-| `/broker/users`                    | `requireBrokerOwner`           |
 | `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
 
 If you add a route, add it here.
@@ -114,13 +113,14 @@ Completely parallel to the TF app, never overlapping:
   `broker_sessions`). A TF session can never satisfy a `/broker` route and
   a broker session can never satisfy a TF route; `src/middleware.ts`
   enforces this and the cookie path is defence in depth.
-- Guards: `requireBrokerUser()` / `requireBrokerOwner()` in
-  `auth-guard.ts`. **Every `/broker` page must call one.** There is no
-  `/broker/layout.tsx` guard because `/broker/login` and `/broker/setup`
-  live under the same segment and must stay public.
-- Admin provisions broker companies and their first user at
-  `/admin/brokers`; a broker `owner` can then invite colleagues at
-  `/broker/users`. Both issue the same setup-token email flow as TF users.
+- Guard: `requireBrokerUser()` in `auth-guard.ts`. **Every `/broker` page
+  must call it.** There is no `/broker/layout.tsx` guard because
+  `/broker/login` and `/broker/setup` live under the same segment and must
+  stay public.
+- **Brokers have no self-service and no privilege tiers.** Everything —
+  creating a broker company, adding a user, disabling, deleting, issuing a
+  password reset — happens at `/admin/brokers`, behind `requireAdmin()`.
+  See the decision note below.
 
 ### One component, two audiences
 
@@ -251,6 +251,27 @@ in API routes / server actions. Output is JSON so Vercel logs are queryable.
   are on an explicit never-drop list. Applied to local dev on 2026-09-03;
   **production still has them** — run it against Turso deliberately, after
   a `.dump` backup.
+- **Only TF manages broker accounts (2026-09-03).** Brokers used to
+  self-serve: an `owner` role could invite colleagues, promote them and
+  reset their passwords at `/broker/users`. That page, its actions and
+  `requireBrokerOwner()` are gone at the user's direction. The portal
+  exposes our stock list, so who can see it is a TF decision, and the
+  smallest reliable way to enforce that is for the broker side to have no
+  write path to `broker_users` at all.
+  - `/admin/brokers` now does the lot: add / disable / **delete** a broker
+    company, add / disable / **delete** a user, and issue a password reset
+    link. Delete is permanent and cascades (users, then their sessions);
+    disable stays as the reversible option and locks people out just as
+    effectively.
+  - Deleting a whole broker needs its name typed, and
+    `deleteBrokerAction` **re-checks the typed name server-side** so the
+    confirmation is part of the operation, not a UI courtesy.
+  - A password reset mints a fresh setup token *and* drops every live
+    session for that user, so a shared password stops working when the
+    link is issued rather than when it's used. Brokers have no "forgot
+    password" flow of their own — by design, they have to ask us.
+  - `broker_users.role` survives as a column (schema changes here are
+    additive only) but nothing reads it. New rows are written `'user'`.
 - **Enquiry Tracker working day is Mon–Fri 09:00–17:30.** Confirmed by the
   user against the worked example "enquiry 17:00, transferred 10:00 next
   day = 90 mins" (30 mins to close + 60 mins next morning). The 17:30

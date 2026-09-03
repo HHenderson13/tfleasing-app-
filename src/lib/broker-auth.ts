@@ -17,8 +17,10 @@ import { checkPassword as checkPasswordPolicy, hashPassword, verifyPassword } fr
 export const BROKER_SESSION_COOKIE = "tf_broker_session";
 const SESSION_DAYS = 14;
 
-export type BrokerRole = "owner" | "user";
-
+// Broker users have no privilege tiers. TF adds and removes every one of
+// them from /admin/brokers, so a signed-in broker user is simply a broker
+// user. The broker_users.role column still exists (schema changes here are
+// additive only) but nothing reads it — see the note in db/schema.ts.
 export interface CurrentBrokerUser {
   id: string;
   brokerId: string;
@@ -26,11 +28,6 @@ export interface CurrentBrokerUser {
   brokerActive: boolean;
   name: string;
   email: string;
-  role: BrokerRole;
-}
-
-export function isBrokerOwner(u: CurrentBrokerUser | null): boolean {
-  return !!u && u.role === "owner";
 }
 
 // Re-export the shared password policy so the broker setup flow uses the
@@ -96,7 +93,6 @@ export const getCurrentBrokerUser = cache(async function getCurrentBrokerUser():
       brokerActive: brokers.active,
       name: brokerUsers.name,
       email: brokerUsers.email,
-      role: brokerUsers.role,
       userActive: brokerUsers.active,
     })
     .from(brokerSessions)
@@ -112,7 +108,6 @@ export const getCurrentBrokerUser = cache(async function getCurrentBrokerUser():
     brokerActive: row.brokerActive,
     name: row.name,
     email: row.email,
-    role: row.role === "owner" ? "owner" : "user",
   };
 });
 

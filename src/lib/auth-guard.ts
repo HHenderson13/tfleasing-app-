@@ -59,16 +59,13 @@ export async function requireLeaderboardAccess(): Promise<CurrentUser> {
 // these from lib/broker-auth would create a cycle, so we deliberately
 // keep them here next to the TF guards.
 
-import { getCurrentBrokerUser, isBrokerOwner, type CurrentBrokerUser } from "./broker-auth";
+import { getCurrentBrokerUser, type CurrentBrokerUser } from "./broker-auth";
 
+// The only broker guard. Brokers have no privileged tier: TF creates and
+// removes every broker user from /admin/brokers, so there is nothing a
+// broker can do that another broker at the same company cannot.
 export async function requireBrokerUser(): Promise<CurrentBrokerUser> {
   const u = await getCurrentBrokerUser();
   if (!u) redirect("/broker/login");
-  return u;
-}
-
-export async function requireBrokerOwner(): Promise<CurrentBrokerUser> {
-  const u = await requireBrokerUser();
-  if (!isBrokerOwner(u)) redirect("/broker");
   return u;
 }
