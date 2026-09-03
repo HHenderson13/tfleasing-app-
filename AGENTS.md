@@ -297,7 +297,14 @@ same reason, as `stock-reference.ts` vs `stock-reference-mint.ts`.
    so the same wording drops into a paper agreement that names the parties
    in its own preamble, and survives a trading-name change. Don't
    reintroduce a company name there.
-8. **Audit + alert** — everything observable is written to
+8. **The reporting endpoint is capped server-side.** The reporter is a
+   script on a page the user controls, so the per-kind cap in
+   `screen-guard.tsx` is a courtesy, not a control — anyone can open
+   devtools and POST in a loop. Without the cap in `recordBrokerSecurityEvent`
+   the endpoint is a write amplifier: every call inserts a row and, for
+   alertable kinds, runs a lookback query. 40 rows per user per 10 minutes,
+   dropped silently past that so nobody learns where the ceiling is.
+9. **Audit + alert** — everything observable is written to
    `broker_security_events` against a named user by
    `/api/broker/security-event`, and the serious kinds email
    `BROKER_SECURITY_ALERT_TO` (comma-separated). One email per user per 30

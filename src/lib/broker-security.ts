@@ -38,6 +38,18 @@ const ALERT_KINDS = new Set<SecurityEventKind>([
 // first leak attempt would bury the inbox it was supposed to alert.
 const ALERT_THROTTLE_MINUTES = 30;
 
+// Hard ceiling on rows one broker user can create, whatever they send.
+//
+// The reporter is a script on a page the user controls, so the client-side
+// per-kind cap in screen-guard.tsx is a courtesy, not a control — anyone can
+// open devtools and POST in a loop. Without a server-side cap the endpoint
+// is a write amplifier: every call inserts a row AND, for alertable kinds,
+// runs a lookback query. 40 in ten minutes is far above what an honest page
+// produces (the client stops at 5 per kind) and far below anything that
+// could bloat the table.
+const EVENT_CAP_PER_USER = 40;
+const EVENT_CAP_WINDOW_MINUTES = 10;
+
 const HUMAN_KIND: Record<SecurityEventKind, string> = {
   "capture-shortcut": "Screenshot shortcut used (macOS Cmd+Shift)",
   "print-screen-key": "Print Screen / snipping shortcut used",
@@ -62,6 +74,12 @@ export async function recordBrokerSecurityEvent(input: {
   userAgent?: string | null;
 }): Promise<void> {
   try {
+    if (await overEventCap(input.me.id)) {
+      // Silently. Someone hammering the endpoint should not learn where the
+      // ceiling is, and the fact they hit it is already on the record.
+      logWarn("broker.security.capped", input.kind, { brokerUserId: input.me.id });
+      return;
+    }
     await db.insert(brokerSecurityEvents).values({
       id: randomUUID(),
       brokerUserId: input.me.id,
@@ -84,6 +102,19 @@ export async function recordBrokerSecurityEvent(input: {
   } catch (err) {
     logWarn("broker.security.write-failed", String(err), { brokerUserId: input.me.id });
   }
+}
+
+async function overEventCap(brokerUserId: string): Promise<boolean> {
+  const since = new Date(Date.now() - EVENT_CAP_WINDOW_MINUTES * 60_000);
+  const rows = await db
+    .select({ id: brokerSecurityEvents.id })
+    .from(brokerSecurityEvents)
+    .where(and(
+      eq(brokerSecurityEvents.brokerUserId, brokerUserId),
+      gt(brokerSecurityEvents.createdAt, since),
+    ))
+    .limit(EVENT_CAP_PER_USER);
+  return rows.length >= EVENT_CAP_PER_USER;
 }
 
 // Who gets told. Set BROKER_SECURITY_ALERT_TO to a comma-separated list;
