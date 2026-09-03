@@ -38,6 +38,11 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
   // the session is already gone, so nothing behind this should still be
   // readable — and says why before sending them to the login page.
   const [displaced, setDisplaced] = useState(false);
+  // The warning's button needs the same reset the event listeners perform,
+  // but that lives inside the effect's closure. A pointerdown on the button
+  // would reach the window listener anyway; going through this ref means the
+  // button still works if that ever stops being true.
+  const bumpRef = useRef<() => void>(() => {});
   // Seeded in the effect, not here: Date.now() during render is impure and
   // would give a different answer on every re-render.
   const lastActive = useRef(0);
@@ -53,6 +58,7 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
       activeSinceBeat = true;
       setSecondsLeft(null);
     };
+    bumpRef.current = bump;
     // Passive: these fire often and must never delay a scroll.
     const opts = { passive: true } as const;
     for (const ev of ACTIVITY_EVENTS) window.addEventListener(ev, bump, opts);
@@ -127,7 +133,13 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
   return (
     <div className="fixed inset-x-0 bottom-4 z-[2147483646] flex justify-center px-4">
       <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-lg">
-        <span>Signing you out in {secondsLeft}s — click or scroll to stay.</span>
+        <span>Signing you out in {secondsLeft}s.</span>
+        <button
+          onClick={() => bumpRef.current()}
+          className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+        >
+          Stay signed in
+        </button>
       </div>
     </div>
   );
