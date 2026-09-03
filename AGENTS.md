@@ -210,6 +210,15 @@ What we do instead, in descending order of what it actually achieves:
    Opacity is deliberately high enough to be unmissable — a watermark
    tuned down until it stops being distracting still identifies a leaker
    afterwards, but no longer deters the leak, which is the point.
+   **Two layers, and both are needed.** A background tile repeats every
+   WxH, so a crop only certainly contains a complete watermark when the
+   tile is smaller than the crop in both axes. The detail tile is 430x215,
+   which is big enough to be legible and therefore big enough that an area
+   snip of one vehicle card (~1100x150) can land between rows and catch
+   nothing usable — exactly the capture someone leaking a single price
+   would take. So it is paired with a 200x100 tile carrying just the email,
+   which every realistic snip and every phone screenshot contains at least
+   one complete copy of. Do not enlarge the dense tile.
 2. **A banner that says so, in words**, naming the viewer. Deterrence only
    works if they have read it.
 3. **The confrontation dialog** — on a detected capture the broker gets a
@@ -219,6 +228,17 @@ What we do instead, in descending order of what it actually achieves:
    visible. Defeats the mobile app-switcher snapshot, screen sharing while
    tabbed away, and focus-stealing capture tools. Does **not** defeat
    Cmd+Shift+4, which never blurs the window.
+
+**On mobile specifically:** the watermark and the shield both work, and
+they are the whole of it. A phone screenshot uses hardware buttons the
+browser never sees — there is no web API on iOS or Android to block or
+even detect one, so no alert fires and no dialog appears. The capture is
+watermarked, which is the only thing that was ever going to survive it.
+The one real block is `FLAG_SECURE` in a native **Android** wrapper (a
+Trusted Web Activity around this site), which stops screenshots *and*
+screen recording at the OS level; iOS has no equivalent. That needs a
+native shell and store distribution, so it is a deliberate decision, not
+something to add quietly.
 5. **Print blocking** — `@media print` blanks the page. Unlike a
    screenshot, printing and print-to-PDF genuinely are blockable.
 6. **Copy / selection / context-menu / drag** blocking, and

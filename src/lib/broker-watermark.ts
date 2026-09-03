@@ -40,6 +40,8 @@ function xmlEscape(s: string): string {
 export interface WatermarkLines {
   primary: string;
   secondary: string;
+  // Short enough to fit the dense tile, and still unique to one person.
+  dense: string;
 }
 
 // Two lines: who, then where-and-when. Kept short so the tile stays legible
@@ -51,7 +53,36 @@ export function watermarkLines(me: CurrentBrokerUser, sessionId: string, now = n
   return {
     primary: `${me.name} · ${me.email}`,
     secondary: `${me.brokerName} · ${stamp} · ${sessionTag(sessionId)}`,
+    dense: me.email,
   };
+}
+
+// Two tiles, layered, because one cannot do both jobs.
+//
+// A background tile repeats every WxH, so a crop is only GUARANTEED to
+// contain a complete watermark if the tile is smaller than the crop in both
+// axes. The detail tile below is 430x215 — big enough to carry name, email,
+// broker, time and ref legibly, and therefore big enough that an area snip
+// of a single vehicle card (roughly 1100x150) can land between rows and
+// catch nothing usable. That is exactly the capture someone leaking one
+// price would take.
+//
+// So the detail tile is paired with a dense tile carrying just the email,
+// small enough (200x100) that any snip worth taking contains at least one
+// complete copy. Both are painted as layers of one background-image, which
+// keeps it a single node for the tamper check in screen-guard.tsx.
+
+// The identifying string, on its own, repeated tightly. An email address is
+// the single most useful thing to recover from a leaked crop: it names one
+// person and one company at once.
+export function watermarkDenseDataUri(lines: WatermarkLines, opacity = 0.16): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='100'>` +
+    `<g transform='rotate(-26 100 50)' fill='rgb(15,23,42)' fill-opacity='${opacity}' ` +
+    `font-family='ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif' font-size='9' font-weight='600'>` +
+    `<text x='6' y='54'>${xmlEscape(lines.dense)}</text>` +
+    `</g></svg>`;
+  return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
 }
 
 // A repeating SVG tile, rotated so it crosses content at an angle. Angled
