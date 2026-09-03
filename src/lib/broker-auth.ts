@@ -73,12 +73,65 @@ export function isSetupTokenExpired(expiresAt: Date | null | undefined): boolean
   return !!expiresAt && expiresAt.getTime() < Date.now();
 }
 
+// ONE live session per broker user. Signing in anywhere signs you out
+// everywhere else.
+//
+// This is the strongest anti-sharing control here, stronger than the second
+// factor: a shared TOTP secret still lets two people in, but two people
+// cannot hold a session at the same time — they boot each other out all day
+// until one of them asks for their own login. It is also the honest reading
+// of "log out of elsewhere": there is no other device left to log out.
+//
+// The cost is real and falls on honest users too: a broker on a laptop and a
+// phone is signed out of one when they use the other. For a single-page
+// stock list that is a fair trade; it would not be for a tool people keep
+// open on two screens.
 export async function createBrokerSession(brokerUserId: string): Promise<string> {
+  await db.delete(brokerSessions).where(eq(brokerSessions.brokerUserId, brokerUserId));
   const id = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_ABSOLUTE_HOURS * 3_600_000);
   await db.insert(brokerSessions).values({ id, brokerUserId, expiresAt, lastSeenAt: now, createdAt: now });
   return id;
+}
+
+// Heartbeat, called by broker/idle-timeout.tsx. Answers two questions the
+// page cannot answer for itself.
+//
+// The first is whether the session still exists — a broker displaced by a
+// sign-in elsewhere would otherwise sit looking at stock until they next
+// navigated, which on this page could be never.
+//
+// The second is subtler and was a genuine bug: the stock list filters
+// entirely in the browser, so someone can work for half an hour without
+// making a single request. lastSeenAt would go stale while they were busy
+// and the server would idle them out mid-use. The client knows about real
+// activity (pointer, keys, scroll) and passes it here, which is the only
+// thing that keeps the server's idle clock honest.
+//
+// `active` must come from real input. A heartbeat that always bumped would
+// keep an abandoned screen signed in for as long as the tab stayed open,
+// which is precisely what the idle timeout exists to prevent.
+export async function brokerSessionHeartbeat(active: boolean): Promise<"ok" | "gone"> {
+  const jar = await cookies();
+  const sid = jar.get(BROKER_SESSION_COOKIE)?.value;
+  if (!sid) return "gone";
+  const now = new Date();
+  const [row] = await db
+    .select({ lastSeenAt: brokerSessions.lastSeenAt, createdAt: brokerSessions.createdAt })
+    .from(brokerSessions)
+    .where(and(eq(brokerSessions.id, sid), gt(brokerSessions.expiresAt, now)))
+    .limit(1);
+  if (!row) return "gone";
+  const lastSeen = row.lastSeenAt ?? row.createdAt;
+  if (now.getTime() - lastSeen.getTime() > SESSION_IDLE_MINUTES * 60_000) {
+    await db.delete(brokerSessions).where(eq(brokerSessions.id, sid));
+    return "gone";
+  }
+  if (active) {
+    await db.update(brokerSessions).set({ lastSeenAt: now }).where(eq(brokerSessions.id, sid));
+  }
+  return "ok";
 }
 
 // ─── Second factor ─────────────────────────────────────────────────────────

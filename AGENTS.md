@@ -138,6 +138,28 @@ Completely parallel to the TF app, never overlapping:
   - Admin resets 2FA from `/admin/brokers/[id]` for a lost phone; that
     clears the secret and drops live sessions, so the old device stops
     working immediately.
+- **One live session per broker user.** `createBrokerSession` deletes every
+  other session for that user first, so signing in anywhere signs you out
+  everywhere else. This is the strongest anti-sharing control here —
+  stronger than the second factor, since a shared TOTP secret still lets two
+  people in, but two people cannot hold a session at once and will boot each
+  other out all day. The cost falls on honest users too (laptop and phone
+  cannot both stay signed in); fair for a single-page stock list, and would
+  not be for a tool people keep open on two screens.
+- **`/api/broker/session` is the heartbeat**, called every 30s by
+  `broker/idle-timeout.tsx`. It does two jobs, and the second one is not
+  optional:
+  - Tells a displaced device it has been signed out (401), instead of
+    leaving it looking at stock until it next navigates — which on this
+    page could be never.
+  - **Keeps the server's idle clock honest.** The stock list filters
+    entirely in the browser, so a broker can work for half an hour without
+    making a single request; `lastSeenAt` would go stale while they were
+    busy and the server would idle them out mid-use. The client reports
+    real input (pointer, keys, scroll) and only that bumps the clock.
+    A heartbeat that always bumped would keep an abandoned tab signed in
+    for as long as it stayed open, defeating the idle timeout entirely —
+    so `active` must never be hardcoded true.
 - **Two session clocks**, both in `lib/broker-auth.ts` and both enforced
   server-side in `getCurrentBrokerUser`:
   - `SESSION_ABSOLUTE_HOURS` (12) — the ceiling. However active they are,
