@@ -155,15 +155,39 @@ What brokers deliberately never see, and why:
 | Model year                  | Commercially sensitive; old plate reads as old stock. |
 | Interest bearing, adopted   | Funding. Never visible in any form — no tag, no filter, no column. |
 | Gate released               | Build milestone, and a back door to the ageing figure. |
-| Days in stock               | The Delivered badge drops its relative count (`showDays`). ETA keeps "in N days" — that's forward-looking lead time. |
+| Arrival date, days in stock | `delivered` is redacted outright. "In stock since 12 May" says how long we've been sitting on it. |
+| ETA urgency                 | No red/amber overdue tone, no "in N days" countdown. That's our schedule pressure, not theirs. |
 | Excel export                | No export button on the broker view, and no route that would serve one. |
 
-**Availability** replaces Status for brokers: a single facet reading
-`In stock` → `Oct 2026` → `Nov 2026` → … → `ETA to be confirmed`, sorted
-chronologically via `availabilitySortKey` (not alphabetically — the
-labels sort wrong). It is derived from `inStock` + `eta`, both of which
-survive redaction; `inStock` is computed **server-side** in `stock-list.ts`
+**Availability** replaces Status for brokers, in two related pieces that
+must not be confused:
+
+- `availabilityLabel` / `availabilitySortKey` — the **facet**. Buckets by
+  month: `In stock` → `Oct 2026` → `Nov 2026` → … → `ETA to be confirmed`,
+  sorted chronologically (not alphabetically — the labels sort wrong).
+  Month granularity because that is a useful filter.
+- `brokerAvailability(row)` — what **one vehicle** says, used by both the
+  badge and the Availability line in the expanded card, so a card cannot
+  contradict itself. Returns `Available now`, a date, `Due now`, or
+  `To be confirmed`.
+
+Both derive from `inStock` + `eta`, the only two scheduling fields that
+survive redaction. `inStock` is computed **server-side** in `stock-list.ts`
 so brokers get availability without status ever reaching the browser.
+
+**One badge component, two states.** `BrokerAvailabilityBadge` is the only
+badge a broker sees. It exists because the previous arrangement — a shared
+`DeliveredBadge` and `EtaBadge` with `audience` / `showDays` flags threaded
+through them — drifted: an in-stock car *with* a delivered date advertised
+the date it landed while one without said "Available now", and an overdue
+ETA turned red and announced how many days late we were. Same list, three
+different stories. Keep every broker badge state inside that one component.
+
+An **elapsed ETA collapses to "Due now"** rather than showing the stale
+date. A vehicle sits past its ETA when it's late or when the feed hasn't
+caught up, and "Arriving 02 May" read in September looks broken. The facet
+still buckets it under its original month — that's a filter, not a claim
+about today.
 
 ### Vehicle references
 

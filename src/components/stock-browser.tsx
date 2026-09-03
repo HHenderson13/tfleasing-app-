@@ -41,9 +41,9 @@ export type StockRow = {
   colour: string;
   options: string[];
   eta: string | null;
-  delivered: string | null;
   inStock: boolean;      // derived server-side from the mapped status
   // ── TF-only. Absent from the broker payload, hence optional. ──────────
+  delivered?: string | null;
   vin?: string | null;
   orderNo?: string | null;
   status?: string | null;
@@ -89,6 +89,21 @@ function availabilityLabel(r: StockRow): string {
   const d = r.eta ? new Date(r.eta) : null;
   if (!d || isNaN(d.getTime())) return ETA_TBC_LABEL;
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// What ONE vehicle is told to say, as opposed to which bucket it filters
+// into. The facet groups by month because that is a useful filter; a badge
+// saying "May 2026" about a specific car is vaguer than the date we have.
+// Both come from this file so they stay in step.
+function brokerAvailability(r: StockRow): string {
+  if (r.inStock) return "Available now";
+  if (!r.eta) return "To be confirmed";
+  const days = daysUntil(r.eta);
+  // Past its ETA — late, or the feed hasn't caught up. "Arriving 02 May"
+  // read in September looks broken and invites the question we least want
+  // asked, so an elapsed date collapses to "Due now".
+  if (days !== null && days < 0) return "Due now";
+  return fmtDate(r.eta) ?? "To be confirmed";
 }
 
 // Chronological, not alphabetical: "In stock" first, then the months in
@@ -590,18 +605,20 @@ function Card({ row: r, audience, open, onToggle }: { row: StockRow; audience: S
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
-            {r.inStock ? (
+            {/* Brokers get exactly one badge, from one component, in every
+                case — see BrokerAvailabilityBadge. TF keeps the status pill
+                alongside the urgency-toned ETA. */}
+            {isBroker ? (
+              <BrokerAvailabilityBadge row={r} />
+            ) : r.inStock ? (
               // Single badge replaces the status pill so "Delivered" doesn't appear twice.
-              // Brokers get no ageing count — see DeliveredBadge.
-              <DeliveredBadge label={deliveredLabel} days={daysUntil(r.delivered)} showDays={!isBroker} audience={audience} />
+              <DeliveredBadge label={deliveredLabel} days={daysUntil(r.delivered)} />
             ) : (
               <>
-                {!isBroker && (
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone.cls}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
-                    {r.status ?? "Unknown"}
-                  </span>
-                )}
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone.cls}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                  {r.status ?? "Unknown"}
+                </span>
                 <EtaBadge etaLabel={etaLabel} etaDays={etaDays} hasEta={!!r.eta} />
               </>
             )}
@@ -657,8 +674,15 @@ function Card({ row: r, audience, open, onToggle }: { row: StockRow; audience: S
             {!isBroker && <Pair k="VIN"           v={<span className="font-mono">{r.vin ?? "—"}</span>} />}
             {!isBroker && <Pair k="Order No"      v={r.orderNo ?? "—"} />}
             {!isBroker && <Pair k="Gate released" v={fmtDate(r.gateRelease) ?? "—"} />}
-            <Pair k="ETA"           v={etaLabel ?? "—"} />
-            <Pair k="Delivered"     v={deliveredLabel ?? "—"} />
+            {isBroker ? (
+              // Same function as the badge, so the card can't contradict itself.
+              <Pair k="Availability" v={brokerAvailability(r)} />
+            ) : (
+              <>
+                <Pair k="ETA"         v={etaLabel ?? "—"} />
+                <Pair k="Delivered"   v={deliveredLabel ?? "—"} />
+              </>
+            )}
             {!isBroker && <Pair k="Interest bearing" v={fmtDate(r.interestBearing) ?? "—"} />}
             {!isBroker && <Pair k="Adopted"       v={fmtDate(r.adopted) ?? "—"} />}
             {!isBroker && <Pair k="Dealer"        v={r.dealer ?? "—"} />}
@@ -768,33 +792,63 @@ function FacetGroup({
   );
 }
 
-function DeliveredBadge({ label, days, showDays, audience }: { label: string | null; days: number | null; showDays: boolean; audience: StockAudience }) {
-  // The vehicle is here. Always emerald.
-  //
-  // showDays is false for brokers: how long a unit has been sitting is our
-  // business, not theirs, and "Delivered · 94 days ago" is an invitation to
-  // negotiate. They still get the arrival date.
-  //
-  // TF keeps saying "Delivered" — that's the internal milestone. The broker
-  // view says "In stock", which is the same fact in the language of the
-  // pipeline they're shown.
+// ─── Broker badge ──────────────────────────────────────────────────────────
+//
+// EVERY badge a broker sees comes from here. Two states, and no third:
+// the vehicle is here, or it is arriving.
+//
+// That single-component rule is the whole point. The badges used to be
+// split across DeliveredBadge and EtaBadge with audience flags threaded
+// through both, and they drifted: an in-stock car WITH a delivered date
+// advertised the date it landed, one without said "Available now", and an
+// overdue ETA turned red and announced how many days late we were. Same
+// list, three different stories.
+//
+// Deliberately absent: the arrival date (it prices the car — a unit that
+// landed in May is a unit we plainly want rid of; `delivered` no longer
+// reaches the browser at all, see redactForBroker), and any urgency
+// colour or countdown on the ETA, which is our schedule pressure to feel,
+// not theirs.
+function BrokerAvailabilityBadge({ row }: { row: StockRow }) {
+  const label = brokerAvailability(row);
+  if (row.inStock) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-right shadow-sm">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">In stock</div>
+        <div className="text-sm font-semibold leading-tight text-emerald-900">{label}</div>
+      </div>
+    );
+  }
+  // A date gets tabular figures so the column of them lines up; the two
+  // word-labels ("Due now", "To be confirmed") would look wrong in them.
+  const isDate = label !== "Due now" && label !== "To be confirmed";
+  return (
+    <div className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-right shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Arriving</div>
+      <div className={`text-sm leading-tight text-sky-900 ${isDate ? "font-semibold tabular-nums" : "font-medium"}`}>{label}</div>
+    </div>
+  );
+}
+
+// TF only. Keeps the arrival date and the ageing count — internally that
+// IS the signal, and it is exactly what the broker view withholds.
+function DeliveredBadge({ label, days }: { label: string | null; days: number | null }) {
   const rel =
-    !showDays || days === null ? null :
+    days === null ? null :
     days < -1 ? `${Math.abs(days)} days ago` :
     days === -1 ? "Yesterday" :
     days === 0 ? "Today" :
     null;
-  const isBroker = audience === "broker";
   return (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-right shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{isBroker ? "In stock" : "Delivered"}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Delivered</div>
       {label ? (
         <>
           <div className="text-sm font-semibold tabular-nums leading-tight text-emerald-900">{label}</div>
           {rel && <div className="text-[11px] font-medium text-emerald-700">{rel}</div>}
         </>
       ) : (
-        <div className="text-xs font-medium text-emerald-700">{isBroker ? "Available now" : "In stock"}</div>
+        <div className="text-xs font-medium text-emerald-700">In stock</div>
       )}
     </div>
   );

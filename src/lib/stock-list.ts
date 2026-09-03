@@ -193,9 +193,15 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //   adopted                 form, including as a filter or a tag.
 //   gateRelease           — a build milestone, and a back door to the
 //                           ageing figure we're deliberately not showing.
+//   delivered             — the arrival date. A broker needs to know a
+//                           vehicle is HERE, not when it landed: a date
+//                           three months old prices the car for them. The
+//                           badge says "Available now" and `inStock`
+//                           already carries the only fact they need, so
+//                           the date does not travel.
 export type BrokerStockRow = Omit<
   MappedStockRow,
-  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease"
+  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered"
 >;
 
 export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
@@ -212,7 +218,6 @@ export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
     colour: r.colour,
     options: r.options,
     eta: r.eta,
-    delivered: r.delivered,
     inStock: r.inStock,
   }));
 }

@@ -36,7 +36,7 @@ const FULL_ROW: MappedStockRow = {
 // it away if it ever appeared in the payload.
 const FORBIDDEN_KEYS = [
   "vin", "orderNo", "dealer", "destination", "status",
-  "modelYear", "gateRelease", "interestBearing", "adopted",
+  "modelYear", "gateRelease", "interestBearing", "adopted", "delivered",
 ] as const;
 
 describe("redactForBroker", () => {
@@ -77,7 +77,6 @@ describe("redactForBroker", () => {
       colour: "Agate Black",
       options: ["Panoramic roof", "Winter pack"],
       eta: "2026-10-14T00:00:00.000Z",
-      delivered: null,
       inStock: false,
     });
   });
@@ -101,5 +100,15 @@ describe("redactForBroker", () => {
     const [here] = redactForBroker([{ ...FULL_ROW, inStock: true, status: "Delivered" }]);
     expect(here.inStock).toBe(true);
     expect(here).not.toHaveProperty("status");
+  });
+
+  it("withholds the arrival date even from a vehicle that is in stock", () => {
+    // "In stock since 12 May" tells a broker how long we have been sitting
+    // on it. inStock alone answers the only question they need answered.
+    const [here] = redactForBroker([
+      { ...FULL_ROW, inStock: true, status: "Delivered", delivered: "2026-05-12T00:00:00.000Z" },
+    ]);
+    expect(here).not.toHaveProperty("delivered");
+    expect(JSON.stringify(here)).not.toContain("2026-05-12");
   });
 });
