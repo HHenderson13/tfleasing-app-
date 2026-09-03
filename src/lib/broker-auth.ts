@@ -8,6 +8,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { ensureAppSchema } from "@/db/ensure-schema";
 import { checkPassword as checkPasswordPolicy, hashPassword, verifyPassword } from "./auth";
 import { verifyTotp } from "./totp";
+import { BROKER_COOKIE_PATH } from "./broker-endpoints";
 
 // Parallel auth system for the broker portal. Mirrors lib/auth.ts but uses
 // its own cookie name, session table, and user table — strict separation
@@ -232,7 +233,7 @@ export async function setBrokerChallengeCookie(challengeId: string) {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/broker",
+    path: BROKER_COOKIE_PATH,
     maxAge: CHALLENGE_TTL_MINUTES * 60,
   });
 }
@@ -254,7 +255,7 @@ export async function setBrokerSessionCookie(sessionId: string) {
     secure: process.env.NODE_ENV === "production",
     // Scoped to /broker only — even if a broker cookie leaks somewhere it
     // physically cannot be sent to non-broker paths.
-    path: "/broker",
+    path: BROKER_COOKIE_PATH,
     maxAge: SESSION_ABSOLUTE_HOURS * 3_600,
   });
 }

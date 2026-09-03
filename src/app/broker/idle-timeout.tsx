@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { BROKER_SESSION_ENDPOINT } from "@/lib/broker-endpoints";
 
 // Client half of the idle timeout, and the session heartbeat.
 //
@@ -73,7 +74,7 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
       const wasActive = activeSinceBeat;
       activeSinceBeat = false;
       try {
-        const res = await fetch("/api/broker/session", {
+        const res = await fetch(BROKER_SESSION_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ active: wasActive }),

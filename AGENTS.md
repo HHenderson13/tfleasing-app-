@@ -54,7 +54,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/broker/terms`                    | `requireBrokerUser` (must be reachable BEFORE acceptance) |
 | `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
 | `/broker/verify`, `/broker/enrol`  | challenge cookie only — half-signed-in, see below |
-| `/api/broker/*`                    | broker session (middleware) + `getCurrentBrokerUser` in the handler |
+| `/broker/api/*`                    | broker session (middleware) + handler check. **Must live under `/broker/`** — see below |
 
 If you add a route, add it here.
 
@@ -374,12 +374,24 @@ same reason, as `stock-reference.ts` vs `stock-reference-mint.ts`.
 and blanks the page on a second attempt. Treat any change that weakens the
 watermark as weakening the only thing here that really works.
 
-**`/api/broker/*` must stay inside the broker branch of `src/middleware.ts`.**
-It was originally outside it, so those routes fell through to the TF branch,
-demanded a TF cookie no broker has, and redirected the reporter to the TF
-login — the endpoint silently did nothing. Note the trailing slash:
-`/api/broker-ratebooks/*` is an **admin** route and deliberately does not
-match.
+**The portal's own API must live at `/broker/api/*`, not `/api/broker/*`.**
+The session cookie is `Path=/broker` on purpose — a broker cookie physically
+cannot be sent to a TF route. A browser honours that strictly: it will not
+send the cookie to `/api/broker/*`, because that is not beneath `/broker`.
+The two paths read as equivalent and are not.
+
+This shipped broken. The heartbeat got 401 every 30 seconds and signed
+brokers out mid-session, telling them they had signed in on another device,
+and capture reporting silently recorded nothing. It survived every test
+because `curl -b "name=value"` sends a cookie regardless of path — only a
+real cookie jar (or a browser) reveals it. **Test broker endpoints with
+`curl -b <jarfile>`, never `-b "name=value"`.**
+
+`lib/broker-endpoints.ts` now holds the cookie path and the endpoint paths
+together, both callers import from it, and `broker-endpoints.test.ts`
+asserts every client-called path sits inside the cookie's scope. Note that
+`/api/broker-ratebooks/*` is an unrelated **admin** route and stays where it
+is.
 
 ### Enquiry buttons
 

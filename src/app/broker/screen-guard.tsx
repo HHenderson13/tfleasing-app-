@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { WATERMARK_FAINT, WATERMARK_LOUD, watermarkBackground, watermarkStamp, type WatermarkStrength } from "@/lib/broker-watermark-tile";
+import { BROKER_SECURITY_EVENT_ENDPOINT } from "@/lib/broker-endpoints";
 
 // ─── Capture deterrence for the broker portal ──────────────────────────────
 //
@@ -26,7 +27,7 @@ import { WATERMARK_FAINT, WATERMARK_LOUD, watermarkBackground, watermarkStamp, t
 // to. It raises effort, removes the effortless routes, and makes what does
 // get out traceable.
 
-const REPORT_URL = "/api/broker/security-event";
+const REPORT_URL = BROKER_SECURITY_EVENT_ENDPOINT;
 
 type Kind =
   | "print-screen-key" | "print" | "capture-shortcut" | "watermark-tamper"

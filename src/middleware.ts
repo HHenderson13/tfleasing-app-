@@ -72,11 +72,11 @@ export function middleware(req: NextRequest) {
   }
 
   // ── Broker portal ───────────────────────────────────────────────────
-  // /api/broker/* belongs to this portal too. Without it those routes fall
-  // through to the TF branch below, which demands a TF cookie a broker will
-  // never have, and the request is redirected to the TF login — so the
-  // endpoint silently stops working for exactly the people meant to use it.
-  if (pathname === "/broker" || pathname.startsWith("/broker/") || pathname.startsWith("/api/broker/")) {
+  // The portal's own API lives at /broker/api/*, INSIDE this prefix, and must
+  // stay there: the session cookie is Path=/broker, so a browser will not send
+  // it anywhere else. Routes under /api/broker/* looked equivalent and were
+  // not — see lib/broker-endpoints.ts.
+  if (pathname === "/broker" || pathname.startsWith("/broker/")) {
     if (BROKER_PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
       return NextResponse.next();
     }
@@ -84,7 +84,7 @@ export function middleware(req: NextRequest) {
     if (!sid) {
       // An API caller wants a status code, not a login page. Redirecting a
       // fetch() to HTML turns a clean 401 into a confusing parse error.
-      if (pathname.startsWith("/api/")) return harden(new NextResponse(null, { status: 401 }));
+      if (pathname.startsWith("/broker/api/")) return harden(new NextResponse(null, { status: 401 }));
       const url = req.nextUrl.clone();
       url.pathname = "/broker/login";
       url.searchParams.set("next", pathname);
