@@ -31,6 +31,9 @@ const FULL_ROW: MappedStockRow = {
   dealer: "TrustFord Enfield",
   destination: "Enfield",
   includedByRule: false,
+  preRegistered: false,
+  regNumber: "AB12 CDE",
+  registeredAt: "2026-05-01T00:00:00.000Z",
   offerNote: "Check with Fleet before offering",
   offerNoteBroker: "Check with Dealer before offering",
   inStock: false,
@@ -45,6 +48,8 @@ const FORBIDDEN_KEYS = [
   "includedByRule",
   // A TF-side search key, not a handle a broker needs.
   "altRef",
+  // A plate identifies one specific car to anyone who sees it.
+  "regNumber",
   // Folded into offerNote at the boundary; carrying it would put the TF
   // wording on the wire alongside the broker's.
   "offerNoteBroker",
@@ -89,6 +94,8 @@ describe("redactForBroker", () => {
       options: ["Panoramic roof", "Winter pack"],
       eta: "2026-10-14T00:00:00.000Z",
       offerNote: "Check with Dealer before offering",
+      preRegistered: false,
+      registeredAt: "2026-05-01T00:00:00.000Z",
       inStock: false,
     });
   });
@@ -112,6 +119,17 @@ describe("redactForBroker", () => {
     const [here] = redactForBroker([{ ...FULL_ROW, inStock: true, status: "Delivered" }]);
     expect(here.inStock).toBe(true);
     expect(here).not.toHaveProperty("status");
+  });
+
+  it("keeps the registration DATE but never the plate", () => {
+    // A broker prices a pre-reg on how long it has been on the road, so the
+    // date is theirs. The plate identifies one specific car to anyone who
+    // sees it, so it is not.
+    const [row] = redactForBroker([{ ...FULL_ROW, preRegistered: true }]);
+    expect(row.registeredAt).toBe("2026-05-01T00:00:00.000Z");
+    expect(row.preRegistered).toBe(true);
+    expect(row).not.toHaveProperty("regNumber");
+    expect(JSON.stringify(row)).not.toContain("AB12 CDE");
   });
 
   it("gives a broker the broker wording, never the internal one", () => {

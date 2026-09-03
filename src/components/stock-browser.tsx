@@ -46,6 +46,10 @@ export type StockRow = {
   // audience by the time it arrives — TF is told to check with Fleet, a
   // broker to check with us — so this renders it without choosing.
   offerNote?: string | null;
+  // Hand-entered, already on a plate. Both audiences see this and the date;
+  // only TF sees the plate itself.
+  preRegistered?: boolean;
+  registeredAt?: string | null;
   inStock: boolean;      // derived server-side from the mapped status
   // ── TF-only. Absent from the broker payload, hence optional. ──────────
   // A second reference the same vehicle also answers to, so a quote a broker
@@ -57,6 +61,8 @@ export type StockRow = {
   includedByRule?: boolean;
   delivered?: string | null;
   vin?: string | null;
+  // The plate. TF-only — it identifies one specific car to anyone who sees it.
+  regNumber?: string | null;
   orderNo?: string | null;
   status?: string | null;
   modelYear?: string | null;
@@ -70,7 +76,7 @@ export type StockRow = {
 type SortKey = "eta-asc" | "eta-desc" | "gate-desc" | "model" | "dealer";
 
 type FacetId =
-  | "model" | "variant" | "derivative" | "availability" | "year" | "body" | "engine" | "included"
+  | "model" | "variant" | "derivative" | "availability" | "registration" | "year" | "body" | "engine" | "included"
   | "transmission" | "drive" | "colour" | "option" | "status" | "funding" | "dealer" | "destination";
 
 // Only flag funding when the date has actually passed — a future "interest bearing date"
@@ -140,6 +146,10 @@ type Facet = {
 
 const FACETS: Facet[] = [
   { id: "availability", label: "Availability", only: "broker", get: availabilityLabel, sortKey: availabilitySortKey },
+  // Both audiences. Pre-reg is a different proposition from factory stock —
+  // already registered, so the first owner is on the logbook — and either
+  // side may want to see only one or the other.
+  { id: "registration", label: "Registration", get: (r) => (r.preRegistered ? "Pre-registered" : "Unregistered") },
   { id: "model",        label: "Model",        get: (r) => r.bucket },
   { id: "variant",      label: "Variant",      get: (r) => r.variant },
   { id: "derivative",   label: "Derivative",   get: (r) => r.derivative },
@@ -639,6 +649,14 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
                 <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">{r.derivative}</span>
               )}
               {!isBroker && r.modelYear && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{r.modelYear}</span>}
+              {r.preRegistered && (
+                <span
+                  className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200"
+                  title={r.registeredAt ? `Registered ${fmtDate(r.registeredAt)}` : "Already registered"}
+                >
+                  Pre-registered
+                </span>
+              )}
               {!isBroker && r.includedByRule && (
                 <span
                   className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
@@ -737,6 +755,8 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
             <Pair k="Reference"     v={<span className="font-mono">{r.ref}</span>} />
             {!isBroker && <Pair k="VIN"           v={<span className="font-mono">{r.vin ?? "—"}</span>} />}
+            {!isBroker && r.preRegistered && <Pair k="Reg number" v={<span className="font-mono">{r.regNumber ?? "—"}</span>} />}
+            {r.preRegistered && <Pair k="Registered"  v={fmtDate(r.registeredAt) ?? "—"} />}
             {!isBroker && <Pair k="Order No"      v={r.orderNo ?? "—"} />}
             {!isBroker && <Pair k="Gate released" v={fmtDate(r.gateRelease) ?? "—"} />}
             {isBroker ? (

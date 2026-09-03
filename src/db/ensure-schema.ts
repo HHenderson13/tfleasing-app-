@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 48;
+const SCHEMA_VERSION = 49;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -125,6 +125,7 @@ async function runEnsureAppSchema() {
   await ensureStockAvailabilityRules();
   await ensureStockReferenceSecret();
   await ensureStockModelDealerRules();
+  await ensurePreRegVehicles();
   await ensureHotPathIndexes();
 }
 
@@ -624,6 +625,42 @@ async function ensureScraperTables() {
 //
 // Seeded with the two rules TF asked for and then left alone: INSERT OR
 // IGNORE so switching one off, or changing its value, survives every boot.
+// Hand-entered pre-registered vehicles — see the note in db/schema.ts. Its
+// own table so a stock upload, which deletes and reloads stock_vehicles
+// wholesale, cannot wipe rows a person typed.
+async function ensurePreRegVehicles() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS pre_reg_vehicles (
+      id TEXT PRIMARY KEY,
+      bucket TEXT NOT NULL,
+      variant TEXT,
+      derivative TEXT,
+      body_style TEXT,
+      engine TEXT,
+      transmission TEXT,
+      drive TEXT,
+      colour TEXT NOT NULL,
+      model_year TEXT,
+      options TEXT,
+      dealer TEXT,
+      destination TEXT,
+      reg_number TEXT NOT NULL,
+      registered_at INTEGER NOT NULL,
+      vin TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'available',
+      sold_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  // For tables that predate the lifecycle columns.
+  await ensureColumns("pre_reg_vehicles", [
+    { name: "status", sqlType: "TEXT NOT NULL DEFAULT 'available'" },
+    { name: "sold_at", sqlType: "INTEGER" },
+  ]);
+}
+
 // Model-by-dealer rules — see the note in db/schema.ts. Seeded with the
 // Explorer Van sites and then left alone: INSERT OR IGNORE, so adding or
 // removing a dealer code in the UI survives every boot.

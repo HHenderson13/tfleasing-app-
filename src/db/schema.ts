@@ -298,6 +298,54 @@ export const stockAvailabilityRules = sqliteTable("stock_availability_rules", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Pre-registered vehicles, entered by hand.
+//
+// A SEPARATE TABLE, and it has to be: every stock upload runs
+// `tx.delete(stockVehicles)` and reloads from the workbook, so anything typed
+// in by a person would be wiped by the next morning's file. These rows are
+// merged into the stock list at read time instead, so they survive uploads
+// and appear on /stock and /broker/stock alongside everything else.
+//
+// The columns mirror the mapped stock row rather than the raw feed, because
+// they are typed by someone reading a screen, not parsed out of Ford's
+// export. Registration is what makes them different: they physically exist,
+// on a plate, which is why they carry a reg number and a date and always
+// read as available now.
+export const preRegVehicles = sqliteTable("pre_reg_vehicles", {
+  id: text("id").primaryKey(),
+  // What it is. `bucket` is the model group the stock list sorts by.
+  bucket: text("bucket").notNull(),
+  variant: text("variant"),
+  derivative: text("derivative"),
+  bodyStyle: text("body_style"),
+  engine: text("engine"),
+  transmission: text("transmission"),
+  drive: text("drive"),
+  colour: text("colour").notNull(),
+  modelYear: text("model_year"),
+  options: text("options"), // one per line, same shape as the feed
+  // Where it is. TF-only, redacted for brokers like every other dealer field.
+  dealer: text("dealer"),
+  destination: text("destination"),
+  // Registration. regNumber is TF-only — a plate identifies a specific car
+  // to anyone who sees it. The DATE is shown to brokers, because how long a
+  // pre-reg has been on the road is exactly what they need to price it.
+  regNumber: text("reg_number").notNull(),
+  registeredAt: integer("registered_at", { mode: "timestamp" }).notNull(),
+  vin: text("vin"), // optional; TF-only when present
+  notes: text("notes"),
+  // Lifecycle: available -> sold -> (invoiced = deleted) or back to available.
+  //
+  // "Sold" takes it off both stock lists but keeps the row, because a sale
+  // falls through and the vehicle comes back. Only invoicing deletes it, and
+  // that is deliberately the one irreversible step — by then the money has
+  // moved and there is nothing to put back.
+  status: text("status").notNull().default("available"), // "available" | "sold"
+  soldAt: integer("sold_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Vehicles the feed calls one thing that are really another, identified by
 // the dealer they sit at.
 //

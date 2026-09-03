@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
-import { stockAvailabilityRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
+import { preRegVehicles, stockAvailabilityRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
 import { availableByRule, type AvailabilityRule } from "./stock-availability";
 import { matchModelDealerRule, parseDealerCodes, type ModelDealerRule } from "./stock-model-rules";
@@ -72,6 +72,15 @@ export interface MappedStockRow {
   // "The vehicle is physically here." Derived from the mapped status once,
   // server-side, so the browser never has to re-parse status text — and so
   // brokers can be shown availability without being shown status at all.
+  // Hand-entered, already on a plate. Drives the Pre-registered tag and the
+  // Registration filter, and is shown to both audiences — a broker needs to
+  // know they are buying a registered car.
+  preRegistered: boolean;
+  // The plate. TF-only: it identifies one specific car to anyone who sees it.
+  regNumber: string | null;
+  // The DATE is shown to brokers on purpose — how long a pre-reg has been on
+  // the road is exactly what they need in order to price it.
+  registeredAt: string | null;
   // A warning to show alongside the vehicle. By the time a row reaches the
   // browser this already holds the text for THAT audience — TF is told to
   // check with Fleet, a broker to check with us — so the component never has
@@ -150,10 +159,13 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
     enabled: !!r.enabled,
   }));
 
-  const [rows, mappings, latestUploadRows] = await Promise.all([
+  const [rows, mappings, latestUploadRows, preRegRows] = await Promise.all([
     db.select().from(stockVehicles).where(and(inScope, sellable)),
     db.select().from(stockMappings),
     db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
+    // Only what is actually for sale. A sold vehicle keeps its row for the
+    // back office but must not appear on either stock list.
+    db.select().from(preRegVehicles).where(eq(preRegVehicles.status, "available")),
   ]);
   const latestUpload = latestUploadRows[0] ?? null;
 
@@ -263,12 +275,63 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       // Only flagged when the row would otherwise have been excluded —
       // a rule matching a normal in-scope vehicle changes nothing.
       includedByRule: v.customerAssigned && availableByRule(rules, v),
+      preRegistered: false,
+      regNumber: null,
+      registeredAt: null,
       offerNote: modelRule?.tfNote ?? null,
       offerNoteBroker: modelRule?.brokerNote ?? null,
       inStock: IN_STOCK_STATUS.test(status ?? ""),
     });
   }
-  return { rows: out, latestUploadedAt: latestUpload?.uploadedAt ?? null };
+  // Hand-entered pre-reg vehicles join the same list. They are mapped
+  // straight through — the values were typed from the same vocabulary the
+  // mappings produce, so running them back through the raw-value mapper
+  // would be mapping something already mapped.
+  //
+  // Their reference is minted from the row id, which is a UUID on a table no
+  // upload touches, so it is stable for the life of the vehicle.
+  const preReg: MappedStockRow[] = [];
+  for (const p of preRegRows) {
+    preReg.push({
+      ref: vehicleReferenceFromIdentity(`PREREG:${p.id}`, secret),
+      altRef: null,
+      vin: p.vin,
+      bucket: p.bucket,
+      variant: p.variant ?? "",
+      derivative: p.derivative,
+      series: p.variant,
+      modelYear: p.modelYear,
+      bodyStyle: p.bodyStyle,
+      engine: p.engine,
+      transmission: p.transmission,
+      drive: p.drive,
+      colour: p.colour,
+      options: (p.options ?? "").split("\n").map((o) => o.trim()).filter(Boolean),
+      orderNo: null,
+      status: "Pre-registered",
+      gateRelease: null,
+      eta: null,
+      delivered: p.registeredAt.toISOString(),
+      interestBearing: null,
+      adopted: null,
+      dealer: p.dealer ?? "—",
+      destination: p.destination,
+      includedByRule: false,
+      preRegistered: true,
+      regNumber: p.regNumber,
+      registeredAt: p.registeredAt.toISOString(),
+      offerNote: null,
+      offerNoteBroker: null,
+      // Registered and on the ground, so available now regardless of status.
+      inStock: true,
+    });
+  }
+
+  // Pre-reg leads. Sorting is stable, so among the ~845 vehicles that are
+  // all equally "in stock" the input order decides — appended, a hand-entered
+  // pre-reg landed 800-odd rows down and never appeared on first paint. It is
+  // a small set someone deliberately typed in, so it goes first.
+  return { rows: [...preReg, ...out], latestUploadedAt: latestUpload?.uploadedAt ?? null };
 }
 
 // Statuses that mean "the vehicle has landed". Kept next to the mapper
@@ -296,6 +359,9 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //                           ageing figure we're deliberately not showing.
 //   offerNoteBroker       — folded into offerNote above; carrying both would
 //                           put the TF wording on the wire.
+//   regNumber             — a plate identifies one specific car to anyone
+//                           who sees it. The registration DATE is kept: a
+//                           broker needs it to price a pre-reg.
 //   altRef                — a TF-side search key, not a broker's handle.
 //   includedByRule        — how we classify our own stock is our business.
 //   delivered             — the arrival date. A broker needs to know a
@@ -306,7 +372,7 @@ const IN_STOCK_STATUS = /deliver|dealer|arrived|at site/i;
 //                           the date does not travel.
 export type BrokerStockRow = Omit<
   MappedStockRow,
-  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule" | "altRef" | "offerNoteBroker"
+  "vin" | "orderNo" | "dealer" | "destination" | "status" | "modelYear" | "interestBearing" | "adopted" | "gateRelease" | "delivered" | "includedByRule" | "altRef" | "offerNoteBroker" | "regNumber"
 >;
 
 export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
@@ -326,6 +392,8 @@ export function redactForBroker(rows: MappedStockRow[]): BrokerStockRow[] {
     // The broker's wording replaces TF's. Done here, at the boundary, so the
     // internal instruction ("check with Fleet") cannot reach a broker.
     offerNote: r.offerNoteBroker,
+    preRegistered: r.preRegistered,
+    registeredAt: r.registeredAt,
     inStock: r.inStock,
   }));
 }

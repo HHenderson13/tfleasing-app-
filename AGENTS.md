@@ -129,6 +129,31 @@ Seeded `SELF → Select` via `seedSeriesMappings`, `INSERT OR IGNORE` so an
 admin edit survives every boot. Add future renames there or in the UI —
 they should not need a code change.
 
+## Pre-registered vehicles
+
+Hand-entered at `/admin/pre-reg`, merged into both stock lists at read time.
+
+- **Its own table, and it has to be.** Every stock upload runs
+  `tx.delete(stockVehicles)` and reloads from the workbook, so anything typed
+  by a person would be gone by the next morning's file.
+- Dropdowns are built from the **mapped** stock list, not the raw feed, so a
+  typed vehicle groups and filters with everything else instead of becoming
+  its own near-miss spelling. Every field has an **Other** escape hatch,
+  because a pre-reg is often the first of something.
+- **Lifecycle: available → sold → invoiced (deleted), or back to available.**
+  Sold takes it off both lists but keeps the row — sales fall through, and
+  putting one back should not mean retyping it. Invoicing is the only
+  irreversible step, deliberately: by then the money has moved.
+- **`regNumber` is TF-only; `registeredAt` is shown to brokers.** A plate
+  identifies one specific car to anyone who sees it. The date is exactly what
+  a broker needs to price a pre-reg, so it stays. `stock-list.test.ts` pins
+  both halves.
+- They **lead the list**. Sorting is stable, so among the ~845 equally
+  "in stock" vehicles the input order decides — appended, a pre-reg landed
+  800 rows down and never appeared on first paint.
+- The **Registration** facet (`Pre-registered` / `Unregistered`) is on both
+  audiences, and both see the `Pre-registered` tag.
+
 ## Model overrides by dealer
 
 Some vehicles are a different model from what Ford's feed calls them, and
