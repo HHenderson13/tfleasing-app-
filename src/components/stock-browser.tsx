@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normaliseReferenceQuery } from "@/lib/stock-reference";
 import { buildEnquiryMailto, type EnquirySender } from "@/lib/broker-enquiry";
+import { PRE_REG_WINDOW_MONTHS, preRegWindow, sellByDate } from "@/lib/pre-reg-window";
 
 // ─── One browser, two audiences ────────────────────────────────────────────
 //
@@ -685,7 +686,9 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
             {/* Brokers get exactly one badge, from one component, in every
                 case — see BrokerAvailabilityBadge. TF keeps the status pill
                 alongside the urgency-toned ETA. */}
-            {isBroker ? (
+            {r.preRegistered ? (
+              <PreRegBadge registeredAt={r.registeredAt} audience={audience} />
+            ) : isBroker ? (
               <BrokerAvailabilityBadge row={r} />
             ) : r.inStock ? (
               // Single badge replaces the status pill so "Delivered" doesn't appear twice.
@@ -928,6 +931,60 @@ function EnquiryButtons({ row, availability, from }: {
       >
         Secure this vehicle
       </a>
+    </div>
+  );
+}
+
+// A pre-registered vehicle, on both lists.
+//
+// It replaces the ordinary in-stock badge rather than sitting beside it, but
+// "Available now" stays the headline: whatever else is true, the first thing
+// anyone needs from this card is that the vehicle is here and sellable. The
+// colour is what marks it out as a different proposition, and the two lines
+// underneath are the ones that actually decide a deal — a pre-reg has three
+// months from registration, so the number that matters is how long is left,
+// not how long it has been sitting.
+//
+// Past the window it is still sellable, so the badge stays green-headed and
+// the warning goes underneath. Removing it or greying it out would hide
+// stock that someone can still shift with a phone call.
+function PreRegBadge({ registeredAt, audience }: { registeredAt: string | null | undefined; audience: StockAudience }) {
+  const at = registeredAt ? new Date(registeredAt) : null;
+  const w = at ? preRegWindow(at) : null;
+  const deadline = at ? fmtDate(sellByDate(at).toISOString()) : null;
+  const isBroker = audience === "broker";
+
+  return (
+    <div className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-right shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-700">Pre-registered</div>
+      <div className="text-sm font-semibold leading-tight text-violet-900">Available now</div>
+      {w && (
+        w.expired ? (
+          <div className="mt-1 max-w-[13rem] rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-amber-900">
+            {isBroker
+              ? `Contact dealer for manual quote — over ${PRE_REG_WINDOW_MONTHS} months`
+              : `Over ${PRE_REG_WINDOW_MONTHS} months — check with funder before quoting`}
+          </div>
+        ) : isBroker ? (
+          // A broker works to a date, not a number that changes under them —
+          // it is what goes on the order, and it does not need re-checking
+          // every morning.
+          <div className="mt-0.5 leading-tight">
+            <div className="text-[10px] font-medium text-violet-700">Must be delivered before</div>
+            <div className="text-[11px] font-semibold tabular-nums text-violet-900">{deadline}</div>
+          </div>
+        ) : (
+          // TF is managing ageing stock, so the pressure is the useful thing.
+          <>
+            <div className="mt-0.5 text-[11px] font-medium text-violet-700">
+              Registered {w.daysSince === 0 ? "today" : `${w.daysSince} day${w.daysSince === 1 ? "" : "s"} ago`}
+            </div>
+            <div className={`text-[11px] font-semibold ${w.daysRemaining <= 14 ? "text-red-700" : "text-violet-700"}`}>
+              {w.daysRemaining === 0 ? "Last day to sell" : `${w.daysRemaining} day${w.daysRemaining === 1 ? "" : "s"} left to sell`}
+            </div>
+          </>
+        )
+      )}
     </div>
   );
 }

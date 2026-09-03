@@ -172,6 +172,25 @@ Hand-entered at `/admin/pre-reg`, merged into both stock lists at read time.
   identifies one specific car to anyone who sees it. The date is exactly what
   a broker needs to price a pre-reg, so it stays. `stock-list.test.ts` pins
   both halves.
+- **The badge is its own thing, and "Available now" stays the headline.**
+  Whatever else is true, the first thing anyone needs from the card is that
+  the vehicle is here and sellable; the violet colour is what marks it out as
+  a different proposition. `PreRegBadge` replaces the ordinary in-stock badge
+  rather than sitting beside it.
+- **A pre-reg has three months from registration** (`PRE_REG_WINDOW_MONTHS`),
+  and each audience is told what they need:
+  - TF sees the pressure — "Registered 80 days ago", "12 days left to sell",
+    turning red inside a fortnight.
+  - Brokers see a **date** — "Must be delivered before 24 Nov 2026". It goes
+    on the order and does not need re-checking every morning, whereas a
+    countdown changes under them.
+  - Past the window: TF gets "check with funder before quoting", brokers
+    "Contact dealer for manual quote". The vehicle stays listed and still
+    reads as available — it is sellable with a phone call, and hiding it
+    would hide stock someone can still shift.
+- `sellByDate` clamps to the end of a shorter month: 30 Nov + 3 months is
+  28 Feb, not 2 March, and adding 90 days would drift. Day counts are
+  CALENDAR days, so a clock change cannot turn one day into two.
 - They **lead the list**. Sorting is stable, so among the ~845 equally
   "in stock" vehicles the input order decides — appended, a pre-reg landed
   800 rows down and never appeared on first paint.
