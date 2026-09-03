@@ -140,6 +140,16 @@ Hand-entered at `/admin/pre-reg`, merged into both stock lists at read time.
   typed vehicle groups and filters with everything else instead of becoming
   its own near-miss spelling. Every field has an **Other** escape hatch,
   because a pre-reg is often the first of something.
+- **Bulk entry is the same form.** Twenty identical vans registered the same
+  day is one spec and twenty plates, so the reg field takes a list — one per
+  line, comma, semicolon or tab — and creates a row per registration. No
+  separate bulk screen and no mode switch: one plate goes down the same path
+  as twenty. `parseRegNumbers` deliberately does NOT split on spaces, since
+  "AB12 CDE" is one plate. Plates already on the system are skipped and
+  named rather than failing the whole paste, because re-pasting an
+  overlapping range is the obvious way to duplicate a car. VIN is disabled
+  for a multi-row entry — a VIN belongs to one vehicle, and attaching it to
+  twenty would be a lie.
 - **Lifecycle: available → sold → invoiced (deleted), or back to available.**
   Sold takes it off both lists but keeps the row — sales fall through, and
   putting one back should not mean retyping it. Invoicing is the only
