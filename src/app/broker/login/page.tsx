@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 export default async function BrokerLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ timeout?: string; elsewhere?: string }>;
+  searchParams: Promise<{ timeout?: string; elsewhere?: string; gone?: string }>;
 }) {
   const me = await getCurrentBrokerUser();
   if (me) redirect("/broker");
-  const { timeout, elsewhere } = await searchParams;
+  const { timeout, elsewhere, gone } = await searchParams;
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -20,6 +20,11 @@ export default async function BrokerLoginPage({
         {timeout && (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
             You were signed out after a period of inactivity.
+          </p>
+        )}
+        {gone && !timeout && !elsewhere && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
+            Your session has ended. Please sign in again.
           </p>
         )}
         {elsewhere && !timeout && (

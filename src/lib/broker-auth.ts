@@ -123,7 +123,9 @@ export async function createBrokerSession(brokerUserId: string): Promise<string>
 // `active` must come from real input. A heartbeat that always bumped would
 // keep an abandoned screen signed in for as long as the tab stayed open,
 // which is precisely what the idle timeout exists to prevent.
-export async function brokerSessionHeartbeat(active: boolean): Promise<"ok" | "gone"> {
+export type HeartbeatResult = "ok" | "idle" | "gone";
+
+export async function brokerSessionHeartbeat(active: boolean): Promise<HeartbeatResult> {
   const jar = await cookies();
   const sid = jar.get(BROKER_SESSION_COOKIE)?.value;
   if (!sid) return "gone";
@@ -146,7 +148,10 @@ export async function brokerSessionHeartbeat(active: boolean): Promise<"ok" | "g
       idleMinutes: Math.round(idleFor / 60_000), limit: SESSION_IDLE_MINUTES, via: "heartbeat",
     });
     await db.delete(brokerSessions).where(eq(brokerSessions.id, sid));
-    return "gone";
+    // Distinct from "gone": this broker idled out, they were not displaced.
+    // Reporting both the same way told idled-out users they had signed in on
+    // another device, which is both wrong and alarming.
+    return "idle";
   }
   if (active) {
     await db.update(brokerSessions).set({ lastSeenAt: now }).where(eq(brokerSessions.id, sid));
@@ -259,7 +264,9 @@ export async function setBrokerChallengeCookie(challengeId: string) {
 
 export async function clearBrokerChallengeCookie() {
   const jar = await cookies();
-  jar.delete(BROKER_CHALLENGE_COOKIE);
+  // Path matters: a cookie is identified by name AND path, so delete(name)
+  // alone targets Path=/ and leaves the /broker-scoped one sitting there.
+  jar.set(BROKER_CHALLENGE_COOKIE, "", { path: BROKER_COOKIE_PATH, maxAge: 0 });
 }
 
 export async function deleteBrokerSession(id: string): Promise<void> {
@@ -281,7 +288,9 @@ export async function setBrokerSessionCookie(sessionId: string) {
 
 export async function clearBrokerSessionCookie() {
   const jar = await cookies();
-  jar.delete(BROKER_SESSION_COOKIE);
+  // Same as above — signing out has to clear the cookie at the path it was
+  // actually set on, or the browser keeps sending a dead session id.
+  jar.set(BROKER_SESSION_COOKIE, "", { path: BROKER_COOKIE_PATH, maxAge: 0 });
 }
 
 // React-cache wrapped per the same logic as getCurrentUser — repeated

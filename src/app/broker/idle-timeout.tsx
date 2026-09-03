@@ -80,11 +80,18 @@ export function IdleTimeout({ idleMinutes }: { idleMinutes: number }) {
           body: JSON.stringify({ active: wasActive }),
         });
         if (res.status === 401) {
+          // Why it ended decides what we tell them. Reporting an idle expiry
+          // as "you signed in elsewhere" is both wrong and alarming.
+          const reason = await res.json().then((b: { reason?: string }) => b?.reason).catch(() => undefined);
+          clearInterval(beat);
+          if (reason === "idle") {
+            signOut("timeout");
+            return;
+          }
           // Cover the screen immediately, then navigate. Redirecting straight
           // away would clear it just as fast but leave them wondering what
           // happened; five seconds is long enough to read one sentence.
           setDisplaced(true);
-          clearInterval(beat);
           setTimeout(() => signOut("elsewhere"), 5000);
         }
       } catch {

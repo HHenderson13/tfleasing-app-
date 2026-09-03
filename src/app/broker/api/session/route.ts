@@ -17,5 +17,8 @@ export async function POST(req: NextRequest) {
     // A malformed body is a liveness check, not activity.
   }
   const status = await brokerSessionHeartbeat(active);
-  return new NextResponse(null, { status: status === "ok" ? 204 : 401 });
+  if (status === "ok") return new NextResponse(null, { status: 204 });
+  // The client shows a different message for each, so the reason has to
+  // survive the trip. 401 either way — the session is over regardless.
+  return NextResponse.json({ reason: status }, { status: 401 });
 }

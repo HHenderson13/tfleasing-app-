@@ -85,9 +85,19 @@ export function middleware(req: NextRequest) {
       // An API caller wants a status code, not a login page. Redirecting a
       // fetch() to HTML turns a clean 401 into a confusing parse error.
       if (pathname.startsWith("/broker/api/")) return harden(new NextResponse(null, { status: 401 }));
+      // Logged because this is the one sign-out that reaches the user with no
+      // explanation at all — the page-level guards each say why, this just
+      // bounces them. Knowing the cookie was ABSENT (rather than present but
+      // stale) is what separates "the server ended the session" from "the
+      // browser never sent it", and those have opposite fixes.
+      console.warn(JSON.stringify({
+        ts: new Date().toISOString(), level: "warn", at: "broker.middleware.no-cookie",
+        msg: "redirected to login with no broker session cookie", path: pathname,
+      }));
       const url = req.nextUrl.clone();
       url.pathname = "/broker/login";
       url.searchParams.set("next", pathname);
+      url.searchParams.set("gone", "1");
       return harden(NextResponse.redirect(url));
     }
     // Stock is the whole portal, so /broker is just a door onto it. Done
