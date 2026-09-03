@@ -44,3 +44,7 @@ next-env.d.ts
 /data
 /public/uploads
 .env*.local
+
+# Database backups written by scripts/drop-legacy-broker-tables.ts.
+# These contain production table contents — never commit one.
+legacy-broker-tables-backup-*.json
