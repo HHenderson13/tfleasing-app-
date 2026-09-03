@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { STOCK_VEHICLES_TAG } from "@/lib/stock-list";
-import { normaliseReg, parseRegNumbers } from "@/lib/reg-numbers";
+import { normaliseReg, pairByPosition, parseRegNumbers, parseVinList } from "@/lib/reg-numbers";
 
 // Pre-reg vehicles are merged into the mapped-stock cache, so every write
 // here has to bust it or the change does not show for up to five minutes and
@@ -29,8 +29,19 @@ export async function savePreRegVehicleAction(form: FormData) {
 
   if (!bucket) return { ok: false as const, error: "Model is required." };
   if (!colour) return { ok: false as const, error: "Colour is required." };
-  const { regs, duplicates } = parseRegNumbers(regInput);
-  if (regs.length === 0) return { ok: false as const, error: "Enter at least one registration number." };
+  const { vehicles: parsedVehicles, duplicateRegs, duplicateVins } = parseRegNumbers(regInput);
+  if (parsedVehicles.length === 0) return { ok: false as const, error: "Enter at least one registration number." };
+
+  // The VIN column, pasted separately and paired by position. Refused on a
+  // length mismatch — see pairByPosition.
+  const vinList = parseVinList(String(form.get("vins") ?? ""));
+  if (vinList.invalid.length) {
+    return { ok: false as const, error: `Not a VIN: ${vinList.invalid.slice(0, 3).join(", ")}. A VIN is 17 characters.` };
+  }
+  const paired = pairByPosition(parsedVehicles, vinList.vins);
+  if (!paired.ok) return { ok: false as const, error: paired.reason };
+  const vehicles = paired.vehicles;
+  const duplicates = [...duplicateRegs, ...duplicateVins];
   if (!registered) return { ok: false as const, error: "Date of registration is required." };
   const registeredAt = new Date(`${registered}T12:00:00`);
   if (isNaN(registeredAt.getTime())) return { ok: false as const, error: "That date isn't valid." };
@@ -54,15 +65,14 @@ export async function savePreRegVehicleAction(form: FormData) {
     dealer: clean(form.get("dealer")),
     destination: clean(form.get("destination")),
     registeredAt,
-    // A VIN belongs to ONE vehicle, so it is only meaningful on a single
-    // entry. Attaching the same one to twenty rows would be a lie.
-    vin: regs.length === 1 ? (clean(form.get("vin"))?.toUpperCase() ?? null) : null,
     notes: clean(form.get("notes")),
     updatedAt: new Date(),
   };
 
   if (id) {
-    await db.update(preRegVehicles).set({ ...spec, regNumber: regs[0] }).where(eq(preRegVehicles.id, id));
+    await db.update(preRegVehicles)
+      .set({ ...spec, regNumber: vehicles[0].reg, vin: vehicles[0].vin })
+      .where(eq(preRegVehicles.id, id));
     reval();
     return { ok: true as const, created: 1, skipped: [] as string[], duplicates };
   }
@@ -70,28 +80,35 @@ export async function savePreRegVehicleAction(form: FormData) {
   // Skip plates already on the system rather than failing the whole paste.
   // Re-pasting an overlapping range is the obvious way to end up with the
   // same car twice, and a plate identifies exactly one car.
-  const existing = new Set(
-    (await db.select({ regNumber: preRegVehicles.regNumber }).from(preRegVehicles))
-      .map((r) => normaliseReg(r.regNumber)),
-  );
-  const fresh = regs.filter((r) => !existing.has(normaliseReg(r)));
-  const skipped = regs.filter((r) => existing.has(normaliseReg(r)));
+  const onSystem = await db
+    .select({ regNumber: preRegVehicles.regNumber, vin: preRegVehicles.vin })
+    .from(preRegVehicles);
+  const existingRegs = new Set(onSystem.map((r) => normaliseReg(r.regNumber)));
+  const existingVins = new Set(onSystem.map((r) => r.vin).filter(Boolean) as string[]);
+
+  const fresh = vehicles.filter((v) => !existingRegs.has(normaliseReg(v.reg)));
+  const skipped = vehicles.filter((v) => existingRegs.has(normaliseReg(v.reg))).map((v) => v.reg);
 
   if (fresh.length === 0) {
     return { ok: false as const, error: `Already on the system: ${skipped.join(", ")}.` };
   }
+  // A VIN already against another vehicle is dropped rather than duplicated;
+  // the plate is what identifies the row, so the entry still goes in.
+  const vinClashes = fresh.filter((v) => v.vin && existingVins.has(v.vin)).map((v) => v.vin!);
 
   const now = new Date();
   await db.insert(preRegVehicles).values(
-    fresh.map((regNumber) => ({
+    fresh.map((v) => ({
       id: randomUUID(),
       ...spec,
-      regNumber,
+      regNumber: v.reg,
+      vin: v.vin && !existingVins.has(v.vin) ? v.vin : null,
       status: "available",
       soldAt: null,
       createdAt: now,
     })),
   );
+  duplicates.push(...vinClashes);
   reval();
   return { ok: true as const, created: fresh.length, skipped, duplicates };
 }
