@@ -42,7 +42,7 @@ export default async function BrokerTeamPage() {
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="text-2xl font-semibold text-slate-900">{me.brokerName} team</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Add users from your firm — they&apos;ll share visibility on every quote your team saves.
+          Add users from your firm — everyone you add gets the same view of available stock.
         </p>
 
         <section className="mt-8">

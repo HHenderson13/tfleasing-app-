@@ -28,7 +28,8 @@ export default async function AdminBrokersPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Brokers</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Each broker is a separate sign-in scope. Their users see each other&apos;s quotes but never another broker&apos;s. The
+          Each broker is a separate sign-in scope, with no visibility of another broker&apos;s users. Brokers see one
+          thing — the stock list — with funding, dealer, status and internal identifiers stripped server-side. The
           broker portal lives at <span className="font-mono">/broker/login</span>.
         </p>
       </div>

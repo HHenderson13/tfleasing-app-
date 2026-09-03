@@ -519,8 +519,8 @@ export const sessions = sqliteTable("sessions", {
 export const brokers = sqliteTable("brokers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  // Soft toggle — disables every user under this broker without deleting
-  // their historical quotes.
+  // Soft toggle — locks out every user under this broker without deleting
+  // the company or its users.
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
@@ -533,7 +533,7 @@ export const brokerUsers = sqliteTable("broker_users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   // 'owner' can manage other broker_users under the same broker;
-  // 'user' can only quote.
+  // 'user' can only sign in and browse stock.
   role: text("role").notNull().default("user"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   // Mirror of the TF user setup-token flow — admin (or broker owner)
