@@ -9,6 +9,7 @@ import { ensureAppSchema } from "@/db/ensure-schema";
 import { checkPassword as checkPasswordPolicy, hashPassword, verifyPassword } from "./auth";
 import { verifyTotp } from "./totp";
 import { BROKER_COOKIE_PATH } from "./broker-endpoints";
+import { logWarn } from "./logger";
 
 // Parallel auth system for the broker portal. Mirrors lib/auth.ts but uses
 // its own cookie name, session table, and user table — strict separation
@@ -88,6 +89,15 @@ export function isSetupTokenExpired(expiresAt: Date | null | undefined): boolean
 // stock list that is a fair trade; it would not be for a tool people keep
 // open on two screens.
 export async function createBrokerSession(brokerUserId: string): Promise<string> {
+  // Logged because "I keep getting signed out" is otherwise unanswerable:
+  // eviction and idle expiry look identical from the outside, and only the
+  // server knows which happened.
+  const evicted = await db.select({ id: brokerSessions.id }).from(brokerSessions).where(eq(brokerSessions.brokerUserId, brokerUserId));
+  if (evicted.length) {
+    logWarn("broker.session.evicted", "new sign-in displaced existing session(s)", {
+      brokerUserId, evictedCount: evicted.length,
+    });
+  }
   await db.delete(brokerSessions).where(eq(brokerSessions.brokerUserId, brokerUserId));
   const id = randomBytes(32).toString("base64url");
   const now = new Date();
@@ -123,9 +133,18 @@ export async function brokerSessionHeartbeat(active: boolean): Promise<"ok" | "g
     .from(brokerSessions)
     .where(and(eq(brokerSessions.id, sid), gt(brokerSessions.expiresAt, now)))
     .limit(1);
-  if (!row) return "gone";
+  if (!row) {
+    // The row is gone or past its absolute expiry. Almost always means the
+    // session was evicted by a sign-in elsewhere.
+    logWarn("broker.session.not-found", "heartbeat on a session that no longer exists", {});
+    return "gone";
+  }
   const lastSeen = row.lastSeenAt ?? row.createdAt;
-  if (now.getTime() - lastSeen.getTime() > SESSION_IDLE_MINUTES * 60_000) {
+  const idleFor = now.getTime() - lastSeen.getTime();
+  if (idleFor > SESSION_IDLE_MINUTES * 60_000) {
+    logWarn("broker.session.idle-expired", "heartbeat found an idle session", {
+      idleMinutes: Math.round(idleFor / 60_000), limit: SESSION_IDLE_MINUTES, via: "heartbeat",
+    });
     await db.delete(brokerSessions).where(eq(brokerSessions.id, sid));
     return "gone";
   }
@@ -299,6 +318,10 @@ export const getCurrentBrokerUser = cache(async function getCurrentBrokerUser():
   const lastSeen = row.lastSeenAt ?? row.sessionCreatedAt;
   const idleMs = now.getTime() - lastSeen.getTime();
   if (idleMs > SESSION_IDLE_MINUTES * 60_000) {
+    logWarn("broker.session.idle-expired", "page load found an idle session", {
+      brokerUserId: row.id, email: row.email,
+      idleMinutes: Math.round(idleMs / 60_000), limit: SESSION_IDLE_MINUTES, via: "page-load",
+    });
     await db.delete(brokerSessions).where(eq(brokerSessions.id, sid));
     return null;
   }
