@@ -13,7 +13,7 @@ import * as XLSX from "xlsx";
 //   • delivered_list: count of rows per exec  =  Deliveries
 //                     non-zero values in W:AC =  Insurance Products
 //   • enquiry_log:    count of rows per exec  =  Enquiries
-//                     col Q Ordered/Delivered =  Sales (for Conversion %)
+//                     col Q a sale status     =  Sales (for Conversion %)
 //
 // Each parser returns a Map<reportCode, counts>. The admin action maps the
 // codes onto sales_execs IDs using sales_leaderboard_name_map.
@@ -24,9 +24,38 @@ const COL_ENQ_STATUS = 16;    // column Q (enquiry_log)
 const INSURANCE_FIRST = 22;   // W
 const INSURANCE_LAST = 28;    // AC
 
+// Enquiry statuses that mean the enquiry became a sale. Dealerweb walks a
+// converted enquiry Ordered → Handover Arranged → Delivered, so all three
+// count. Handover Arranged was missing, which dropped real orders out of
+// Conversion % — an exec with an order on the board read 0%.
+const SALE_STATUSES = new Set(["ordered", "handover arranged", "delivered"]);
+
+export function isSaleStatus(status: string): boolean {
+  return SALE_STATUSES.has(status.trim().replace(/\s+/g, " ").toLowerCase());
+}
+
 export interface OrderListParseRow { reportCode: string; orderCount: number; latestVehicle: string | null }
 export interface DeliveredParseRow { reportCode: string; deliveryCount: number; insuranceCount: number }
-export interface EnquiryParseRow   { reportCode: string; enquiryCount: number; salesCount: number }
+export interface EnquiryParseRow {
+  reportCode: string;
+  enquiryCount: number;
+  salesCount: number;
+  // Raw column Q tally. Stored with the upload so a change to SALE_STATUSES
+  // reaches past months on Re-process instead of needing every enquiry log
+  // re-uploaded. Absent on uploads parsed before it existed.
+  statusCounts?: Record<string, number>;
+}
+
+// Sales for an enquiry row under the CURRENT status rules. Falls back to
+// the salesCount frozen at parse time for uploads without a status tally.
+export function enquirySales(row: EnquiryParseRow): number {
+  if (!row.statusCounts) return row.salesCount;
+  let n = 0;
+  for (const [status, count] of Object.entries(row.statusCounts)) {
+    if (isSaleStatus(status)) n += count;
+  }
+  return n;
+}
 
 export interface ParseSummary { rowsTotal: number; rowsAttributed: number }
 
@@ -37,10 +66,14 @@ function loadSheet(buffer: ArrayBuffer): unknown[][] {
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 }
 
+// Dealerweb exec codes are letters ("MiHo"). The order and delivered lists
+// end in a totals block whose column B holds numbers (0, 1, 42), which
+// would otherwise surface as unmapped "execs" on every upload.
 function execCode(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
-  return s.length > 0 ? s : null;
+  if (s.length === 0 || /^[\d.,\s-]+$/.test(s)) return null;
+  return s;
 }
 
 export function parseOrderList(buffer: ArrayBuffer): { rows: OrderListParseRow[]; summary: ParseSummary } {
@@ -105,16 +138,89 @@ export function parseEnquiryLog(buffer: ArrayBuffer): { rows: EnquiryParseRow[];
     const code = execCode(row[COL_SE]);
     if (!code) continue;
     const status = row[COL_ENQ_STATUS] != null ? String(row[COL_ENQ_STATUS]).trim() : "";
-    const isSale = status === "Ordered" || status === "Delivered";
-    const cur = counts.get(code) ?? { reportCode: code, enquiryCount: 0, salesCount: 0 };
+    const cur = counts.get(code) ?? { reportCode: code, enquiryCount: 0, salesCount: 0, statusCounts: {} };
     cur.enquiryCount++;
-    if (isSale) cur.salesCount++;
+    if (isSaleStatus(status)) cur.salesCount++;
+    const tally = cur.statusCounts!;
+    tally[status] = (tally[status] ?? 0) + 1;
     counts.set(code, cur);
     rowsAttributed++;
   }
   return {
     rows: Array.from(counts.values()),
     summary: { rowsTotal: Math.max(0, aoa.length - 1), rowsAttributed },
+  };
+}
+
+// ─── Attribution ───────────────────────────────────────────────────────────
+//
+// Fold parsed report rows onto sales execs through the name map. Several
+// report codes can map to one exec, so counts are SUMMED per exec — setting
+// them let whichever code came last overwrite the others. Every participant
+// gets a row, zeroed if the report never mentions them, so a re-upload
+// resets a count instead of leaving the previous one stuck.
+
+export type LeaderboardReportType = "orders" | "delivered" | "enquiry";
+export type ParsedReportRow = OrderListParseRow | DeliveredParseRow | EnquiryParseRow;
+
+export interface AttributedCounts {
+  orderCount: number;
+  latestVehicle: string | null;
+  deliveryCount: number;
+  insuranceCount: number;
+  enquiryCount: number;
+  salesCount: number;
+}
+
+export interface Attribution {
+  byExec: Map<string, AttributedCounts>;
+  matched: number;
+  unmapped: { reportCode: string; count: number }[];
+}
+
+export function attributeReportRows(
+  reportType: LeaderboardReportType,
+  rows: ParsedReportRow[],
+  codeToExec: Map<string, string>,
+  participantIds: Set<string>,
+): Attribution {
+  const byExec = new Map<string, AttributedCounts>();
+  for (const id of participantIds) {
+    byExec.set(id, { orderCount: 0, latestVehicle: null, deliveryCount: 0, insuranceCount: 0, enquiryCount: 0, salesCount: 0 });
+  }
+  const unmappedCounts = new Map<string, number>();
+  let matched = 0;
+
+  for (const r of rows) {
+    const execId = codeToExec.get(r.reportCode);
+    if (!execId) {
+      unmappedCounts.set(r.reportCode, (unmappedCounts.get(r.reportCode) ?? 0) + 1);
+      continue;
+    }
+    const t = byExec.get(execId);
+    if (!t) continue; // mapped, but not a participant
+    if (reportType === "orders") {
+      const o = r as OrderListParseRow;
+      t.orderCount += o.orderCount;
+      t.latestVehicle = o.latestVehicle ?? t.latestVehicle;
+    } else if (reportType === "delivered") {
+      const d = r as DeliveredParseRow;
+      t.deliveryCount += d.deliveryCount;
+      t.insuranceCount += d.insuranceCount;
+    } else {
+      const e = r as EnquiryParseRow;
+      t.enquiryCount += e.enquiryCount;
+      t.salesCount += enquirySales(e);
+    }
+    matched++;
+  }
+
+  return {
+    byExec,
+    matched,
+    unmapped: Array.from(unmappedCounts.entries())
+      .map(([reportCode, count]) => ({ reportCode, count }))
+      .sort((a, b) => b.count - a.count),
   };
 }
 
@@ -142,14 +248,26 @@ export interface ExecMonthStats {
   latestVehicle: string | null;
   metricPoints: Record<LeaderboardMetric, number>;
   totalPoints: number;
-  metricRanks: Record<LeaderboardMetric, number | null>; // null when metric has 0 across the board
+  metricRanks: Record<LeaderboardMetric, number | null>; // null when they scored 0 on that metric
+}
+
+// Conversion % for display. "—" when there were no enquiries to convert:
+// 0 of 0 is not a 0% conversion rate, and showing it as one beside an
+// order count is what made the board look broken.
+export function formatConversion(s: Pick<ExecMonthStats, "enquiryCount" | "conversionPct">): string {
+  return s.enquiryCount > 0 ? `${s.conversionPct.toFixed(1)}%` : "—";
 }
 
 function rankBy(rows: ExecMonthStats[], key: (s: ExecMonthStats) => number): Map<string, number> {
   // Standard sports ranking — tied scores share the same rank, and the next
   // rank is the position-based number (so 1, 2, 2, 4 not 1, 2, 2, 3). Only
   // give points to the top 3 positions.
-  const sorted = [...rows].sort((a, b) => key(b) - key(a));
+  //
+  // Zero is not ranked at all. Ranked, everyone on 0 tied for the first
+  // place below the last non-zero score — so with two execs converting,
+  // the rest of the team shared 3rd on 0% and each took a point and a 🥉.
+  // Same rule overallRanks applies to total points.
+  const sorted = rows.filter((r) => key(r) > 0).sort((a, b) => key(b) - key(a));
   const ranks = new Map<string, number>();
   let prevValue: number | null = null;
   let rank = 0;
@@ -172,14 +290,14 @@ function pointsForRank(rank: number): number {
 }
 
 // Apply the 3/2/1 scoring to an array of monthly stats. Mutates in place by
-// filling metricPoints/totalPoints/metricRanks. A metric with zero across
-// the board doesn't award any points (every rank is null).
+// filling metricPoints/totalPoints/metricRanks. A zero earns no rank and no
+// points, so a metric with zero across the board awards nothing.
 export function applyPoints(rows: ExecMonthStats[]): void {
-  const metrics: { key: LeaderboardMetric; pick: (s: ExecMonthStats) => number; isMeaningful: (s: ExecMonthStats[]) => boolean }[] = [
-    { key: "orders",      pick: (s) => s.orderCount,     isMeaningful: (xs) => xs.some((s) => s.orderCount > 0) },
-    { key: "deliveries",  pick: (s) => s.deliveryCount,  isMeaningful: (xs) => xs.some((s) => s.deliveryCount > 0) },
-    { key: "insurance",   pick: (s) => s.insuranceCount, isMeaningful: (xs) => xs.some((s) => s.insuranceCount > 0) },
-    { key: "conversion",  pick: (s) => s.conversionPct,  isMeaningful: (xs) => xs.some((s) => s.enquiryCount > 0) },
+  const metrics: { key: LeaderboardMetric; pick: (s: ExecMonthStats) => number }[] = [
+    { key: "orders",      pick: (s) => s.orderCount },
+    { key: "deliveries",  pick: (s) => s.deliveryCount },
+    { key: "insurance",   pick: (s) => s.insuranceCount },
+    { key: "conversion",  pick: (s) => s.conversionPct },
   ];
   for (const r of rows) {
     r.metricPoints = { orders: 0, deliveries: 0, insurance: 0, conversion: 0 };
@@ -187,7 +305,6 @@ export function applyPoints(rows: ExecMonthStats[]): void {
     r.totalPoints = 0;
   }
   for (const m of metrics) {
-    if (!m.isMeaningful(rows)) continue;
     const ranks = rankBy(rows, m.pick);
     for (const r of rows) {
       const rank = ranks.get(r.salesExecId) ?? null;
@@ -296,6 +413,9 @@ export function overtakeTargets(rows: ExecMonthStats[], me: ExecMonthStats): Ove
   ];
   const out: OvertakeTarget[] = [];
   for (const c of candidates) {
+    // No enquiries means no conversion rate to improve — the gap would be
+    // measured from a 0% that doesn't exist.
+    if (c.metric === "conversion" && me.enquiryCount === 0) continue;
     const sorted = [...rows].sort((a, b) => c.pick(b) - c.pick(a));
     const myIdx = sorted.findIndex((r) => r.salesExecId === me.salesExecId);
     if (myIdx <= 0) continue;

@@ -655,6 +655,42 @@ a shape ordinary search text can accidentally take ("PANTHER5"), and
 silently returning nothing for a real search would be worse than not
 having the feature.
 
+## Sales leaderboard (Pole Position)
+
+`/sales-leaderboard` scores execs 3/2/1 per metric from three Dealerweb
+exports uploaded per month at `/sales-leaderboard/admin`: order list
+(Orders), delivered list (Deliveries, Insurance), enquiry log (Conversion).
+Parsing, attribution and scoring are pure, in `lib/sales-leaderboard.ts`.
+
+- **Conversion % comes from the enquiry log alone**: enquiries in that
+  export whose Status (column Q) is a sale ÷ all their enquiries in it. It
+  is NOT orders ÷ enquiries, so an exec can have orders on the board and a
+  low or 0% conversion. That is a true result when those orders came from
+  leads raised before the export's window (or from repeat customers) —
+  confirmed against the October 2026 files, where HeMo's only order
+  matched none of their 19 enquiries. It is kept separate from Order Take
+  deliberately, or the same orders would score twice.
+- **Sale statuses are `Ordered`, `Handover Arranged` and `Delivered`**
+  (`SALE_STATUSES`). Dealerweb walks a converted enquiry through all
+  three. Handover Arranged was missing, and an exec whose one converted
+  enquiry had reached it read 0% beside their order. Add new post-order
+  statuses there.
+- Uploads store each code's raw **status tally** (`statusCounts`), and
+  attribution re-derives sales from it through `enquirySales()`. A change
+  to the status list therefore reaches past months on **Re-process**.
+  Uploads made before the tally existed only hold a frozen `salesCount` —
+  those months need the enquiry log uploading once more.
+- **No enquiries shows `—`, never `0.0%`** (`formatConversion`). 0 of 0
+  is no data, not a rate.
+- **A zero earns no rank, no points and no badge** on any metric, which
+  is the rule `overallRanks` already applied to total points. Ranked,
+  everyone on 0 tied for the first place below the last non-zero score:
+  with two execs converting, the rest of the team shared 3rd on 0% and
+  each took a point and a 🥉.
+- Several report codes can map to one exec; attribution **sums** them.
+- The order and delivered lists end in a totals block whose column B is a
+  number (`0`, `1`, `42`). Numeric codes are skipped as not-an-exec.
+
 ## Logging
 
 Use `logError(at, err, ctx)` from `src/lib/logger.ts`, not `console.error`,

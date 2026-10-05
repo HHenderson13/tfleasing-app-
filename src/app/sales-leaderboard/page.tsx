@@ -6,6 +6,7 @@ import { signOutAction } from "../login/actions";
 import {
   closestRace,
   currentYearMonth,
+  formatConversion,
   formatMonthLabel,
   MONTH_LABELS,
   type ExecMonthStats,
@@ -27,7 +28,7 @@ const METRIC_META: { key: LeaderboardMetric; label: string; tone: string; format
   { key: "orders",     label: "Order Take",        tone: "from-amber-500 to-orange-500", format: (s) => String(s.orderCount) },
   { key: "deliveries", label: "Deliveries",        tone: "from-emerald-500 to-teal-500", format: (s) => String(s.deliveryCount) },
   { key: "insurance",  label: "Insurance Products", tone: "from-violet-500 to-fuchsia-500", format: (s) => String(s.insuranceCount) },
-  { key: "conversion", label: "Conversion %",      tone: "from-sky-500 to-indigo-500", format: (s) => `${s.conversionPct.toFixed(1)}%` },
+  { key: "conversion", label: "Conversion %",      tone: "from-sky-500 to-indigo-500", format: formatConversion },
 ];
 
 const TROPHIES: Record<1 | 2 | 3, string> = { 1: "🏆", 2: "🥈", 3: "🥉" };
@@ -271,7 +272,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     <Cell n={r.orderCount}     pts={r.metricPoints.orders} />
                     <Cell n={r.deliveryCount}  pts={r.metricPoints.deliveries} />
                     <Cell n={r.insuranceCount} pts={r.metricPoints.insurance} />
-                    <Cell n={`${r.conversionPct.toFixed(1)}%`} pts={r.metricPoints.conversion} />
+                    <Cell n={formatConversion(r)} pts={r.metricPoints.conversion} />
                     <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-slate-900">{r.totalPoints}</td>
                   </tr>
                 );
@@ -379,7 +380,7 @@ function Scorecard({ rank, stats, badges }: { rank: number; stats: ExecMonthStat
         <ScoreLine label="Orders"     n={stats.orderCount}     rank={stats.metricRanks.orders} />
         <ScoreLine label="Deliveries" n={stats.deliveryCount}  rank={stats.metricRanks.deliveries} />
         <ScoreLine label="Insurance"  n={stats.insuranceCount} rank={stats.metricRanks.insurance} />
-        <ScoreLine label="Conv %"     n={`${stats.conversionPct.toFixed(1)}%`} rank={stats.metricRanks.conversion} sub={`${stats.salesCount}/${stats.enquiryCount}`} />
+        <ScoreLine label="Conv %"     n={formatConversion(stats)} rank={stats.metricRanks.conversion} sub={`${stats.salesCount}/${stats.enquiryCount}`} />
       </div>
       {badges.length > 0 && (
         <div className="flex flex-wrap gap-1 border-t border-slate-100 bg-slate-50 px-4 py-2">

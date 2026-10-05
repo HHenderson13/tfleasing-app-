@@ -129,7 +129,7 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
                     <td className="px-2 py-2 text-right tabular-nums">{t.insuranceCount}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{t.enquiryCount}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{t.salesCount}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{conv.toFixed(1)}%</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{t.enquiryCount > 0 ? `${conv.toFixed(1)}%` : "—"}</td>
                   </tr>
                 );
               })}

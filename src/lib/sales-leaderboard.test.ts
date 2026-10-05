@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
 import {
   applyPoints,
+  attributeReportRows,
   currentYearMonth,
+  enquirySales,
+  formatConversion,
   formatMonthLabel,
+  isSaleStatus,
+  parseEnquiryLog,
+  parseOrderList,
   type ExecMonthStats,
   type LeaderboardMetric,
 } from "./sales-leaderboard";
@@ -75,16 +82,37 @@ describe("sales-leaderboard scoring", () => {
     }
   });
 
-  it("conversion uses enquiry presence as the meaningful flag", () => {
-    // Everyone has enquiries; only one converts. They should rank first.
+  it("a 0% conversion takes no podium place", () => {
+    // Everyone has enquiries; only one converts. The other two used to tie
+    // for 2nd on 0% and take 2 points each for converting nothing.
     const a = makeRow("a", 0, 0, 0, 10, 5);
     const b = makeRow("b", 0, 0, 0, 10, 0);
     const c = makeRow("c", 0, 0, 0, 10, 0);
     applyPoints([a, b, c]);
     expect(a.metricRanks.conversion).toBe(1);
     expect(a.metricPoints.conversion).toBe(3);
-    expect(b.metricRanks.conversion).toBe(2);
-    expect(c.metricRanks.conversion).toBe(2);
+    expect(b.metricRanks.conversion).toBeNull();
+    expect(c.metricRanks.conversion).toBeNull();
+    expect(b.totalPoints).toBe(0);
+  });
+
+  it("zero never earns a podium on any metric", () => {
+    // Two execs with orders; the rest are on 0 and must not share 3rd.
+    const rows = [makeRow("a", 10), makeRow("b", 5), makeRow("c", 0), makeRow("d", 0)];
+    applyPoints(rows);
+    expect(rows[1].metricRanks.orders).toBe(2);
+    expect(rows[2].metricRanks.orders).toBeNull();
+    expect(rows[3].metricRanks.orders).toBeNull();
+    expect(rows[2].totalPoints).toBe(0);
+    expect(rows[3].totalPoints).toBe(0);
+  });
+
+  it("no enquiries means no conversion rank, even beside orders", () => {
+    const withOrders = makeRow("a", 4, 0, 0, 0, 0);
+    const converter = makeRow("b", 1, 0, 0, 18, 1);
+    applyPoints([withOrders, converter]);
+    expect(withOrders.metricRanks.conversion).toBeNull();
+    expect(converter.metricRanks.conversion).toBe(1);
   });
 
   it("totalPoints sums across all four metrics", () => {
@@ -95,6 +123,119 @@ describe("sales-leaderboard scoring", () => {
     expect(a.totalPoints).toBe(12);
     expect(b.totalPoints).toBe(8);
     expect(c.totalPoints).toBe(4);
+  });
+});
+
+// Build an in-memory XLSX shaped like a Dealerweb export: header row, then
+// data with the exec code in column B.
+function workbook(rows: unknown[][]): ArrayBuffer {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "ag-grid");
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+}
+
+// Enquiry log row with SE in B and Status in Q (index 16).
+function enquiry(se: string, status: string): unknown[] {
+  const r: unknown[] = new Array(17).fill(null);
+  r[1] = se;
+  r[16] = status;
+  return r;
+}
+
+describe("enquiry sale statuses", () => {
+  it("counts every post-order status as a sale", () => {
+    expect(isSaleStatus("Ordered")).toBe(true);
+    expect(isSaleStatus("Handover Arranged")).toBe(true);
+    expect(isSaleStatus("Delivered")).toBe(true);
+    expect(isSaleStatus(" handover  arranged ")).toBe(true);
+    expect(isSaleStatus("Live")).toBe(false);
+    expect(isSaleStatus("Lost Sale")).toBe(false);
+    expect(isSaleStatus("")).toBe(false);
+  });
+
+  it("parseEnquiryLog counts Handover Arranged and keeps the status tally", () => {
+    // October 2026: DoJa's only converted enquiry had moved on to Handover
+    // Arranged, and the board showed 0% beside their order.
+    const header = new Array(17).fill("h");
+    const { rows } = parseEnquiryLog(workbook([
+      header,
+      enquiry("DoJa", "Live"),
+      enquiry("DoJa", "Handover Arranged"),
+      enquiry("DoJa", "Lost Sale"),
+      enquiry("LoBa", "Ordered"),
+    ]));
+    const doja = rows.find((r) => r.reportCode === "DoJa")!;
+    expect(doja.enquiryCount).toBe(3);
+    expect(doja.salesCount).toBe(1);
+    expect(doja.statusCounts).toEqual({ Live: 1, "Handover Arranged": 1, "Lost Sale": 1 });
+  });
+
+  it("enquirySales re-applies the current rules from the stored tally", () => {
+    // Stored before Handover Arranged counted: salesCount was frozen at 0.
+    const stored = { reportCode: "DoJa", enquiryCount: 2, salesCount: 0, statusCounts: { Live: 1, "Handover Arranged": 1 } };
+    expect(enquirySales(stored)).toBe(1);
+    // Legacy upload with no tally: nothing to re-derive from.
+    expect(enquirySales({ reportCode: "X", enquiryCount: 5, salesCount: 2 })).toBe(2);
+  });
+});
+
+describe("report parsing", () => {
+  it("skips the numeric totals block at the foot of the order list", () => {
+    const order = (se: unknown) => ["Red", se, "R", "Customer", "1 Oct 2026", "Transit"];
+    const { rows, summary } = parseOrderList(workbook([
+      ["Status", "SE", "Sales Type", "Customer", "Order Date", "Vehicle Details"],
+      order("OlMa"),
+      order("OlMa"),
+      [null, null, null, null, null, "NEW TOTALS"],
+      ["R", 42, null, null, null, "112 Units"],
+      ["M", 0, null, null, null, "AVERAGE"],
+      ["F", 1, null, null, null, "PENETRATION"],
+    ]));
+    expect(rows.map((r) => r.reportCode)).toEqual(["OlMa"]);
+    expect(rows[0].orderCount).toBe(2);
+    expect(summary.rowsAttributed).toBe(2);
+  });
+});
+
+describe("attribution", () => {
+  const map = new Map([["MiHo", "e1"], ["MHo", "e1"], ["LoBa", "e2"], ["Gone", "e9"]]);
+  const participants = new Set(["e1", "e2", "e3"]);
+
+  it("sums every report code mapped to the same exec", () => {
+    // Previously the second code overwrote the first.
+    const { byExec } = attributeReportRows("enquiry", [
+      { reportCode: "MiHo", enquiryCount: 18, salesCount: 1 },
+      { reportCode: "MHo", enquiryCount: 4, salesCount: 0 },
+    ], map, participants);
+    expect(byExec.get("e1")).toMatchObject({ enquiryCount: 22, salesCount: 1 });
+  });
+
+  it("zero-fills participants, skips non-participants, reports unmapped codes", () => {
+    const { byExec, matched, unmapped } = attributeReportRows("orders", [
+      { reportCode: "LoBa", orderCount: 6, latestVehicle: "Ranger" },
+      { reportCode: "Gone", orderCount: 3, latestVehicle: null },
+      { reportCode: "ZzZz", orderCount: 2, latestVehicle: null },
+    ], map, participants);
+    expect(byExec.get("e2")?.orderCount).toBe(6);
+    expect(byExec.get("e3")?.orderCount).toBe(0);
+    expect(byExec.has("e9")).toBe(false);
+    expect(matched).toBe(1);
+    expect(unmapped).toEqual([{ reportCode: "ZzZz", count: 1 }]);
+  });
+
+  it("derives enquiry sales from the status tally", () => {
+    const { byExec } = attributeReportRows("enquiry", [
+      { reportCode: "LoBa", enquiryCount: 2, salesCount: 0, statusCounts: { "Handover Arranged": 1, Live: 1 } },
+    ], map, participants);
+    expect(byExec.get("e2")?.salesCount).toBe(1);
+  });
+});
+
+describe("formatConversion", () => {
+  it("shows a dash, not 0%, when there were no enquiries", () => {
+    expect(formatConversion({ enquiryCount: 0, conversionPct: 0 })).toBe("—");
+    expect(formatConversion({ enquiryCount: 19, conversionPct: 0 })).toBe("0.0%");
+    expect(formatConversion({ enquiryCount: 18, conversionPct: 100 / 18 })).toBe("5.6%");
   });
 });
 

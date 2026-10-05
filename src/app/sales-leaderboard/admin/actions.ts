@@ -17,15 +17,18 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { del } from "@vercel/blob";
 import {
+  attributeReportRows,
+  enquirySales,
   parseDeliveredList,
   parseEnquiryLog,
   parseOrderList,
   type DeliveredParseRow,
   type EnquiryParseRow,
+  type LeaderboardReportType,
   type OrderListParseRow,
 } from "@/lib/sales-leaderboard";
 
-type ReportType = "orders" | "delivered" | "enquiry";
+type ReportType = LeaderboardReportType;
 const REPORT_TYPES: ReportType[] = ["orders", "delivered", "enquiry"];
 
 // Single helper — every admin mutation invalidates both the cross-request
@@ -244,53 +247,22 @@ async function attributeUpload(
   const codeToExec = new Map(mapRows.map((m) => [m.reportCode, m.salesExecId]));
   const participantIds = new Set(participants.map((p) => p.salesExecId));
 
-  const unmappedCounts = new Map<string, number>();
-  const targets = new Map<string, { o?: number; lv?: string | null; d?: number; ic?: number; e?: number; s?: number }>();
-  let matched = 0;
-
-  for (const r of rows) {
-    const execId = codeToExec.get(r.reportCode);
-    if (!execId) {
-      unmappedCounts.set(r.reportCode, (unmappedCounts.get(r.reportCode) ?? 0) + 1);
-      continue;
-    }
-    if (!participantIds.has(execId)) continue;
-    if (reportType === "orders") {
-      const o = r as OrderListParseRow;
-      targets.set(execId, { o: o.orderCount, lv: o.latestVehicle });
-    } else if (reportType === "delivered") {
-      const d = r as DeliveredParseRow;
-      targets.set(execId, { d: d.deliveryCount, ic: d.insuranceCount });
-    } else {
-      const e = r as EnquiryParseRow;
-      targets.set(execId, { e: e.enquiryCount, s: e.salesCount });
-    }
-    matched++;
-  }
-
-  // Zero-fill participants who weren't in the report so dropping someone
-  // off resets their count to 0 instead of leaving yesterday's number stuck.
-  for (const id of participantIds) {
-    if (targets.has(id)) continue;
-    if (reportType === "orders")    targets.set(id, { o: 0, lv: null });
-    if (reportType === "delivered") targets.set(id, { d: 0, ic: 0 });
-    if (reportType === "enquiry")   targets.set(id, { e: 0, s: 0 });
-  }
+  const { byExec, matched, unmapped } = attributeReportRows(reportType, rows, codeToExec, participantIds);
 
   const writes: Promise<void>[] = [];
-  for (const [execId, vals] of targets) {
+  for (const [execId, vals] of byExec) {
     const setFields: Record<string, unknown> = {};
     if (reportType === "orders") {
-      setFields.orderCount = vals.o ?? 0;
-      setFields.latestVehicle = vals.lv ?? null;
+      setFields.orderCount = vals.orderCount;
+      setFields.latestVehicle = vals.latestVehicle;
       setFields.ordersUpdatedAt = now;
     } else if (reportType === "delivered") {
-      setFields.deliveryCount = vals.d ?? 0;
-      setFields.insuranceCount = vals.ic ?? 0;
+      setFields.deliveryCount = vals.deliveryCount;
+      setFields.insuranceCount = vals.insuranceCount;
       setFields.deliveriesUpdatedAt = now;
     } else {
-      setFields.enquiryCount = vals.e ?? 0;
-      setFields.salesCount = vals.s ?? 0;
+      setFields.enquiryCount = vals.enquiryCount;
+      setFields.salesCount = vals.salesCount;
       setFields.enquiriesUpdatedAt = now;
     }
     writes.push(
@@ -306,12 +278,7 @@ async function attributeUpload(
   }
   await Promise.all(writes);
 
-  return {
-    matched,
-    unmapped: Array.from(unmappedCounts.entries())
-      .map(([reportCode, count]) => ({ reportCode, count }))
-      .sort((a, b) => b.count - a.count),
-  };
+  return { matched, unmapped };
 }
 
 // Walk every (yearMonth, reportType) slot we have parsed data for, take the
@@ -419,7 +386,7 @@ export async function loadUploadDetailAction(input: { yearMonth: string; reportT
       secondary = (r as DeliveredParseRow).insuranceCount;
     } else {
       primary = (r as EnquiryParseRow).enquiryCount;
-      secondary = (r as EnquiryParseRow).salesCount;
+      secondary = enquirySales(r as EnquiryParseRow);
     }
     const execId = codeToExec.get(r.reportCode) ?? null;
     let status: UploadDetailRow["status"];

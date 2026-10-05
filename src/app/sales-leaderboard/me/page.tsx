@@ -4,6 +4,7 @@ import { requireLeaderboardAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import {
   currentYearMonth,
+  formatConversion,
   formatMonthLabel,
   overtakeTargets,
   type ExecMonthStats,
@@ -155,6 +156,7 @@ export default async function MyScorecardPage() {
               key={meta.key}
               meta={meta}
               myValue={myVal}
+              myLabel={meta.key === "conversion" ? formatConversion(mine) : meta.format(myVal)}
               avgValue={avg}
               topValue={top}
               rank={rank}
@@ -202,11 +204,16 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
 
 function computeDeptAverages(rows: ExecMonthStats[]): Record<LeaderboardMetric, number> {
   if (rows.length === 0) return { orders: 0, deliveries: 0, insurance: 0, conversion: 0 };
+  // Conversion is the department's own rate (all sales ÷ all enquiries),
+  // the same figure the leaderboard shows as the team total. Averaging the
+  // per-exec percentages counted everyone without enquiries as a 0%.
+  const enquiries = rows.reduce((a, r) => a + r.enquiryCount, 0);
+  const sales = rows.reduce((a, r) => a + r.salesCount, 0);
   return {
     orders:     rows.reduce((a, r) => a + r.orderCount, 0)     / rows.length,
     deliveries: rows.reduce((a, r) => a + r.deliveryCount, 0)  / rows.length,
     insurance:  rows.reduce((a, r) => a + r.insuranceCount, 0) / rows.length,
-    conversion: rows.reduce((a, r) => a + r.conversionPct, 0)  / rows.length,
+    conversion: enquiries > 0 ? (sales / enquiries) * 100 : 0,
   };
 }
 
@@ -249,12 +256,14 @@ function BadgeChip({ badge, large }: { badge: Badge; large?: boolean }) {
 function MetricBreakdownCard({
   meta,
   myValue,
+  myLabel,
   avgValue,
   topValue,
   rank,
 }: {
   meta: { key: LeaderboardMetric; label: string; tone: string; format: (n: number) => string };
   myValue: number;
+  myLabel: string;
   avgValue: number;
   topValue: number;
   rank: number | null;
@@ -265,7 +274,7 @@ function MetricBreakdownCard({
       <div className={`flex items-center justify-between bg-gradient-to-r ${meta.tone} px-4 py-3 text-white`}>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wide opacity-90">{meta.label}</div>
-          <div className="mt-0.5 text-2xl font-bold tabular-nums">{meta.format(myValue)}</div>
+          <div className="mt-0.5 text-2xl font-bold tabular-nums">{myLabel}</div>
         </div>
         <div className="text-right">
           {rank !== null && rank <= 3 ? (
