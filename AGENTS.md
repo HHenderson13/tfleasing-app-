@@ -655,6 +655,39 @@ a shape ordinary search text can accidentally take ("PANTHER5"), and
 silently returning nothing for a real search would be worse than not
 having the feature.
 
+## Market analysis (`/scraper`)
+
+The Intelligence tab compares TF's leasing.com prices against every other
+broker, from runs the desktop RateX app uploads. All of it is built from
+**slots** in `lib/market-slots.ts`: one exact vehicle on one exact payment
+profile, holding **at most one offer per broker**.
+
+- **The slot key is `model` + `derivative` + term + mileage + upfront +
+  finance.** Derivative alone is not a vehicle on a van: the model carries
+  the wheelbase/weight ("Transit Custom 320 L1" vs "320 L2") and 86 of 136
+  van derivatives sit under more than one model. Keyed on derivative, an L1
+  and an L2 shared a slot, every broker appeared once per wheelbase, and
+  TF's price was averaged across different vans. Cars never showed it,
+  because their model doesn't vary under one derivative. Fixed 2026-10-07,
+  after the user saw TrustFord Transit Centre four times in one van slot.
+- **The same deal can be stored twice, and is dropped at read.** leasing.com
+  returns every PHEV Transit Custom under BOTH `fuel=Petrol` and
+  `fuel=Plugin+Hybrid`, so a run listing both URLs saves those deals twice
+  (1,738 in the 7 Oct run). `dedupeListings` drops repeats by deal id + profile
+  rather than anything being deleted from stored runs, so history is fixed
+  too. The Results tab and CSV export still show the raw rows, on purpose.
+- **A broker listing one vehicle twice keeps its cheapest**, marked
+  "cheapest of N". Rivervale posts two prices per profile and Select lists an
+  in-stock and a factory-order version; nothing scraped tells them apart.
+- **Cars and vans are separate views.** The segment comes from the search
+  URL (`/car-leasing/` vs `/van-leasing/`), never the range: "Explorer" is
+  both, and mixing them hid that the Explorer car was behind. Classified
+  server-side in the slim results payload, so `source_url` isn't shipped.
+- Gap = TF − cheapest competitor (positive = we're dearer), displayed from
+  our side ("-£9" = £9 worse). Rank counts competitors strictly cheaper, so a
+  tie still reads #1. Terms and mileages come from the data, not a fixed
+  24/36/48 list; older runs have 18-month deals.
+
 ## Sales leaderboard (Pole Position)
 
 `/sales-leaderboard` scores execs 3/2/1 per metric from three Dealerweb

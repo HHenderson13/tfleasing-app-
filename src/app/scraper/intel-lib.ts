@@ -1,129 +1,9 @@
-"use client";
-
-// Mirrors the Flask app's scoring algorithm verbatim — see static/index.html.
-// Field names are camelCase here because the cloud API serves results in camelCase.
-
-export interface ScrapedResult {
-  id: number;
-  runId: string;
-  manufacturer?: string | null;
-  range?: string | null;
-  model?: string | null;
-  derivative?: string | null;
-  fuelType?: string | null;
-  transmission?: string | null;
-  bodyStyle?: string | null;
-  trim?: string | null;
-  monthlyPriceGbp?: number | null;
-  initialRentalGbp?: number | null;
-  totalLeaseCostGbp?: number | null;
-  additionalFeesGbp?: number | null;
-  contractLengthMonths?: number | null;
-  annualMileage?: number | null;
-  depositMonths?: number | null;
-  brokerDealerName?: string | null;
-  advertiserCategory?: string | null;
-  inStock?: string | null;
-  financeType?: string | null;
-  dealIdentifier?: string | null;
-  leasingUrl?: string | null;
-}
-
-const TF_NAMES = ["trustford", "trustford transit centre"];
-
-export function isTrustFord(name?: string | null): boolean {
-  if (!name) return false;
-  const lower = name.toLowerCase();
-  return TF_NAMES.some((n) => lower.includes(n));
-}
-
-export function normKey(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  return String(v).trim();
-}
-
-export function termOf(r: ScrapedResult): string {
-  return normKey(r.contractLengthMonths);
-}
-
-export function mileageOf(r: ScrapedResult): string {
-  return normKey(r.annualMileage);
-}
-
-export interface SlotDetail {
-  deriv: string;
-  term: string;
-  mil: string;
-  tfAvg: number;
-  mktBest: number;
-  gap: number;
-}
-
-export interface AvgResult {
-  tfAvg: number | null;
-  mktAvg: number | null;
-  gap: number | null;
-  count: number;
-  details: SlotDetail[];
-}
-
-export function lflAvg(tfRows: ScrapedResult[], mktRows: ScrapedResult[]): AvgResult {
-  const tfSlot: Record<string, number> = {};
-  const tfCount: Record<string, number> = {};
-  for (const r of tfRows) {
-    const key = `${r.derivative}||${termOf(r)}||${mileageOf(r)}`;
-    const p = Number(r.monthlyPriceGbp);
-    if (isNaN(p) || p <= 0) continue;
-    tfSlot[key] = (tfSlot[key] || 0) + p;
-    tfCount[key] = (tfCount[key] || 0) + 1;
-  }
-
-  const mktBest: Record<string, number> = {};
-  for (const r of mktRows) {
-    const key = `${r.derivative}||${termOf(r)}||${mileageOf(r)}`;
-    const p = Number(r.monthlyPriceGbp);
-    if (isNaN(p) || p <= 0) continue;
-    if (mktBest[key] === undefined || p < mktBest[key]) mktBest[key] = p;
-  }
-
-  const sharedKeys = Object.keys(tfSlot).filter((k) => mktBest[k] !== undefined);
-  if (sharedKeys.length === 0) {
-    return { tfAvg: null, mktAvg: null, gap: null, count: 0, details: [] };
-  }
-
-  let tfSum = 0,
-    mktSum = 0;
-  const details: SlotDetail[] = [];
-  for (const key of sharedKeys) {
-    const tf = tfSlot[key] / tfCount[key];
-    const mkt = mktBest[key];
-    tfSum += tf;
-    mktSum += mkt;
-    const [deriv, term, mil] = key.split("||");
-    details.push({ deriv, term, mil, tfAvg: tf, mktBest: mkt, gap: tf - mkt });
-  }
-
-  const count = sharedKeys.length;
-  return {
-    tfAvg: tfSum / count,
-    mktAvg: mktSum / count,
-    gap: (tfSum - mktSum) / count,
-    count,
-    details,
-  };
-}
-
-export function lflByTerm(
-  tfRows: ScrapedResult[],
-  mktRows: ScrapedResult[],
-  term: string | number
-): AvgResult {
-  const target = normKey(term);
-  return lflAvg(
-    tfRows.filter((r) => termOf(r) === target),
-    mktRows.filter((r) => termOf(r) === target)
-  );
-}
+// Display helpers for the Intelligence tab. The comparison itself — slots,
+// dedupe, gap and rank — lives in lib/market-slots.ts, where it is tested.
+//
+// Gap sign convention: gap = TF price − cheapest competitor, so a positive
+// gap means we are dearer. It is DISPLAYED from our side: "-£9.01" reads as
+// "£9.01 worse off", "+£20.00" as "£20 better".
 
 export type GapClass = "leading" | "close" | "behind" | "not-competing";
 
@@ -150,6 +30,11 @@ export function hmClass(gap: number | null): string {
   return "hm-behind";
 }
 
+export function gapCellClass(gap: number | null): string {
+  if (gap === null) return "";
+  return gap <= 0 ? "td-gap-neg" : gap <= 20 ? "td-gap-zero" : "td-gap-pos";
+}
+
 export function gapStr(gap: number | null): string {
   if (gap === null) return "—";
   return (gap > 0 ? "-£" : "+£") + Math.abs(gap).toFixed(2);
@@ -160,4 +45,22 @@ export function gapColor(gap: number | null): string {
   if (gap <= 0) return "#16a34a";
   if (gap <= 20) return "#d97706";
   return "#dc2626";
+}
+
+export function milesLabel(m: string): string {
+  const n = parseInt(m, 10);
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : m;
+}
+
+export function pct(part: number, whole: number): string {
+  return whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—";
+}
+
+// "Transit Custom 320 L1 Fwd" under range "Transit Custom" → "320 L1 Fwd".
+// The range is already in the heading; repeating it on every row buries the
+// part that differs.
+export function modelShort(model: string, range: string): string {
+  return model.toLowerCase().startsWith(range.toLowerCase())
+    ? model.slice(range.length).trim()
+    : model;
 }
