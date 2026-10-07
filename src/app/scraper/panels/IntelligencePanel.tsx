@@ -1,18 +1,23 @@
 "use client";
 import { useState, useEffect, useMemo, Fragment } from "react";
 import {
+  buildHeadlines,
   buildSlots,
   competitorTable,
   dedupeListings,
   distinctNumeric,
   groupBy,
   summarise,
+  summariseHeadlines,
   vehicleTable,
   type GapSummary,
+  type Headline,
+  type HeadlineSummary,
   type Listing,
   type Segment,
   type Slot,
 } from "@/lib/market-slots";
+import { loadRun } from "../run-cache";
 import {
   badgeText,
   gapCellClass,
@@ -72,37 +77,14 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
     setLoadProgress("");
     setResults([]);
     (async () => {
-      const PER_PAGE = 10000;
-      // First page tells us how many pages exist
-      const firstRes = await fetch(
-        `/api/scraper/results?runId=${activeRunId}&slim=true&page=1&per_page=${PER_PAGE}`
-      );
-      if (!firstRes.ok) {
+      let all: Listing[];
+      try {
+        all = await loadRun(activeRunId, (loaded, total) =>
+          setLoadProgress(`${loaded.toLocaleString()} / ${total.toLocaleString()}`)
+        );
+      } catch {
         setLoading(false);
         return;
-      }
-      const first = (await firstRes.json()) as {
-        results: Listing[];
-        total: number;
-        pages: number;
-      };
-      const all: Listing[] = [...first.results];
-      setLoadProgress(
-        `${all.length.toLocaleString()} / ${first.total.toLocaleString()}`
-      );
-
-      // Remaining pages in parallel
-      if (first.pages > 1) {
-        const remaining = await Promise.all(
-          Array.from({ length: first.pages - 1 }, (_, i) =>
-            fetch(
-              `/api/scraper/results?runId=${activeRunId}&slim=true&page=${i + 2}&per_page=${PER_PAGE}`
-            ).then((r) =>
-              r.ok ? (r.json() as Promise<{ results: Listing[] }>) : { results: [] }
-            )
-          )
-        );
-        for (const r of remaining) all.push(...(r.results || []));
       }
 
       setResults(all);
@@ -156,6 +138,9 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
   const byRange = useMemo(() => groupBy(slots, (s) => s.range), [slots]);
   const ranges = useMemo(() => [...byRange.keys()].sort(), [byRange]);
   const overall = useMemo(() => summarise(slots), [slots]);
+  const headlines = useMemo(() => buildHeadlines(slots), [slots]);
+  const headlineOverall = useMemo(() => summariseHeadlines(headlines), [headlines]);
+  const headlinesByRange = useMemo(() => groupBy(headlines, (h) => h.range), [headlines]);
   const marketSlots = useMemo(() => slots.filter((s) => s.best).length, [slots]);
 
   const selectedRun = runs.find((r) => r.id === activeRunId);
@@ -249,6 +234,12 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
             sub={`${overall.cheapest.toLocaleString()} of ${overall.compared.toLocaleString()} combos`}
           />
           <SumCard
+            value={pct(headlineOverall.lowest, headlineOverall.compared)}
+            label="Lowest Headline"
+            sub={`beaten on ${headlineOverall.crossTerm.toLocaleString()} where our best price wins its term`}
+            color={headlineOverall.crossTerm > 0 ? "#d97706" : undefined}
+          />
+          <SumCard
             value={pct(overall.compared, marketSlots)}
             label="Coverage"
             sub={`priced on ${overall.compared.toLocaleString()} of ${marketSlots.toLocaleString()} market combos`}
@@ -282,11 +273,19 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
                   key={range}
                   range={range}
                   slots={byRange.get(range)!}
+                  headline={summariseHeadlines(headlinesByRange.get(range) ?? [])}
                   terms={terms}
                   onClick={() => openRange(range)}
                 />
               ))}
             </div>
+            <HeadlineLosses
+              headlines={headlines}
+              onOpen={(range, vehicleKey) => {
+                openRange(range);
+                setDeepVehicle(vehicleKey);
+              }}
+            />
             <div className="overview-split">
               <BehindList
                 slots={slots}
@@ -306,6 +305,7 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
             range={drillRange}
             segment={segment}
             slots={byRange.get(drillRange) ?? []}
+            headlines={headlinesByRange.get(drillRange) ?? []}
             terms={terms}
             termFilter={drillTermFilter}
             mileageFilter={drillMileageFilter}
@@ -323,6 +323,9 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
             range={drillRange}
             slots={(byRange.get(drillRange) ?? []).filter(
               (s) => s.vehicleKey === deepVehicle
+            )}
+            headlines={(headlinesByRange.get(drillRange) ?? []).filter(
+              (h) => h.vehicleKey === deepVehicle
             )}
             onBack={() => setDeepVehicle(null)}
           />
@@ -367,11 +370,13 @@ function VehicleLabel({ slot, range }: { slot: Pick<Slot, "model" | "derivative"
 function RangeCard({
   range,
   slots,
+  headline,
   terms,
   onClick,
 }: {
   range: string;
   slots: Slot[];
+  headline: HeadlineSummary;
   terms: string[];
   onClick: () => void;
 }) {
@@ -397,6 +402,7 @@ function RangeCard({
         {terms.map((t) => (
           <TermRow key={t} label={`${t} mo`} t={summarise(byTerm.get(t) ?? [])} />
         ))}
+        <HeadlineRow h={headline} />
       </div>
       <div className="range-footer">
         <div className="range-stat">
@@ -434,6 +440,145 @@ function TermRow({ label, t }: { label: string; t: GapSummary }) {
   );
 }
 
+// Our cheapest at any term against the cheapest rival at any term, per
+// vehicle and mileage: the price a customer actually compares first. See
+// buildHeadlines in lib/market-slots.ts.
+function HeadlineRow({ h }: { h: HeadlineSummary }) {
+  return (
+    <div
+      className="rc-term-row rc-headline-row"
+      title="Headline: our cheapest monthly at any term vs the cheapest any rival offers at any term, per vehicle and mileage. Off-term: our best price wins its own term but a rival's price on another term is lower."
+    >
+      <span>Headline</span>
+      {h.gap === null ? (
+        <span style={{ color: "var(--text3)" }}>—</span>
+      ) : (
+        <>
+          <span style={{ color: "var(--text3)", fontSize: 10 }}>
+            lowest {h.lowest}/{h.compared}
+            {h.crossTerm > 0 && <span className="hl-warn"> · {h.crossTerm} off-term</span>}
+          </span>
+          <span style={{ color: gapColor(h.gap), fontWeight: 600 }}>{gapStr(h.gap)}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ShowMore({ total, shown, open, onToggle }: { total: number; shown: number; open: boolean; onToggle: () => void }) {
+  if (total <= shown && !open) return null;
+  return (
+    <button className="ov-more" onClick={onToggle}>
+      {open ? "Show fewer" : `Show all ${total.toLocaleString()}`}
+    </button>
+  );
+}
+
+function mileageList(ms: string[]): string {
+  const labels = ms.map((m) => milesLabel(m));
+  return labels.length <= 4 ? labels.join(", ") : `${labels.slice(0, 3).join(", ")} +${labels.length - 3}`;
+}
+
+// The insight the term-by-term views can't show: our best price wins its own
+// term, and a rival is still cheaper on a different term — very cheap on two
+// years, say, below our three- and four-year prices. A customer sees their
+// headline first, so winning 36 and 48 like-for-like doesn't win the enquiry.
+function HeadlineLosses({
+  headlines,
+  onOpen,
+}: {
+  headlines: Headline[];
+  onOpen: (range: string, vehicleKey: string) => void;
+}) {
+  const [mode, setMode] = useState<"cross" | "all">("cross");
+  const [showAll, setShowAll] = useState(false);
+
+  const groups = useMemo(() => {
+    const pick = headlines.filter((h) => (mode === "cross" ? h.crossTerm : h.gap !== null && h.gap > 0));
+    return [...groupBy(pick, (h) => `${h.range}||${h.vehicleKey}`).values()]
+      .map((hs) => {
+        const worst = hs.reduce((a, b) => (b.gap! > a.gap! ? b : a));
+        return { worst, mileages: distinctMileages(hs) };
+      })
+      .sort((a, b) => b.worst.gap! - a.worst.gap!);
+  }, [headlines, mode]);
+  const counts = useMemo(
+    () => ({
+      cross: headlines.filter((h) => h.crossTerm).length,
+      all: headlines.filter((h) => h.gap !== null && h.gap > 0).length,
+    }),
+    [headlines]
+  );
+  const shown = showAll ? groups : groups.slice(0, 8);
+
+  return (
+    <div className="ov-block ov-wide">
+      <div className="ov-title ov-title-row">
+        <div>
+          Losing on headline price
+          <span className="ov-count">
+            {mode === "cross"
+              ? "Our best price wins its own term, but a rival's price on another term is lower — the customer sees theirs first."
+              : "A rival's cheapest monthly (any term) is below ours (any term), for the same vehicle and mileage."}
+          </span>
+        </div>
+        <div className="chip-toggle">
+          <button className={mode === "cross" ? "active" : ""} onClick={() => setMode("cross")}>
+            Undercut on another term · {counts.cross}
+          </button>
+          <button className={mode === "all" ? "active" : ""} onClick={() => setMode("all")}>
+            All headline losses · {counts.all}
+          </button>
+        </div>
+      </div>
+      {groups.length === 0 ? (
+        <div className="ov-empty">
+          {mode === "cross" ? "No rival undercuts our best price from another term." : "Our headline is lowest everywhere in view."}
+        </div>
+      ) : (
+        <table className="intel-table">
+          <thead>
+            <tr>
+              <th>Vehicle</th>
+              <th>Mileages</th>
+              <th>Rival headline</th>
+              <th>Our best</th>
+              <th>Gap</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map(({ worst: h, mileages }) => (
+              <tr key={h.key} onClick={() => onOpen(h.range, h.vehicleKey)}>
+                <td className="td-wrap">
+                  <span className="veh-range">{h.range}</span>
+                  <VehicleLabel slot={h} range={h.range} />
+                </td>
+                <td title={mileages.map((m) => `${milesLabel(m)}/yr`).join(", ")}>{mileageList(mileages)}</td>
+                <td className="td-wrap">
+                  <strong className="td-our-price">£{h.rival!.monthly.toFixed(2)}</strong> · {h.rival!.term}mo
+                  <span className="veh-model">{h.rival!.broker} · at {milesLabel(h.mileage)}/yr</span>
+                </td>
+                <td className="td-wrap">
+                  £{h.tf!.monthly.toFixed(2)} · {h.tf!.term}mo
+                  <span className="veh-model">
+                    {h.termsWon.length > 0 ? `cheapest like-for-like on ${h.termsWon.join("/")}mo` : "not cheapest on any term"}
+                  </span>
+                </td>
+                <td className={gapCellClass(h.gap)}>{gapStr(h.gap)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <ShowMore total={groups.length} shown={8} open={showAll} onToggle={() => setShowAll(!showAll)} />
+    </div>
+  );
+}
+
+function distinctMileages(hs: Headline[]): string[] {
+  return [...new Set(hs.map((h) => h.mileage))].sort((a, b) => Number(a) - Number(b));
+}
+
 // The vehicles we are furthest behind on, across every range in view. The
 // range cards say WHERE overall; this says WHICH vehicle, so the first thing
 // to reprice is one click away instead of three.
@@ -444,6 +589,7 @@ function BehindList({
   slots: Slot[];
   onOpen: (range: string, vehicleKey: string) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
   const rows = useMemo(
     () =>
       vehicleTable(slots)
@@ -451,7 +597,7 @@ function BehindList({
         .sort((a, b) => b.summary.gap! - a.summary.gap!),
     [slots]
   );
-  const shown = rows.slice(0, 12);
+  const shown = showAll ? rows : rows.slice(0, 12);
 
   return (
     <div className="ov-block">
@@ -486,6 +632,7 @@ function BehindList({
           </tbody>
         </table>
       )}
+      <ShowMore total={rows.length} shown={12} open={showAll} onToggle={() => setShowAll(!showAll)} />
     </div>
   );
 }
@@ -538,10 +685,13 @@ function CompetitorList({ slots }: { slots: Slot[] }) {
   );
 }
 
+type DrillSort = "vehicle" | "gap" | "headline";
+
 function DrilldownView({
   range,
   segment,
   slots,
+  headlines,
   terms,
   termFilter,
   mileageFilter,
@@ -553,6 +703,7 @@ function DrilldownView({
   range: string;
   segment: Segment;
   slots: Slot[];
+  headlines: Headline[];
   terms: string[];
   termFilter: string;
   mileageFilter: string;
@@ -561,9 +712,18 @@ function DrilldownView({
   onBack: () => void;
   onDeepDive: (vehicleKey: string) => void;
 }) {
-  const [sortBy, setSortBy] = useState<"vehicle" | "gap">("vehicle");
+  const [sortBy, setSortBy] = useState<DrillSort>("vehicle");
+  const [search, setSearch] = useState("");
 
   const mileages = useMemo(() => distinctNumeric(slots, (s) => s.mileage), [slots]);
+
+  // Search matches model and derivative, every word anywhere: "320 l2 trend"
+  // finds the 320 L2 Trend without caring about word order.
+  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (v: { model: string; derivative: string }) => {
+    const text = `${v.model} ${v.derivative}`.toLowerCase();
+    return words.every((w) => text.includes(w));
+  };
 
   const filtered = useMemo(
     () =>
@@ -575,18 +735,34 @@ function DrilldownView({
     [slots, termFilter, mileageFilter]
   );
 
+  // A headline is across terms by definition, so only the mileage filter
+  // applies to it.
+  const headlinesByVehicle = useMemo(
+    () =>
+      groupBy(
+        headlines.filter((h) => !mileageFilter || h.mileage === mileageFilter),
+        (h) => h.vehicleKey
+      ),
+    [headlines, mileageFilter]
+  );
+
   const vehicles = useMemo(() => {
     const byVehicle = groupBy(filtered, (s) => s.vehicleKey);
     const rows = vehicleTable(filtered).map((v) => ({
       ...v,
       byTerm: groupBy(byVehicle.get(v.vehicleKey) ?? [], (s) => s.term),
+      headline: summariseHeadlines(headlinesByVehicle.get(v.vehicleKey) ?? []),
     }));
     return rows.sort((a, b) =>
       sortBy === "gap"
         ? (b.summary.gap ?? -Infinity) - (a.summary.gap ?? -Infinity)
-        : a.model.localeCompare(b.model) || a.derivative.localeCompare(b.derivative)
+        : sortBy === "headline"
+          ? b.headline.crossTerm - a.headline.crossTerm ||
+            (b.headline.gap ?? -Infinity) - (a.headline.gap ?? -Infinity)
+          : a.model.localeCompare(b.model) || a.derivative.localeCompare(b.derivative)
     );
-  }, [filtered, sortBy]);
+  }, [filtered, sortBy, headlinesByVehicle]);
+  const visible = words.length ? vehicles.filter(matches) : vehicles;
 
   const missing = vehicles.filter((v) => !v.tfListed);
   const byTerm = useMemo(() => groupBy(filtered, (s) => s.term), [filtered]);
@@ -594,7 +770,7 @@ function DrilldownView({
   // Vans come in several wheelbases/weights per range; a header per model
   // keeps an L1 and an L2 of the same derivative from reading as a repeat.
   const showModelHeaders =
-    sortBy === "vehicle" && new Set(vehicles.map((v) => v.model)).size > 1;
+    sortBy === "vehicle" && new Set(visible.map((v) => v.model)).size > 1;
 
   return (
     <>
@@ -626,10 +802,11 @@ function DrilldownView({
           </select>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "vehicle" | "gap")}
+            onChange={(e) => setSortBy(e.target.value as DrillSort)}
           >
             <option value="vehicle">Sort by vehicle</option>
             <option value="gap">Furthest behind first</option>
+            <option value="headline">Undercut on another term first</option>
           </select>
         </div>
       </div>
@@ -685,6 +862,20 @@ function DrilldownView({
         </div>
       </div>
 
+      <div className="drill-search">
+        <input
+          type="search"
+          placeholder={`Search ${vehicles.length} vehicles — e.g. "320 L2 trend"`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {words.length > 0 && (
+          <span className="drill-search-count">
+            {visible.length} of {vehicles.length}
+          </span>
+        )}
+      </div>
+
       <div className="intel-drill-wrap" style={{ margin: 0 }}>
         <table className="intel-table">
           <thead>
@@ -695,17 +886,23 @@ function DrilldownView({
               ))}
               <th>Overall Gap</th>
               <th>Cheapest on</th>
+              <th title="Our cheapest at any term vs the cheapest rival at any term, per mileage">Headline</th>
             </tr>
           </thead>
           <tbody>
-            {vehicles.map((v, i) => {
+            {visible.length === 0 && (
+              <tr className="model-group-row">
+                <td colSpan={terms.length + 4}>No vehicle matches &ldquo;{search}&rdquo;.</td>
+              </tr>
+            )}
+            {visible.map((v, i) => {
               const header =
-                showModelHeaders && (i === 0 || vehicles[i - 1].model !== v.model);
+                showModelHeaders && (i === 0 || visible[i - 1].model !== v.model);
               return (
                 <Fragment key={v.vehicleKey}>
                   {header && (
                     <tr className="model-group-row">
-                      <td colSpan={terms.length + 3}>
+                      <td colSpan={terms.length + 4}>
                         {modelShort(v.model, range) || v.model}
                       </td>
                     </tr>
@@ -732,6 +929,29 @@ function DrilldownView({
                         ? `${v.summary.cheapest}/${v.summary.compared}`
                         : "—"}
                     </td>
+                    <td
+                      title={
+                        v.headline.compared > 0
+                          ? `Lowest headline on ${v.headline.lowest} of ${v.headline.compared} mileages` +
+                            (v.headline.crossTerm > 0
+                              ? `; on ${v.headline.crossTerm} our best price wins its term but a rival is cheaper on another`
+                              : "")
+                          : undefined
+                      }
+                    >
+                      {v.headline.compared === 0 ? (
+                        <span style={{ color: "var(--text3)" }}>—</span>
+                      ) : (
+                        <>
+                          <span className={v.headline.lowest === v.headline.compared ? "td-gap-neg" : ""}>
+                            {v.headline.lowest}/{v.headline.compared}
+                          </span>
+                          {v.headline.crossTerm > 0 && (
+                            <span className="hl-warn"> · ⚠ {v.headline.crossTerm} off-term</span>
+                          )}
+                        </>
+                      )}
+                    </td>
                   </tr>
                 </Fragment>
               );
@@ -746,10 +966,12 @@ function DrilldownView({
 function DeepDiveView({
   range,
   slots,
+  headlines,
   onBack,
 }: {
   range: string;
   slots: Slot[];
+  headlines: Headline[];
   onBack: () => void;
 }) {
   // A grid cell is term × mileage, so it has to sit inside one finance type
@@ -771,6 +993,15 @@ function DeepDiveView({
   const cell = useMemo(
     () => new Map(inProfile.map((s) => [`${s.term}||${s.mileage}`, s])),
     [inProfile]
+  );
+  const headlineByMileage = useMemo(
+    () =>
+      new Map(
+        headlines
+          .filter((h) => `${h.finance}||${h.upfront}` === profile)
+          .map((h) => [h.mileage, h])
+      ),
+    [headlines, profile]
   );
   const selected = inProfile.find((s) => s.key === selectedKey) ?? null;
   const first = slots[0];
@@ -886,6 +1117,50 @@ function DeepDiveView({
                 })}
               </tr>
             ))}
+            {/* The headline: what the customer compares first. Clicking opens
+                the brokers on the term the rival's headline comes from. */}
+            <tr className="dd-headline-row">
+              <td className="td-our-price">
+                Headline
+                <span className="veh-model">any term</span>
+              </td>
+              {mileages.map((m) => {
+                const h = headlineByMileage.get(m);
+                const rivalSlot = h?.rival ? cell.get(`${h.rival.term}||${m}`) : undefined;
+                if (!h || (!h.tf && !h.rival)) return <td key={m} style={{ textAlign: "center" }}>—</td>;
+                return (
+                  <td
+                    key={m}
+                    className={[
+                      h.crossTerm ? "dd-cross" : "",
+                      rivalSlot && rivalSlot.key === selectedKey ? "dd-cell-selected" : "",
+                    ].join(" ")}
+                    style={{ textAlign: "center", cursor: rivalSlot ? "pointer" : "default" }}
+                    onClick={() => rivalSlot && setSelectedKey(rivalSlot.key)}
+                    title={
+                      h.crossTerm
+                        ? `Our best (£${h.tf!.monthly.toFixed(2)} at ${h.tf!.term}mo) wins its term, but ${h.rival!.broker} is £${h.rival!.monthly.toFixed(2)} at ${h.rival!.term}mo.`
+                        : undefined
+                    }
+                  >
+                    <div style={{ fontWeight: 600, color: "var(--text)" }}>
+                      {h.tf ? `£${h.tf.monthly.toFixed(0)} · ${h.tf.term}mo` : "Not listed"}
+                    </div>
+                    {h.rival && (
+                      <div style={{ fontSize: 10, color: "var(--text3)" }}>
+                        Rival £{h.rival.monthly.toFixed(0)} · {h.rival.term}mo
+                      </div>
+                    )}
+                    {h.gap !== null && (
+                      <div style={{ fontSize: 10, color: gapColor(h.gap), fontWeight: 600 }}>
+                        {h.crossTerm ? "⚠ " : ""}
+                        {gapStr(h.gap)}
+                      </div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
           </tbody>
         </table>
       </div>
@@ -893,7 +1168,10 @@ function DeepDiveView({
       {selected ? (
         <BrokerPanel slot={selected} onClose={() => setSelectedKey(null)} />
       ) : (
-        <div className="dd-hint">Click a cell to see every broker on that exact profile.</div>
+        <div className="dd-hint">
+          Click a cell to see every broker on that exact profile. Click a headline to see the
+          brokers on the term the cheapest rival price comes from.
+        </div>
       )}
     </>
   );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { scraperRuns, scraperResults, scraperLogs } from "@/db/schema";
+import { scraperRuns, scraperResults, scraperLogs, scraperRunSummaries } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { eq } from "drizzle-orm";
@@ -18,6 +18,7 @@ export async function DELETE(
 
     await db.delete(scraperLogs).where(eq(scraperLogs.runId, runId));
     await db.delete(scraperResults).where(eq(scraperResults.runId, runId));
+    await db.delete(scraperRunSummaries).where(eq(scraperRunSummaries.runId, runId));
     await db.delete(scraperRuns).where(eq(scraperRuns.id, runId));
 
     return NextResponse.json({ ok: true });

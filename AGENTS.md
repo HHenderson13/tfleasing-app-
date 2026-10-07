@@ -42,6 +42,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/funders/snapshot`            | `requireAdmin`                 |
 | `/api/broker-ratebooks/*`          | `requireAdmin`                 |
 | `/api/scraper/*` (except upload)   | `requireAdmin`                 |
+| `/api/scraper/trends`             | `requireAdmin` (cached run digests; see Market analysis) |
 | `/api/scraper/upload`              | `requireAdmin` OR `x-api-key` matching `SCRAPER_API_KEY` (middleware validates the value) |
 | `/api/cron/daily-summary`          | `CRON_SECRET` header (Vercel cron) |
 | `/api/cron/daily-preview`          | `requireAdmin` |
@@ -687,6 +688,45 @@ profile, holding **at most one offer per broker**.
   our side ("-£9" = £9 worse). Rank counts competitors strictly cheaper, so a
   tie still reads #1. Terms and mileages come from the data, not a fixed
   24/36/48 list; older runs have 18-month deals.
+- **Ranges are renamed where leasing.com's are misleading** (`rangeOf`). The
+  van Explorer reads as **Explorer Van**, and electric vans get their own
+  range — **E-Transit Custom**, **E-Transit Courier** — rather than sitting
+  inside the diesel/PHEV card (3,174 EV rows in Transit Custom on 7 Oct).
+  Range names are in every slot key, so Trends depends on this staying
+  stable run to run.
+- **"[NI]" derivatives are separate vehicles, not duplicates.** Only Carwow
+  Leasey lists them, and they average £82/mo more than their un-suffixed twin
+  from the same broker. Don't merge them.
+- **Headline price** (`buildHeadlines`): per vehicle + mileage (+ upfront +
+  finance), our cheapest monthly at ANY term vs the cheapest any rival offers
+  at any term — what a customer compares first on leasing.com. `crossTerm` is
+  the case the user asked for (2026-10-07): our best price wins its own term,
+  and a rival is still cheaper on a different term ("mega cheap on 2 years,
+  cheaper than our 3 and 4"). No term-by-term view can show it. It is rare
+  while 48 months is nearly always the cheapest monthly; plain headline
+  losses are common.
+
+### Trends tab
+
+Kept as its **own tab on purpose** — the user's instruction was that the
+over-time view must not change the Intelligence view.
+
+- **Position over time** plots one point per run from per-run digests
+  (`summariseRun`), cached in `scraper_run_summaries`. A digest is rebuilt
+  when the run's `total_results` or `RUN_SUMMARY_VERSION` differs. **Bump
+  `RUN_SUMMARY_VERSION` whenever slot, headline or range logic changes**, or
+  the history will mix figures computed two different ways. The first visit
+  after a bump rebuilds every run (~7s locally for 30 runs; longer on Turso).
+- Runs don't all search the same URLs (the 6–7 Oct runs covered ~2,700 van
+  combos, the 7 Oct evening run 4,393), so the combo count is in every chart
+  tooltip. A dip on a thin run is not a trend.
+- **What changed** compares two runs on slots present in BOTH, and gives a
+  cause for each lead change (`compareSlots`): we rose / we cut, a rival cut
+  / rose / left, or a new rival. Default pair is the latest run vs the
+  latest one at least six days older — repeat runs on the same day make
+  "previous run" nearly always "nothing changed".
+- `scraper/run-cache.ts` holds the last three runs client-side, so moving
+  between Intelligence and Trends doesn't re-download ~4MB each time.
 
 ## Sales leaderboard (Pole Position)
 

@@ -9,13 +9,15 @@ import { signOutAction } from "../login/actions";
 // tab. IntelligencePanel alone is ~800 lines; deferring Results + History
 // trims roughly 60% off the scraper page's initial bundle.
 const IntelligencePanel = dynamic(() => import("./panels/IntelligencePanel").then((m) => ({ default: m.IntelligencePanel })));
+const TrendsPanel       = dynamic(() => import("./panels/TrendsPanel").then((m) => ({ default: m.TrendsPanel })));
 const ResultsPanel      = dynamic(() => import("./panels/ResultsPanel").then((m) => ({ default: m.ResultsPanel })));
 const HistoryPanel      = dynamic(() => import("./panels/HistoryPanel").then((m) => ({ default: m.HistoryPanel })));
 
-type TabName = "intelligence" | "results" | "history";
+type TabName = "intelligence" | "trends" | "results" | "history";
 
 const TABS: Array<{ id: TabName; label: string }> = [
   { id: "intelligence", label: "Intelligence" },
+  { id: "trends", label: "Trends" },
   { id: "results", label: "Results" },
   { id: "history", label: "History" },
 ];
@@ -64,6 +66,9 @@ export function ScraperClient({ userName }: { userName: string }) {
                   onSelectRun={setActiveRunId}
                 />
               )}
+            </div>
+            <div className={`panel ${activeTab === "trends" ? "active" : ""}`}>
+              {activeTab === "trends" && <TrendsPanel />}
             </div>
             <div className={`panel ${activeTab === "results" ? "active" : ""}`}>
               {activeTab === "results" && (

@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 49;
+const SCHEMA_VERSION = 50;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -617,6 +617,15 @@ async function ensureScraperTables() {
       name TEXT NOT NULL,
       urls TEXT NOT NULL,
       created_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS scraper_run_summaries (
+      run_id TEXT PRIMARY KEY,
+      total_results INTEGER NOT NULL,
+      version INTEGER NOT NULL,
+      summary TEXT NOT NULL,
+      computed_at INTEGER NOT NULL
     )
   `));
 }

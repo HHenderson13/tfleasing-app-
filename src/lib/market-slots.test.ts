@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildHeadlines,
   buildSlots,
   competitorTable,
   dedupeListings,
   distinctNumeric,
+  rangeOf,
   segmentOf,
   summarise,
+  summariseHeadlines,
   vehicleTable,
   type Listing,
 } from "./market-slots";
@@ -202,5 +205,115 @@ describe("summaries", () => {
       row({ contractLengthMonths: 36 }),
     ]);
     expect(distinctNumeric(s, (x) => x.term)).toEqual(["18", "36", "48"]);
+  });
+});
+
+describe("rangeOf", () => {
+  it("names the Explorer van apart from the Explorer car", () => {
+    // leasing.com files both under "Explorer".
+    expect(rangeOf({ range: "Explorer", model: "Explorer Electric", segment: "van" })).toBe("Explorer Van");
+    expect(rangeOf({ range: "Explorer", model: "Explorer Estate", segment: "car" })).toBe("Explorer");
+  });
+
+  it("gives electric vans their own range", () => {
+    expect(rangeOf({ range: "Transit Custom", model: "E-Transit Custom 320 L1 Electric Awd", segment: "van" })).toBe("E-Transit Custom");
+    expect(rangeOf({ range: "Transit Courier", model: "E-Transit Courier", segment: "van" })).toBe("E-Transit Courier");
+    expect(rangeOf({ range: "Transit Custom", model: "Transit Custom 320 L1 Fwd", segment: "van" })).toBe("Transit Custom");
+  });
+
+  it("leaves commercial ranges alone", () => {
+    for (const range of ["Ranger", "Transit Connect", "Transit City", "Transit Courier"]) {
+      expect(rangeOf({ range, model: range, segment: "van" })).toBe(range);
+    }
+  });
+
+  it("keeps the two Explorers in separate slots", () => {
+    const slots = buildSlots([
+      row({ segment: "car", range: "Explorer", model: "Explorer Estate", derivative: "X" }),
+      row({ segment: "van", range: "Explorer", model: "Explorer Electric", derivative: "X" }),
+    ]);
+    expect(slots.map((s) => s.range).sort()).toEqual(["Explorer", "Explorer Van"]);
+  });
+});
+
+describe("headline price", () => {
+  // We win 36 and 48 like-for-like, but Select's 24-month price is below our
+  // cheapest at any term — the case the term-by-term view hides.
+  const masked = () =>
+    buildSlots([
+      row({ contractLengthMonths: 24, monthlyPriceGbp: 520 }),
+      row({ contractLengthMonths: 24, brokerDealerName: "Select", monthlyPriceGbp: 399, dealIdentifier: "S24" }),
+      row({ contractLengthMonths: 36, monthlyPriceGbp: 450 }),
+      row({ contractLengthMonths: 36, brokerDealerName: "Select", monthlyPriceGbp: 470, dealIdentifier: "S36" }),
+      row({ contractLengthMonths: 48, monthlyPriceGbp: 420 }),
+      row({ contractLengthMonths: 48, brokerDealerName: "Select", monthlyPriceGbp: 440, dealIdentifier: "S48" }),
+    ]);
+
+  it("compares our cheapest at any term with the cheapest rival at any term", () => {
+    const [h] = buildHeadlines(masked());
+    expect(h.tf).toEqual({ monthly: 420, term: "48", broker: "TrustFord Transit Centre" });
+    expect(h.rival).toEqual({ monthly: 399, term: "24", broker: "Select" });
+    expect(h.gap).toBeCloseTo(21);
+  });
+
+  it("flags winning like-for-like while losing the headline", () => {
+    const [h] = buildHeadlines(masked());
+    expect(h.termsWon).toEqual(["36", "48"]);
+    expect(h.masked).toBe(true);
+    // Our best (48) wins 48 like-for-like; Select's 24 still undercuts it.
+    expect(h.crossTerm).toBe(true);
+  });
+
+  it("is masked but not cross-term when the headline is lost on our own best term", () => {
+    // We win 24, but our cheapest is 48 and Select beats us at 48 directly —
+    // the term view already shows that loss.
+    const [h] = buildHeadlines(
+      buildSlots([
+        row({ contractLengthMonths: 24, monthlyPriceGbp: 500 }),
+        row({ contractLengthMonths: 24, brokerDealerName: "Select", monthlyPriceGbp: 510, dealIdentifier: "S24" }),
+        row({ contractLengthMonths: 48, monthlyPriceGbp: 430 }),
+        row({ contractLengthMonths: 48, brokerDealerName: "Select", monthlyPriceGbp: 420, dealIdentifier: "S48" }),
+      ])
+    );
+    expect(h.masked).toBe(true);
+    expect(h.crossTerm).toBe(false);
+  });
+
+  it("is not masked when we hold the lowest headline", () => {
+    const [h] = buildHeadlines(
+      buildSlots([
+        row({ contractLengthMonths: 48, monthlyPriceGbp: 390 }),
+        row({ contractLengthMonths: 24, brokerDealerName: "Select", monthlyPriceGbp: 399, dealIdentifier: "S" }),
+      ])
+    );
+    expect(h.gap).toBeCloseTo(-9);
+    expect(h.masked).toBe(false);
+  });
+
+  it("is a plain loss, not masked, when we win no term", () => {
+    const [h] = buildHeadlines(
+      buildSlots([
+        row({ contractLengthMonths: 48, monthlyPriceGbp: 450 }),
+        row({ contractLengthMonths: 48, brokerDealerName: "Select", monthlyPriceGbp: 440, dealIdentifier: "S" }),
+      ])
+    );
+    expect(h.gap).toBeCloseTo(10);
+    expect(h.termsWon).toEqual([]);
+    expect(h.masked).toBe(false);
+  });
+
+  it("keeps mileages apart — the customer has already chosen one", () => {
+    const hs = buildHeadlines(
+      buildSlots([row({ annualMileage: 5000 }), row({ annualMileage: 10000 })])
+    );
+    expect(hs).toHaveLength(2);
+  });
+
+  it("summarises lowest and masked over headlines both sides price", () => {
+    const hs = [
+      ...buildHeadlines(masked()),
+      ...buildHeadlines(buildSlots([row({ annualMileage: 8000, monthlyPriceGbp: 300 })])), // TF only
+    ];
+    expect(summariseHeadlines(hs)).toMatchObject({ compared: 1, lowest: 0, masked: 1, crossTerm: 1 });
   });
 });

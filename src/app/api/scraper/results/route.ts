@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { scraperRuns, scraperResults } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
-import { segmentOf } from "@/lib/market-slots";
+import { LISTING_COLUMNS, toListing } from "@/lib/scraper-listings";
 import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -91,36 +91,10 @@ export async function GET(req: NextRequest) {
     const totalNum = Number(total);
     const pages = Math.max(1, Math.ceil(totalNum / perPage));
 
-    // Slim mode returns the columns needed for the Intelligence panel
-    // (including drill-down broker table). Drops trim, fuel_type,
-    // transmission, scraped_at, leasing_url and additional_fees_gbp, none of
-    // which the intel views render.
-    //
-    // source_url and body_style are read only to classify car vs van — the
-    // range can't ("Explorer" is both) — and are not sent. deal_identifier IS
-    // sent: the panel drops a deal scraped twice by two overlapping search
-    // URLs, which needs it. See lib/market-slots.ts.
+    // Slim mode returns what Market Analysis reads — see LISTING_COLUMNS.
     if (slim) {
       const rows = await db
-        .select({
-          id: scraperResults.id,
-          sourceUrl: scraperResults.sourceUrl,
-          bodyStyle: scraperResults.bodyStyle,
-          range: scraperResults.range,
-          model: scraperResults.model,
-          derivative: scraperResults.derivative,
-          contractLengthMonths: scraperResults.contractLengthMonths,
-          annualMileage: scraperResults.annualMileage,
-          monthlyPriceGbp: scraperResults.monthlyPriceGbp,
-          initialRentalGbp: scraperResults.initialRentalGbp,
-          totalLeaseCostGbp: scraperResults.totalLeaseCostGbp,
-          depositMonths: scraperResults.depositMonths,
-          brokerDealerName: scraperResults.brokerDealerName,
-          advertiserCategory: scraperResults.advertiserCategory,
-          inStock: scraperResults.inStock,
-          financeType: scraperResults.financeType,
-          dealIdentifier: scraperResults.dealIdentifier,
-        })
+        .select(LISTING_COLUMNS)
         .from(scraperResults)
         .where(eq(scraperResults.runId, runId))
         .orderBy(scraperResults.id)
@@ -128,10 +102,7 @@ export async function GET(req: NextRequest) {
         .offset((page - 1) * perPage);
 
       return NextResponse.json({
-        results: rows.map(({ sourceUrl, bodyStyle, ...r }) => ({
-          ...r,
-          segment: segmentOf(sourceUrl, bodyStyle),
-        })),
+        results: rows.map(toListing),
         total: totalNum,
         page,
         pages,

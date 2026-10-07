@@ -68,6 +68,24 @@ function k(v: unknown): string {
   return v === null || v === undefined ? "" : String(v).trim();
 }
 
+// The range as TF talks about it, which is not always leasing.com's:
+//  • A van filed under a car's range is the van version. leasing.com puts
+//    the Explorer Electric van under "Explorer", beside the Explorer car; it
+//    reads as "Explorer Van" here, the name the stock list already uses.
+//  • Electric vans are their own range. leasing.com files the E-Transit
+//    Custom under "Transit Custom", where 3,174 EV listings at EV prices sat
+//    inside the diesel/PHEV card (7 Oct 2026 run). Same for E-Transit Courier.
+// Range names feed every slot key, so this must stay stable from run to run
+// for Trends to line up.
+const COMMERCIAL_RANGE = /transit|ranger|tourneo|\bvan\b/i;
+
+export function rangeOf(r: Pick<Listing, "range" | "model" | "segment">): string {
+  const range = k(r.range) || "Unknown";
+  if (r.segment !== "van") return range;
+  if (k(r.model).toLowerCase().startsWith(`e-${range.toLowerCase()}`)) return `E-${range}`;
+  return COMMERCIAL_RANGE.test(range) ? range : `${range} Van`;
+}
+
 // The payment profile: everything that changes the price of one vehicle.
 function profileParts(r: Listing): string[] {
   return [k(r.contractLengthMonths), k(r.annualMileage), k(r.depositMonths), k(r.financeType)];
@@ -96,7 +114,7 @@ export function vehicleKeyOf(r: Pick<Listing, "model" | "derivative">): string {
 }
 
 export function slotKeyOf(r: Listing): string {
-  return [r.segment ?? "", k(r.range), vehicleKeyOf(r), ...profileParts(r)].join("||");
+  return [r.segment ?? "", rangeOf(r), vehicleKeyOf(r), ...profileParts(r)].join("||");
 }
 
 export interface Offer {
@@ -178,7 +196,7 @@ export function buildSlots(rows: Listing[]): Slot[] {
     slots.push({
       key,
       segment: first.segment ?? "car",
-      range: k(first.range) || "Unknown",
+      range: rangeOf(first),
       model: k(first.model),
       derivative: k(first.derivative),
       vehicleKey: vehicleKeyOf(first),
@@ -300,4 +318,119 @@ export function vehicleTable(slots: Slot[]): VehicleRow[] {
     });
   }
   return out;
+}
+
+// HEADLINE PRICE. Like-for-like is how we price; it is not how a customer
+// shops. On leasing.com they see each broker's cheapest monthly for the
+// vehicle, at whatever term makes it lowest, before they ever line terms up.
+// A rival who is very cheap on 24 months can take the enquiry even where we
+// are cheapest like-for-like on 36 and 48.
+//
+// So a headline compares, per vehicle and mileage (upfront and finance too,
+// which the customer has already chosen), OUR lowest monthly at any term with
+// the lowest ANY rival offers at any term. `masked` is the case that matters
+// most: we win at least one term like-for-like, so every term-by-term view
+// says we're fine, and a rival's headline still undercuts ours.
+
+export interface HeadlineOffer {
+  monthly: number;
+  term: string;
+  broker: string;
+}
+
+export interface Headline {
+  key: string;
+  segment: Segment;
+  range: string;
+  model: string;
+  derivative: string;
+  vehicleKey: string;
+  mileage: string;
+  upfront: string;
+  finance: string;
+  tf: HeadlineOffer | null;     // our cheapest at any term
+  rival: HeadlineOffer | null;  // the cheapest any rival offers at any term
+  gap: number | null;           // tf - rival. Positive = beaten on headline.
+  termsWon: string[];           // terms where we are cheapest like-for-like
+  masked: boolean;              // win a term like-for-like, lose the headline
+  // The sharpest form: our best price WINS its own term, and is still beaten
+  // by a rival's price on another term ("they're mega cheap on 2 years,
+  // cheaper than our 3 and 4"). No term-by-term view can show it, because
+  // the two prices never sit in the same column.
+  crossTerm: boolean;
+}
+
+function cheaper(cur: HeadlineOffer | null, o: Offer, term: string): HeadlineOffer {
+  return cur && cur.monthly <= o.monthly ? cur : { monthly: o.monthly, term, broker: o.broker };
+}
+
+export function buildHeadlines(slots: Slot[]): Headline[] {
+  const out: Headline[] = [];
+  const groups = groupBy(slots, (s) =>
+    [s.segment, s.range, s.vehicleKey, s.mileage, s.upfront, s.finance].join("||")
+  );
+  for (const [key, ss] of groups) {
+    let tf: HeadlineOffer | null = null;
+    let rival: HeadlineOffer | null = null;
+    const termsWon: string[] = [];
+    for (const s of ss) {
+      if (s.tf) tf = cheaper(tf, s.tf, s.term);
+      if (s.best) rival = cheaper(rival, s.best, s.term);
+      if (s.tf && s.best && s.rank === 1) termsWon.push(s.term);
+    }
+    termsWon.sort((a, b) => Number(a) - Number(b));
+    const gap = tf && rival ? tf.monthly - rival.monthly : null;
+    const f = ss[0];
+    out.push({
+      key,
+      segment: f.segment,
+      range: f.range,
+      model: f.model,
+      derivative: f.derivative,
+      vehicleKey: f.vehicleKey,
+      mileage: f.mileage,
+      upfront: f.upfront,
+      finance: f.finance,
+      tf,
+      rival,
+      gap,
+      termsWon,
+      masked: gap !== null && gap > 0 && termsWon.length > 0,
+      crossTerm: gap !== null && gap > 0 && !!tf && termsWon.includes(tf.term),
+    });
+  }
+  return out;
+}
+
+export interface HeadlineSummary {
+  compared: number;       // headlines where we and a rival are both priced
+  lowest: number;         // of those, where nobody's headline is below ours
+  masked: number;         // of those, beaten on headline while winning a term
+  crossTerm: number;      // of those, our best price wins its term and still loses
+  tfAvg: number | null;
+  rivalAvg: number | null;
+  gap: number | null;
+}
+
+export function summariseHeadlines(hs: Headline[]): HeadlineSummary {
+  let compared = 0, lowest = 0, masked = 0, crossTerm = 0, tfSum = 0, rivalSum = 0;
+  for (const h of hs) {
+    if (!h.tf || !h.rival) continue;
+    compared++;
+    tfSum += h.tf.monthly;
+    rivalSum += h.rival.monthly;
+    if (h.gap! <= 0) lowest++;
+    if (h.masked) masked++;
+    if (h.crossTerm) crossTerm++;
+  }
+  if (compared === 0) return { compared, lowest, masked, crossTerm, tfAvg: null, rivalAvg: null, gap: null };
+  return {
+    compared,
+    lowest,
+    masked,
+    crossTerm,
+    tfAvg: tfSum / compared,
+    rivalAvg: rivalSum / compared,
+    gap: (tfSum - rivalSum) / compared,
+  };
 }

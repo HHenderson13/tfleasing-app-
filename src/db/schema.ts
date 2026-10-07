@@ -519,6 +519,18 @@ export const scraperUrlLists = sqliteTable("scraper_url_lists", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+// A cache of each run's Market Analysis digest (lib/market-trends.ts), so the
+// Trends history doesn't reload ~30k rows per run plotted. Rebuilt whenever
+// the run's row count or RUN_SUMMARY_VERSION no longer matches — a run still
+// uploading in chunks, or a change to how slots are worked out.
+export const scraperRunSummaries = sqliteTable("scraper_run_summaries", {
+  runId: text("run_id").primaryKey(),
+  totalResults: integer("total_results").notNull(),
+  version: integer("version").notNull(),
+  summary: text("summary").notNull(), // JSON RunSummary
+  computedAt: integer("computed_at", { mode: "timestamp" }).notNull(),
+});
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
