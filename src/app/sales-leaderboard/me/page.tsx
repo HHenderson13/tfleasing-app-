@@ -21,7 +21,7 @@ const METRIC_META: { key: LeaderboardMetric; label: string; tone: string; format
   { key: "orders",     label: "Order Take",        tone: "from-amber-500 to-orange-500", format: (n) => String(n) },
   { key: "deliveries", label: "Deliveries",        tone: "from-emerald-500 to-teal-500", format: (n) => String(n) },
   { key: "insurance",  label: "Insurance Products", tone: "from-violet-500 to-fuchsia-500", format: (n) => String(n) },
-  { key: "conversion", label: "Conversion %",      tone: "from-sky-500 to-indigo-500", format: (n) => `${n.toFixed(1)}%` },
+  { key: "conversion", label: "Inbound Conversion %", tone: "from-sky-500 to-indigo-500", format: (n) => `${n.toFixed(1)}%` },
 ];
 
 const TROPHIES: Record<1 | 2 | 3, string> = { 1: "🏆", 2: "🥈", 3: "🥉" };
@@ -204,7 +204,8 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
 
 function computeDeptAverages(rows: ExecMonthStats[]): Record<LeaderboardMetric, number> {
   if (rows.length === 0) return { orders: 0, deliveries: 0, insurance: 0, conversion: 0 };
-  // Conversion is the department's own rate (all sales ÷ all enquiries),
+  // Inbound Conversion is the department's own rate (inbound sales ÷
+  // inbound enquiries),
   // the same figure the leaderboard shows as the team total. Averaging the
   // per-exec percentages counted everyone without enquiries as a 0%.
   const enquiries = rows.reduce((a, r) => a + r.enquiryCount, 0);

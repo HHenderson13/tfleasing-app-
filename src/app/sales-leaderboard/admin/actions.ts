@@ -18,6 +18,7 @@ import { logError } from "@/lib/logger";
 import { del } from "@vercel/blob";
 import {
   attributeReportRows,
+  enquiryInbound,
   enquirySales,
   parseDeliveredList,
   parseEnquiryLog,
@@ -263,6 +264,10 @@ async function attributeUpload(
     } else {
       setFields.enquiryCount = vals.enquiryCount;
       setFields.salesCount = vals.salesCount;
+      // Written every time, NULL included, so a re-processed old upload
+      // clears an inbound figure rather than leaving a stale one behind.
+      setFields.inboundEnquiryCount = vals.inboundEnquiryCount;
+      setFields.inboundSalesCount = vals.inboundSalesCount;
       setFields.enquiriesUpdatedAt = now;
     }
     writes.push(
@@ -370,11 +375,17 @@ export async function loadUploadDetailAction(input: { yearMonth: string; reportT
   const activeIds = new Set(participantRows.filter((p) => p.active).map((p) => p.salesExecId));
   const execNameById = new Map(execRows.map((e) => [e.id, e.name]));
 
+  // Enquiry logs show the inbound (MotorComplete) figures, which are what
+  // reach the board. An upload parsed before sources were read can only
+  // show the all-source counts, labelled as such.
+  const hasSources = reportType === "enquiry" && (parsedRows as EnquiryParseRow[]).every((r) => r.sourceStatusCounts);
   const labels = reportType === "orders"
     ? { primary: "Orders", secondary: null }
     : reportType === "delivered"
       ? { primary: "Deliveries", secondary: "Insurance" }
-      : { primary: "Enquiries", secondary: "Sales" };
+      : hasSources
+        ? { primary: "Inbound enquiries", secondary: "Inbound sales" }
+        : { primary: "All enquiries (re-upload for inbound)", secondary: "All sales" };
 
   const rows: UploadDetailRow[] = parsedRows.map((r) => {
     let primary = 0;
@@ -385,8 +396,9 @@ export async function loadUploadDetailAction(input: { yearMonth: string; reportT
       primary = (r as DeliveredParseRow).deliveryCount;
       secondary = (r as DeliveredParseRow).insuranceCount;
     } else {
-      primary = (r as EnquiryParseRow).enquiryCount;
-      secondary = enquirySales(r as EnquiryParseRow);
+      const inbound = enquiryInbound(r as EnquiryParseRow);
+      primary = inbound ? inbound.enquiries : (r as EnquiryParseRow).enquiryCount;
+      secondary = inbound ? inbound.sales : enquirySales(r as EnquiryParseRow);
     }
     const execId = codeToExec.get(r.reportCode) ?? null;
     let status: UploadDetailRow["status"];
@@ -425,7 +437,7 @@ export async function loadAdminContext() {
     db.select().from(salesExecs).orderBy(salesExecs.name),
     db.select().from(salesLeaderboardParticipants),
     db.select().from(salesLeaderboardNameMap),
-    db.all<{ year_month: string; report_type: string; uploaded_at: number; row_count: number; has_parsed: number }>(sql`
+    db.all<{ year_month: string; report_type: string; uploaded_at: number; row_count: number; has_parsed: number; has_sources: number }>(sql`
       SELECT year_month, report_type, MAX(uploaded_at) as uploaded_at,
              (SELECT row_count FROM sales_leaderboard_uploads u2
                WHERE u2.year_month = u.year_month AND u2.report_type = u.report_type
@@ -433,7 +445,11 @@ export async function loadAdminContext() {
              (SELECT CASE WHEN parsed_data IS NOT NULL THEN 1 ELSE 0 END
                 FROM sales_leaderboard_uploads u3
                 WHERE u3.year_month = u.year_month AND u3.report_type = u.report_type
-                ORDER BY u3.uploaded_at DESC LIMIT 1) as has_parsed
+                ORDER BY u3.uploaded_at DESC LIMIT 1) as has_parsed,
+             (SELECT CASE WHEN parsed_data LIKE '%"sourceStatusCounts"%' THEN 1 ELSE 0 END
+                FROM sales_leaderboard_uploads u4
+                WHERE u4.year_month = u.year_month AND u4.report_type = u.report_type
+                ORDER BY u4.uploaded_at DESC LIMIT 1) as has_sources
       FROM sales_leaderboard_uploads u
       GROUP BY year_month, report_type
       ORDER BY year_month DESC, report_type ASC
@@ -456,6 +472,9 @@ export async function loadAdminContext() {
       uploadedAt: new Date(Number(u.uploaded_at) * 1000).toISOString(),
       rowCount: Number(u.row_count),
       hasParsedData: Number(u.has_parsed) === 1,
+      // Enquiry logs only: false means the month has no Inbound Conversion
+      // until the log is uploaded again.
+      hasSourceData: Number(u.has_sources) === 1,
     })),
   };
 }

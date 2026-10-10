@@ -732,11 +732,32 @@ over-time view must not change the Intelligence view.
 
 `/sales-leaderboard` scores execs 3/2/1 per metric from three Dealerweb
 exports uploaded per month at `/sales-leaderboard/admin`: order list
-(Orders), delivered list (Deliveries, Insurance), enquiry log (Conversion).
-Parsing, attribution and scoring are pure, in `lib/sales-leaderboard.ts`.
+(Orders), delivered list (Deliveries, Insurance), enquiry log (Inbound
+Conversion). Parsing, attribution and scoring are pure, in
+`lib/sales-leaderboard.ts`.
 
-- **Conversion % comes from the enquiry log alone**: enquiries in that
-  export whose Status (column Q) is a sale ÷ all their enquiries in it. It
+- **Inbound Conversion counts MotorComplete enquiries only** (user's rule,
+  2026-10-10): column E (Source) of the enquiry log must be a MotorComplete
+  feed — "MotorComplete Lead", "- Leasing.com", "- LeaseLoco", "- carwow".
+  `isInboundSource` matches the letters-only prefix `motorcomplete`, so a new
+  MotorComplete feed counts without a code change; Customer, Broker
+  Introduction, FR website and the like are left out, on both sides of the
+  fraction. Expect it to move individual execs a lot: LoBa's October read
+  31% all-source and 0% inbound, every sale having come from a Customer or
+  Broker lead.
+- Inbound counts live in their own columns (`inbound_enquiry_count`,
+  `inbound_sales_count` on `sales_leaderboard_monthly`), apart from the
+  all-source `enquiry_count` / `sales_count`, and **NULL means unknown**: an
+  enquiry log parsed before column E was read has no `sourceStatusCounts`,
+  so its month reads "—" rather than all-source numbers under an Inbound
+  label. The admin Uploads tab flags those months "Re-upload for Inbound
+  Conversion". `ExecMonthStats.enquiryCount` / `salesCount` carry the
+  inbound figures — the board, /me, coaching cards and dept trend all read
+  conversion from them.
+
+- **Conversion % comes from the enquiry log alone**: inbound enquiries in
+  that export whose Status (column Q) is a sale ÷ all their inbound
+  enquiries in it. It
   is NOT orders ÷ enquiries, so an exec can have orders on the board and a
   low or 0% conversion. That is a true result when those orders came from
   leads raised before the export's window (or from repeat customers) —

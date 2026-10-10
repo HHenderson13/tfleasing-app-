@@ -112,8 +112,8 @@ export const loadMonthSnapshot = unstable_cache(
       base.orderCount = m.orderCount ?? 0;
       base.deliveryCount = m.deliveryCount ?? 0;
       base.insuranceCount = m.insuranceCount ?? 0;
-      base.enquiryCount = m.enquiryCount ?? 0;
-      base.salesCount = m.salesCount ?? 0;
+      base.enquiryCount = m.inboundEnquiryCount ?? 0;
+      base.salesCount = m.inboundSalesCount ?? 0;
       base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
       base.latestVehicle = m.latestVehicle ?? null;
       return base;
@@ -132,8 +132,8 @@ export const loadMonthSnapshot = unstable_cache(
 );
 
 // YTD across the calendar year of `upToYearMonth`. We sum the per-month
-// counts (orders, deliveries, insurance, enquiries, sales) and recompute
-// conversion from the YTD enquiry/sales totals — points are awarded against
+// counts (orders, deliveries, insurance, inbound enquiries and sales) and
+// recompute Inbound Conversion from the YTD totals — points are awarded against
 // the YTD aggregates. Cached with the leaderboard tag.
 export const loadYtdSnapshot = unstable_cache(
   async (upToYearMonth: string): Promise<LeaderboardSnapshot> => {
@@ -163,8 +163,10 @@ export const loadYtdSnapshot = unstable_cache(
     cur.orders     += m.orderCount     ?? 0;
     cur.deliveries += m.deliveryCount  ?? 0;
     cur.insurance  += m.insuranceCount ?? 0;
-    cur.enquiries  += m.enquiryCount   ?? 0;
-    cur.sales      += m.salesCount     ?? 0;
+    // Inbound only. A month with no source data adds nothing, so YTD
+    // Inbound Conversion covers the months that can actually be measured.
+    cur.enquiries  += m.inboundEnquiryCount ?? 0;
+    cur.sales      += m.inboundSalesCount   ?? 0;
     if (m.latestVehicle && (cur.latestVehicleMonth === null || m.yearMonth > cur.latestVehicleMonth)) {
       cur.latestVehicle = m.latestVehicle;
       cur.latestVehicleMonth = m.yearMonth;
@@ -227,8 +229,8 @@ export interface MonthlyTrendCell {
   orderCount: number;
   deliveryCount: number;
   insuranceCount: number;
-  enquiryCount: number;
-  salesCount: number;
+  enquiryCount: number;   // inbound (MotorComplete) only
+  salesCount: number;     // sales among those inbound enquiries
 }
 
 export interface DeptDashboard {
@@ -285,7 +287,7 @@ export const loadDeptDashboard = unstable_cache(
     { label: "Deliveries", current: curTotals.deliveries, previous: prevTotals.deliveries, format: "int" },
     { label: "Insurance products", current: curTotals.insurance, previous: prevTotals.insurance, format: "int" },
     {
-      label: "Dept conversion %",
+      label: "Dept inbound conversion %",
       current:  curTotals.enquiries  > 0 ? (curTotals.sales  / curTotals.enquiries)  * 100 : 0,
       previous: prevTotals.enquiries > 0 ? (prevTotals.sales / prevTotals.enquiries) * 100 : 0,
       format: "pct",
@@ -316,7 +318,7 @@ export const loadDeptDashboard = unstable_cache(
   }
 
   const coachingFocus: CoachingFocus[] = [
-    pickPair("conversion", "Conversion %",       (s) => s.conversionPct,    (s) => `${s.conversionPct.toFixed(1)}%`, (s) => s.enquiryCount > 0),
+    pickPair("conversion", "Inbound Conversion %", (s) => s.conversionPct,    (s) => `${s.conversionPct.toFixed(1)}%`, (s) => s.enquiryCount > 0),
     pickPair("attach",     "Insurance attach",   (s) => s.deliveryCount > 0 ? s.insuranceCount / s.deliveryCount : 0,
                                                  (s) => s.deliveryCount > 0 ? `${(s.insuranceCount / s.deliveryCount).toFixed(2)}/del` : "—",
                                                  (s) => s.deliveryCount > 0),
@@ -340,8 +342,8 @@ export const loadDeptDashboard = unstable_cache(
       cell.orderCount     += m.orderCount     ?? 0;
       cell.deliveryCount  += m.deliveryCount  ?? 0;
       cell.insuranceCount += m.insuranceCount ?? 0;
-      cell.enquiryCount   += m.enquiryCount   ?? 0;
-      cell.salesCount     += m.salesCount     ?? 0;
+      cell.enquiryCount   += m.inboundEnquiryCount ?? 0;
+      cell.salesCount     += m.inboundSalesCount   ?? 0;
     }
     return cell;
   });
@@ -396,8 +398,8 @@ export const loadChampionArchive = unstable_cache(
       base.orderCount = m.orderCount ?? 0;
       base.deliveryCount = m.deliveryCount ?? 0;
       base.insuranceCount = m.insuranceCount ?? 0;
-      base.enquiryCount = m.enquiryCount ?? 0;
-      base.salesCount = m.salesCount ?? 0;
+      base.enquiryCount = m.inboundEnquiryCount ?? 0;
+      base.salesCount = m.inboundSalesCount ?? 0;
       base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
       return base;
     });

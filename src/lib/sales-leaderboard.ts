@@ -13,13 +13,17 @@ import * as XLSX from "xlsx";
 //   • delivered_list: count of rows per exec  =  Deliveries
 //                     non-zero values in W:AC =  Insurance Products
 //   • enquiry_log:    count of rows per exec  =  Enquiries
-//                     col Q a sale status     =  Sales (for Conversion %)
+//                     col Q a sale status     =  Sales
+//                     col E a MotorComplete   =  Inbound — the only
+//                       source                   enquiries Inbound
+//                                                Conversion % counts
 //
 // Each parser returns a Map<reportCode, counts>. The admin action maps the
 // codes onto sales_execs IDs using sales_leaderboard_name_map.
 
 const COL_SE = 1;             // column B in every report
 const COL_VEHICLE = 5;        // column F (order_list)
+const COL_ENQ_SOURCE = 4;     // column E (enquiry_log)
 const COL_ENQ_STATUS = 16;    // column Q (enquiry_log)
 const INSURANCE_FIRST = 22;   // W
 const INSURANCE_LAST = 28;    // AC
@@ -34,6 +38,16 @@ export function isSaleStatus(status: string): boolean {
   return SALE_STATUSES.has(status.trim().replace(/\s+/g, " ").toLowerCase());
 }
 
+// Inbound = the enquiry came in through MotorComplete: "MotorComplete Lead",
+// "MotorComplete - Leasing.com", "MotorComplete - LeaseLoco",
+// "MotorComplete - carwow". Matched on letters only, as a prefix, so a new
+// "MotorComplete - <site>" counts without a code change. Everything else in
+// column E (Customer, Broker Introduction, FR website…) is a lead the exec
+// didn't win from the inbound queue, and is left out of Inbound Conversion.
+export function isInboundSource(source: string): boolean {
+  return source.toLowerCase().replace(/[^a-z]/g, "").startsWith("motorcomplete");
+}
+
 export interface OrderListParseRow { reportCode: string; orderCount: number; latestVehicle: string | null }
 export interface DeliveredParseRow { reportCode: string; deliveryCount: number; insuranceCount: number }
 export interface EnquiryParseRow {
@@ -44,6 +58,11 @@ export interface EnquiryParseRow {
   // reaches past months on Re-process instead of needing every enquiry log
   // re-uploaded. Absent on uploads parsed before it existed.
   statusCounts?: Record<string, number>;
+  // Column E source → column Q status → count. Inbound Conversion is derived
+  // from this at attribution time, so the source rule can change and reach
+  // past months on Re-process. Absent on uploads parsed before it existed —
+  // those months have no inbound figure until the enquiry log is re-uploaded.
+  sourceStatusCounts?: Record<string, Record<string, number>>;
 }
 
 // Sales for an enquiry row under the CURRENT status rules. Falls back to
@@ -55,6 +74,24 @@ export function enquirySales(row: EnquiryParseRow): number {
     if (isSaleStatus(status)) n += count;
   }
   return n;
+}
+
+// Inbound (MotorComplete) enquiries and sales for an enquiry row under the
+// CURRENT source + status rules. null when the upload predates the source
+// tally — there is nothing to derive it from, and guessing would put
+// all-source numbers under an "Inbound" label.
+export function enquiryInbound(row: EnquiryParseRow): { enquiries: number; sales: number } | null {
+  if (!row.sourceStatusCounts) return null;
+  let enquiries = 0;
+  let sales = 0;
+  for (const [source, statuses] of Object.entries(row.sourceStatusCounts)) {
+    if (!isInboundSource(source)) continue;
+    for (const [status, count] of Object.entries(statuses)) {
+      enquiries += count;
+      if (isSaleStatus(status)) sales += count;
+    }
+  }
+  return { enquiries, sales };
 }
 
 export interface ParseSummary { rowsTotal: number; rowsAttributed: number }
@@ -138,11 +175,14 @@ export function parseEnquiryLog(buffer: ArrayBuffer): { rows: EnquiryParseRow[];
     const code = execCode(row[COL_SE]);
     if (!code) continue;
     const status = row[COL_ENQ_STATUS] != null ? String(row[COL_ENQ_STATUS]).trim() : "";
-    const cur = counts.get(code) ?? { reportCode: code, enquiryCount: 0, salesCount: 0, statusCounts: {} };
+    const source = row[COL_ENQ_SOURCE] != null ? String(row[COL_ENQ_SOURCE]).trim() : "";
+    const cur = counts.get(code) ?? { reportCode: code, enquiryCount: 0, salesCount: 0, statusCounts: {}, sourceStatusCounts: {} };
     cur.enquiryCount++;
     if (isSaleStatus(status)) cur.salesCount++;
     const tally = cur.statusCounts!;
     tally[status] = (tally[status] ?? 0) + 1;
+    const bySource = (cur.sourceStatusCounts![source] ??= {});
+    bySource[status] = (bySource[status] ?? 0) + 1;
     counts.set(code, cur);
     rowsAttributed++;
   }
@@ -170,6 +210,10 @@ export interface AttributedCounts {
   insuranceCount: number;
   enquiryCount: number;
   salesCount: number;
+  // MotorComplete enquiries and the sales among them. null when the upload
+  // has no source tally, so the month reads "—" rather than a wrong figure.
+  inboundEnquiryCount: number | null;
+  inboundSalesCount: number | null;
 }
 
 export interface Attribution {
@@ -184,9 +228,16 @@ export function attributeReportRows(
   codeToExec: Map<string, string>,
   participantIds: Set<string>,
 ): Attribution {
+  // An upload either carries the source tally on every row or on none (it
+  // depends on when it was parsed), so one check decides for the month.
+  const hasSources = reportType === "enquiry" && rows.every((r) => (r as EnquiryParseRow).sourceStatusCounts);
+  const inboundStart = hasSources ? 0 : null;
   const byExec = new Map<string, AttributedCounts>();
   for (const id of participantIds) {
-    byExec.set(id, { orderCount: 0, latestVehicle: null, deliveryCount: 0, insuranceCount: 0, enquiryCount: 0, salesCount: 0 });
+    byExec.set(id, {
+      orderCount: 0, latestVehicle: null, deliveryCount: 0, insuranceCount: 0, enquiryCount: 0, salesCount: 0,
+      inboundEnquiryCount: inboundStart, inboundSalesCount: inboundStart,
+    });
   }
   const unmappedCounts = new Map<string, number>();
   let matched = 0;
@@ -211,6 +262,11 @@ export function attributeReportRows(
       const e = r as EnquiryParseRow;
       t.enquiryCount += e.enquiryCount;
       t.salesCount += enquirySales(e);
+      const inbound = enquiryInbound(e);
+      if (inbound && t.inboundEnquiryCount !== null && t.inboundSalesCount !== null) {
+        t.inboundEnquiryCount += inbound.enquiries;
+        t.inboundSalesCount += inbound.sales;
+      }
     }
     matched++;
   }
@@ -231,7 +287,8 @@ export function attributeReportRows(
 //   • orders        — higher is better
 //   • deliveries    — higher is better
 //   • insurance     — higher is better
-//   • conversionPct — higher is better (salesCount ÷ enquiryCount)
+//   • conversionPct — higher is better. Inbound Conversion: MotorComplete
+//                     sales ÷ MotorComplete enquiries (see isInboundSource)
 
 export type LeaderboardMetric = "orders" | "deliveries" | "insurance" | "conversion";
 
@@ -242,6 +299,8 @@ export interface ExecMonthStats {
   orderCount: number;
   deliveryCount: number;
   insuranceCount: number;
+  // Inbound (MotorComplete) enquiries and the sales among them — the
+  // only enquiries Inbound Conversion % counts.
   enquiryCount: number;
   salesCount: number;
   conversionPct: number; // salesCount / enquiryCount × 100, 0 when no enquiries
@@ -251,7 +310,7 @@ export interface ExecMonthStats {
   metricRanks: Record<LeaderboardMetric, number | null>; // null when they scored 0 on that metric
 }
 
-// Conversion % for display. "—" when there were no enquiries to convert:
+// Inbound Conversion % for display. "—" when there were no enquiries to convert:
 // 0 of 0 is not a 0% conversion rate, and showing it as one beside an
 // order count is what made the board look broken.
 export function formatConversion(s: Pick<ExecMonthStats, "enquiryCount" | "conversionPct">): string {
@@ -367,7 +426,7 @@ export function closestRace(rows: ExecMonthStats[]): ClosestRace | null {
     { metric: "orders",     label: "Order Take",          pick: (s) => s.orderCount,     gapLabel: (g) => `${g} order${g === 1 ? "" : "s"} apart` },
     { metric: "deliveries", label: "Deliveries",          pick: (s) => s.deliveryCount,  gapLabel: (g) => `${g} deliver${g === 1 ? "y" : "ies"} apart` },
     { metric: "insurance",  label: "Insurance Products",  pick: (s) => s.insuranceCount, gapLabel: (g) => `${g} insurance product${g === 1 ? "" : "s"} apart` },
-    { metric: "conversion", label: "Conversion %",        pick: (s) => s.conversionPct,  gapLabel: (g) => `${g.toFixed(1)} percentage point${g === 1 ? "" : "s"} apart` },
+    { metric: "conversion", label: "Inbound Conversion %", pick: (s) => s.conversionPct, gapLabel: (g) => `${g.toFixed(1)} percentage point${g === 1 ? "" : "s"} apart` },
   ];
 
   let best: ClosestRace | null = null;
@@ -409,7 +468,7 @@ export function overtakeTargets(rows: ExecMonthStats[], me: ExecMonthStats): Ove
     { metric: "orders",     label: "Order Take",          pick: (s) => s.orderCount,     gapLabel: (g) => `${Math.ceil(g)} more order${Math.ceil(g) === 1 ? "" : "s"}` },
     { metric: "deliveries", label: "Deliveries",          pick: (s) => s.deliveryCount,  gapLabel: (g) => `${Math.ceil(g)} more deliver${Math.ceil(g) === 1 ? "y" : "ies"}` },
     { metric: "insurance",  label: "Insurance Products",  pick: (s) => s.insuranceCount, gapLabel: (g) => `${Math.ceil(g)} more product${Math.ceil(g) === 1 ? "" : "s"}` },
-    { metric: "conversion", label: "Conversion %",        pick: (s) => s.conversionPct,  gapLabel: (g) => `${g.toFixed(1)}pp` },
+    { metric: "conversion", label: "Inbound Conversion %", pick: (s) => s.conversionPct, gapLabel: (g) => `${g.toFixed(1)}pp` },
   ];
   const out: OvertakeTarget[] = [];
   for (const c of candidates) {

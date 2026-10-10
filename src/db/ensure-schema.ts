@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 50;
+const SCHEMA_VERSION = 51;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -858,6 +858,13 @@ async function ensureSalesLeaderboardTables() {
     CREATE INDEX IF NOT EXISTS idx_sales_leaderboard_monthly_month
       ON sales_leaderboard_monthly(year_month)
   `));
+  // Inbound Conversion: MotorComplete enquiries and their sales, kept apart
+  // from the all-source counts so a month parsed before sources were read
+  // stays NULL ("—") instead of showing all-source numbers as inbound.
+  await ensureColumns("sales_leaderboard_monthly", [
+    { name: "inbound_enquiry_count", sqlType: "INTEGER" },
+    { name: "inbound_sales_count", sqlType: "INTEGER" },
+  ]);
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS sales_leaderboard_uploads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

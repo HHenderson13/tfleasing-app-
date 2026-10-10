@@ -581,6 +581,11 @@ export const salesLeaderboardMonthly = sqliteTable(
     insuranceCount: integer("insurance_count"),
     enquiryCount: integer("enquiry_count"),
     salesCount: integer("sales_count"), // enquiries that ended Ordered or Delivered
+    // The MotorComplete subset (column E source), which is all Inbound
+    // Conversion % counts. NULL for a month whose enquiry log was parsed
+    // before sources were read — it shows "—" until re-uploaded.
+    inboundEnquiryCount: integer("inbound_enquiry_count"),
+    inboundSalesCount: integer("inbound_sales_count"),
     // One "interesting fact" per exec per month — picked at upload time from
     // the order_list to flavour the scorecard. Currently the most recent
     // vehicle they ordered.

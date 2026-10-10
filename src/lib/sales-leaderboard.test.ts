@@ -4,9 +4,11 @@ import {
   applyPoints,
   attributeReportRows,
   currentYearMonth,
+  enquiryInbound,
   enquirySales,
   formatConversion,
   formatMonthLabel,
+  isInboundSource,
   isSaleStatus,
   parseEnquiryLog,
   parseOrderList,
@@ -134,10 +136,11 @@ function workbook(rows: unknown[][]): ArrayBuffer {
   return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
 }
 
-// Enquiry log row with SE in B and Status in Q (index 16).
-function enquiry(se: string, status: string): unknown[] {
+// Enquiry log row with SE in B, Source in E (index 4) and Status in Q (index 16).
+function enquiry(se: string, status: string, source = "MotorComplete Lead"): unknown[] {
   const r: unknown[] = new Array(17).fill(null);
   r[1] = se;
+  r[4] = source;
   r[16] = status;
   return r;
 }
@@ -176,6 +179,46 @@ describe("enquiry sale statuses", () => {
     expect(enquirySales(stored)).toBe(1);
     // Legacy upload with no tally: nothing to re-derive from.
     expect(enquirySales({ reportCode: "X", enquiryCount: 5, salesCount: 2 })).toBe(2);
+  });
+});
+
+describe("inbound conversion", () => {
+  it("counts every MotorComplete source as inbound, and nothing else", () => {
+    // The four sources in the September and October 2026 logs.
+    expect(isInboundSource("MotorComplete Lead")).toBe(true);
+    expect(isInboundSource("MotorComplete - Leasing.com")).toBe(true);
+    expect(isInboundSource("MotorComplete - LeaseLoco")).toBe(true);
+    expect(isInboundSource("MotorComplete - carwow")).toBe(true);
+    // A future MotorComplete feed counts without a code change.
+    expect(isInboundSource(" motorcomplete - autotrader ")).toBe(true);
+    expect(isInboundSource("Customer")).toBe(false);
+    expect(isInboundSource("Broker Introduction")).toBe(false);
+    expect(isInboundSource("FRoLLeasing.com")).toBe(false);
+    expect(isInboundSource("FR Website")).toBe(false);
+    expect(isInboundSource("")).toBe(false);
+  });
+
+  it("parseEnquiryLog keeps a source → status tally and derives inbound from it", () => {
+    // October 2026: LoBa's five sales were all Customer or Broker leads, and
+    // none of their MotorComplete enquiries had converted.
+    const { rows } = parseEnquiryLog(workbook([
+      new Array(17).fill("h"),
+      enquiry("LoBa", "Ordered", "Customer"),
+      enquiry("LoBa", "Delivered", "Broker Introduction"),
+      enquiry("LoBa", "Live", "MotorComplete - Leasing.com"),
+      enquiry("DoJa", "Handover Arranged", "MotorComplete - carwow"),
+      enquiry("DoJa", "Lost Sale", "MotorComplete Lead"),
+    ]));
+    const loba = rows.find((r) => r.reportCode === "LoBa")!;
+    expect(loba.enquiryCount).toBe(3);
+    expect(enquirySales(loba)).toBe(2);
+    expect(enquiryInbound(loba)).toEqual({ enquiries: 1, sales: 0 });
+    expect(loba.sourceStatusCounts?.["Customer"]).toEqual({ Ordered: 1 });
+    expect(enquiryInbound(rows.find((r) => r.reportCode === "DoJa")!)).toEqual({ enquiries: 2, sales: 1 });
+  });
+
+  it("has no inbound figure for an upload parsed before sources were read", () => {
+    expect(enquiryInbound({ reportCode: "X", enquiryCount: 5, salesCount: 2, statusCounts: { Ordered: 2, Live: 3 } })).toBeNull();
   });
 });
 
@@ -221,6 +264,21 @@ describe("attribution", () => {
     expect(byExec.has("e9")).toBe(false);
     expect(matched).toBe(1);
     expect(unmapped).toEqual([{ reportCode: "ZzZz", count: 1 }]);
+  });
+
+  it("sums inbound across codes, and leaves it null without source data", () => {
+    const withSources = attributeReportRows("enquiry", [
+      { reportCode: "MiHo", enquiryCount: 3, salesCount: 2, sourceStatusCounts: { "MotorComplete Lead": { Ordered: 1, Live: 1 }, Customer: { Ordered: 1 } } },
+      { reportCode: "MHo", enquiryCount: 1, salesCount: 1, sourceStatusCounts: { "MotorComplete - carwow": { Delivered: 1 } } },
+    ], map, participants);
+    expect(withSources.byExec.get("e1")).toMatchObject({ enquiryCount: 4, salesCount: 3, inboundEnquiryCount: 3, inboundSalesCount: 2 });
+    // Participants missing from the report are a true zero, not unknown.
+    expect(withSources.byExec.get("e3")).toMatchObject({ inboundEnquiryCount: 0, inboundSalesCount: 0 });
+
+    const legacy = attributeReportRows("enquiry", [
+      { reportCode: "MiHo", enquiryCount: 3, salesCount: 2, statusCounts: { Ordered: 2, Live: 1 } },
+    ], map, participants);
+    expect(legacy.byExec.get("e1")).toMatchObject({ enquiryCount: 3, salesCount: 2, inboundEnquiryCount: null, inboundSalesCount: null });
   });
 
   it("derives enquiry sales from the status tally", () => {

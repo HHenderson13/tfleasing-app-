@@ -41,6 +41,9 @@ export interface AdminLastUpload {
   // be re-uploaded once if the admin wants future map changes to fix stats
   // automatically. Surfaced as a warning on the upload card.
   hasParsedData: boolean;
+  // Enquiry logs only: false when the upload was parsed before column E
+  // (source) was read, so the month has no Inbound Conversion figure.
+  hasSourceData: boolean;
 }
 
 type Tab = "dashboard" | "participants" | "names" | "uploads";
@@ -112,9 +115,9 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
                 <th className="px-2 py-3 text-right">Orders</th>
                 <th className="px-2 py-3 text-right">Deliveries</th>
                 <th className="px-2 py-3 text-right">Insurance</th>
-                <th className="px-2 py-3 text-right">Enquiries</th>
-                <th className="px-2 py-3 text-right">Sales</th>
-                <th className="px-4 py-3 text-right">Conv %</th>
+                <th className="px-2 py-3 text-right">Inbound enq.</th>
+                <th className="px-2 py-3 text-right">Inbound sales</th>
+                <th className="px-4 py-3 text-right">Inbound conv %</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -467,7 +470,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
 const REPORTS: { type: "orders" | "delivered" | "enquiry"; label: string; note: string }[] = [
   { type: "orders",    label: "Order list",     note: "Upload the Order List report from Dealerweb. Counts rows per exec (col B) for Order Take; vehicle text in col F is used for the interesting-fact line." },
   { type: "delivered", label: "Delivered list", note: "Upload the Dealbook (delivered list) from Dealerweb. Counts rows per exec for Deliveries, and non-zero values in cols W:AC (Diamondbrite, GAP, TrustFord Protect, Tyre, Alloy) for Insurance Products." },
-  { type: "enquiry",   label: "Enquiry log",    note: "Upload the Enquiry Log. Counts enquiries per exec (col B); rows where col Q is Ordered or Delivered count as sales for the Conversion % metric." },
+  { type: "enquiry",   label: "Enquiry log",    note: "Upload the Enquiry Log. Inbound Conversion % counts only enquiries whose source (col E) is MotorComplete — Lead, Leasing.com, LeaseLoco, carwow. Of those, rows where col Q is Ordered, Handover Arranged or Delivered count as sales." },
 ];
 
 function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: string; lastUploads: AdminLastUpload[] }) {
@@ -617,6 +620,11 @@ function UploadCard({
               {!last.hasParsedData && (
                 <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                   Re-upload once to enable self-healing
+                </div>
+              )}
+              {report.type === "enquiry" && last.hasParsedData && !last.hasSourceData && (
+                <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                  Re-upload for Inbound Conversion
                 </div>
               )}
             </>
