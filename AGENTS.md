@@ -49,6 +49,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/cron/stock-match-debug`      | `requireAdmin` |
 | `/api/email/test`                  | `requireAdmin` |
 | `/api/blob/upload`                 | session + admin role check on token issue |
+| `/ten-at-ten`, `/ten-at-ten/admin` | `requireAdmin` (10 at 10 report + its uploads; the upload action re-checks) |
 | `/enquiries`                       | `requireUser`                  |
 | `/enquiries/upload`                | `requireAdmin`                 |
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
@@ -727,6 +728,49 @@ over-time view must not change the Intelligence view.
   "previous run" nearly always "nothing changed".
 - `scraper/run-cache.ts` holds the last three runs client-side, so moving
   between Intelligence and Trends doesn't re-download ~4MB each time.
+
+## 10 at 10 (`/ten-at-ten`)
+
+Admin-only reporting tab built from the Dealerweb enquiry log (the same
+"ag-grid" export Pole Position reads — A Date Time, B SE, D Customer,
+E Source, G Model, I First Contact Details, Q Status). Rules in
+`lib/ten-at-ten.ts` (pure, tested); slicing and grouping in
+`lib/ten-at-ten-report.ts` (client-safe); ingest/load in
+`lib/ten-at-ten-store.ts`. User's rules, 2026-10-10:
+
+- **Sources:** MotorComplete Lead → TF Lead, - Leasing.com → Leasing.com,
+  - LeaseLoco → LeaseLoco, - carwow → CarWow; anything else is
+  Broker / Prospect. Letters-only match.
+- **Status:** Ordered, Delivered, Handover Arranged = order; Live = live;
+  Lost Sale = lost. Conversion is always orders ÷ enquiries, over enquiries
+  RAISED in the period.
+- **HaHe and JoRu are stripped from everything** — duplicates are moved
+  onto those codes in Dealerweb. Ingest never stores them, deletes any
+  stored enquiry a file shows was moved to them, and ensure-schema sweeps
+  as a backstop.
+- **Uploads merge line by line**, never replace a file. The key is enquiry
+  time (to the minute) + customer + source — NOT the exec (reassignment is
+  how duplicates reach HaHe/JoRu, and must overwrite, not duplicate) and
+  NOT the vehicle (a corrected model is the same enquiry). A known line is
+  overwritten with the newer file's values; an identical one is counted
+  "unchanged". The same key twice in one file keeps the row furthest along
+  (Ordered beats Live beats Lost Sale) — September 2026 has Paul Burns as
+  both Ordered and Lost Sale in the same minute.
+- **Model vs derivative:** column G is anything from "Ford" to a full
+  derivative. `vehicleOf` reads the model by ordered regex (specific before
+  general — Transit E-Custom before Transit Custom, Puma Gen-E when a kW
+  rating is present); the derivative is the full text only when it says
+  more than the model. `derivativeKey` groups spellings of one derivative
+  (case, brackets, Estate/Hatchback, Diesel/Petrol/Electric, FWD, "D/Cab")
+  and the report labels each group with its commonest spelling.
+- The finance type / term / mileage dimensions come from the MotorComplete
+  block in column I, so other sources read "Not stated". Funder is not in
+  the log (blank on every line) — the user meant source.
+- **Comparison is like for like.** A period in progress compares with the
+  same stretch of the previous period, measured to the last day the data
+  covers (this morning's export has nothing for today): "October so far"
+  faces 1–9 September, not all of September.
+- Exec codes show as names via the Pole Position name map where known.
 
 ## Sales leaderboard (Pole Position)
 

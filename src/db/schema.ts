@@ -1014,3 +1014,51 @@ export const enquiryUploads = sqliteTable("enquiry_uploads", {
   uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
   uploadedByUserId: text("uploaded_by_user_id").notNull(),
 });
+
+// ─── 10 at 10 ──────────────────────────────────────────────────────────────
+//
+// One row per enquiry from the Dealerweb enquiry log, merged line by line
+// across uploads on a natural key (enquiry time + customer + source — see
+// makeEnquiryKey in lib/ten-at-ten.ts). Source, outcome, model and
+// derivative are derived at ingest so the report only has to group.
+export const tenAtTenEnquiries = sqliteTable(
+  "ten_at_ten_enquiries",
+  {
+    id: text("id").primaryKey(),
+    enquiredAt: integer("enquired_at").notNull(),     // A, wall clock as UTC
+    enquiryDay: text("enquiry_day").notNull(),        // YYYY-MM-DD
+    exec: text("exec").notNull(),                     // B  SE code
+    customer: text("customer").notNull(),             // D
+    sourceRaw: text("source_raw").notNull(),          // E  as exported
+    source: text("source").notNull(),                 // E  named (TF Lead, CarWow…)
+    vehicleRaw: text("vehicle_raw"),                  // G  as exported
+    model: text("model").notNull(),
+    derivative: text("derivative"),
+    derivativeKey: text("derivative_key"),
+    status: text("status"),                           // Q
+    outcome: text("outcome").notNull(),               // order | live | lost | other
+    financeType: text("finance_type"),                // I  Business | Personal
+    termMonths: integer("term_months"),               // I  Contract length
+    annualMileage: integer("annual_mileage"),         // I  Annual mileage
+    firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byDay: index("idx_ten_at_ten_day").on(t.enquiryDay),
+  }),
+);
+
+export const tenAtTenUploads = sqliteTable("ten_at_ten_uploads", {
+  id: text("id").primaryKey(),
+  filename: text("filename").notNull(),
+  rowsInFile: integer("rows_in_file").notNull(),
+  inserted: integer("inserted").notNull(),
+  updated: integer("updated").notNull(),
+  unchanged: integer("unchanged").notNull(),
+  excluded: integer("excluded").notNull(),
+  removed: integer("removed").notNull(),
+  firstDay: text("first_day"),
+  lastDay: text("last_day"),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
+  uploadedByUserId: text("uploaded_by_user_id").notNull(),
+});

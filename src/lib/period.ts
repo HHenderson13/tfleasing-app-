@@ -1,11 +1,12 @@
-// Day / week / month period selection for the Enquiry Tracker.
+// Day / week / month / quarter period selection, shared by the Enquiry
+// Tracker (day–month) and 10 at 10 (all four, plus a custom range).
 //
 // Everything here works in plain "YYYY-MM-DD" day keys and UTC-encoded
 // dates, matching how enquiry timestamps are stored (see business-hours.ts
 // — local wall clock re-encoded as UTC). No timezone conversion happens,
 // so a period boundary means the same thing year-round.
 
-export type Granularity = "day" | "week" | "month";
+export type Granularity = "day" | "week" | "month" | "quarter";
 
 export interface Period {
   granularity: Granularity;
@@ -65,6 +66,11 @@ export function buildPeriod(granularity: Granularity, anchor: string): Period {
     const offset = (a.getUTCDay() + 6) % 7;
     start = new Date(a.getTime() - offset * MS_PER_DAY);
     end = new Date(start.getTime() + 6 * MS_PER_DAY);
+  } else if (granularity === "quarter") {
+    // Calendar quarters: Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec.
+    const q0 = Math.floor(a.getUTCMonth() / 3) * 3;
+    start = new Date(Date.UTC(a.getUTCFullYear(), q0, 1));
+    end = new Date(Date.UTC(a.getUTCFullYear(), q0 + 3, 0));
   } else {
     start = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 1));
     end = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + 1, 0));
@@ -83,6 +89,10 @@ export function buildPeriod(granularity: Granularity, anchor: string): Period {
     const right = fmt(end, { day: "numeric", month: "short", year: "numeric" });
     label = `${left} – ${right}`;
     shortLabel = `${left} – ${fmt(end, { day: "numeric", month: "short" })}`;
+  } else if (granularity === "quarter") {
+    const q = Math.floor(start.getUTCMonth() / 3) + 1;
+    label = `Q${q} ${start.getUTCFullYear()} (${fmt(start, { month: "short" })} – ${fmt(end, { month: "short" })})`;
+    shortLabel = `Q${q} ${start.getUTCFullYear()}`;
   } else {
     label = fmt(start, { month: "long", year: "numeric" });
     shortLabel = fmt(start, { month: "short", year: "numeric" });
@@ -107,9 +117,10 @@ export function shiftAnchor(granularity: Granularity, anchor: string, direction:
   if (granularity === "week") {
     return toDayKey(new Date(a.getTime() + direction * 7 * MS_PER_DAY));
   }
-  // Month: anchor to the 1st so month-length differences can't skid (e.g.
-  // stepping back from 31 Mar must land in February, not 3 March).
-  return toDayKey(new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + direction, 1)));
+  // Month / quarter: anchor to the 1st so month-length differences can't
+  // skid (e.g. stepping back from 31 Mar must land in February, not 3 March).
+  const months = granularity === "quarter" ? 3 : 1;
+  return toDayKey(new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + direction * months, 1)));
 }
 
 /**

@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 51;
+const SCHEMA_VERSION = 52;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -119,6 +119,7 @@ async function runEnsureAppSchema() {
   await ensureBrokerPortalTables();
   await ensureForecastTables();
   await ensureEnquiryTables();
+  await ensureTenAtTenTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await seedSeriesMappings();
@@ -937,6 +938,51 @@ async function ensureColumns(
 // Stores the MotorComplete enquiry export. Uploads stack rather than
 // replace: `id` is a stable hash of the natural key so re-uploading an
 // overlapping day merges instead of duplicating.
+async function ensureTenAtTenTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_enquiries (
+      id TEXT PRIMARY KEY,
+      enquired_at INTEGER NOT NULL,
+      enquiry_day TEXT NOT NULL,
+      exec TEXT NOT NULL,
+      customer TEXT NOT NULL,
+      source_raw TEXT NOT NULL,
+      source TEXT NOT NULL,
+      vehicle_raw TEXT,
+      model TEXT NOT NULL,
+      derivative TEXT,
+      derivative_key TEXT,
+      status TEXT,
+      outcome TEXT NOT NULL,
+      finance_type TEXT,
+      term_months INTEGER,
+      annual_mileage INTEGER,
+      first_uploaded_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_day ON ten_at_ten_enquiries(enquiry_day)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_uploads (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      rows_in_file INTEGER NOT NULL,
+      inserted INTEGER NOT NULL,
+      updated INTEGER NOT NULL,
+      unchanged INTEGER NOT NULL,
+      excluded INTEGER NOT NULL,
+      removed INTEGER NOT NULL,
+      first_day TEXT,
+      last_day TEXT,
+      uploaded_at INTEGER NOT NULL,
+      uploaded_by_user_id TEXT NOT NULL
+    )
+  `));
+  // HaHe and JoRu hold enquiries identified as duplicates. Ingest never
+  // stores them; this sweep is the backstop. Idempotent.
+  await db.run(sql.raw(`DELETE FROM ten_at_ten_enquiries WHERE lower(exec) IN ('hahe', 'joru')`));
+}
+
 async function ensureEnquiryTables() {
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS enquiries (
