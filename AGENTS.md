@@ -766,10 +766,11 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
 - The finance type / term / mileage dimensions come from the MotorComplete
   block in column I, so other sources read "Not stated". Funder is not in
   the log (blank on every line) — the user meant source.
-- **Comparison is like for like.** A period in progress compares with the
-  same stretch of the previous period, measured to the last day the data
-  covers (this morning's export has nothing for today): "October so far"
-  faces 1–9 September, not all of September.
+- **No "vs previous" on the tiles** — removed at the user's request
+  (2026-10-10). `previousRange` stays in the report lib, tested, if it's
+  wanted back: a period in progress compares like for like with the same
+  stretch of the previous one (October so far vs 1–9 September), never the
+  whole previous period, which reads as a collapse every morning.
 - Exec codes show as names via the Pole Position name map where known.
 
 ## Sales leaderboard (Pole Position)

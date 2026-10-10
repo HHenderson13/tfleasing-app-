@@ -10,7 +10,6 @@ import {
   dimLabel,
   groupRows,
   inRange,
-  previousRange,
   rangeFor,
   statsOf,
   timeBuckets,
@@ -54,19 +53,12 @@ export function ReportClient({ payload, today }: { payload: ReportPayload; today
   const [model, setModel] = useState("");
 
   const range = useMemo(() => rangeFor(mode, anchor, custom), [mode, anchor, custom]);
-  // Compare up to the last day the data covers: this morning's export holds
-  // nothing for today yet, so "October so far" is really 1–9 October and
-  // should face 1–9 September.
-  const lastDay = all[all.length - 1]?.day;
-  const asOf = lastDay && lastDay < today ? lastDay : today;
-  const prev = useMemo(() => previousRange(mode, anchor, custom, asOf), [mode, anchor, custom, asOf]);
 
   const filtered = useMemo(
     () => all.filter((r) => (sources.size === 0 || sources.has(r.source)) && (!exec || r.exec === exec) && (!model || r.model === model)),
     [all, sources, exec, model],
   );
   const rows = useMemo(() => inRange(filtered, range), [filtered, range]);
-  const prevRows = useMemo(() => inRange(filtered, prev), [filtered, prev]);
 
   // Filter lists come from the selected period, busiest first, so the
   // dropdowns offer what is actually in view.
@@ -113,7 +105,6 @@ export function ReportClient({ payload, today }: { payload: ReportPayload; today
             )}
           </div>
         )}
-        <span className="ml-auto text-xs text-slate-400">Compared with {prev.label}</span>
       </div>
 
       {/* Filters */}
@@ -153,7 +144,7 @@ export function ReportClient({ payload, today }: { payload: ReportPayload; today
         </div>
       ) : (
         <>
-          <Kpis cur={statsOf(rows)} prev={statsOf(prevRows)} />
+          <Kpis cur={statsOf(rows)} />
           {rows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500">
               No enquiries in {range.label}{filtersOn ? " with these filters" : ""}.
@@ -177,18 +168,13 @@ export function ReportClient({ payload, today }: { payload: ReportPayload; today
 
 // ─── Headline tiles ────────────────────────────────────────────────────────
 
-function Kpis({ cur, prev }: { cur: Stats; prev: Stats }) {
-  const conv = conversionPct(cur), prevConv = conversionPct(prev);
-  const tiles: { label: string; value: string; delta: string | null; good: boolean | null; hero?: boolean }[] = [
-    { label: "Enquiries", value: int(cur.enquiries), ...countDelta(cur.enquiries, prev.enquiries, true) },
-    { label: "Orders", value: int(cur.orders), ...countDelta(cur.orders, prev.orders, true) },
-    {
-      label: "Conversion", value: pct(conv), hero: true,
-      delta: conv != null && prevConv != null ? `${conv - prevConv >= 0 ? "+" : ""}${(conv - prevConv).toFixed(1)} pts` : null,
-      good: conv != null && prevConv != null ? conv >= prevConv : null,
-    },
-    { label: "Live", value: int(cur.live), ...countDelta(cur.live, prev.live, null) },
-    { label: "Lost", value: int(cur.lost), ...countDelta(cur.lost, prev.lost, false) },
+function Kpis({ cur }: { cur: Stats }) {
+  const tiles: { label: string; value: string; hero?: boolean }[] = [
+    { label: "Enquiries", value: int(cur.enquiries) },
+    { label: "Orders", value: int(cur.orders) },
+    { label: "Conversion", value: pct(conversionPct(cur)), hero: true },
+    { label: "Live", value: int(cur.live) },
+    { label: "Lost", value: int(cur.lost) },
   ];
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -196,19 +182,10 @@ function Kpis({ cur, prev }: { cur: Stats; prev: Stats }) {
         <div key={t.label} className={`rounded-2xl border px-4 py-3 shadow-sm ${t.hero ? "border-indigo-900 bg-indigo-950 text-white" : "border-slate-200 bg-white"}`}>
           <div className={`text-[11px] font-semibold uppercase tracking-wider ${t.hero ? "text-indigo-200" : "text-slate-500"}`}>{t.label}</div>
           <div className={`mt-1 text-3xl font-bold tabular-nums ${t.hero ? "text-white" : "text-slate-900"}`}>{t.value}</div>
-          <div className={`mt-0.5 text-xs ${t.delta == null ? "text-transparent" : t.good == null ? (t.hero ? "text-indigo-200" : "text-slate-500") : t.good ? (t.hero ? "text-emerald-300" : "text-emerald-700") : (t.hero ? "text-rose-300" : "text-rose-700")}`}>
-            {t.delta ?? "·"} <span className={t.hero ? "text-indigo-300" : "text-slate-400"}>{t.delta ? "vs previous" : ""}</span>
-          </div>
         </div>
       ))}
     </div>
   );
-}
-
-// Up is good for enquiries and orders, bad for lost, neutral for live.
-function countDelta(cur: number, prev: number, upIsGood: boolean | null): { delta: string | null; good: boolean | null } {
-  const d = cur - prev;
-  return { delta: `${d >= 0 ? "+" : ""}${int(d)}`, good: upIsGood == null || d === 0 ? null : upIsGood ? d > 0 : d < 0 };
 }
 
 // ─── Source share ──────────────────────────────────────────────────────────
