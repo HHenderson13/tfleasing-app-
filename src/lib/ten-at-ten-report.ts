@@ -471,3 +471,67 @@ export function timeBuckets(rows: readonly ReportRow[], r: Range): Bucket[] {
     return { key: dayFromNumber(n), label: weekly ? `w/c ${label}` : label, stats: statsOf(rs) };
   });
 }
+
+// ─── Deliveries vs budget ──────────────────────────────────────────────────
+//
+// Budgets are monthly units for Car and CV (commercial); combined is their
+// sum. Deliveries count in the month of their delivery date. "Delivered"
+// is handed over; "still to deliver" is Arrived + Due in the period — so a
+// month in progress reads as delivered so far, and what it's on course for.
+
+/** Delivery budgets by month: { "2026-10": { car: 106, cv: 40 } }. */
+export type Budgets = Record<string, { car: number; cv: number }>;
+
+export type Department = "car" | "cv";
+
+/** Car is ICE and BEV cars; CV is the vans. */
+export const departmentOf = (segment: string): Department => (segment === "Van" ? "cv" : "car");
+
+/**
+ * The whole months a period covers, or null when it doesn't line up with
+ * months (a day, a week, a custom range starting mid-month) — budgets are
+ * monthly, and pro-rating them would invent a target nobody set.
+ */
+export function budgetMonths(r: Range): string[] | null {
+  const start = fromDayKey(r.startDay);
+  const end = fromDayKey(r.endDay);
+  const lastOfEndMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+  if (start.getUTCDate() !== 1 || end.getUTCDate() !== lastOfEndMonth) return null;
+  const out: string[] = [];
+  for (let y = start.getUTCFullYear(), m = start.getUTCMonth(); y < end.getUTCFullYear() || (y === end.getUTCFullYear() && m <= end.getUTCMonth()); m === 11 ? (y++, m = 0) : m++) {
+    out.push(`${y}-${String(m + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+export interface BudgetLine {
+  /** Sum of the budgets set for the months; null when none are set. */
+  budget: number | null;
+  /** Months in the period with no budget set (shown, never treated as 0). */
+  missing: string[];
+  delivered: number;
+  arrived: number;
+  due: number;
+}
+
+export function budgetLines(rows: readonly OrderRow[], budgets: Budgets, months: string[]): Record<Department | "combined", BudgetLine> {
+  const set = months.filter((m) => budgets[m]);
+  const missing = months.filter((m) => !budgets[m]);
+  const sum = (d: Department) => (set.length ? set.reduce((n, m) => n + budgets[m][d], 0) : null);
+  const line = (budget: number | null, keep: (r: OrderRow) => boolean): BudgetLine => {
+    const rs = rows.filter(keep);
+    return {
+      budget,
+      missing,
+      delivered: rs.filter((r) => r.delivery === "Delivered").length,
+      arrived: rs.filter((r) => r.delivery === "Arrived").length,
+      due: rs.filter((r) => r.delivery !== "Delivered" && r.delivery !== "Arrived").length,
+    };
+  };
+  const car = sum("car"), cv = sum("cv");
+  return {
+    car: line(car, (r) => departmentOf(r.segment) === "car"),
+    cv: line(cv, (r) => departmentOf(r.segment) === "cv"),
+    combined: line(car == null || cv == null ? null : car + cv, () => true),
+  };
+}

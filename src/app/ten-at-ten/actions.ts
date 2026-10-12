@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { NotAnEnquiryExportError, ingestEnquiries, parseEnquiryWorkbook } from "@/lib/enquiries";
 import { NotAnEnquiryLogError, parseTenAtTenWorkbook } from "@/lib/ten-at-ten";
-import { NotAnOrderListError, detectTenAtTenFile, parseOrderWorkbook, type TenAtTenFileKind } from "@/lib/ten-at-ten-orders";
-import { ingestTenAtTen, ingestTenAtTenOrders, recordResponseUpload, type TenAtTenIngest } from "@/lib/ten-at-ten-store";
+import { NotAnOrderListError, classifyDealbook, detectTenAtTenFile, makeDeliveryKey, parseOrderWorkbook, type TenAtTenFileKind } from "@/lib/ten-at-ten-orders";
+import { ingestDealbook, ingestTenAtTen, recordResponseUpload, saveBudgets, type TenAtTenIngest } from "@/lib/ten-at-ten-store";
 
 export interface TenAtTenUploadOutcome {
   ok: boolean;
@@ -14,13 +15,17 @@ export interface TenAtTenUploadOutcome {
   filename?: string;
   kind?: TenAtTenFileKind;
   result?: TenAtTenIngest;
+  /** A Dealbook file that could be either report: ask which, then re-send with `kind`. */
+  needsChoice?: boolean;
 }
 
 /**
  * Merge one export into 10 at 10, line by line. The file says what it is
- * — the Dealerweb enquiry log, the Dealerweb order list, or the
- * MotorComplete enquiry export behind Response times — told apart by its
- * header row, so one drop zone takes all three. Admin only.
+ * — Enquiry Log, Enquiry Tracker (MotorComplete), or a Dealbook — told
+ * apart by its header row, so one drop zone takes them all. The two
+ * Dealbook reports share their columns and are told apart by their dates
+ * (classifyDealbook); when a file could be either, the uploader is asked
+ * and it comes back with `kind` set. Admin only.
  */
 export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTenUploadOutcome> {
   const user = await requireAdmin();
@@ -31,21 +36,42 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
 
   try {
     const buf = Buffer.from(await file.arrayBuffer());
-    const kind = detectTenAtTenFile(buf);
-    if (!kind) {
-      return { ok: false, error: `${file.name}: not an Enquiry Tracker, Enquiry Log or Dealbook – Orders export — the columns don't match any of them.` };
+    const detected = detectTenAtTenFile(buf);
+    if (!detected) {
+      return { ok: false, error: `${file.name}: not an Enquiry Tracker, Enquiry Log or Dealbook export — the columns don't match any of them.` };
     }
     const meta = { filename: file.name, userId: user.id };
+    let kind: TenAtTenFileKind;
     let result: TenAtTenIngest;
-    if (kind === "enquiries") {
+    if (detected === "enquiries") {
+      kind = "enquiries";
       const parsed = parseTenAtTenWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
       result = await ingestTenAtTen(parsed, meta);
-    } else if (kind === "orders") {
+    } else if (detected === "dealbook") {
       const parsed = parseOrderWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
-      result = await ingestTenAtTenOrders(parsed, meta);
+      const chosen = formData.get("kind");
+      const dealbook = chosen === "orders" || chosen === "deliveries" ? chosen : classifyDealbook(parsed.rows);
+      if (!dealbook) {
+        return { ok: false, needsChoice: true, filename: file.name, error: `${file.name}: is this Dealbook – Orders or Dealbook – Deliveries? Its dates fit either.` };
+      }
+      kind = dealbook;
+      let syncMonths: string[] = [];
+      if (dealbook === "deliveries") {
+        // A delivery with no date in column AK can't be put in a month.
+        const undated = parsed.rows.filter((r) => !r.deliveryDay).length;
+        parsed.rows = parsed.rows
+          .filter((r) => r.deliveryDay)
+          .map((r) => ({ ...r, id: makeDeliveryKey(r.id, r.deliveryDay as string) }));
+        parsed.skippedUnreadable += undated;
+        // The report is the full list for its delivery month(s): anything
+        // stored for them that it no longer carries has slipped or gone.
+        syncMonths = [...new Set(parsed.rows.map((r) => (r.deliveryDay as string).slice(0, 7)))];
+      }
+      result = await ingestDealbook(parsed, meta, dealbook, syncMonths);
     } else {
+      kind = "response";
       // The Enquiry Tracker's own parse and merge, rules unchanged.
       const parsed = parseEnquiryWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.rowsInFile === 0) return { ok: false, error: `${file.name}: no rows found.` };
@@ -74,5 +100,29 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     }
     logError("ten-at-ten/upload", e, { filename: file.name });
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
+  }
+}
+
+const budgetSchema = z.object({
+  rows: z.array(z.object({
+    yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    car: z.number().int().min(0).max(100000),
+    cv: z.number().int().min(0).max(100000),
+  })).max(60),
+});
+
+/** Save monthly delivery budgets (Car and CV; combined is their sum). Admin only. */
+export async function saveBudgetsAction(input: { rows: { yearMonth: string; car: number; cv: number }[] }): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const parsed = budgetSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid budgets" };
+  try {
+    await saveBudgets(parsed.data.rows);
+    revalidatePath("/ten-at-ten");
+    revalidatePath("/ten-at-ten/admin");
+    return { ok: true };
+  } catch (e) {
+    logError("ten-at-ten/budgets", e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save budgets." };
   }
 }

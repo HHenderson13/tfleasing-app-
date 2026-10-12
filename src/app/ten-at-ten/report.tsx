@@ -18,6 +18,8 @@ import {
   SEGMENTS,
   SOURCES,
   avgProfit,
+  budgetLines,
+  budgetMonths,
   conversionPct,
   decodeOrders,
   decodeReport,
@@ -42,6 +44,8 @@ import {
   type ReportRow,
   type SortKey,
   type Stats,
+  type BudgetLine,
+  type Budgets,
 } from "@/lib/ten-at-ten-report";
 
 const SOURCE_COLOURS: Record<string, string> = {
@@ -71,13 +75,17 @@ const int = (n: number) => n.toLocaleString("en-GB");
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
 const gbp = (n: number | null) => (n == null ? "—" : GBP.format(Math.round(n)).replace("-", "−"));
 
-type Section = "enquiries" | "response" | "orders";
+type Section = "enquiries" | "response" | "orders" | "deliveries";
 
-export function ReportClient({ payload, orders, responses, reportHorizon, today }: {
-  payload: ReportPayload; orders: OrdersPayload; responses: EnquiryRow[]; reportHorizon: number | null; today: string;
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today }: {
+  payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
+  responses: EnquiryRow[]; reportHorizon: number | null; today: string;
 }) {
   const enquiryRows = useMemo(() => decodeReport(payload), [payload]);
   const orderRows = useMemo(() => decodeOrders(orders), [orders]);
+  // Deliveries arrive as order rows whose `day` is the DELIVERY day and
+  // whose `delivery` is the status (Delivered, Arrived, Due).
+  const deliveryRows = useMemo(() => decodeOrders(deliveries), [deliveries]);
 
   const [section, setSection] = useState<Section>("enquiries");
   const [mode, setMode] = useState<PeriodMode>("month");
@@ -88,8 +96,9 @@ export function ReportClient({ payload, orders, responses, reportHorizon, today 
   const minDay = useMemo(() => {
     if (section === "enquiries") return enquiryRows[0]?.day ?? today;
     if (section === "orders") return orderRows[0]?.day ?? today;
+    if (section === "deliveries") return deliveryRows[0]?.day ?? today;
     return responses.reduce((m, r) => (r.enquiryDay < m ? r.enquiryDay : m), today);
-  }, [section, enquiryRows, orderRows, responses, today]);
+  }, [section, enquiryRows, orderRows, deliveryRows, responses, today]);
   const modeMeta = MODES.find((m) => m.key === mode)!;
   const atCurrent = mode !== "custom" && range.startDay <= today && range.endDay >= today;
 
@@ -97,7 +106,7 @@ export function ReportClient({ payload, orders, responses, reportHorizon, today 
     <div className="mt-5 space-y-5">
       {/* Section */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([["enquiries", "Enquiries"], ["response", "Response times"], ["orders", "Orders"]] as const).map(([key, label]) => (
+        {([["enquiries", "Enquiries"], ["response", "Response times"], ["orders", "Orders"], ["deliveries", "Deliveries"]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSection(key)}
@@ -145,7 +154,8 @@ export function ReportClient({ payload, orders, responses, reportHorizon, today 
 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
-      {section === "orders" && <OrdersSection all={orderRows} range={range} />}
+      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range} />}
+      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} />}
     </div>
   );
 }
@@ -447,19 +457,31 @@ function Money({ n }: { n: number | null }) {
   return <span className={`whitespace-nowrap ${n != null && n < 0 ? "text-rose-700" : ""}`}>{gbp(n)}</span>;
 }
 
-const ORDER_COLS: Col<OrderStats>[] = [
-  { key: "orders", label: "Orders", render: (g) => int(g.stats.orders) },
+// The count column reads "Orders" or "Deliveries" to match the tab.
+const orderCols = (unit: string): Col<OrderStats>[] => [
+  { key: "orders", label: unit, render: (g) => int(g.stats.orders) },
   { key: "share", label: "Share", left: true, render: (g) => <ShareCell share={g.share} /> },
   { key: "profit", label: "Total profit", render: (g) => <Money n={g.stats.priced ? g.stats.profit : null} /> },
   { key: "avg", label: "Avg profit", strong: true, render: (g) => <Money n={avgProfit(g.stats)} /> },
   { key: "loss", label: "Loss-making", render: (g) => <span className={g.stats.loss ? "text-rose-700" : "text-slate-400"}>{int(g.stats.loss)}</span> },
 ];
+const ORDER_COLS = orderCols("Orders");
+const DELIVERY_COLS = orderCols("Deliveries");
 
 const SEGMENT_COLOURS = Object.fromEntries(Object.entries(SEGMENT_META).map(([k, v]) => [k, v.colour]));
 type SegmentName = (typeof SEGMENTS)[number];
 
-function OrdersSection({ all, range }: { all: OrderRow[]; range: Range }) {
+const STATUSES = ["Delivered", "Arrived", "Due"] as const;
+type StatusName = (typeof STATUSES)[number];
+const STATUS_COLOURS: Record<string, string> = { Delivered: "#047857", Arrived: "#0891b2", Due: "#94a3b8" };
+
+// Orders and Deliveries are the same Dealbook report counted two ways —
+// by order date, or by delivery date with a status — so one section serves
+// both. Deliveries adds the status filter and the department budget panel.
+function DealbookSection({ all, range, variant, budgets }: { all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets }) {
+  const isDel = variant === "deliveries";
   const [segments, setSegments] = useState<Set<SegmentName>>(new Set());
+  const [statuses, setStatuses] = useState<Set<StatusName>>(new Set());
   const [exec, setExec] = useState("");
   const [model, setModel] = useState("");
   const [funder, setFunder] = useState("");
@@ -467,51 +489,125 @@ function OrdersSection({ all, range }: { all: OrderRow[]; range: Range }) {
   const periodAll = useMemo(() => inRange(all, range), [all, range]);
   const rows = useMemo(
     () => periodAll.filter((r) =>
-      (segments.size === 0 || segments.has(r.segment as SegmentName)) && (!exec || r.exec === exec)
-      && (!model || r.model === model) && (!funder || r.funder === funder)),
-    [periodAll, segments, exec, model, funder],
+      (segments.size === 0 || segments.has(r.segment as SegmentName)) && (statuses.size === 0 || statuses.has(r.delivery as StatusName))
+      && (!exec || r.exec === exec) && (!model || r.model === model) && (!funder || r.funder === funder)),
+    [periodAll, segments, statuses, exec, model, funder],
   );
   const options = useMemo(() => ({
     exec: groupOrders(periodAll, ["exec"]).map((g) => g.label),
     model: groupOrders(periodAll, ["model"]).map((g) => g.label),
     funder: groupOrders(periodAll, ["funder"]).map((g) => g.label),
   }), [periodAll]);
-  const filtersOn = segments.size > 0 || !!exec || !!model || !!funder;
+  const filtersOn = segments.size > 0 || statuses.size > 0 || !!exec || !!model || !!funder;
   const s = orderStatsOf(rows);
+  const noun = isDel ? "deliveries" : "orders";
+  const dateLabel = isDel ? "Delivery" : "Ordered";
+  const statusLabel = isDel ? "Status" : "Delivery";
+  const cols = isDel ? DELIVERY_COLS : ORDER_COLS;
 
-  if (all.length === 0) return <Empty>No orders yet. Upload an order list from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+  if (all.length === 0) {
+    return <Empty>No {noun} yet. Upload {isDel ? "Dealbook – Deliveries" : "Dealbook – Orders"} from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+  }
+
+  const delivered = rows.filter((r) => r.delivery === "Delivered").length;
+  const tiles = isDel
+    ? [
+      { label: "Delivered", value: int(delivered), sub: "handed over" },
+      { label: "Still to deliver", value: int(rows.length - delivered), sub: `${int(rows.filter((r) => r.delivery === "Arrived").length)} arrived · ${int(rows.filter((r) => r.delivery !== "Delivered" && r.delivery !== "Arrived").length)} due` },
+      { label: "Total profit", value: gbp(s.priced ? s.profit : null) },
+      { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true },
+    ]
+    : [
+      { label: "Orders", value: int(s.orders), sub: s.orders > s.priced ? `${int(s.orders - s.priced)} without a profit figure yet` : undefined },
+      { label: "Total profit", value: gbp(s.priced ? s.profit : null) },
+      { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true },
+    ];
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
         <Chips options={SEGMENTS} selected={segments} onChange={setSegments} colours={SEGMENT_COLOURS} />
+        {isDel && <Chips options={STATUSES} selected={statuses} onChange={setStatuses} colours={STATUS_COLOURS} />}
         <Select value={exec} onChange={setExec} all="All execs" options={options.exec} />
         <Select value={model} onChange={setModel} all="All models" options={options.model} />
         <Select value={funder} onChange={setFunder} all="All funders" options={options.funder} />
-        {filtersOn && <button onClick={() => { setSegments(new Set()); setExec(""); setModel(""); setFunder(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
+        {filtersOn && <button onClick={() => { setSegments(new Set()); setStatuses(new Set()); setExec(""); setModel(""); setFunder(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
       </div>
-      <Tiles tiles={[
-        { label: "Orders", value: int(s.orders), sub: s.orders > s.priced ? `${int(s.orders - s.priced)} without a profit figure yet` : undefined },
-        { label: "Total profit", value: gbp(s.priced ? s.profit : null) },
-        { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true },
-      ]} />
+      {isDel && budgets && <BudgetPanel rows={periodAll} range={range} budgets={budgets} />}
+      <Tiles tiles={tiles} />
       {rows.length === 0 ? (
-        <Empty>No orders in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
+        <Empty>No {noun} in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
       ) : (
         <>
-          <SegmentCards rows={rows} />
+          <SegmentCards rows={rows} noun={isDel ? "deliveries" : "orders"} />
           {/* The two tables that open into customer lists get the full width. */}
-          <OrderBreakdown title="By exec" note="Click an exec for their customers" rows={rows} dims={O_EXEC} customers="date" />
+          <OrderBreakdown title="By exec" note="Click an exec for their customers" rows={rows} dims={O_EXEC} customers="date" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
           <div className="grid gap-5 lg:grid-cols-2">
-            <OrderBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={O_MODEL} />
-            <OrderBreakdown title="By funder" note="Click a funder for its models" rows={rows} dims={O_FUNDER} />
+            <OrderBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={O_MODEL} cols={cols} />
+            <OrderBreakdown title="By funder" note="Click a funder for its models" rows={rows} dims={O_FUNDER} cols={cols} />
           </div>
-          <OrderBreakdown title="Profit bands" note="Click a band for its customers" rows={rows} dims={O_BAND} defaultSort="label" customers="profit" />
-          <BestWorst rows={rows} />
-          <OrderBuilder rows={rows} />
+          <OrderBreakdown title="Profit bands" note="Click a band for its customers" rows={rows} dims={O_BAND} defaultSort="label" customers="profit" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
+          <BestWorst rows={rows} title={isDel ? "Most and least profitable deliveries" : "Most and least profitable orders"} />
+          <OrderBuilder rows={rows} cols={cols} />
         </>
       )}
+    </div>
+  );
+}
+
+// Department vs budget: Car, CV and combined, for the whole months in the
+// period. Always the department — the filters above don't narrow it.
+function BudgetPanel({ rows, range, budgets }: { rows: OrderRow[]; range: Range; budgets: Budgets }) {
+  const months = budgetMonths(range);
+  if (!months) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
+        <span className="font-semibold text-slate-900">Budget</span> is set by month — choose Month or Quarter (or a custom range of whole months) to compare against it.
+      </div>
+    );
+  }
+  const lines = budgetLines(rows, budgets, months);
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {([["car", "Car", "#b45309"], ["cv", "CV", "#1d4ed8"], ["combined", "Combined", "#312e81"]] as const).map(([k, title, colour]) => (
+        <BudgetCard key={k} title={title} colour={colour} line={lines[k]} />
+      ))}
+    </div>
+  );
+}
+
+function BudgetCard({ title, colour, line }: { title: string; colour: string; line: BudgetLine }) {
+  const { budget, delivered, arrived, due, missing } = line;
+  const onCourse = delivered + arrived + due;
+  const pctOf = (n: number) => (budget ? Math.min(100, (n / budget) * 100) : 0);
+  const gap = budget == null ? null : onCourse - budget;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${colour}` }}>
+      <div className="flex items-baseline justify-between">
+        <div className="text-sm font-semibold text-slate-900">{title} vs budget</div>
+        <div className="text-xs text-slate-500">{budget == null ? "No budget set" : `Budget ${int(budget)}`}</div>
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="text-3xl font-bold tabular-nums text-slate-900">{int(delivered)}</span>
+        <span className="text-sm text-slate-500">delivered{budget ? ` · ${Math.round((delivered / budget) * 100)}% of budget` : ""}</span>
+      </div>
+      {budget != null && (
+        <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100" title={`${delivered} delivered, ${arrived + due} still to deliver, budget ${budget}`}>
+          <div style={{ width: `${pctOf(delivered)}%`, background: colour }} />
+          <div style={{ width: `${Math.max(0, pctOf(onCourse) - pctOf(delivered))}%`, background: colour, opacity: 0.3 }} />
+        </div>
+      )}
+      <div className="mt-2 space-y-0.5 text-xs text-slate-600">
+        <div>Still to deliver <b className="tabular-nums">{int(arrived + due)}</b> <span className="text-slate-400">({int(arrived)} arrived · {int(due)} due)</span></div>
+        {gap != null && (
+          <div>
+            On course for <b className="tabular-nums">{int(onCourse)}</b> —{" "}
+            <b className={gap >= 0 ? "text-emerald-700" : "text-rose-700"}>{gap >= 0 ? `${int(gap)} over budget` : `${int(-gap)} short of budget`}</b>
+          </div>
+        )}
+        {missing.length > 0 && budget != null && <div className="text-amber-700">No budget set for {missing.join(", ")}</div>}
+      </div>
     </div>
   );
 }
@@ -522,7 +618,7 @@ const O_FUNDER: OrderDimKey[] = ["funder", "model"];
 const O_BAND: OrderDimKey[] = ["profitBand"];
 
 // The headline averages: ICE cars, BEV cars and vans side by side.
-function SegmentCards({ rows }: { rows: OrderRow[] }) {
+function SegmentCards({ rows, noun = "orders" }: { rows: OrderRow[]; noun?: string }) {
   const groups = useMemo(() => new Map(groupOrders(rows, ["segment"]).map((g) => [g.label, g])), [rows]);
   return (
     <div className="grid gap-3 sm:grid-cols-3">
@@ -535,7 +631,7 @@ function SegmentCards({ rows }: { rows: OrderRow[] }) {
           <div key={seg} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${meta.colour}` }}>
             <div className="flex items-baseline justify-between">
               <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
-              <div className="text-xs text-slate-500">{g ? `${int(g.stats.orders)} units · ${g.share.toFixed(0)}% of orders` : "No orders"}</div>
+              <div className="text-xs text-slate-500">{g ? `${int(g.stats.orders)} units · ${g.share.toFixed(0)}% of ${noun}` : `No ${noun}`}</div>
             </div>
             <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Avg profit per unit</div>
             <div className={`text-3xl font-bold tabular-nums ${avg != null && avg < 0 ? "text-rose-700" : "text-slate-900"}`}>{gbp(avg)}</div>
@@ -550,23 +646,26 @@ function SegmentCards({ rows }: { rows: OrderRow[] }) {
   );
 }
 
-function OrderBreakdown({ title, note, rows, dims, defaultSort = "orders", customers }: {
-  title: string; note?: string; rows: OrderRow[]; dims: OrderDimKey[]; defaultSort?: OrderSortKey;
+function OrderBreakdown({ title, note, rows, dims, defaultSort = "orders", customers, dateLabel, statusLabel, cols = ORDER_COLS }: {
+  title: string; note?: string; rows: OrderRow[]; dims: OrderDimKey[]; defaultSort?: OrderSortKey; cols?: Col<OrderStats>[];
   /** Open each row into its individual orders, newest first or lowest profit first. */
   customers?: "date" | "profit";
+  dateLabel?: string; statusLabel?: string;
 }) {
   const [sort, setSort] = useState<OrderSortKey>(defaultSort);
   const groups = useMemo(() => groupOrders(rows, dims, sort), [rows, dims, sort]);
   return (
     <Card title={title} note={note}>
-      <GroupTable groups={groups} dimTitle={orderDimLabel(dims[0])} cols={ORDER_COLS} sort={sort} onSort={(k) => setSort(k as OrderSortKey)} limit={12}
-        detail={customers ? (g) => <OrderList rows={g.rows} by={customers} showExec={dims[0] !== "exec"} /> : undefined} />
+      <GroupTable groups={groups} dimTitle={orderDimLabel(dims[0])} cols={cols} sort={sort} onSort={(k) => setSort(k as OrderSortKey)} limit={12}
+        detail={customers ? (g) => <OrderList rows={g.rows} by={customers} showExec={dims[0] !== "exec"} dateLabel={dateLabel} statusLabel={statusLabel} /> : undefined} />
     </Card>
   );
 }
 
 // One line per order: who bought what, when, how it was funded, and what it made.
-function OrderList({ rows, by, showExec = true }: { rows: OrderRow[]; by: "date" | "profit"; showExec?: boolean }) {
+function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLabel = "Delivery" }: {
+  rows: OrderRow[]; by: "date" | "profit"; showExec?: boolean; dateLabel?: string; statusLabel?: string;
+}) {
   const sorted = useMemo(() => [...rows].sort((a, b) =>
     by === "date" ? b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer) : (a.profit ?? Infinity) - (b.profit ?? Infinity),
   ), [rows, by]);
@@ -577,9 +676,9 @@ function OrderList({ rows, by, showExec = true }: { rows: OrderRow[]; by: "date"
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Vehicle</th>
           {showExec && <th className="px-2 py-1 text-left font-semibold">Exec</th>}
-          <th className="px-2 py-1 text-left font-semibold">Ordered</th>
+          <th className="px-2 py-1 text-left font-semibold">{dateLabel}</th>
           <th className="px-2 py-1 text-left font-semibold">Funder</th>
-          <th className="px-2 py-1 text-left font-semibold">Delivery</th>
+          <th className="px-2 py-1 text-left font-semibold">{statusLabel}</th>
           <th className="px-2 py-1 text-right font-semibold">Profit</th>
         </tr>
       </thead>
@@ -603,7 +702,7 @@ function OrderList({ rows, by, showExec = true }: { rows: OrderRow[]; by: "date"
 const shortDate = (day: string) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
 
-function BestWorst({ rows }: { rows: OrderRow[] }) {
+function BestWorst({ rows, title = "Most and least profitable orders" }: { rows: OrderRow[]; title?: string }) {
   const priced = useMemo(() => rows.filter((r) => r.profit != null).sort((a, b) => (b.profit as number) - (a.profit as number)), [rows]);
   if (priced.length < 2) return null;
   const n = Math.min(5, Math.floor(priced.length / 2));
@@ -628,7 +727,7 @@ function BestWorst({ rows }: { rows: OrderRow[] }) {
     </div>
   );
   return (
-    <Card title="Most and least profitable orders">
+    <Card title={title}>
       <div className="grid gap-6 lg:grid-cols-2">
         {list("Most profitable", priced.slice(0, n))}
         {list("Least profitable", priced.slice(-n).reverse())}
@@ -637,7 +736,7 @@ function BestWorst({ rows }: { rows: OrderRow[] }) {
   );
 }
 
-function OrderBuilder({ rows }: { rows: OrderRow[] }) {
+function OrderBuilder({ rows, cols = ORDER_COLS }: { rows: OrderRow[]; cols?: Col<OrderStats>[] }) {
   const [first, setFirst] = useState<OrderDimKey>("segment");
   const [second, setSecond] = useState<OrderDimKey | "">("model");
   const [sort, setSort] = useState<OrderSortKey>("orders");
@@ -645,7 +744,7 @@ function OrderBuilder({ rows }: { rows: OrderRow[] }) {
   const groups = useMemo(() => groupOrders(rows, dims, sort), [rows, dims, sort]);
   return (
     <BuilderCard dims={ORDER_DIMENSIONS} first={first} second={second} setFirst={setFirst} setSecond={setSecond} labelOf={orderDimLabel}>
-      <GroupTable key={dims.join("|")} groups={groups} dimTitle={dims.map(orderDimLabel).join(" › ")} cols={ORDER_COLS}
+      <GroupTable key={dims.join("|")} groups={groups} dimTitle={dims.map(orderDimLabel).join(" › ")} cols={cols}
         sort={sort} onSort={(k) => setSort(k as OrderSortKey)} swatches={first === "segment" ? SEGMENT_COLOURS : undefined} />
     </BuilderCard>
   );

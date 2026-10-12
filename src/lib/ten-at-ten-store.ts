@@ -3,10 +3,12 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { salesExecs, salesLeaderboardNameMap, tenAtTenUploads } from "@/db/schema";
+import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads } from "@/db/schema";
 import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
 import type { OrderParse, TenAtTenOrder } from "./ten-at-ten-orders";
-import type { OrderStoredRow, StoredRow } from "./ten-at-ten-report";
+import type { Budgets, OrderStoredRow, StoredRow } from "./ten-at-ten-report";
+
+export type { Budgets };
 
 export interface TenAtTenIngest {
   rowsInFile: number;
@@ -144,28 +146,51 @@ export async function ingestTenAtTen(parsed: TenAtTenParse, meta: { filename: st
 
 // ─── Orders ────────────────────────────────────────────────────────────────
 
-type OrderComparable = Pick<TenAtTenOrder, "exec" | "vehicleRaw" | "product" | "termMonths" | "funder" | "delivery" | "profit">;
+type OrderComparable = Pick<TenAtTenOrder, "exec" | "vehicleRaw" | "product" | "termMonths" | "funder" | "delivery" | "deliveryDay" | "deliveryStatus" | "profit">;
 
 function sameOrder(a: OrderComparable, b: OrderComparable): boolean {
   return a.exec === b.exec && a.vehicleRaw === b.vehicleRaw && a.product === b.product && a.termMonths === b.termMonths
-    && a.funder === b.funder && a.delivery === b.delivery && a.profit === b.profit;
+    && a.funder === b.funder && a.delivery === b.delivery && a.deliveryDay === b.deliveryDay
+    && a.deliveryStatus === b.deliveryStatus && a.profit === b.profit;
+}
+
+// The two Dealbook reports share columns and keys, so one merge serves both;
+// only the table differs. Named explicitly — never interpolated from input.
+const DEALBOOK_TABLE = { orders: "ten_at_ten_orders", deliveries: "ten_at_ten_deliveries" } as const;
+export type DealbookKind = keyof typeof DEALBOOK_TABLE;
+
+export function ingestTenAtTenOrders(parsed: OrderParse, meta: { filename: string; userId: string }): Promise<TenAtTenIngest> {
+  return ingestDealbook(parsed, meta, "orders");
 }
 
 /**
- * Merge an order list into the store, line by line — the same rules as the
- * enquiry log: new lines are added, known lines overwritten with this file's
- * values (profit settling, delivery landing), identical lines left alone.
+ * Merge a Dealbook report into its table, line by line — the same rules as
+ * the enquiry log: new lines are added, known lines overwritten with this
+ * file's values (profit settling, a delivery landing or slipping a month),
+ * identical lines left alone.
  */
-export async function ingestTenAtTenOrders(parsed: OrderParse, meta: { filename: string; userId: string }): Promise<TenAtTenIngest> {
+export async function ingestDealbook(
+  parsed: OrderParse,
+  meta: { filename: string; userId: string },
+  kind: DealbookKind,
+  /**
+   * Delivery months this file is the complete list for. Lines stored for
+   * those months that the file no longer carries have slipped to another
+   * month or been cancelled, and are removed — otherwise a slipped vehicle
+   * would sit in its old month as "Due" for good.
+   */
+  syncMonths: string[] = [],
+): Promise<TenAtTenIngest> {
+  const table = sql.raw(DEALBOOK_TABLE[kind]);
   const now = new Date();
   const nowSec = Math.floor(now.getTime() / 1000);
   let removed = 0;
 
   for (let i = 0; i < parsed.excludedIds.length; i += 400) {
     const slice = parsed.excludedIds.slice(i, i + 400);
-    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ten_at_ten_orders WHERE id IN (${inList(slice)})`);
+    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ${table} WHERE id IN (${inList(slice)})`);
     if (Number(c?.n ?? 0) > 0) {
-      await db.run(sql`DELETE FROM ten_at_ten_orders WHERE id IN (${inList(slice)})`);
+      await db.run(sql`DELETE FROM ${table} WHERE id IN (${inList(slice)})`);
       removed += Number(c.n);
     }
   }
@@ -175,13 +200,14 @@ export async function ingestTenAtTenOrders(parsed: OrderParse, meta: { filename:
   for (let i = 0; i < ids.length; i += 400) {
     const found = await db.all<{
       id: string; exec: string; vehicle_raw: string | null; product: string | null; term_months: number | null;
-      funder: string | null; delivery: string | null; profit: number | null;
-    }>(sql`SELECT id, exec, vehicle_raw, product, term_months, funder, delivery, profit
-           FROM ten_at_ten_orders WHERE id IN (${inList(ids.slice(i, i + 400))})`);
+      funder: string | null; delivery: string | null; delivery_day: string | null; delivery_status: string | null; profit: number | null;
+    }>(sql`SELECT id, exec, vehicle_raw, product, term_months, funder, delivery, delivery_day, delivery_status, profit
+           FROM ${table} WHERE id IN (${inList(ids.slice(i, i + 400))})`);
     for (const f of found) {
       existing.set(f.id, {
         exec: f.exec, vehicleRaw: f.vehicle_raw ?? "", product: f.product ?? "", termMonths: f.term_months,
-        funder: f.funder ?? "", delivery: f.delivery ?? "", profit: f.profit,
+        funder: f.funder ?? "", delivery: f.delivery ?? "", deliveryDay: f.delivery_day,
+        deliveryStatus: (f.delivery_status ?? "") as OrderComparable["deliveryStatus"], profit: f.profit,
       });
     }
   }
@@ -199,13 +225,13 @@ export async function ingestTenAtTenOrders(parsed: OrderParse, meta: { filename:
     const values = writes.slice(i, i + 50).map((r) => sql`(
       ${r.id}, ${r.orderedAt}, ${r.orderDay}, ${r.exec}, ${r.customer}, ${r.vehicleRaw}, ${r.model},
       ${r.derivative}, ${r.derivativeKey}, ${r.segment}, ${r.product}, ${r.termMonths}, ${r.funder},
-      ${r.delivery}, ${r.profit}, ${nowSec}, ${nowSec}
+      ${r.delivery}, ${r.deliveryDay}, ${r.deliveryStatus}, ${r.profit}, ${nowSec}, ${nowSec}
     )`);
     await db.run(sql`
-      INSERT INTO ten_at_ten_orders (
+      INSERT INTO ${table} (
         id, ordered_at, order_day, exec, customer, vehicle_raw, model,
         derivative, derivative_key, segment, product, term_months, funder,
-        delivery, profit, first_uploaded_at, updated_at
+        delivery, delivery_day, delivery_status, profit, first_uploaded_at, updated_at
       ) VALUES ${sql.join(values, sql`, `)}
       ON CONFLICT(id) DO UPDATE SET
         exec = excluded.exec,
@@ -218,12 +244,25 @@ export async function ingestTenAtTenOrders(parsed: OrderParse, meta: { filename:
         term_months = excluded.term_months,
         funder = excluded.funder,
         delivery = excluded.delivery,
+        delivery_day = excluded.delivery_day,
+        delivery_status = excluded.delivery_status,
         profit = excluded.profit,
         updated_at = excluded.updated_at
     `);
   }
 
-  const days = parsed.rows.map((r) => r.orderDay).sort();
+  if (syncMonths.length > 0 && parsed.rows.length > 0) {
+    const keep = inList(parsed.rows.map((r) => r.id));
+    const months = inList(syncMonths);
+    const gone = sql`substr(delivery_day, 1, 7) IN (${months}) AND id NOT IN (${keep})`;
+    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ${table} WHERE ${gone}`);
+    if (Number(c?.n ?? 0) > 0) {
+      await db.run(sql`DELETE FROM ${table} WHERE ${gone}`);
+      removed += Number(c.n);
+    }
+  }
+
+  const days = parsed.rows.map((r) => (kind === "deliveries" ? r.deliveryDay ?? r.orderDay : r.orderDay)).sort();
   const result: TenAtTenIngest = {
     rowsInFile: parsed.rowsInFile,
     inserted, updated, unchanged,
@@ -246,7 +285,7 @@ export async function ingestTenAtTenOrders(parsed: OrderParse, meta: { filename:
     lastDay: result.lastDay,
     uploadedAt: now,
     uploadedByUserId: meta.userId,
-    kind: "orders",
+    kind,
   });
 
   return result;
@@ -321,9 +360,50 @@ export async function recordResponseUpload(result: TenAtTenIngest, meta: { filen
   });
 }
 
+/**
+ * Deliveries for the report, shaped as order rows so the Orders views can be
+ * reused: `orderDay` carries the DELIVERY day (the month a vehicle counts
+ * in) and `delivery` its status — Delivered, Arrived or Due.
+ */
+export async function loadTenAtTenDeliveries(): Promise<OrderStoredRow[]> {
+  const rows = await db.all<{
+    delivery_day: string; delivery_status: string | null; exec: string; customer: string; model: string; derivative: string | null;
+    derivative_key: string | null; segment: string; product: string | null; term_months: number | null; funder: string | null; profit: number | null;
+  }>(sql`SELECT delivery_day, delivery_status, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder, profit
+         FROM ten_at_ten_deliveries WHERE delivery_day IS NOT NULL ORDER BY delivery_day`);
+  return rows.map((r) => ({
+    orderDay: r.delivery_day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative,
+    derivativeKey: r.derivative_key, segment: r.segment, product: r.product ?? "", termMonths: r.term_months,
+    funder: r.funder ?? "", delivery: r.delivery_status ?? "", profit: r.profit == null ? null : Number(r.profit),
+  }));
+}
+
+
+export async function loadBudgets(): Promise<Budgets> {
+  const rows = await db.select().from(tenAtTenBudgets);
+  const out: Budgets = {};
+  for (const r of rows) {
+    const b = (out[r.yearMonth] ??= { car: 0, cv: 0 });
+    if (r.segment === "car") b.car = r.units;
+    else if (r.segment === "cv") b.cv = r.units;
+  }
+  return out;
+}
+
+export async function saveBudgets(rows: { yearMonth: string; car: number; cv: number }[]): Promise<void> {
+  for (const r of rows) {
+    for (const [segment, units] of [["car", r.car], ["cv", r.cv]] as const) {
+      await db.run(sql`
+        INSERT INTO ten_at_ten_budgets (year_month, segment, units) VALUES (${r.yearMonth}, ${segment}, ${units})
+        ON CONFLICT(year_month, segment) DO UPDATE SET units = excluded.units
+      `);
+    }
+  }
+}
+
 export interface HeldSummary { rows: number; firstDay: string | null; lastDay: string | null }
 
-export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; response: HeldSummary }> {
+export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; deliveries: HeldSummary; response: HeldSummary }> {
   const [e] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(enquiry_day) AS lo, MAX(enquiry_day) AS hi FROM ten_at_ten_enquiries`,
   );
@@ -333,7 +413,10 @@ export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; order
   const [x] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(enquiry_day) AS lo, MAX(enquiry_day) AS hi FROM enquiries`,
   );
+  const [d] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
+    sql`SELECT COUNT(*) AS n, MIN(delivery_day) AS lo, MAX(delivery_day) AS hi FROM ten_at_ten_deliveries`,
+  );
   const held = (r: { n: number; lo: string | null; hi: string | null } | undefined): HeldSummary =>
     ({ rows: Number(r?.n ?? 0), firstDay: r?.lo ?? null, lastDay: r?.hi ?? null });
-  return { enquiries: held(e), orders: held(o), response: held(x) };
+  return { enquiries: held(e), orders: held(o), deliveries: held(d), response: held(x) };
 }

@@ -836,6 +836,40 @@ files; `detectTenAtTenFile` tells them apart by header.
   below, −£999 to −£500, −£499 to −£1). By exec and profit bands open into
   the individual orders; groups carry their `rows` for exactly this.
 
+### Deliveries section (Dealbook – Deliveries)
+
+The Dealerweb delivered list. **Same columns as the order list** — the
+upload tells them apart by date shape (`classifyDealbook`): Orders have
+their ORDER dates in one month and delivery dates spread; Deliveries have
+their DELIVERY dates (column AK) in one month and order dates spread. Every
+real file follows that. When both sit in one month the uploader is asked
+(`needsChoice`) rather than the file being guessed into the wrong table.
+
+- Counted in the month of the AK date. AK's flag is the status: Dlv
+  Delivered, Arr Arrived, Est Due. "Still to deliver" = Arrived + Due.
+- **Key = order key + delivery month** (`makeDeliveryKey`). One deal can hold
+  identical vehicles delivered in different months (The Primary and Urgent
+  Care Alliance's two Ranger Wildtraks, ordered 11 Aug 2026: one delivered
+  24 Sep, one due 30 Oct); on the order key alone each month's report
+  overwrote the other's.
+- **Each deliveries upload syncs its month**: lines stored for that delivery
+  month that the file no longer carries are removed (slipped or cancelled),
+  shown in the upload result. Otherwise a slipped vehicle sat in its old
+  month as Due for good, inflating "on course for". This is the one place
+  an upload removes lines it doesn't contain — so upload the full month,
+  never a filtered export. Orders still never remove.
+- **Budgets** live in `ten_at_ten_budgets` (month × car|cv), edited on the
+  upload page; combined is always car + cv. Seeded Q4 2026 with the user's
+  figures (Oct 106/40, Nov 78/32, Dec 61/20) via INSERT OR IGNORE. Car = ICE
+  + BEV cars, CV = vans (`departmentOf`).
+- Budget comparison only for whole months (Month, Quarter, or a custom
+  range of whole months — `budgetMonths`); a day or week says so rather than
+  pro-rating a target nobody set. A month without a budget is shown as
+  missing, never as 0. The panel is always the department — filters don't
+  narrow it.
+- Rows are loaded as order rows (`loadTenAtTenDeliveries`: day = delivery
+  day, delivery = status) so the Orders views serve both tabs.
+
 ## Sales leaderboard (Pole Position)
 
 `/sales-leaderboard` scores execs 3/2/1 per metric from three Dealerweb

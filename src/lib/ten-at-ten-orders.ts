@@ -1,4 +1,5 @@
-// 10 at 10 — parsing rules for the Dealerweb order list.
+// 10 at 10 — parsing rules for the two Dealbook reports: the order list
+// (Dealbook – Orders) and the delivered list (Dealbook – Deliveries).
 //
 // Pure, like ten-at-ten.ts. The order list is the "ag-grid" export Pole
 // Position reads for Order Take:
@@ -6,8 +7,8 @@
 //   R Finance Type ("HP 60 Nov 31234.50") · AH Total Gross (profit) ·
 //   AK Delivery Date ("9 Oct 2026 Dlv" / "30 Nov 2026 Est")
 // It ends in a totals block ("NEW TOTALS", "29 Units", "AVERAGE"), which
-// is skipped. The delivered list has the same columns; uploading it is
-// harmless, as its rows are the same orders keyed the same way.
+// is skipped. Both reports have exactly the same columns; classifyDealbook
+// tells them apart by their dates.
 
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
@@ -92,6 +93,19 @@ export function deliveryOf(raw: unknown): "Delivered" | "Awaiting delivery" | "N
   return "Not stated";
 }
 
+// The delivered list's view of column AK: the date the vehicle delivers
+// (or is due to) and where it is. Dlv = handed over, Arr = arrived and
+// waiting, Est = due on that date.
+export type DeliveryStatus = "Delivered" | "Arrived" | "Due" | "Not stated";
+
+export function deliveryStatusOf(raw: unknown): DeliveryStatus {
+  const s = norm(raw).toLowerCase();
+  if (/\bdlv\b/.test(s)) return "Delivered";
+  if (/\barr\b/.test(s)) return "Arrived";
+  if (/\best\b/.test(s)) return "Due";
+  return "Not stated";
+}
+
 function money(raw: unknown): number | null {
   if (raw == null || raw === "") return null;
   const n = typeof raw === "number" ? raw : Number(String(raw).replace(/[£,\s]/g, ""));
@@ -116,6 +130,17 @@ export function makeOrderKey(orderAt: number, customer: string, vehicle: string,
     .slice(0, 20);
 }
 
+/**
+ * A delivery's key adds its delivery month to the order key. One deal can
+ * hold identical vehicles delivered in different months — The Primary and
+ * Urgent Care Alliance's two Ranger Wildtraks ordered 11 Aug 2026, one
+ * delivered 24 Sep, one due 30 Oct — and on the order key alone each
+ * month's report would overwrite the other's.
+ */
+export function makeDeliveryKey(orderKey: string, deliveryDay: string): string {
+  return createHash("sha1").update(`${orderKey}|${deliveryDay.slice(0, 7)}`).digest("hex").slice(0, 20);
+}
+
 // ─── Parse ─────────────────────────────────────────────────────────────────
 
 export interface TenAtTenOrder {
@@ -133,6 +158,9 @@ export interface TenAtTenOrder {
   termMonths: number | null;
   funder: string;
   delivery: string;
+  /** Column AK's date, day key — the delivery month for Dealbook – Deliveries. */
+  deliveryDay: string | null;
+  deliveryStatus: DeliveryStatus;
   profit: number | null;
 }
 
@@ -163,21 +191,45 @@ export function isOrderListHeader(header: readonly unknown[]): boolean {
   return REQUIRED_HEADERS.every(([i, want]) => letters(header[i]) === want);
 }
 
-export type TenAtTenFileKind = "enquiries" | "orders" | "response";
+export type TenAtTenFileKind = "enquiries" | "orders" | "deliveries" | "response";
+
+function deliveredAtDay(raw: unknown): string | null {
+  const at = parseExportTimestamp(raw);
+  return at == null ? null : dayKey(at);
+}
+
+/**
+ * Dealbook – Orders or Dealbook – Deliveries? The two reports share every
+ * column, but not their shape: the order list is one month of ORDER dates
+ * with delivery dates spread out, and the delivered list is one month of
+ * DELIVERY dates with order dates spread back over the year. Every real
+ * file we hold follows that. When both columns sit in a single month (an
+ * order list on the 3rd, say) it can't be told, and null asks the person
+ * uploading — guessing would put lines in the wrong report.
+ */
+export function classifyDealbook(rows: readonly Pick<TenAtTenOrder, "orderDay" | "deliveryDay">[]): "orders" | "deliveries" | null {
+  const months = (xs: (string | null)[]) => new Set(xs.filter((x): x is string => !!x).map((d) => d.slice(0, 7)));
+  const orderMonths = months(rows.map((r) => r.orderDay));
+  const deliveryMonths = months(rows.map((r) => r.deliveryDay));
+  if (orderMonths.size === 1 && deliveryMonths.size > 1) return "orders";
+  if (deliveryMonths.size === 1 && orderMonths.size > 1) return "deliveries";
+  return null;
+}
 
 /**
  * Which 10 at 10 report a file is, from its header row: the Dealerweb
- * enquiry log and order list, and the MotorComplete enquiry export that
- * drives Response times, are all "ag-grid" exports with different column
- * layouts. null for anything else.
+ * enquiry log, the Dealbook (orders or deliveries — same columns, see
+ * classifyDealbook) and the MotorComplete enquiry export behind Response
+ * times are all "ag-grid" exports with different column layouts. null for
+ * anything else.
  */
-export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): TenAtTenFileKind | null {
+export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): "enquiries" | "dealbook" | "response" | null {
   const wb = XLSX.read(buf, { type: Buffer.isBuffer(buf) ? "buffer" : "array", sheetRows: 1 });
   const ws = wb.Sheets[wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0]];
   if (!ws) return null;
   const header = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null })[0] ?? [];
   if (isEnquiryLogHeader(header)) return "enquiries";
-  if (isOrderListHeader(header)) return "orders";
+  if (isOrderListHeader(header)) return "dealbook";
   if (isMotorCompleteExportHeader(header)) return "response";
   return null;
 }
@@ -230,6 +282,8 @@ export function parseOrderWorkbook(buf: ArrayBuffer | Buffer): OrderParse {
       termMonths: finance.termMonths,
       funder: finance.funder,
       delivery: deliveryOf(raw[COL.delivery]),
+      deliveryDay: deliveredAtDay(raw[COL.delivery]),
+      deliveryStatus: deliveryStatusOf(raw[COL.delivery]),
       profit: money(raw[COL.profit]),
     });
   }

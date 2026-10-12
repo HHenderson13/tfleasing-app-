@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import {
   NotAnOrderListError,
+  classifyDealbook,
   cleanVehicle,
   deliveryOf,
+  deliveryStatusOf,
   detectTenAtTenFile,
   parseFinance,
   parseOrderWorkbook,
   segmentOf,
 } from "./ten-at-ten-orders";
-import { avgProfit, decodeOrders, encodeOrders, groupOrders, orderStatsOf, profitBand } from "./ten-at-ten-report";
+import { avgProfit, budgetLines, budgetMonths, decodeOrders, encodeOrders, groupOrders, orderStatsOf, profitBand, rangeFor } from "./ten-at-ten-report";
 
 const HEADER = ["Status", "SE", "Sales Type", "Customer", "Order Date", "Vehicle Details", ...new Array(11).fill("x"), "Finance Type",
   ...new Array(15).fill("x"), "Total Gross", "DMS Total Gross", "Difference", "Delivery Date"];
@@ -99,7 +101,7 @@ describe("parseOrderWorkbook", () => {
   });
 
   it("tells the order list from the enquiry log by its header", () => {
-    expect(detectTenAtTenFile(file)).toBe("orders");
+    expect(detectTenAtTenFile(file)).toBe("dealbook");
     const enquiryHeader = ["Date Time", "SE", "Dealer Location", "Customer", "Source", "NU", "Model", ...new Array(9).fill("x"), "Status"];
     expect(detectTenAtTenFile(workbook([enquiryHeader]))).toBe("enquiries");
     const motorComplete = ["Dealer", "Created By", "Customer", "Customer Id", "Date Raised", "Type", ...new Array(9).fill("x"), "Date Transferred"];
@@ -138,5 +140,63 @@ describe("order stats", () => {
     expect(profitBand(1999.99)).toBe("£1,000 to £1,999");
     expect(profitBand(2000)).toBe("£2,000 and above");
     expect(profitBand(null)).toBe("No profit figure");
+  });
+});
+
+describe("Dealbook – Orders or Dealbook – Deliveries", () => {
+  const row = (orderDay: string, deliveryDay: string | null) => ({ orderDay, deliveryDay });
+
+  it("tells the two apart by which date sits in one month", () => {
+    // export (46): October orders, deliveries spread to March.
+    expect(classifyDealbook([row("2026-10-01", "2026-10-30"), row("2026-10-09", "2026-11-30"), row("2026-10-05", "2027-03-31")])).toBe("orders");
+    // export (47): October deliveries, ordered back to May.
+    expect(classifyDealbook([row("2026-05-14", "2026-10-02"), row("2026-09-20", "2026-10-31"), row("2026-10-12", "2026-10-31")])).toBe("deliveries");
+  });
+
+  it("asks when both dates sit in one month", () => {
+    expect(classifyDealbook([row("2026-10-01", "2026-10-30"), row("2026-10-03", "2026-10-31")])).toBeNull();
+  });
+
+  it("reads delivered, arrived and due from column AK", () => {
+    expect(deliveryStatusOf("9 Oct 2026 Dlv")).toBe("Delivered");
+    expect(deliveryStatusOf("15 Oct 2026 Arr")).toBe("Arrived");
+    expect(deliveryStatusOf("31 Oct 2026 Est")).toBe("Due");
+    expect(deliveryStatusOf("")).toBe("Not stated");
+  });
+});
+
+describe("deliveries vs budget", () => {
+  const budgets = { "2026-10": { car: 106, cv: 40 }, "2026-11": { car: 78, cv: 32 }, "2026-12": { car: 61, cv: 20 } };
+  const deliveries = decodeOrders(encodeOrders([
+    ...Array.from({ length: 3 }, () => ({ status: "Delivered", segment: "BEV Car" })),
+    { status: "Due", segment: "ICE Car" },
+    { status: "Delivered", segment: "Van" },
+    { status: "Arrived", segment: "Van" },
+    { status: "Due", segment: "Van" },
+  ].map((x, i) => ({
+    orderDay: "2026-10-05", exec: "DoJa", customer: `C${i}`, model: "M", derivative: null, derivativeKey: null,
+    segment: x.segment, product: "HP", termMonths: 60, funder: "Lex", delivery: x.status, profit: 100,
+  }))));
+
+  it("only compares whole months — budgets are monthly", () => {
+    expect(budgetMonths(rangeFor("month", "2026-10-12", { from: "", to: "" }))).toEqual(["2026-10"]);
+    expect(budgetMonths(rangeFor("quarter", "2026-11-02", { from: "", to: "" }))).toEqual(["2026-10", "2026-11", "2026-12"]);
+    expect(budgetMonths(rangeFor("custom", "", { from: "2026-11-01", to: "2026-12-31" }))).toEqual(["2026-11", "2026-12"]);
+    expect(budgetMonths(rangeFor("week", "2026-10-12", { from: "", to: "" }))).toBeNull();
+    expect(budgetMonths(rangeFor("custom", "", { from: "2026-10-05", to: "2026-10-31" }))).toBeNull();
+  });
+
+  it("splits Car and CV, and combines them", () => {
+    const l = budgetLines(deliveries, budgets, ["2026-10"]);
+    expect(l.car).toMatchObject({ budget: 106, delivered: 3, arrived: 0, due: 1 });
+    expect(l.cv).toMatchObject({ budget: 40, delivered: 1, arrived: 1, due: 1 });
+    expect(l.combined).toMatchObject({ budget: 146, delivered: 4, arrived: 1, due: 2 });
+    expect(budgetLines(deliveries, budgets, ["2026-10", "2026-11", "2026-12"]).combined.budget).toBe(337);
+  });
+
+  it("never treats a month without a budget as zero", () => {
+    const l = budgetLines(deliveries, budgets, ["2027-01"]);
+    expect(l.combined.budget).toBeNull();
+    expect(l.car.missing).toEqual(["2027-01"]);
   });
 });

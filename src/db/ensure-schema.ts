@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 54;
+const SCHEMA_VERSION = 55;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1001,10 +1001,55 @@ async function ensureTenAtTenTables() {
     )
   `));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_orders_day ON ten_at_ten_orders(order_day)`));
+  await ensureColumns("ten_at_ten_orders", [
+    { name: "delivery_day", sqlType: "TEXT" },
+    { name: "delivery_status", sqlType: "TEXT" },
+  ]);
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_deliveries (
+      id TEXT PRIMARY KEY,
+      ordered_at INTEGER NOT NULL,
+      order_day TEXT NOT NULL,
+      exec TEXT NOT NULL,
+      customer TEXT NOT NULL,
+      vehicle_raw TEXT,
+      model TEXT NOT NULL,
+      derivative TEXT,
+      derivative_key TEXT,
+      segment TEXT NOT NULL,
+      product TEXT,
+      term_months INTEGER,
+      funder TEXT,
+      delivery TEXT,
+      delivery_day TEXT,
+      delivery_status TEXT,
+      profit REAL,
+      first_uploaded_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_deliveries_day ON ten_at_ten_deliveries(delivery_day)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_budgets (
+      year_month TEXT NOT NULL,
+      segment TEXT NOT NULL,
+      units INTEGER NOT NULL,
+      PRIMARY KEY (year_month, segment)
+    )
+  `));
+  // Q4 2026 delivery budgets as given by the user (2026-10-12). INSERT OR
+  // IGNORE, so an edit made on the upload page is never overwritten.
+  await db.run(sql.raw(`
+    INSERT OR IGNORE INTO ten_at_ten_budgets (year_month, segment, units) VALUES
+      ('2026-10', 'car', 106), ('2026-10', 'cv', 40),
+      ('2026-11', 'car', 78),  ('2026-11', 'cv', 32),
+      ('2026-12', 'car', 61),  ('2026-12', 'cv', 20)
+  `));
   // HaHe and JoRu are stripped from all 10 at 10 data. Ingest never stores
   // them; this sweep is the backstop. Idempotent.
   await db.run(sql.raw(`DELETE FROM ten_at_ten_enquiries WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_orders WHERE lower(exec) IN ('hahe', 'joru')`));
+  await db.run(sql.raw(`DELETE FROM ten_at_ten_deliveries WHERE lower(exec) IN ('hahe', 'joru')`));
 }
 
 async function ensureEnquiryTables() {

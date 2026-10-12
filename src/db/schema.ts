@@ -1068,12 +1068,59 @@ export const tenAtTenOrders = sqliteTable(
     termMonths: integer("term_months"),               // R
     funder: text("funder"),                           // R  ALD | Lex | Novuna | Arval | Ford Credit
     delivery: text("delivery"),                       // AK Delivered | Awaiting delivery
+    deliveryDay: text("delivery_day"),                // AK date
+    deliveryStatus: text("delivery_status"),          // AK Delivered | Arrived | Due
     profit: real("profit"),                           // AH Total Gross
     firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
   (t) => ({
     byDay: index("idx_ten_at_ten_orders_day").on(t.orderDay),
+  }),
+);
+
+// Dealbook – Deliveries: the delivered list, same columns and the same key
+// as the order list, but reported by DELIVERY month (column AK). A vehicle
+// whose date slips moves month when a later report carries it.
+export const tenAtTenDeliveries = sqliteTable(
+  "ten_at_ten_deliveries",
+  {
+    id: text("id").primaryKey(),
+    orderedAt: integer("ordered_at").notNull(),
+    orderDay: text("order_day").notNull(),
+    exec: text("exec").notNull(),
+    customer: text("customer").notNull(),
+    vehicleRaw: text("vehicle_raw"),
+    model: text("model").notNull(),
+    derivative: text("derivative"),
+    derivativeKey: text("derivative_key"),
+    segment: text("segment").notNull(),
+    product: text("product"),
+    termMonths: integer("term_months"),
+    funder: text("funder"),
+    delivery: text("delivery"),
+    deliveryDay: text("delivery_day"),                // AK date — the month it counts in
+    deliveryStatus: text("delivery_status"),          // Delivered | Arrived | Due
+    profit: real("profit"),
+    firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byDeliveryDay: index("idx_ten_at_ten_deliveries_day").on(t.deliveryDay),
+  }),
+);
+
+// Monthly delivery budgets, Car and CV (commercial); combined is their sum.
+// Edited on the 10 at 10 upload page.
+export const tenAtTenBudgets = sqliteTable(
+  "ten_at_ten_budgets",
+  {
+    yearMonth: text("year_month").notNull(),          // "2026-10"
+    segment: text("segment").notNull(),               // car | cv
+    units: integer("units").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.yearMonth, t.segment] }),
   }),
 );
 

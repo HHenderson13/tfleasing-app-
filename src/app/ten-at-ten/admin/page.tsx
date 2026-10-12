@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
-import { listTenAtTenUploads, tenAtTenSummary, type HeldSummary } from "@/lib/ten-at-ten-store";
+import { listTenAtTenUploads, loadBudgets, tenAtTenSummary, type HeldSummary } from "@/lib/ten-at-ten-store";
+import { BudgetEditor } from "./budget-editor";
 import { UploadClient } from "./upload-client";
 
 export const dynamic = "force-dynamic";
 
 // The names the team uses for the three files. Keep in step with the
 // upload client's KIND_LABEL.
-const KIND_LABEL: Record<string, string> = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders" };
+const KIND_LABEL: Record<string, string> = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries" };
 
 const fmtDay = (d: string | null) =>
   d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "—";
 
 interface FileGuide {
-  kind: "response" | "enquiries" | "orders";
+  kind: "response" | "enquiries" | "orders" | "deliveries";
   from: string;
   columns: string;
   feeds: string;
@@ -51,15 +52,28 @@ const FILES: FileGuide[] = [
     feeds: "Orders (profit)",
     rules: [
       "Profit is Total Gross; funder, product and term come from Finance Type. Vehicles split into ICE Car, BEV Car and Van.",
-      "HaHe and JoRu are stripped. The delivered list has the same columns and is safe to upload too — its lines merge onto the same orders.",
+      "Same columns as Dealbook – Deliveries; recognised because its order dates sit in one month. If a file could be either, you'll be asked. HaHe and JoRu are stripped.",
     ],
     matched: "order date, customer and vehicle (identical vehicles on the same day stay separate)",
+  },
+  {
+    kind: "deliveries",
+    from: "Dealerweb delivered list (dealbook)",
+    columns: "SE · Customer · Vehicle Details · Total Gross · Delivery Date",
+    feeds: "Deliveries (vs budget, profit)",
+    rules: [
+      "Counted in the month of its Delivery Date (column AK): Dlv is delivered, Arr arrived, Est due.",
+      "Upload the full month: each upload is that month's complete list, so a vehicle no longer on it (slipped to another month, or cancelled) is removed from the month. A filtered export would drop the lines it leaves out.",
+      "Same columns as Dealbook – Orders; recognised because its delivery dates sit in one month. Profit is Total Gross. HaHe and JoRu are stripped.",
+    ],
+    matched: "order date, customer, vehicle and delivery month",
   },
 ];
 
 export default async function TenAtTenAdminPage() {
   await requireAdmin();
-  const [uploads, summary] = await Promise.all([listTenAtTenUploads(25), tenAtTenSummary()]);
+  const [uploads, summary, budgets] = await Promise.all([listTenAtTenUploads(25), tenAtTenSummary(), loadBudgets()]);
+  const thisYear = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric" }).format(new Date()));
   const held: Record<FileGuide["kind"], HeldSummary> = summary;
 
   return (
@@ -74,11 +88,11 @@ export default async function TenAtTenAdminPage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Upload data</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Three files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
-          each is recognised from its columns, so there&apos;s nothing to choose.
+          Four files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
+          each is recognised for you. Delivery budgets are set at the bottom of the page.
         </p>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
           {FILES.map((f) => {
             const h = held[f.kind];
             return (
@@ -105,12 +119,15 @@ export default async function TenAtTenAdminPage() {
           <span className="font-semibold text-slate-900">How uploads work.</span> Files are merged{" "}
           <strong>line by line</strong>, never replaced wholesale: a line already held is overwritten with the newer
           file&apos;s values (Live becoming Ordered, a profit settling, a contact time corrected) and a new line is
-          added. Nothing else already stored is touched, so overlapping date ranges and re-uploading the same file
-          are both safe. Several files at once are merged in the order chosen. If a file shows a line has moved to
-          an excluded name, it&apos;s removed from what&apos;s stored too.
+          added. Overlapping date ranges and re-uploading the same file are both safe, and several files at once are
+          merged in the order chosen. The one exception to &ldquo;nothing else is touched&rdquo;:{" "}
+          <strong>Dealbook – Deliveries is each month&apos;s full list</strong>, so a vehicle no longer on it is
+          removed from that month. And if a file shows a line has moved to an excluded name, it&apos;s removed too.
         </div>
 
         <UploadClient />
+
+        <BudgetEditor budgets={budgets} initialYear={thisYear} />
 
         <section className="mt-10">
           <h2 className="text-sm font-semibold text-slate-900">Recent uploads</h2>
