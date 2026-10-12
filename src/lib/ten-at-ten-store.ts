@@ -306,12 +306,12 @@ export async function loadTenAtTenOrders(): Promise<OrderStoredRow[]> {
 
 export async function loadTenAtTenRows(): Promise<StoredRow[]> {
   const rows = await db.all<{
-    enquiry_day: string; exec: string; source: string; model: string; derivative: string | null; derivative_key: string | null;
+    enquiry_day: string; exec: string; customer: string; source: string; model: string; derivative: string | null; derivative_key: string | null;
     status: string | null; outcome: string; finance_type: string | null; term_months: number | null; annual_mileage: number | null;
-  }>(sql`SELECT enquiry_day, exec, source, model, derivative, derivative_key, status, outcome, finance_type, term_months, annual_mileage
+  }>(sql`SELECT enquiry_day, exec, customer, source, model, derivative, derivative_key, status, outcome, finance_type, term_months, annual_mileage
          FROM ten_at_ten_enquiries ORDER BY enquired_at`);
   return rows.map((r) => ({
-    enquiryDay: r.enquiry_day, exec: r.exec, source: r.source, model: r.model, derivative: r.derivative,
+    enquiryDay: r.enquiry_day, exec: r.exec, customer: r.customer, source: r.source, model: r.model, derivative: r.derivative,
     derivativeKey: r.derivative_key, status: r.status, outcome: r.outcome, financeType: r.finance_type,
     termMonths: r.term_months, annualMileage: r.annual_mileage,
   }));

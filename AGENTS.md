@@ -802,6 +802,27 @@ reads its header check from too.
   upload action are deleted; the homepage card is gone.
 - The PWA manifest moved with it: start_url / scope are `/ten-at-ten`.
 - Every exec, day and "needs attention" line opens into its customers.
+- **Sales Support** (user, 2026-10-12): an exec isn't penalised for a lead
+  that reached them too late to work. `sameDayMissOwner` gives a same-day
+  miss to Sales Support when the lead was passed over with less than the
+  exec's own 15-minute contact target left before 17:30, on a later day, or
+  never; `neverContactedOwner` gives never-contacted to Sales Support only
+  when it was never passed over (once it reached the exec, there was always
+  a next day to call). By exec shows each exec's own misses, plus a
+  "Sales Support · allocation" row whose figures are allocation (5-minute
+  target) and the misses that came from it.
+
+### One look across every tab
+
+User, 2026-10-12: same theme, colours and style everywhere. Hold to it:
+one highlighted (indigo) headline tile per tab — Conversion, First contact,
+Avg profit, Avg profit — with on/off target as a badge on it; emerald-700
+for good and rose-700 for bad, never other greens or reds; source colours
+(blue/cyan/violet/orange/slate), segment colours (ICE amber, BEV emerald,
+Van blue) and budget colours (Car slate, CV = Van blue, Combined indigo)
+fixed; By exec full width and opening into its customers on every tab;
+nested tables collapsed until clicked; everything through the shared
+Tiles / Card / GroupTable components rather than one-off markup.
 
 ### Orders section
 

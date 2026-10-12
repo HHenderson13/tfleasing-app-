@@ -1,4 +1,4 @@
-import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, isEnquiryReportable, reportableAfter } from "./business-hours";
+import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, DAY_CLOSE_MIN, dayKey, isEnquiryReportable, reportableAfter } from "./business-hours";
 
 export interface ReportingRow {
   enquiryAt: number;
@@ -74,6 +74,35 @@ export interface ResponseRow extends ReportingRow {
   sameDayMet: boolean;
 }
 
+// ─── Who a miss belongs to ─────────────────────────────────────────────
+//
+// An exec isn't penalised for a lead that reached them too late to work
+// (user's rule, 2026-10-12). Those misses belong to Sales Support, who
+// allocate the leads, and show against a "Sales Support" row instead.
+
+export type MissOwner = "exec" | "salesSupport";
+
+/**
+ * Who missed a same-day contact. The exec, if the enquiry reached them with
+ * at least their own contact target (15 working minutes) left before the
+ * 17:30 close; Sales Support if it was passed over later than that, on a
+ * later day, or never. null when it isn't a same-day miss at all.
+ */
+export function sameDayMissOwner(r: ResponseRow): MissOwner | null {
+  if (!isSameDayReportable(r) || r.sameDayMet) return null;
+  if (r.transferredAt == null) return "salesSupport";
+  if (dayKey(r.transferredAt) !== r.enquiryDay) return "salesSupport";
+  const t = new Date(r.transferredAt);
+  const minuteOfDay = t.getUTCHours() * 60 + t.getUTCMinutes(); // wall clock, see business-hours
+  return minuteOfDay > DAY_CLOSE_MIN - CONTACT_TARGET_MINS ? "salesSupport" : "exec";
+}
+
+/** Never contacted: the exec's if it reached them, Sales Support's if it was never passed over. */
+export function neverContactedOwner(r: ResponseRow): MissOwner | null {
+  if (!isContactMissing(r)) return null;
+  return r.transferredAt == null ? "salesSupport" : "exec";
+}
+
 export interface ResponseSummary {
   total: number;
   allocMeasured: number;
@@ -89,6 +118,11 @@ export interface ResponseSummary {
   sameDayExpected: number;
   sameDayMet: number;
   sameDayMissed: number;
+  /** sameDayMissed split by owner — the exec's, and Sales Support's (late allocation). */
+  sameDayMissedExec: number;
+  sameDayMissedSupport: number;
+  /** Never contacted though it reached the exec. */
+  neverContactedExec: number;
 }
 
 /**
@@ -118,5 +152,8 @@ export function summariseResponse(rows: readonly ResponseRow[]): ResponseSummary
     sameDayExpected: sde.length,
     sameDayMet: sde.filter((r) => r.sameDayMet).length,
     sameDayMissed: sde.filter((r) => !r.sameDayMet).length,
+    sameDayMissedExec: rows.filter((r) => sameDayMissOwner(r) === "exec").length,
+    sameDayMissedSupport: rows.filter((r) => sameDayMissOwner(r) === "salesSupport").length,
+    neverContactedExec: rows.filter((r) => neverContactedOwner(r) === "exec").length,
   };
 }

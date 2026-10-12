@@ -13,7 +13,7 @@ import {
 
 function stored(over: Partial<StoredRow>): StoredRow {
   return {
-    enquiryDay: "2026-10-01", exec: "DoJa", source: "TF Lead", model: "Ranger", derivative: null, derivativeKey: null,
+    enquiryDay: "2026-10-01", exec: "DoJa", customer: "Customer", source: "TF Lead", model: "Ranger", derivative: null, derivativeKey: null,
     status: "Live", outcome: "live", financeType: "Business", termMonths: 36, annualMileage: 10000, ...over,
   };
 }

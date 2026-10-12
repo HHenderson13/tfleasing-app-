@@ -5,10 +5,11 @@ import { shiftAnchor } from "@/lib/period";
 import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, formatMins, formatWall } from "@/lib/business-hours";
 import type { EnquiryRow } from "@/lib/enquiries";
 import {
-  isContactMissing,
   isSameDayReportable,
   isTransferMissing,
+  neverContactedOwner,
   partitionByReportability,
+  sameDayMissOwner,
   summariseResponse,
   type ResponseSummary,
 } from "@/lib/enquiry-reporting";
@@ -187,7 +188,15 @@ function Tiles({ tiles }: { tiles: { label: string; value: string; sub?: string;
       {tiles.map((t) => (
         <div key={t.label} className={`rounded-2xl border px-4 py-3 shadow-sm ${t.hero ? "border-indigo-900 bg-indigo-950 text-white" : "border-slate-200 bg-white"}`}>
           <div className={`text-[11px] font-semibold uppercase tracking-wider ${t.hero ? "text-indigo-200" : "text-slate-500"}`}>{t.label}</div>
-          <div className={`mt-1 text-3xl font-bold tabular-nums ${t.hero ? "text-white" : t.tone === "good" ? "text-emerald-700" : t.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{t.value}</div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className={`text-3xl font-bold tabular-nums ${t.hero ? "text-white" : t.tone === "good" ? "text-emerald-700" : t.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{t.value}</span>
+            {/* The highlighted tile keeps its white figure; on/off target shows as a badge. */}
+            {t.hero && t.tone && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${t.tone === "good" ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/25 text-rose-200"}`}>
+                {t.tone === "good" ? "On target" : "Over target"}
+              </span>
+            )}
+          </div>
           {t.sub && <div className={`mt-0.5 text-xs ${t.hero ? "text-indigo-200" : "text-slate-500"}`}>{t.sub}</div>}
         </div>
       ))}
@@ -396,10 +405,10 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
       ) : (
         <>
           <SourceShare rows={rows} />
-          <div className="grid gap-5 lg:grid-cols-2">
-            <EnquiryBreakdown title="By exec" rows={rows} dims={EXEC_DIMS} />
-            <EnquiryBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={MODEL_DIMS} />
-          </div>
+          {/* Same layout as every other tab: by exec full width, opening into
+              the customers behind each figure. */}
+          <EnquiryBreakdown title="By exec" note="Click an exec for their enquiries" rows={rows} dims={EXEC_DIMS} customers />
+          <EnquiryBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={MODEL_DIMS} />
           <EnquiryBuilder rows={rows} />
         </>
       )}
@@ -428,13 +437,47 @@ function SourceShare({ rows }: { rows: ReportRow[] }) {
   );
 }
 
-function EnquiryBreakdown({ title, note, rows, dims }: { title: string; note?: string; rows: ReportRow[]; dims: DimKey[] }) {
+function EnquiryBreakdown({ title, note, rows, dims, customers }: { title: string; note?: string; rows: ReportRow[]; dims: DimKey[]; customers?: boolean }) {
   const [sort, setSort] = useState<SortKey>("enquiries");
   const groups = useMemo(() => groupRows(rows, dims, sort), [rows, dims, sort]);
   return (
     <Card title={title} note={note}>
-      <GroupTable groups={groups} dimTitle={dimLabel(dims[0])} cols={ENQ_COLS} sort={sort} onSort={(k) => setSort(k as SortKey)} limit={12} />
+      <GroupTable groups={groups} dimTitle={dimLabel(dims[0])} cols={ENQ_COLS} sort={sort} onSort={(k) => setSort(k as SortKey)} limit={12}
+        detail={customers ? (g) => <EnquiryList rows={g.rows} /> : undefined} />
     </Card>
+  );
+}
+
+const OUTCOME_TONE: Record<string, string> = { order: "text-emerald-700 font-semibold", live: "text-slate-700", lost: "text-slate-400" };
+
+// One line per enquiry, newest first: who, from where, for what, and where it got to.
+function EnquiryList({ rows }: { rows: ReportRow[] }) {
+  const sorted = useMemo(() => [...rows].sort((a, b) => b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer)), [rows]);
+  return (
+    <table className="w-full text-xs">
+      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th className="px-2 py-1 text-left font-semibold">Customer</th>
+          <th className="px-2 py-1 text-left font-semibold">Source</th>
+          <th className="px-2 py-1 text-left font-semibold">Vehicle</th>
+          <th className="px-2 py-1 text-left font-semibold">Enquired</th>
+          <th className="px-2 py-1 text-right font-semibold">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((r, i) => (
+          <tr key={i} className="border-t border-slate-100 align-top">
+            <td className="max-w-[260px] truncate px-2 py-1 font-medium text-slate-800" title={r.customer}>{r.customer}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-slate-600">
+              <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: SOURCE_COLOURS[r.source] ?? "#94a3b8" }} />{r.source}
+            </td>
+            <td className="max-w-[420px] truncate px-2 py-1 text-slate-600" title={r.derivative}>{r.derivative.replace(" (model only)", "")}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(r.day)}</td>
+            <td className={`whitespace-nowrap px-2 py-1 text-right ${OUTCOME_TONE[r.outcome] ?? "text-slate-600"}`}>{r.status}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -573,7 +616,7 @@ function BudgetPanel({ rows, range, budgets, today }: { rows: OrderRow[]; range:
   const pace = { ...periodProgress(range, today), word: months.length === 1 ? "month" : months.length === 3 && range.label.startsWith("Q") ? "quarter" : "period" };
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {([["car", "Car", "#b45309"], ["cv", "CV (commercial)", "#1d4ed8"], ["combined", "Combined", "#312e81"]] as const).map(([k, title, colour]) => (
+      {([["car", "Car", "#334155"], ["cv", "CV (commercial)", SEGMENT_META.Van.colour], ["combined", "Combined", "#312e81"]] as const).map(([k, title, colour]) => (
         <BudgetCard key={k} title={title} colour={colour} line={lines[k]} pace={pace} />
       ))}
     </div>
@@ -814,16 +857,26 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
     const make = (label: string, rows: EnquiryRow[]): RGroup =>
       ({ key: label, label, stats: summariseResponse(rows), share: reportable.length ? (rows.length / reportable.length) * 100 : 0, rows, children: [] });
     return [
-      make("Missed same-day contact", reportable.filter((r) => isSameDayReportable(r) && !r.sameDayMet)),
-      make("Never contacted", reportable.filter((r) => isContactMissing(r))),
+      make("Missed same day — exec", reportable.filter((r) => sameDayMissOwner(r) === "exec")),
+      make("Missed same day — late allocation (Sales Support)", reportable.filter((r) => sameDayMissOwner(r) === "salesSupport")),
+      make("Never contacted — exec", reportable.filter((r) => neverContactedOwner(r) === "exec")),
       make(`First contact over ${CONTACT_TARGET_MINS} min`, reportable.filter((r) => r.contactMins != null && r.contactMins > CONTACT_TARGET_MINS)),
       make(`Allocation over ${ALLOCATION_TARGET_MINS} min`, reportable.filter((r) => r.allocMins != null && r.allocMins > ALLOCATION_TARGET_MINS)),
-      make("No transfer recorded", reportable.filter((r) => isTransferMissing(r))),
+      make("Never passed to an exec (Sales Support)", reportable.filter((r) => isTransferMissing(r))),
     ];
   }, [reportable]);
-  const byExec = useMemo(() => rGroups(reportable, (r) => r.salesExec)
-    // Worst first: most same-day misses, then slowest average response.
-    .sort((a, b) => b.stats.sameDayMissed - a.stats.sameDayMissed || (b.stats.contactAvg ?? -1) - (a.stats.contactAvg ?? -1)), [reportable]);
+  const byExec = useMemo(() => {
+    const execs = rGroups(reportable, (r) => r.salesExec)
+      // Worst first: most same-day misses of their own, then slowest response.
+      .sort((a, b) => b.stats.sameDayMissedExec - a.stats.sameDayMissedExec || (b.stats.contactAvg ?? -1) - (a.stats.contactAvg ?? -1));
+    // Sales Support carries the misses an exec couldn't have prevented: leads
+    // passed over too late to call that day, never passed over, or allocated
+    // over target. Its figures are allocation figures (target 5 minutes).
+    const supportRows = reportable.filter((r) =>
+      sameDayMissOwner(r) === "salesSupport" || isTransferMissing(r) || (r.allocMins != null && r.allocMins > ALLOCATION_TARGET_MINS));
+    const support: RGroup = { key: SALES_SUPPORT, label: SALES_SUPPORT, stats: summariseResponse(reportable), share: 100, rows: supportRows, children: [] };
+    return reportable.length ? [...execs, support] : execs;
+  }, [reportable]);
   const byDay = useMemo(() => rGroups(reportable, (r) => r.enquiryDay, dayLabel).sort((a, b) => b.key.localeCompare(a.key)), [reportable]);
 
   if (all.length === 0) {
@@ -844,9 +897,9 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
       <Tiles tiles={[
         { label: "Enquiries", value: int(s.total), sub: "judged in this period" },
         { label: `Allocation · target ${ALLOCATION_TARGET_MINS}m`, value: formatMins(s.allocAvg), tone: timeTone(s.allocAvg, ALLOCATION_TARGET_MINS), sub: `${s.allocHit} on target · ${s.allocMissed} over` },
-        { label: `First contact · target ${CONTACT_TARGET_MINS}m`, value: formatMins(s.contactAvg), tone: timeTone(s.contactAvg, CONTACT_TARGET_MINS), sub: `${s.contactHit} on target · ${s.contactMissed} over` },
-        { label: "Same-day contact", value: sameDayPct == null ? "—" : `${sameDayPct}%`, tone: s.sameDayExpected ? (s.sameDayMissed === 0 ? "good" : "bad") : undefined, sub: `${s.sameDayMissed} missed of ${s.sameDayExpected}` },
-        { label: "Never contacted", value: int(s.neverContacted), tone: s.neverContacted > 0 ? "bad" : undefined },
+        { label: `First contact · target ${CONTACT_TARGET_MINS}m`, value: formatMins(s.contactAvg), hero: true, tone: timeTone(s.contactAvg, CONTACT_TARGET_MINS), sub: `${s.contactHit} on target · ${s.contactMissed} over` },
+        { label: "Same-day contact", value: sameDayPct == null ? "—" : `${sameDayPct}%`, tone: s.sameDayExpected ? (s.sameDayMissed === 0 ? "good" : "bad") : undefined, sub: `${s.sameDayMissed} missed of ${s.sameDayExpected} · ${s.sameDayMissedSupport} late allocation` },
+        { label: "Never contacted", value: int(s.neverContacted), tone: s.neverContacted > 0 ? "bad" : undefined, sub: `${s.noTransfer} never passed to an exec` },
       ]} />
       {reportable.length === 0 ? (
         <Empty>No enquiries to judge in {range.label}{exec ? ` for ${exec}` : ""} yet.</Empty>
@@ -855,8 +908,8 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
           <Card title="Needs attention" note="Click a line for the customers behind it">
             <GroupTable groups={attention} dimTitle="Issue" cols={ATTENTION_COLS} detail={(g) => <ResponseList rows={g.rows} focus={focusFor(g.key)} />} />
           </Card>
-          <Card title="By exec" note="Response is from when the enquiry reached them · click an exec for their customers">
-            <GroupTable groups={byExec} dimTitle="Exec" cols={EXEC_RESPONSE_COLS} detail={(g) => <ResponseList rows={g.rows} focus="contact" />} />
+          <Card title="By exec" note="An exec's figures run from when the lead reached them; Sales Support's are allocation (target 5m) · click a row for its customers">
+            <GroupTable groups={byExec} dimTitle="Exec" cols={EXEC_RESPONSE_COLS} detail={(g) => <ResponseList rows={g.rows} focus={g.key === SALES_SUPPORT ? "alloc" : "contact"} />} />
           </Card>
           <Card title="By day" note="Click a day for its customers">
             <GroupTable groups={byDay} dimTitle="Day" cols={DAY_COLS} limit={14} detail={(g) => <ResponseList rows={g.rows} focus="sameday" />} />
@@ -870,7 +923,11 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
 const dayLabel = (day: string) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).replace(",", "");
 
-const focusFor = (label: string): Focus => (label.startsWith("Allocation") || label.startsWith("No transfer") ? "alloc" : label.startsWith("Missed same-day") ? "sameday" : "contact");
+const SALES_SUPPORT = "Sales Support · allocation";
+
+const focusFor = (label: string): Focus =>
+  label.startsWith("Allocation") || label.startsWith("Never passed") || label.includes("late allocation") ? "alloc"
+    : label.startsWith("Missed same day") ? "sameday" : "contact";
 
 const ATTENTION_COLS: Col<ResponseSummary, EnquiryRow>[] = [
   { key: "count", label: "Enquiries", render: (g) => <span className={g.rows.length ? "font-semibold text-rose-700" : "text-slate-400"}>{int(g.rows.length)}</span> },
@@ -881,12 +938,15 @@ const minsCell = (avg: number | null, target: number) => (
   <span className={`font-semibold ${avg == null ? "text-slate-400" : avg <= target ? "text-emerald-700" : "text-rose-700"}`}>{formatMins(avg)}</span>
 );
 
+// Each exec is judged only on what reached them in time; the Sales Support
+// row carries allocation and the misses that came from it.
+const isSupport = (g: { key: string }) => g.key === SALES_SUPPORT;
 const EXEC_RESPONSE_COLS: Col<ResponseSummary, EnquiryRow>[] = [
   { key: "total", label: "Enquiries", render: (g) => int(g.stats.total) },
-  { key: "avg", label: `Avg response (${CONTACT_TARGET_MINS}m)`, render: (g) => minsCell(g.stats.contactAvg, CONTACT_TARGET_MINS) },
-  { key: "over", label: "Over target", render: (g) => <span className={g.stats.contactMissed ? "text-rose-700" : "text-slate-400"}>{int(g.stats.contactMissed)}</span> },
-  { key: "sameday", label: "Missed same day", strong: true, render: (g) => <span className={g.stats.sameDayMissed ? "text-rose-700" : "text-emerald-700"}>{int(g.stats.sameDayMissed)}</span> },
-  { key: "never", label: "Never contacted", render: (g) => <span className={g.stats.neverContacted ? "text-rose-700" : "text-slate-400"}>{int(g.stats.neverContacted)}</span> },
+  { key: "avg", label: "Avg response", render: (g) => (isSupport(g) ? minsCell(g.stats.allocAvg, ALLOCATION_TARGET_MINS) : minsCell(g.stats.contactAvg, CONTACT_TARGET_MINS)) },
+  { key: "over", label: "Over target", render: (g) => { const n = isSupport(g) ? g.stats.allocMissed : g.stats.contactMissed; return <span className={n ? "text-rose-700" : "text-slate-400"}>{int(n)}</span>; } },
+  { key: "sameday", label: "Missed same day", strong: true, render: (g) => { const n = isSupport(g) ? g.stats.sameDayMissedSupport : g.stats.sameDayMissedExec; return <span className={n ? "text-rose-700" : "text-emerald-700"}>{int(n)}</span>; } },
+  { key: "never", label: "Never contacted", render: (g) => { const n = isSupport(g) ? g.stats.noTransfer : g.stats.neverContactedExec; return <span className={n ? "text-rose-700" : "text-slate-400"}>{int(n)}</span>; } },
 ];
 
 const DAY_COLS: Col<ResponseSummary, EnquiryRow>[] = [

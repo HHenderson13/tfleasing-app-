@@ -44,13 +44,14 @@ const OUTCOME_CODES: Outcome[] = ["other", "order", "live", "lost"];
 
 export interface ReportPayload {
   strings: string[];
-  /** [dayNumber, exec, source, model, derivative, status, finance, term, mileage, outcome] */
+  /** [dayNumber, exec, source, model, derivative, status, finance, term, mileage, outcome, customer] */
   rows: number[][];
 }
 
 export interface StoredRow {
   enquiryDay: string;
   exec: string;
+  customer: string;
   source: string;
   model: string;
   derivative: string | null;
@@ -65,6 +66,7 @@ export interface StoredRow {
 export interface ReportRow {
   day: string;
   exec: string;
+  customer: string;
   source: string;
   model: string;
   derivative: string;
@@ -138,6 +140,7 @@ export function encodeReport(rows: StoredRow[], execNames: Map<string, string> =
       intern(termLabel(r.termMonths)),
       intern(mileageLabel(r.annualMileage)),
       outcome,
+      intern(r.customer),
     ];
   });
   return { strings, rows: out };
@@ -156,6 +159,7 @@ export function decodeReport(p: ReportPayload): ReportRow[] {
     term: s[r[7]],
     mileage: s[r[8]],
     outcome: OUTCOME_CODES[r[9]] ?? "other",
+    customer: s[r[10]] ?? "",
   }));
 }
 
