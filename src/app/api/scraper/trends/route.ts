@@ -3,8 +3,8 @@ import { db } from "@/db";
 import { scraperRuns, scraperRunSummaries } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
-import { RUN_SUMMARY_VERSION, summariseRun, type RunSummary, type TrendRun } from "@/lib/market-trends";
-import { loadRunListings } from "@/lib/scraper-listings";
+import { buildRunSummary } from "@/lib/market-overview";
+import { RUN_SUMMARY_VERSION, type RunSummary, type TrendRun } from "@/lib/market-trends";
 import { asc, gt } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -50,19 +50,7 @@ export async function GET() {
       while (next < stale.length) {
         const run = stale[next++];
         try {
-          const summary = summariseRun(await loadRunListings(run.id));
-          summaries.set(run.id, summary);
-          const row = {
-            runId: run.id,
-            totalResults: run.totalResults,
-            version: RUN_SUMMARY_VERSION,
-            summary: JSON.stringify(summary),
-            computedAt: new Date(),
-          };
-          await db
-            .insert(scraperRunSummaries)
-            .values(row)
-            .onConflictDoUpdate({ target: scraperRunSummaries.runId, set: row });
+          summaries.set(run.id, await buildRunSummary(run));
         } catch (e) {
           logError("api/scraper/trends", e, { runId: run.id });
           summaries.set(run.id, null);

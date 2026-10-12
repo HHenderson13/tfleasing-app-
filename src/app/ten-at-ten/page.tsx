@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
 import { reportingHorizonFromInstant } from "@/lib/business-hours";
 import { loadEnquiries, loadLatestEnquiryUploadAt } from "@/lib/enquiries";
+import { logError } from "@/lib/logger";
+import { loadMarketOverview, type MarketOverview } from "@/lib/market-overview";
 import { encodeOrders, encodeReport } from "@/lib/ten-at-ten-report";
 import {
   listTenAtTenUploads, loadBudgets, loadCancellationsReport, loadExecNames, loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows,
@@ -12,9 +14,12 @@ export const dynamic = "force-dynamic";
 
 export default async function TenAtTenPage() {
   await requireAdmin();
-  const [rows, orders, deliveries, budgets, names, uploads, responses, latestResponseUpload] = await Promise.all([
+  const [rows, orders, deliveries, budgets, names, uploads, responses, latestResponseUpload, market] = await Promise.all([
     loadTenAtTenRows(), loadTenAtTenOrders(), loadTenAtTenDeliveries(), loadBudgets(), loadExecNames(), listTenAtTenUploads(1),
     loadEnquiries(), loadLatestEnquiryUploadAt(),
+    // The latest scrape's digest. A problem there mustn't take the rest of
+    // the report down with it.
+    loadMarketOverview().catch((e): MarketOverview | null => { logError("ten-at-ten/market", e); return null; }),
   ]);
   // Response times only judges an enquiry once it has had a full working
   // day, measured from the latest MotorComplete upload (business-hours.ts).
@@ -49,13 +54,13 @@ export default async function TenAtTenPage() {
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">10 at 10</h1>
-            <p className="text-sm text-slate-500">Enquiries and conversion, response times against target, orders and profit, deliveries against budget, and cancellations.</p>
+            <p className="text-sm text-slate-500">Enquiries and conversion, response times, orders and profit, deliveries against budget, cancellations and the market.</p>
           </div>
           {lastUpload && <p className="text-xs text-slate-400">Last upload {lastUpload}</p>}
         </div>
         <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
           responses={responses} reportHorizon={reportHorizon} today={today}
-          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} />
+          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} market={market} />
       </main>
     </div>
   );

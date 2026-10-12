@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/db";
 import { scraperRuns, scraperResults } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
+import { warmRunSummary } from "@/lib/market-overview";
 import { eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -200,6 +201,20 @@ export async function POST(req: NextRequest) {
           finishedAt: finalize ? now : null,
         })
         .where(eq(scraperRuns.id, runId));
+    }
+
+    // A finished scrape gets its digest built straight away, after the
+    // response, so 10 at 10's Market Analysis is current the moment anyone
+    // looks rather than building ~30k rows on that first page load.
+    if (finalize) {
+      const finished = runId;
+      after(async () => {
+        try {
+          await warmRunSummary(finished);
+        } catch (e) {
+          logError("api/scraper/upload/warm-summary", e, { runId: finished });
+        }
+      });
     }
 
     return NextResponse.json({

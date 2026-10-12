@@ -781,6 +781,37 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
 - No over-time chart, and "Build a breakdown" opens collapsed (user,
   2026-10-12: too much screen space). Every nested table starts collapsed.
 
+### Summary and Market Analysis tabs
+
+Tabs run Summary, Enquiries, Response times, Orders, Deliveries,
+Cancellations, Market Analysis (user, 2026-10-12). **Summary is the landing
+tab**: one card per area with its two to four headline figures for the
+period and an Open link to the tab. It computes nothing of its own — the
+same stats functions the tabs use — so a Summary figure always matches the
+tab behind it. Deliveries measures against budget only on whole months, as
+the tab does. Summary is cards, with no indigo hero of its own.
+
+**Market Analysis is an overview, not a second copy of `/scraper`.** It
+reads the latest finished scrape's digest — the same `summariseRun` digest
+the Trends tab plots, cached in `scraper_run_summaries`
+(`lib/market-overview.ts`) — so its figures mean exactly what they mean
+there: cheapest like-for-like, lowest headline, average gap (ours minus the
+cheapest rival, + is dearer, Trends' green / amber within £20 / red bands),
+by range, and who undercuts us. Not tied to the period selector, which is
+hidden on that tab; Summary says "latest scrape" for the same reason.
+
+- **Current the moment a scrape lands.** The upload route builds the
+  digest with `after()` when RateX sends the final chunk
+  (`warmRunSummary`), so 10 at 10 never pays for ~30k rows on page load. If
+  that ever fails, the page builds it on first view instead.
+- A run still uploading (`status` not `done`) is passed over for the last
+  finished one, so the overview never shows half a run.
+- A failure loading the market is logged and the tab says there's no data;
+  it can't take the rest of 10 at 10 down.
+- `buildRunSummary` is shared with `/api/scraper/trends` — one place builds
+  and caches digests. **Bump `RUN_SUMMARY_VERSION` as before** when slot or
+  headline logic changes; both views rebuild from it.
+
 ### Response times (was the Enquiry Tracker)
 
 Merged into 10 at 10 at the user's request (2026-10-12) — one place, one
@@ -823,8 +854,9 @@ reads its header check from too.
 ### One look across every tab
 
 User, 2026-10-12: same theme, colours and style everywhere. Hold to it:
-one highlighted (indigo) headline tile per tab — Conversion, First contact,
-Avg profit, Avg profit — with on/off target as a badge on it; emerald-700
+one highlighted (indigo) headline per tab — Overall conversion, First contact,
+Avg profit, Avg profit, Cancellations, We're cheapest — with on/off target as
+a badge on it; emerald-700
 for good and rose-700 for bad, never other greens or reds; source colours
 (blue/cyan/violet/orange/slate), segment colours (ICE amber, BEV emerald,
 Van blue) and budget colours (Car slate, CV = Van blue, Combined indigo)

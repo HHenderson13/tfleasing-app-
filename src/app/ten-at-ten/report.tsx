@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { shiftAnchor } from "@/lib/period";
 import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, formatMins, formatWall } from "@/lib/business-hours";
 import type { EnquiryRow } from "@/lib/enquiries";
+import type { MarketOverview, MarketSegmentView } from "@/lib/market-overview";
+import type { CompetitorRow } from "@/lib/market-slots";
+import type { RangeStats } from "@/lib/market-trends";
 import {
   isSameDayReportable,
   isTransferMissing,
@@ -83,15 +86,22 @@ const int = (n: number) => n.toLocaleString("en-GB");
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
 const gbp = (n: number | null) => (n == null ? "—" : GBP.format(Math.round(n)).replace("-", "−"));
 
-type Section = "enquiries" | "response" | "orders" | "deliveries" | "cancellations";
+type Section = "summary" | "enquiries" | "response" | "orders" | "deliveries" | "cancellations" | "market";
 
-export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays }: {
+const SECTIONS: [Section, string][] = [
+  ["summary", "Summary"], ["enquiries", "Enquiries"], ["response", "Response times"], ["orders", "Orders"],
+  ["deliveries", "Deliveries"], ["cancellations", "Cancellations"], ["market", "Market Analysis"],
+];
+
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, market }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
   /** Every cancellation, already classified on the server. */
   cancellations: CancellationView[];
   /** Order days of held orders that were later cancelled — left out of Orders. */
   cancelledOrderDays: string[];
+  /** The latest scrape, summarised; null before the first one. */
+  market: MarketOverview | null;
 }) {
   const enquiryRows = useMemo(() => decodeReport(payload), [payload]);
   const orderRows = useMemo(() => decodeOrders(orders), [orders]);
@@ -99,13 +109,16 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
   // whose `delivery` is the status (Delivered, Arrived, Due).
   const deliveryRows = useMemo(() => decodeOrders(deliveries), [deliveries]);
 
-  const [section, setSection] = useState<Section>("enquiries");
+  const [section, setSection] = useState<Section>("summary");
   const [mode, setMode] = useState<PeriodMode>("month");
   const [anchor, setAnchor] = useState(today);
   const [custom, setCustom] = useState({ from: `${today.slice(0, 8)}01`, to: today });
 
   const range = useMemo(() => rangeFor(mode, anchor, custom), [mode, anchor, custom]);
   const minDay = useMemo(() => {
+    if (section === "summary") {
+      return [enquiryRows[0]?.day, orderRows[0]?.day, deliveryRows[0]?.day, today].filter((d): d is string => !!d).sort()[0];
+    }
     if (section === "enquiries") return enquiryRows[0]?.day ?? today;
     if (section === "orders") return orderRows[0]?.day ?? today;
     if (section === "deliveries") return deliveryRows[0]?.day ?? today;
@@ -119,7 +132,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
     <div className="mt-5 space-y-5">
       {/* Section */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([["enquiries", "Enquiries"], ["response", "Response times"], ["orders", "Orders"], ["deliveries", "Deliveries"], ["cancellations", "Cancellations"]] as const).map(([key, label]) => (
+        {SECTIONS.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSection(key)}
@@ -130,8 +143,8 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         ))}
       </div>
 
-      {/* Period, shared by every section */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      {/* Period, shared by every section but the market, which is always the latest scrape */}
+      {section !== "market" && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
           {MODES.map((m) => (
             <button
@@ -163,7 +176,13 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
             )}
           </div>
         )}
-      </div>
+      </div>}
+
+      {section === "summary" && (
+        <SummarySection range={range} today={today} enquiries={enquiryRows} responses={responses} reportHorizon={reportHorizon}
+          orders={orderRows} deliveries={deliveryRows} budgets={budgets} cancellations={cancellations}
+          cancelledOrderDays={cancelledOrderDays} market={market} open={setSection} />
+      )}
 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
@@ -171,6 +190,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         cancelledDays={cancelledOrderDays} onShowCancellations={() => setSection("cancellations")} />}
       {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
+      {section === "market" && <MarketSection market={market} />}
     </div>
   );
 }
@@ -1356,6 +1376,258 @@ function CancellationList({ rows, showExec = true }: { rows: CancellationView[];
             <td className="whitespace-nowrap px-2 py-1 text-right">
               {isProper(c) ? <span className="font-semibold text-rose-700">Cancellation</span> : <span className="text-slate-500">Re-Write</span>}
             </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ─── Summary ───────────────────────────────────────────────────────────────
+//
+// The first tab: every area's headline for the period, light enough to take
+// in at once, each card opening its own tab for the detail. Same figures,
+// same maths as the tabs themselves — nothing here is computed differently.
+
+interface SummaryStat { label: string; value: string; sub?: string; tone?: "good" | "bad" }
+
+function SummaryCard({ title, onOpen, stats, note }: { title: string; onOpen: () => void; stats: SummaryStat[]; note?: ReactNode }) {
+  return (
+    <section className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <button onClick={onOpen} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Open →</button>
+      </div>
+      <div className={`mt-3 grid gap-x-4 gap-y-3 ${stats.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+        {stats.map((st) => (
+          <div key={st.label} className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{st.label}</div>
+            <div className={`text-2xl font-bold tabular-nums ${st.tone === "good" ? "text-emerald-700" : st.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{st.value}</div>
+            {st.sub && <div className="text-[11px] leading-snug text-slate-500">{st.sub}</div>}
+          </div>
+        ))}
+      </div>
+      {note && <div className="mt-auto pt-3 text-[11px] text-slate-400">{note}</div>}
+    </section>
+  );
+}
+
+const share = (n: number, of: number) => (of > 0 ? (n / of) * 100 : null);
+
+function SummarySection({ range, today, enquiries, responses, reportHorizon, orders, deliveries, budgets, cancellations, cancelledOrderDays, market, open }: {
+  range: Range; today: string; enquiries: ReportRow[]; responses: EnquiryRow[]; reportHorizon: number | null;
+  orders: OrderRow[]; deliveries: OrderRow[]; budgets: Budgets; cancellations: CancellationView[]; cancelledOrderDays: string[];
+  market: MarketOverview | null; open: (s: Section) => void;
+}) {
+  const e = useMemo(() => statsOf(inRange(enquiries, range)), [enquiries, range]);
+  const r = useMemo(() => {
+    const period = responses.filter((x) => x.enquiryDay >= range.startDay && x.enquiryDay <= range.endDay);
+    const { reportable, held } = partitionByReportability(period, reportHorizon);
+    return { s: summariseResponse(reportable), held: held.length };
+  }, [responses, range, reportHorizon]);
+  const o = useMemo(() => orderStatsOf(inRange(orders, range)), [orders, range]);
+  const d = useMemo(() => inRange(deliveries, range), [deliveries, range]);
+  const c = useMemo(() => inRange(cancellations, range), [cancellations, range]);
+  const cancelledHere = cancelledOrderDays.filter((x) => x >= range.startDay && x <= range.endDay).length;
+
+  // Deliveries: against budget when the period is whole months.
+  const months = budgetMonths(range);
+  const line = months ? budgetLines(d, budgets, months).combined : null;
+  const pace = periodProgress(range, today);
+  const delivered = d.filter((x) => x.delivery === "Delivered").length;
+  const arrived = d.filter((x) => x.delivery === "Arrived").length;
+  const deliveredPct = d.length ? Math.round((delivered / d.length) * 100) : null;
+  const gap = line?.budget != null ? line.going - line.budget : null;
+
+  const rs = r.s;
+  const sameDay = share(rs.sameDayMet, rs.sameDayExpected);
+  const proper = c.filter(isProper).length;
+  const unexplained = c.filter(needsReason).length;
+  const cars = market?.segments.find((x) => x.segment === "car");
+  const vans = market?.segments.find((x) => x.segment === "van");
+  const all = market ? marketTotals(market.segments) : null;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <SummaryCard title="Enquiries" onOpen={() => open("enquiries")} stats={[
+        { label: "Enquiries", value: int(e.enquiries), sub: `${int(e.inboundEnquiries)} inbound · ${int(e.enquiries - e.inboundEnquiries)} broker / prospect` },
+        { label: "Inbound conv.", value: pct(inboundPct(e)), sub: "MotorComplete leads" },
+        { label: "Broker conv.", value: pct(brokerPct(e)), sub: "broker / prospect" },
+        { label: "Overall conv.", value: pct(conversionPct(e)), sub: `${int(e.orders)} orders` },
+      ]} />
+      <SummaryCard title="Response times" onOpen={() => open("response")} stats={[
+        { label: "First contact", value: formatMins(rs.contactAvg), tone: timeTone(rs.contactAvg, CONTACT_TARGET_MINS), sub: `target ${CONTACT_TARGET_MINS}m · ${int(rs.contactMissed)} over` },
+        { label: "Same-day contact", value: sameDay == null ? "—" : `${Math.round(sameDay)}%`, tone: rs.sameDayExpected ? (rs.sameDayMissed ? "bad" : "good") : undefined, sub: `${int(rs.sameDayMissed)} missed · ${int(rs.sameDayMissedSupport)} late allocation` },
+        { label: "Never contacted", value: int(rs.neverContacted), tone: rs.neverContacted ? "bad" : undefined, sub: `of ${int(rs.total)} judged` },
+      ]} note={r.held > 0 ? `${int(r.held)} more not judged yet — they need a full working day first.` : undefined} />
+      <SummaryCard title="Orders" onOpen={() => open("orders")} stats={[
+        { label: "Orders", value: int(o.orders), sub: cancelledHere ? `${int(cancelledHere)} cancelled since, left out` : undefined },
+        { label: "Total profit", value: gbp(o.priced ? o.profit : null) },
+        { label: "Avg per unit", value: gbp(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined },
+      ]} />
+      <SummaryCard title="Deliveries" onOpen={() => open("deliveries")} stats={line ? [
+        { label: "Going vs budget", value: line.budget == null ? int(line.going) : `${int(line.going)} / ${int(line.budget)}`, tone: gap == null ? undefined : gap >= 0 ? "good" : "bad",
+          sub: gap == null ? "no budget set" : gap >= 0 ? `${int(gap)} over budget` : `${int(-gap)} short of budget` },
+        { label: "Delivered", value: deliveredPct == null ? "—" : `${deliveredPct}%`, tone: deliveredPct == null ? undefined : deliveredPct >= Math.round(pace.pct) ? "good" : "bad",
+          sub: `of what's going · ${Math.round(pace.pct)}% through` },
+        { label: "Still to deliver", value: int(d.length - delivered), sub: `${int(arrived)} arrived · ${int(d.length - delivered - arrived)} due` },
+      ] : [
+        { label: "Going", value: int(d.length), sub: "delivered + arrived + due" },
+        { label: "Delivered", value: int(delivered), sub: deliveredPct == null ? undefined : `${deliveredPct}% of what's going` },
+        { label: "Still to deliver", value: int(d.length - delivered), sub: `${int(arrived)} arrived · ${int(d.length - delivered - arrived)} due` },
+      ]} note={line ? "Car and CV combined." : "Budget is monthly — choose Month or Quarter to measure against it."} />
+      <SummaryCard title="Cancellations" onOpen={() => open("cancellations")} stats={[
+        { label: "Cancellations", value: int(proper), sub: "cancelled, not re-ordered" },
+        { label: "Re-Writes", value: int(c.length - proper), sub: "re-ordered — not counted" },
+        { label: "Reasons to add", value: int(unexplained), tone: proper ? (unexplained ? "bad" : "good") : undefined, sub: proper ? `${int(proper - unexplained)} of ${int(proper)} explained` : undefined },
+      ]} />
+      <SummaryCard title="Market Analysis" onOpen={() => open("market")} stats={market && all ? [
+        { label: "Cars · cheapest", value: pct(cars ? share(cars.overall.cheapest, cars.overall.compared) : null, 0), sub: cars ? gapText(cars.overall.gap) : "not scraped" },
+        { label: "Vans · cheapest", value: pct(vans ? share(vans.overall.cheapest, vans.overall.compared) : null, 0), sub: vans ? gapText(vans.overall.gap) : "not scraped" },
+        { label: "Lowest headline", value: pct(share(all.headlineLowest, all.headlineCompared), 0), sub: "our best price at any term" },
+      ] : [
+        { label: "Cheapest", value: "—", sub: "no scrape yet" },
+      ]} note={market ? `Latest scrape, ${scrapeWhen(market.run.startedAt)} — not tied to the period above.` : undefined} />
+    </div>
+  );
+}
+
+// ─── Market Analysis ───────────────────────────────────────────────────────
+//
+// The latest scrape at a glance, from the run digest the Trends tab uses
+// (lib/market-overview.ts). The full analysis stays on /scraper. Gap is our
+// price minus the cheapest rival's, per month, like-for-like.
+
+const MARKET_META: Record<string, { title: string; colour: string }> = {
+  car: { title: "Cars", colour: "#334155" },
+  van: { title: "Vans", colour: SEGMENT_META.Van.colour },
+};
+
+const scrapeWhen = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(",", "");
+
+/** "£9/mo dearer" — from our side, like the Trends tab. */
+function gapText(gap: number | null): string {
+  if (gap == null) return "no rival priced";
+  if (Math.abs(gap) < 0.5) return "level with the cheapest rival";
+  return gap > 0 ? `£${Math.round(gap)}/mo dearer on average` : `£${Math.round(-gap)}/mo cheaper on average`;
+}
+
+// Green cheaper, amber within £20, red more than £20 dearer — the Trends tab's bands.
+const gapTone = (gap: number | null) =>
+  gap == null ? "text-slate-400" : gap <= 0 ? "text-emerald-700" : gap <= 20 ? "text-amber-700" : "text-rose-700";
+
+const gapCell = (gap: number | null) => (
+  <span className={`whitespace-nowrap font-semibold ${gapTone(gap)}`}>
+    {gap == null ? "—" : Math.abs(gap) < 0.5 ? "level" : `${gap > 0 ? "+" : "−"}£${Math.round(Math.abs(gap))}`}
+  </span>
+);
+
+function marketTotals(segments: MarketSegmentView[]) {
+  let compared = 0, cheapest = 0, gapSum = 0, headlineCompared = 0, headlineLowest = 0;
+  for (const s of segments) {
+    compared += s.overall.compared;
+    cheapest += s.overall.cheapest;
+    gapSum += (s.overall.gap ?? 0) * s.overall.compared;
+    headlineCompared += s.overall.headline.compared;
+    headlineLowest += s.overall.headline.lowest;
+  }
+  return { compared, cheapest, gap: compared ? gapSum / compared : null, headlineCompared, headlineLowest };
+}
+
+const RANGE_COLS: Col<RangeStats>[] = [
+  { key: "compared", label: "Deals", render: (g) => int(g.stats.compared) },
+  { key: "cheapest", label: "Cheapest", strong: true, render: (g) => pct(share(g.stats.cheapest, g.stats.compared), 0) },
+  { key: "gap", label: "Avg gap", render: (g) => gapCell(g.stats.gap) },
+  { key: "headline", label: "Lowest headline", render: (g) => <span className="text-slate-600">{pct(share(g.stats.headline.lowest, g.stats.headline.compared), 0)}</span> },
+];
+
+function MarketSection({ market }: { market: MarketOverview | null }) {
+  if (!market || market.segments.length === 0) {
+    return (
+      <Empty>
+        No market data yet. Each scrape from the RateX app shows here as soon as it finishes — the full analysis is on{" "}
+        <a href="/scraper" className="font-medium text-indigo-600">Market Analysis</a>.
+      </Empty>
+    );
+  }
+  const all = marketTotals(market.segments);
+  const gapTileTone = all.gap == null ? undefined : all.gap <= 0 ? "good" as const : "bad" as const;
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
+        <span>
+          <span className="font-semibold text-slate-900">Latest scrape</span> · {scrapeWhen(market.run.startedAt)}
+          {market.run.label && <> · {market.run.label}</>} · {int(market.run.totalResults)} prices · updates every time a scrape finishes
+        </span>
+        <a href="/scraper" className="font-semibold text-indigo-600 hover:text-indigo-800">Full analysis →</a>
+      </div>
+      <Tiles tiles={[
+        { label: "We're cheapest", value: pct(share(all.cheapest, all.compared), 0), sub: `on ${int(all.cheapest)} of ${int(all.compared)} like-for-like deals`, hero: true },
+        { label: "Lowest headline price", value: pct(share(all.headlineLowest, all.headlineCompared), 0), sub: `on ${int(all.headlineLowest)} of ${int(all.headlineCompared)} — our best at any term vs theirs` },
+        { label: "Avg gap to cheapest", value: all.gap == null ? "—" : `${all.gap > 0 ? "+" : all.gap < 0 ? "−" : ""}£${Math.round(Math.abs(all.gap))}`, tone: gapTileTone, sub: "per month, like-for-like · + is dearer" },
+      ]} />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {market.segments.map((s) => <MarketColumn key={s.segment} s={s} />)}
+      </div>
+    </div>
+  );
+}
+
+function MarketColumn({ s }: { s: MarketSegmentView }) {
+  const meta = MARKET_META[s.segment] ?? { title: s.segment, colour: "#64748b" };
+  const o = s.overall;
+  const groups = useMemo(
+    () => s.ranges.map((r) => ({ key: r.name, label: r.name, stats: r.stats, share: share(r.stats.compared, o.compared) ?? 0, rows: [], children: [] })),
+    [s.ranges, o.compared],
+  );
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${meta.colour}` }}>
+        <div className="flex items-baseline justify-between">
+          <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
+          <div className="text-xs text-slate-500">{int(o.compared)} deals compared</div>
+        </div>
+        <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">We&apos;re cheapest on</div>
+        <div className="text-3xl font-bold tabular-nums text-slate-900">{pct(share(o.cheapest, o.compared), 0)}</div>
+        <div className={`mt-1 text-sm font-semibold ${gapTone(o.gap)}`}>{gapText(o.gap)}</div>
+        <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
+          <span>Lowest headline <b className="tabular-nums">{pct(share(o.headline.lowest, o.headline.compared), 0)}</b></span>
+          <span>Our avg <b className="tabular-nums">{gbp(o.tfAvg)}</b> · cheapest rival <b className="tabular-nums">{gbp(o.mktAvg)}</b></span>
+        </div>
+      </div>
+      <Card title={`${meta.title} by range`} note="Most-compared first">
+        <GroupTable groups={groups} dimTitle="Range" cols={RANGE_COLS} limit={10} />
+      </Card>
+      <Card title={`Who undercuts us · ${meta.title.toLowerCase()}`} note="Deals where both of us are priced">
+        <CompetitorList rows={s.competitors} />
+      </Card>
+    </div>
+  );
+}
+
+function CompetitorList({ rows }: { rows: CompetitorRow[] }) {
+  if (rows.length === 0) return <p className="text-sm text-slate-500">Nobody undercuts us on these deals.</p>;
+  return (
+    <table className="w-full text-sm">
+      <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+        <tr className="border-b border-slate-200">
+          <th className="px-2 py-2 text-left font-semibold">Broker</th>
+          <th className="px-2 py-2 text-right font-semibold">Head to head</th>
+          <th className="px-2 py-2 text-right font-semibold">Cheaper than us</th>
+          <th className="px-2 py-2 text-right font-semibold">By, on average</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.broker} className="border-b border-slate-100">
+            <td className="px-2 py-1.5 font-medium text-slate-900">{r.broker}</td>
+            <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{int(r.headToHead)}</td>
+            <td className="px-2 py-1.5 text-right tabular-nums">
+              <span className="font-semibold text-rose-700">{int(r.undercuts)}</span>
+              <span className="ml-1 text-xs text-slate-500">({pct(share(r.undercuts, r.headToHead), 0)})</span>
+            </td>
+            <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{r.avgUndercut == null ? "—" : `£${Math.round(r.avgUndercut)}/mo`}</td>
           </tr>
         ))}
       </tbody>
