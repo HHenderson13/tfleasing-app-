@@ -58,20 +58,11 @@ import {
   type CancellationView,
 } from "@/lib/ten-at-ten-report";
 import { saveCancellationNoteAction, setCancellationStatusAction } from "./actions";
-
-const SOURCE_COLOURS: Record<string, string> = {
-  "TF Lead": "#1d4ed8",
-  "Leasing.com": "#0891b2",
-  LeaseLoco: "#7c3aed",
-  CarWow: "#ea580c",
-  "Broker / Prospect": "#64748b",
-};
-
-const SEGMENT_META: Record<string, { title: string; colour: string }> = {
-  "ICE Car": { title: "ICE Cars", colour: "#b45309" },
-  "BEV Car": { title: "BEV Cars", colour: "#047857" },
-  Van: { title: "Vans", colour: "#1d4ed8" },
-};
+import type { PdfReportInput } from "./pdf-report";
+import {
+  MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, dayLabel, firstName, gapText, gbp, int,
+  isProper, marketTotals, needsReason, pct, scrapeWhen, share, shortDate, timeTone,
+} from "./shared";
 
 const MODES: { key: PeriodMode; label: string; current: string }[] = [
   { key: "day", label: "Day", current: "Today" },
@@ -80,11 +71,6 @@ const MODES: { key: PeriodMode; label: string; current: string }[] = [
   { key: "quarter", label: "Quarter", current: "This quarter" },
   { key: "custom", label: "Custom", current: "" },
 ];
-
-const pct = (n: number | null, dp = 1) => (n == null ? "—" : `${n.toFixed(dp)}%`);
-const int = (n: number) => n.toLocaleString("en-GB");
-const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
-const gbp = (n: number | null) => (n == null ? "—" : GBP.format(Math.round(n)).replace("-", "−"));
 
 type Section = "summary" | "enquiries" | "response" | "orders" | "deliveries" | "cancellations" | "market";
 
@@ -131,17 +117,25 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
   return (
     <div className="mt-5 space-y-5">
       {/* Section */}
-      {/* Seven tabs don't fit a phone: they scroll sideways in their own row. */}
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
-        {SECTIONS.map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setSection(key)}
-            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition ${section === key ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Seven tabs don't fit a phone: they scroll sideways in their own row,
+          and Export PDF stays put beside them. */}
+      <div className="flex items-center gap-3 border-b border-slate-200">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {SECTIONS.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setSection(key)}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition ${section === key ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <ExportPdfButton label={range.label} input={() => ({
+          range, today, exportedAt: new Date().toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+          enquiries: enquiryRows, responses, reportHorizon, orders: orderRows, deliveries: deliveryRows, budgets,
+          cancellations, cancelledOrderDays, market,
+        })} />
       </div>
 
       {/* Period, shared by every section but the market, which is always the latest scrape */}
@@ -193,6 +187,44 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
       {section === "market" && <MarketSection market={market} />}
     </div>
+  );
+}
+
+// ─── Export ────────────────────────────────────────────────────────────────
+//
+// A seven-page PDF of the chosen period, one page per tab (pdf-report.tsx).
+// react-pdf and the document are only loaded when the button is pressed.
+
+function ExportPdfButton({ label, input }: { label: string; input: () => PdfReportInput }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  async function run() {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const [{ pdf }, { TenAtTenPdf }] = await Promise.all([import("@react-pdf/renderer"), import("./pdf-report")]);
+      const data = input();
+      const blob = await pdf(<TenAtTenPdf {...data} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `10 at 10 - ${data.range.label}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      console.error("10 at 10 PDF export failed", e);
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button onClick={run} disabled={busy} title={`Seven pages, one per tab, for ${label}`}
+      className={`mb-1 shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${failed ? "border-rose-300 bg-rose-50 text-rose-700" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"}`}>
+      {busy ? "Preparing PDF…" : failed ? "Export failed — retry" : "Export PDF"}
+    </button>
   );
 }
 
@@ -589,7 +621,6 @@ type SegmentName = (typeof SEGMENTS)[number];
 
 const STATUSES = ["Delivered", "Arrived", "Due"] as const;
 type StatusName = (typeof STATUSES)[number];
-const STATUS_COLOURS: Record<string, string> = { Delivered: "#047857", Arrived: "#0891b2", Due: "#94a3b8" };
 
 // Orders and Deliveries are the same Dealbook report counted two ways —
 // by order date, or by delivery date with a status — so one section serves
@@ -854,9 +885,6 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
   );
 }
 
-const shortDate = (day: string) =>
-  new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-
 function BestWorst({ rows, title = "Most and least profitable orders" }: { rows: OrderRow[]; title?: string }) {
   const priced = useMemo(() => rows.filter((r) => r.profit != null).sort((a, b) => (b.profit as number) - (a.profit as number)), [rows]);
   if (priced.length < 2) return null;
@@ -916,9 +944,6 @@ function OrderBuilder({ rows, cols = ORDER_COLS }: { rows: OrderRow[]; cols?: Co
 
 type Focus = "alloc" | "contact" | "sameday";
 type RGroup = Nested<ResponseSummary, EnquiryRow>;
-
-const timeTone = (avg: number | null, target: number): "good" | "bad" | undefined =>
-  avg == null ? undefined : avg <= target ? "good" : "bad";
 
 function rGroups(rows: EnquiryRow[], keyOf: (r: EnquiryRow) => string, labelOf: (k: string) => string = (k) => k, total = rows.length): RGroup[] {
   const m = new Map<string, EnquiryRow[]>();
@@ -1005,10 +1030,6 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
   );
 }
 
-const dayLabel = (day: string) =>
-  new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).replace(",", "");
-
-const SALES_SUPPORT = "Sales Support · allocation";
 
 const focusFor = (label: string): Focus =>
   label.startsWith("Allocation") || label.startsWith("Never passed") || label.includes("late allocation") ? "alloc"
@@ -1119,8 +1140,6 @@ function ResponseList({ rows, focus }: { rows: EnquiryRow[]; focus: Focus }) {
 interface CancelStats { proper: number; rewrites: number; unexplained: number }
 type CGroup = Nested<CancelStats, CancellationView>;
 
-const isProper = (c: CancellationView) => c.status === "proper";
-const needsReason = (c: CancellationView) => isProper(c) && !c.note.trim();
 
 function cancelStatsOf(rows: readonly CancellationView[]): CancelStats {
   return { proper: rows.filter(isProper).length, rewrites: rows.filter((c) => !isProper(c)).length, unexplained: rows.filter(needsReason).length };
@@ -1438,8 +1457,6 @@ function MiniBar({ value, of, colour }: { value: number; of: number; colour: str
   );
 }
 
-const share = (n: number, of: number) => (of > 0 ? (n / of) * 100 : null);
-const firstName = (name: string) => name.split(" ")[0];
 
 function SummarySection({ range, today, enquiries, responses, reportHorizon, orders, deliveries, budgets, cancellations, cancelledOrderDays, market, open }: {
   range: Range; today: string; enquiries: ReportRow[]; responses: EnquiryRow[]; reportHorizon: number | null;
@@ -1660,21 +1677,6 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
 // (lib/market-overview.ts). The full analysis stays on /scraper. Gap is our
 // price minus the cheapest rival's, per month, like-for-like.
 
-const MARKET_META: Record<string, { title: string; colour: string }> = {
-  car: { title: "Cars", colour: "#334155" },
-  van: { title: "Vans", colour: SEGMENT_META.Van.colour },
-};
-
-const scrapeWhen = (iso: string) =>
-  new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(",", "");
-
-/** "£9/mo dearer" — from our side, like the Trends tab. */
-function gapText(gap: number | null): string {
-  if (gap == null) return "no rival priced";
-  if (Math.abs(gap) < 0.5) return "level with the cheapest rival";
-  return gap > 0 ? `£${Math.round(gap)}/mo dearer on average` : `£${Math.round(-gap)}/mo cheaper on average`;
-}
-
 // Green cheaper, amber within £20, red more than £20 dearer — the Trends tab's bands.
 const gapTone = (gap: number | null) =>
   gap == null ? "text-slate-400" : gap <= 0 ? "text-emerald-700" : gap <= 20 ? "text-amber-700" : "text-rose-700";
@@ -1684,18 +1686,6 @@ const gapCell = (gap: number | null) => (
     {gap == null ? "—" : Math.abs(gap) < 0.5 ? "level" : `${gap > 0 ? "+" : "−"}£${Math.round(Math.abs(gap))}`}
   </span>
 );
-
-function marketTotals(segments: MarketSegmentView[]) {
-  let compared = 0, cheapest = 0, gapSum = 0, headlineCompared = 0, headlineLowest = 0;
-  for (const s of segments) {
-    compared += s.overall.compared;
-    cheapest += s.overall.cheapest;
-    gapSum += (s.overall.gap ?? 0) * s.overall.compared;
-    headlineCompared += s.overall.headline.compared;
-    headlineLowest += s.overall.headline.lowest;
-  }
-  return { compared, cheapest, gap: compared ? gapSum / compared : null, headlineCompared, headlineLowest };
-}
 
 const RANGE_COLS: Col<RangeStats>[] = [
   { key: "compared", label: "Deals", render: (g) => int(g.stats.compared) },

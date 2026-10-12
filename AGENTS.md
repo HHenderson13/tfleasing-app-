@@ -825,6 +825,37 @@ hidden on that tab; Summary says "latest scrape" for the same reason.
   and caches digests. **Bump `RUN_SUMMARY_VERSION` as before** when slot or
   headline logic changes; both views rebuild from it.
 
+### PDF export
+
+**Export PDF** (right of the tab row) downloads `10 at 10 - <period>.pdf`:
+seven A4 landscape pages, one per tab in tab order, for the period on
+screen (Market Analysis is always the latest scrape). User, 2026-10-12: for
+taking the department through; uncluttered but complete; "Build a
+breakdown" left out; say so if a tab won't fit one page.
+
+- Built **in the browser** with `@react-pdf/renderer` (`pdf-report.tsx`),
+  from the data the page already holds and the same stats functions as the
+  tabs — nothing is fetched, nothing differs from the screen. react-pdf is
+  heavy, so it and the document load only when the button is pressed.
+- Formatters and colours shared by page and PDF live in `shared.ts`.
+- Helvetica (a PDF base font, nothing to download) covers Latin-1 only, so
+  `tx()` swaps the page's typographic minus for a hyphen. Word hyphenation
+  is switched off (`Font.registerHyphenationCallback`) — it was splitting
+  "broker" and column headings.
+- **What's left out, deliberately:** the customer lists behind each row
+  (the drill-downs) and derivatives under models — except Cancellations,
+  where the list with each reason is the point. Long lists are capped with
+  "and N more — see the tab" (models 14, ranges 10). Response times goes
+  by week instead of by day once the period passes a month.
+- Fit, checked on real data: October, September and Q3 2026 are each
+  exactly seven pages. Deliveries is the fullest page; its tallest column
+  (profit bands + five best / five worst) is fixed in size, so it doesn't
+  grow with the period. **Cancellations is the one page that can run onto
+  a second sheet** in a long period: it lists every cancellation and
+  Re-Write in full, and the panels are allowed to break rather than cut.
+- To check a layout: export in the browser, then render pages with
+  PDFKit (a small Swift script: `PDFDocument` → `page.draw` → PNG).
+
 ### Response times (was the Enquiry Tracker)
 
 Merged into 10 at 10 at the user's request (2026-10-12) — one place, one
