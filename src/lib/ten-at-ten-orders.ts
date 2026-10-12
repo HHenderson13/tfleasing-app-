@@ -4,7 +4,7 @@
 // Pure, like ten-at-ten.ts. The order list is the "ag-grid" export Pole
 // Position reads for Order Take:
 //   B SE (exec) · D Customer · E Order Date · F Vehicle Details ·
-//   R Finance Type ("HP 60 Nov 31234.50") · AH Total Gross (profit) ·
+//   G Vehicle Registration · R Finance Type ("HP 60 Nov 31234.50") · AH Total Gross (profit) ·
 //   AK Delivery Date ("9 Oct 2026 Dlv" / "30 Nov 2026 Est")
 // It ends in a totals block ("NEW TOTALS", "29 Units", "AVERAGE"), which
 // is skipped. Both reports have exactly the same columns; classifyDealbook
@@ -12,7 +12,7 @@
 
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
-import { dayKey, parseExportTimestamp } from "./business-hours";
+import { dayKey, parseExportTimestamp, wallClockFromInstant } from "./business-hours";
 import { isMotorCompleteExportHeader } from "./enquiries-header";
 import { isEnquiryLogHeader, isExcludedExec, vehicleOf } from "./ten-at-ten";
 import type { Segment } from "./ten-at-ten-report";
@@ -24,6 +24,7 @@ const COL = {
   customer: 3,      // D
   orderDate: 4,     // E
   vehicle: 5,       // F  Vehicle Details
+  registration: 6,  // G  Vehicle Registration
   finance: 17,      // R  Finance Type
   profit: 33,       // AH Total Gross
   delivery: 36,     // AK Delivery Date
@@ -59,6 +60,33 @@ export function segmentOf(model: string, text: string): Segment {
   if (model === "Not specified" && /\b(van|pick ?up|transit|ranger)\b/.test(t)) return "Van";
   if (BEV_CAR_MODELS.has(model) || /\d\s*kwh\b|\belectric\b|\bbev\b/.test(t)) return "BEV Car";
   return "ICE Car";
+}
+
+/**
+ * A registration as the two reports can be matched on. Dealerweb decorates
+ * stock plates — "TACTICALMP26VWA", "MP26VYNTACTICAL" — so the current-style
+ * plate is lifted out of whatever surrounds it; anything else (a private
+ * plate, an old format) is kept as its letters and digits.
+ */
+export function plateOf(raw: unknown): string | null {
+  const s = norm(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!s) return null;
+  const m = s.match(/[A-Z]{2}\d{2}[A-Z]{3}/);
+  if (m) return m[0];
+  const rest = s.replace(/TACTICAL/g, "");
+  return rest.length >= 2 ? rest : null;
+}
+
+/**
+ * When the export was taken, as UK wall-clock time. AG Grid stamps it in the
+ * workbook's properties. It is what says whether an order was still live
+ * after a cancellation (see ten-at-ten-cancellations.ts) — the upload time
+ * would not do, since an old export can be uploaded days later.
+ */
+export function exportedAtOf(wb: XLSX.WorkBook): number | null {
+  const d = wb.Props?.CreatedDate;
+  const t = d instanceof Date ? d.getTime() : typeof d === "string" ? Date.parse(d) : Number.NaN;
+  return Number.isFinite(t) ? wallClockFromInstant(t) : null;
 }
 
 // ─── Finance (column R) ────────────────────────────────────────────────────
@@ -121,7 +149,8 @@ function money(raw: unknown): number | null {
 // left out of the key, as for enquiries, so a reassigned order overwrites.
 //
 // Line-by-line merging can't see an order that disappears from a later
-// export (a cancellation): its stored line stays until the data is cleared.
+// export (a cancellation): its stored line stays. The Cancelled Orders
+// upload is what finds those lines and keeps them out of Orders.
 
 export function makeOrderKey(orderAt: number, customer: string, vehicle: string, occurrence: number): string {
   return createHash("sha1")
@@ -161,6 +190,8 @@ export interface TenAtTenOrder {
   /** Column AK's date, day key — the delivery month for Dealbook – Deliveries. */
   deliveryDay: string | null;
   deliveryStatus: DeliveryStatus;
+  /** Column G, normalised by plateOf — how a Re-Write is recognised. */
+  registration: string | null;
   profit: number | null;
 }
 
@@ -170,6 +201,8 @@ export interface OrderParse {
   skippedExcluded: number;
   skippedUnreadable: number;
   excludedIds: string[];
+  /** When the export was taken (wall clock), from the workbook; null if not stamped. */
+  exportedAt: number | null;
 }
 
 const REQUIRED_HEADERS: [number, string][] = [
@@ -191,7 +224,23 @@ export function isOrderListHeader(header: readonly unknown[]): boolean {
   return REQUIRED_HEADERS.every(([i, want]) => letters(header[i]) === want);
 }
 
-export type TenAtTenFileKind = "enquiries" | "orders" | "deliveries" | "response";
+export type TenAtTenFileKind = "enquiries" | "orders" | "deliveries" | "response" | "cancellations";
+
+// Dealerweb's Cancelled Orders export: A Sales Executive · B Order Date ·
+// C Customer · D Type · E Model · F Registration Number · G Cancelled Date.
+// Here rather than in ten-at-ten-cancellations.ts so detectTenAtTenFile
+// can use it without the two modules importing each other.
+const CANCELLED_HEADERS: [number, string][] = [
+  [0, "salesexecutive"], [1, "orderdate"], [2, "customer"], [4, "model"], [6, "cancelleddate"],
+];
+
+export function isCancelledOrdersHeader(header: readonly unknown[]): boolean {
+  return CANCELLED_HEADERS.every(([i, want]) => letters(header[i]) === want);
+}
+
+export function cancelledHeaderFound(header: readonly unknown[]): string {
+  return CANCELLED_HEADERS.map(([i]) => `${String.fromCharCode(65 + i)}=${JSON.stringify(norm(header[i]) || null)}`).join(", ");
+}
 
 function deliveredAtDay(raw: unknown): string | null {
   const at = parseExportTimestamp(raw);
@@ -219,11 +268,11 @@ export function classifyDealbook(rows: readonly Pick<TenAtTenOrder, "orderDay" |
 /**
  * Which 10 at 10 report a file is, from its header row: the Dealerweb
  * enquiry log, the Dealbook (orders or deliveries — same columns, see
- * classifyDealbook) and the MotorComplete enquiry export behind Response
- * times are all "ag-grid" exports with different column layouts. null for
- * anything else.
+ * classifyDealbook), the MotorComplete enquiry export behind Response
+ * times and the Cancelled Orders export are all "ag-grid" exports with
+ * different column layouts. null for anything else.
  */
-export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): "enquiries" | "dealbook" | "response" | null {
+export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): "enquiries" | "dealbook" | "response" | "cancellations" | null {
   const wb = XLSX.read(buf, { type: Buffer.isBuffer(buf) ? "buffer" : "array", sheetRows: 1 });
   const ws = wb.Sheets[wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0]];
   if (!ws) return null;
@@ -231,13 +280,14 @@ export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): "enquiries" | "de
   if (isEnquiryLogHeader(header)) return "enquiries";
   if (isOrderListHeader(header)) return "dealbook";
   if (isMotorCompleteExportHeader(header)) return "response";
+  if (isCancelledOrdersHeader(header)) return "cancellations";
   return null;
 }
 
 export function parseOrderWorkbook(buf: ArrayBuffer | Buffer): OrderParse {
   const wb = XLSX.read(buf, { type: Buffer.isBuffer(buf) ? "buffer" : "array", cellDates: true });
   const ws = wb.Sheets[wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0]];
-  const out: OrderParse = { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnreadable: 0, excludedIds: [] };
+  const out: OrderParse = { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnreadable: 0, excludedIds: [], exportedAt: exportedAtOf(wb) };
   if (!ws) return out;
   const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: null });
   const header = Array.isArray(grid[0]) ? grid[0] : [];
@@ -284,6 +334,7 @@ export function parseOrderWorkbook(buf: ArrayBuffer | Buffer): OrderParse {
       delivery: deliveryOf(raw[COL.delivery]),
       deliveryDay: deliveredAtDay(raw[COL.delivery]),
       deliveryStatus: deliveryStatusOf(raw[COL.delivery]),
+      registration: plateOf(raw[COL.registration]),
       profit: money(raw[COL.profit]),
     });
   }

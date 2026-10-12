@@ -7,10 +7,10 @@ import { uploadTenAtTenAction, type TenAtTenUploadOutcome } from "../actions";
 interface Totals { files: number; rowsInFile: number; inserted: number; updated: number; unchanged: number; excluded: number; removed: number; duplicatesCollapsed: number; unreadable: number }
 const blank = (): Totals => ({ files: 0, rowsInFile: 0, inserted: 0, updated: 0, unchanged: 0, excluded: 0, removed: 0, duplicatesCollapsed: 0, unreadable: 0 });
 // The team's names for the files — keep in step with the upload page.
-const KIND_LABEL = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries" } as const;
+const KIND_LABEL = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries", cancellations: "Cancelled Orders" } as const;
 type Kind = keyof typeof KIND_LABEL;
 const KINDS = Object.keys(KIND_LABEL) as Kind[];
-const emptyTotals = (): Record<Kind, Totals> => ({ response: blank(), enquiries: blank(), orders: blank(), deliveries: blank() });
+const emptyTotals = (): Record<Kind, Totals> => ({ response: blank(), enquiries: blank(), orders: blank(), deliveries: blank(), cancellations: blank() });
 
 export function UploadClient() {
   const router = useRouter();
@@ -94,7 +94,7 @@ export function UploadClient() {
       >
         <input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(e) => pick(e.target.files)} />
         <div className="text-sm font-medium text-slate-800">
-          {queued.length > 0 ? `${queued.length} file${queued.length === 1 ? "" : "s"} ready: ${queued.map((f) => f.name).join(", ")}` : "Drop Enquiry Tracker, Enquiry Log or Dealbook files here, or click to choose"}
+          {queued.length > 0 ? `${queued.length} file${queued.length === 1 ? "" : "s"} ready: ${queued.map((f) => f.name).join(", ")}` : "Drop Enquiry Tracker, Enquiry Log, Dealbook or Cancelled Orders files here, or click to choose"}
         </div>
         <div className="mt-1 text-xs text-slate-500">.xlsx · several at once is fine — they&apos;re merged in the order chosen</div>
       </label>
@@ -133,7 +133,7 @@ export function UploadClient() {
             </div>
             <div className="mt-1 text-xs">
               <b>{x.inserted}</b> new · <b>{x.updated}</b> overwritten with newer values · {x.unchanged} already up to date
-              {x.excluded > 0 && <> · {x.excluded} lines left out ({k === "response" ? "not a MotorComplete lead, Harry Henderson / Joseph Rustigini, or a merged lead" : "HaHe / JoRu"})</>}
+              {x.excluded > 0 && <> · {x.excluded} lines left out ({k === "response" ? "not a MotorComplete lead, Harry Henderson / Joseph Rustigini, or a merged lead" : k === "cancellations" ? "Harry Henderson / Joseph Rustigini" : "HaHe / JoRu"})</>}
               {x.removed > 0 && <> · {x.removed} stored lines removed ({k === "deliveries" ? "no longer in that month's report — slipped or cancelled" : "moved to HaHe / JoRu"})</>}
               {x.duplicatesCollapsed > 0 && <> · {x.duplicatesCollapsed} repeated lines collapsed</>}
               {x.unreadable > 0 && <> · {x.unreadable} unreadable lines skipped</>}

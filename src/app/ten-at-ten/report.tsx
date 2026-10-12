@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { shiftAnchor } from "@/lib/period";
 import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, formatMins, formatWall } from "@/lib/business-hours";
 import type { EnquiryRow } from "@/lib/enquiries";
@@ -19,16 +20,19 @@ import {
   SEGMENTS,
   SOURCES,
   avgProfit,
+  brokerPct,
   budgetLines,
   budgetMonths,
   periodProgress,
   conversionPct,
+  daysToCancel,
   decodeOrders,
   decodeReport,
   dimLabel,
   groupOrders,
   groupRows,
   inRange,
+  inboundPct,
   orderDimLabel,
   orderStatsOf,
   rangeFor,
@@ -48,7 +52,9 @@ import {
   type Stats,
   type BudgetLine,
   type Budgets,
+  type CancellationView,
 } from "@/lib/ten-at-ten-report";
+import { saveCancellationNoteAction, setCancellationStatusAction } from "./actions";
 
 const SOURCE_COLOURS: Record<string, string> = {
   "TF Lead": "#1d4ed8",
@@ -77,11 +83,15 @@ const int = (n: number) => n.toLocaleString("en-GB");
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
 const gbp = (n: number | null) => (n == null ? "—" : GBP.format(Math.round(n)).replace("-", "−"));
 
-type Section = "enquiries" | "response" | "orders" | "deliveries";
+type Section = "enquiries" | "response" | "orders" | "deliveries" | "cancellations";
 
-export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today }: {
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
+  /** Every cancellation, already classified on the server. */
+  cancellations: CancellationView[];
+  /** Order days of held orders that were later cancelled — left out of Orders. */
+  cancelledOrderDays: string[];
 }) {
   const enquiryRows = useMemo(() => decodeReport(payload), [payload]);
   const orderRows = useMemo(() => decodeOrders(orders), [orders]);
@@ -99,8 +109,9 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
     if (section === "enquiries") return enquiryRows[0]?.day ?? today;
     if (section === "orders") return orderRows[0]?.day ?? today;
     if (section === "deliveries") return deliveryRows[0]?.day ?? today;
+    if (section === "cancellations") return cancellations.reduce((m, c) => (c.day < m ? c.day : m), today);
     return responses.reduce((m, r) => (r.enquiryDay < m ? r.enquiryDay : m), today);
-  }, [section, enquiryRows, orderRows, deliveryRows, responses, today]);
+  }, [section, enquiryRows, orderRows, deliveryRows, responses, cancellations, today]);
   const modeMeta = MODES.find((m) => m.key === mode)!;
   const atCurrent = mode !== "custom" && range.startDay <= today && range.endDay >= today;
 
@@ -108,7 +119,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
     <div className="mt-5 space-y-5">
       {/* Section */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([["enquiries", "Enquiries"], ["response", "Response times"], ["orders", "Orders"], ["deliveries", "Deliveries"]] as const).map(([key, label]) => (
+        {([["enquiries", "Enquiries"], ["response", "Response times"], ["orders", "Orders"], ["deliveries", "Deliveries"], ["cancellations", "Cancellations"]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSection(key)}
@@ -119,7 +130,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         ))}
       </div>
 
-      {/* Period, shared by both sections */}
+      {/* Period, shared by every section */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
           {MODES.map((m) => (
@@ -156,8 +167,10 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
-      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range} />}
+      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range}
+        cancelledDays={cancelledOrderDays} onShowCancellations={() => setSection("cancellations")} />}
       {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
+      {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
     </div>
   );
 }
@@ -356,14 +369,23 @@ function BuilderCard<D extends string>({ dims, first, second, setFirst, setSecon
 
 // ─── Enquiries ─────────────────────────────────────────────────────────────
 
+// Conversion three ways, always side by side: inbound (MotorComplete) and
+// broker / prospect, which together make overall.
 const ENQ_COLS: Col<Stats>[] = [
   { key: "enquiries", label: "Enquiries", render: (g) => int(g.stats.enquiries) },
   { key: "share", label: "Share", left: true, render: (g) => <ShareCell share={g.share} /> },
   { key: "orders", label: "Orders", render: (g) => int(g.stats.orders) },
-  { key: "conversion", label: "Conv.", strong: true, render: (g) => pct(conversionPct(g.stats)) },
+  { key: "inbound", label: "Inbound conv.", render: (g) => pct(inboundPct(g.stats)) },
+  { key: "broker", label: "Broker conv.", render: (g) => pct(brokerPct(g.stats)) },
+  { key: "conversion", label: "Overall conv.", strong: true, render: (g) => pct(conversionPct(g.stats)) },
   { key: "live", label: "Live", render: (g) => <span className="text-slate-500">{int(g.stats.live)}</span> },
   { key: "lost", label: "Lost", render: (g) => <span className="text-slate-500">{int(g.stats.lost)}</span> },
 ];
+
+// By source, each source is wholly inbound or wholly broker, so one rate says it.
+const SOURCE_COLS: Col<Stats>[] = ENQ_COLS
+  .filter((c) => c.key !== "inbound" && c.key !== "broker")
+  .map((c) => (c.key === "conversion" ? { ...c, label: "Conv." } : c));
 
 type SourceName = (typeof SOURCES)[number];
 
@@ -393,10 +415,10 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
         <Select value={model} onChange={setModel} all="All models" options={modelOptions} />
         {filtersOn && <button onClick={() => { setSources(new Set()); setExec(""); setModel(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
       </div>
+      <ConversionPanel s={s} />
       <Tiles tiles={[
-        { label: "Enquiries", value: int(s.enquiries) },
-        { label: "Orders", value: int(s.orders) },
-        { label: "Conversion", value: pct(conversionPct(s)), sub: "orders ÷ enquiries raised", hero: true },
+        { label: "Enquiries", value: int(s.enquiries), sub: `${int(s.inboundEnquiries)} inbound · ${int(s.enquiries - s.inboundEnquiries)} broker / prospect` },
+        { label: "Orders", value: int(s.orders), sub: `${int(s.inboundOrders)} inbound · ${int(s.orders - s.inboundOrders)} broker / prospect` },
         { label: "Live", value: int(s.live) },
         { label: "Lost", value: int(s.lost) },
       ]} />
@@ -412,6 +434,34 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
           <EnquiryBuilder rows={rows} />
         </>
       )}
+    </div>
+  );
+}
+
+// The three conversions, kept apart: inbound is the MotorComplete leads
+// alone, broker / prospect the rest, and overall the two together.
+function ConversionPanel({ s }: { s: Stats }) {
+  const brokerEnq = s.enquiries - s.inboundEnquiries;
+  const cards = [
+    { title: "Inbound conversion", what: "MotorComplete leads — TF Lead, Leasing.com, LeaseLoco, CarWow", colour: "#4f46e5", rate: inboundPct(s), orders: s.inboundOrders, enquiries: s.inboundEnquiries },
+    { title: "Broker / Prospect conversion", what: "Every other source", colour: SOURCE_COLOURS["Broker / Prospect"], rate: brokerPct(s), orders: s.orders - s.inboundOrders, enquiries: brokerEnq },
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {cards.map((c) => (
+        <div key={c.title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${c.colour}` }}>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{c.title}</div>
+          <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{pct(c.rate)}</div>
+          <div className="mt-0.5 text-xs text-slate-600">{int(c.orders)} orders of {int(c.enquiries)} enquiries</div>
+          <div className="mt-1 text-[11px] text-slate-400">{c.what}</div>
+        </div>
+      ))}
+      <div className="rounded-2xl border border-indigo-900 bg-indigo-950 p-4 text-white shadow-sm">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-200">Overall conversion</div>
+        <div className="mt-1 text-3xl font-bold tabular-nums">{pct(conversionPct(s))}</div>
+        <div className="mt-0.5 text-xs text-indigo-200">{int(s.orders)} orders of {int(s.enquiries)} enquiries</div>
+        <div className="mt-1 text-[11px] text-indigo-300">Inbound and broker / prospect together</div>
+      </div>
     </div>
   );
 }
@@ -432,7 +482,7 @@ function SourceShare({ rows }: { rows: ReportRow[] }) {
           </div>
         ))}
       </div>
-      <div className="mt-4"><GroupTable groups={groups} dimTitle="Source" cols={ENQ_COLS} swatches={SOURCE_COLOURS} /></div>
+      <div className="mt-4"><GroupTable groups={groups} dimTitle="Source" cols={SOURCE_COLS} swatches={SOURCE_COLOURS} /></div>
     </Card>
   );
 }
@@ -522,7 +572,10 @@ const STATUS_COLOURS: Record<string, string> = { Delivered: "#047857", Arrived: 
 // Orders and Deliveries are the same Dealbook report counted two ways —
 // by order date, or by delivery date with a status — so one section serves
 // both. Deliveries adds the status filter and the department budget panel.
-function DealbookSection({ all, range, variant, budgets, today }: { all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets; today?: string }) {
+function DealbookSection({ all, range, variant, budgets, today, cancelledDays, onShowCancellations }: {
+  all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets; today?: string;
+  cancelledDays?: string[]; onShowCancellations?: () => void;
+}) {
   const isDel = variant === "deliveries";
   const [segments, setSegments] = useState<Set<SegmentName>>(new Set());
   const [statuses, setStatuses] = useState<Set<StatusName>>(new Set());
@@ -554,6 +607,7 @@ function DealbookSection({ all, range, variant, budgets, today }: { all: OrderRo
   }
 
   const delivered = rows.filter((r) => r.delivery === "Delivered").length;
+  const cancelledHere = (cancelledDays ?? []).filter((d) => d >= range.startDay && d <= range.endDay).length;
   const tiles = isDel
     ? [
       { label: "Going", value: int(rows.length), sub: "delivered + arrived + due" },
@@ -580,6 +634,15 @@ function DealbookSection({ all, range, variant, budgets, today }: { all: OrderRo
         {filtersOn && <button onClick={() => { setSegments(new Set()); setStatuses(new Set()); setExec(""); setModel(""); setFunder(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
       </div>
       {isDel && budgets && today && <BudgetPanel rows={periodAll} range={range} budgets={budgets} today={today} />}
+      {cancelledHere > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
+          <span className="font-semibold text-slate-900">
+            {cancelledHere} {cancelledHere === 1 ? "order" : "orders"} in {range.label} {cancelledHere === 1 ? "was" : "were"} cancelled afterwards
+          </span>{" "}
+          and {cancelledHere === 1 ? "is" : "are"} left out here, as Dealerweb&apos;s own order list now leaves {cancelledHere === 1 ? "it" : "them"} out.{" "}
+          {onShowCancellations && <button onClick={onShowCancellations} className="font-semibold text-indigo-600 hover:text-indigo-800">See Cancellations</button>}
+        </div>
+      )}
       <Tiles tiles={tiles} />
       {rows.length === 0 ? (
         <Empty>No {noun} in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
@@ -1018,6 +1081,283 @@ function ResponseList({ rows, focus }: { rows: EnquiryRow[]; focus: Focus }) {
             </tr>
           );
         })}
+      </tbody>
+    </table>
+  );
+}
+
+// ─── Cancellations ─────────────────────────────────────────────────────────
+//
+// Dealerweb's Cancelled Orders, each checked against the Dealbook on the
+// server (lib/ten-at-ten-cancellations.ts). A Re-Write — an order put on
+// wrong, cancelled and ordered again — is listed but never counted as a
+// cancellation. Every proper cancellation wants a manager's reason, saved
+// for everyone; a manager can also overrule the matching either way.
+
+interface CancelStats { proper: number; rewrites: number; unexplained: number }
+type CGroup = Nested<CancelStats, CancellationView>;
+
+const isProper = (c: CancellationView) => c.status === "proper";
+const needsReason = (c: CancellationView) => isProper(c) && !c.note.trim();
+
+function cancelStatsOf(rows: readonly CancellationView[]): CancelStats {
+  return { proper: rows.filter(isProper).length, rewrites: rows.filter((c) => !isProper(c)).length, unexplained: rows.filter(needsReason).length };
+}
+
+// Share is of the proper cancellations — Re-Writes don't count.
+function cGroups(rows: CancellationView[], keyOf: (c: CancellationView) => string): CGroup[] {
+  const m = new Map<string, CancellationView[]>();
+  for (const r of rows) {
+    const k = keyOf(r);
+    const b = m.get(k);
+    if (b) b.push(r); else m.set(k, [r]);
+  }
+  const total = rows.filter(isProper).length;
+  return [...m]
+    .map(([key, rs]) => { const stats = cancelStatsOf(rs); return { key, label: key, stats, share: total ? (stats.proper / total) * 100 : 0, rows: rs, children: [] }; })
+    .sort((a, b) => b.stats.proper - a.stats.proper || b.stats.rewrites - a.stats.rewrites || a.label.localeCompare(b.label));
+}
+
+const CANCEL_COLS: Col<CancelStats, CancellationView>[] = [
+  { key: "proper", label: "Cancellations", strong: true, render: (g) => <span className={g.stats.proper ? "text-rose-700" : "text-slate-400"}>{int(g.stats.proper)}</span> },
+  { key: "share", label: "Share", left: true, render: (g) => <ShareCell share={g.share} /> },
+  { key: "rewrites", label: "Re-Writes", render: (g) => <span className="text-slate-500">{int(g.stats.rewrites)}</span> },
+  { key: "unexplained", label: "Reason to add", render: (g) => <span className={g.stats.unexplained ? "font-semibold text-amber-700" : "text-slate-400"}>{int(g.stats.unexplained)}</span> },
+];
+
+const daysLabel = (n: number) => (n === 0 ? "same day" : `${n} day${n === 1 ? "" : "s"} later`);
+// "Mr Steven Braine" and "Steven Braine" are the same customer.
+const nameKey = (s: string) => s.toLowerCase().replace(/^(mr|mrs|ms|miss|mx|dr)\.?\s+/, "").replace(/[^a-z0-9]/g, "");
+
+function CancellationsSection({ all, range }: { all: CancellationView[]; range: Range }) {
+  const [segments, setSegments] = useState<Set<SegmentName>>(new Set());
+  const [exec, setExec] = useState("");
+  const [model, setModel] = useState("");
+
+  const periodAll = useMemo(() => inRange(all, range), [all, range]);
+  const rows = useMemo(
+    () => periodAll.filter((c) => (segments.size === 0 || segments.has(c.segment as SegmentName)) && (!exec || c.exec === exec) && (!model || c.model === model)),
+    [periodAll, segments, exec, model],
+  );
+  const execOptions = useMemo(() => [...new Set(periodAll.map((c) => c.exec))].sort(), [periodAll]);
+  const modelOptions = useMemo(() => [...new Set(periodAll.map((c) => c.model))].sort(), [periodAll]);
+  const filtersOn = segments.size > 0 || !!exec || !!model;
+  // Reasons still to add first, then the most recent.
+  const proper = useMemo(() => rows.filter(isProper).sort((a, b) => Number(needsReason(b)) - Number(needsReason(a)) || b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer)), [rows]);
+  const rewrites = useMemo(() => rows.filter((c) => !isProper(c)).sort((a, b) => b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer)), [rows]);
+  const byExec = useMemo(() => cGroups(rows, (c) => c.exec), [rows]);
+  const byModel = useMemo(() => cGroups(rows, (c) => c.model), [rows]);
+
+  if (all.length === 0) {
+    return <Empty>No cancellations yet. Upload Cancelled Orders from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+  }
+
+  const unexplained = proper.filter(needsReason).length;
+  const avgDays = proper.length ? proper.reduce((n, c) => n + daysToCancel(c), 0) / proper.length : null;
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
+        <Chips options={SEGMENTS} selected={segments} onChange={setSegments} colours={SEGMENT_COLOURS} />
+        <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
+        <Select value={model} onChange={setModel} all="All models" options={modelOptions} />
+        {filtersOn && <button onClick={() => { setSegments(new Set()); setExec(""); setModel(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
+        <span className="text-[11px] text-slate-400">Counted on the day it was cancelled.</span>
+      </div>
+      <Tiles tiles={[
+        { label: "Cancellations", value: int(proper.length), sub: "cancelled and not re-ordered", hero: true },
+        { label: "Re-Writes", value: int(rewrites.length), sub: "cancelled and re-ordered — not counted" },
+        { label: "Reasons to add", value: int(unexplained), tone: proper.length ? (unexplained ? "bad" : "good") : undefined, sub: proper.length ? `${proper.length - unexplained} of ${proper.length} explained` : undefined },
+        { label: "Avg time to cancel", value: avgDays == null ? "—" : `${Math.round(avgDays)} days`, sub: "from order to cancellation" },
+      ]} />
+      {rows.length === 0 ? (
+        <Empty>No cancellations in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
+      ) : (
+        <>
+          <Card title="Cancellations" note="Add the reason for each · saved for everyone">
+            {proper.length === 0
+              ? <p className="text-sm text-slate-500">None — everything cancelled in {range.label} was ordered again.</p>
+              : <div className="divide-y divide-slate-100">{proper.map((c) => <CancellationItem key={c.id} c={c} />)}</div>}
+          </Card>
+          <Card title="Re-Writes" note="Cancelled and ordered again · shown, not counted as cancellations">
+            {rewrites.length === 0 ? <p className="text-sm text-slate-500">None in {range.label}.</p> : <RewriteList rows={rewrites} />}
+          </Card>
+          <Card title="By exec" note="Click an exec for their cancellations">
+            <GroupTable groups={byExec} dimTitle="Exec" cols={CANCEL_COLS} limit={12} detail={(g) => <CancellationList rows={g.rows} showExec={false} />} />
+          </Card>
+          <Card title="By model" note="Click a model for its cancellations">
+            <GroupTable groups={byModel} dimTitle="Model" cols={CANCEL_COLS} limit={12} detail={(g) => <CancellationList rows={g.rows} />} />
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Re-Write or not, as a manager sees it: a call they made can be undone,
+// handing it back to the matching.
+function useReclassify(id: string) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const set = (classification: "rewrite" | "proper" | null) => start(async () => {
+    setError(null);
+    const res = await setCancellationStatusAction({ id, classification });
+    if (!res.ok) { setError(res.error ?? "Couldn't save that."); return; }
+    router.refresh();
+  });
+  return { pending, error, set };
+}
+
+const smallButton = "rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40";
+
+// One proper cancellation: what, who, when — and the manager's reason.
+function CancellationItem({ c }: { c: CancellationView }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [text, setText] = useState(c.note);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const re = useReclassify(c.id);
+  const dirty = text.trim() !== c.note.trim();
+
+  function save() {
+    start(async () => {
+      const res = await saveCancellationNoteAction({ id: c.id, note: text });
+      if (!res.ok) { setMsg({ ok: false, text: res.error ?? "Couldn't save the note." }); return; }
+      setMsg({ ok: true, text: "Saved" });
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium text-slate-900">{c.customer}</div>
+          <div className="max-w-[640px] truncate text-xs text-slate-500" title={c.vehicle}>{c.vehicle}</div>
+          <div className="mt-0.5 text-xs text-slate-600">
+            {c.exec} · ordered {shortDate(c.orderDay)} · cancelled {shortDate(c.day)} <span className="text-slate-400">({daysLabel(daysToCancel(c))})</span>
+            {c.registration && <> · {c.registration}</>}
+            {c.orderProfit != null && <> · profit on the order <b><Money n={c.orderProfit} /></b></>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {c.overridden && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Manager&apos;s call</span>}
+          <button onClick={() => re.set(c.overridden ? null : "rewrite")} disabled={re.pending} className={smallButton}
+            title={c.overridden ? `Hand it back to the matching, which found a re-order${c.reorder ? ` on ${shortDate(c.reorder.orderDay)}` : ""}` : "It was ordered again — count it as a Re-Write"}>
+            {c.overridden ? "Undo" : "It's a Re-Write"}
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
+        <textarea value={text} onChange={(e) => { setText(e.target.value); setMsg(null); }} rows={2} maxLength={2000}
+          placeholder="Reason for the cancellation…" aria-label={`Reason ${c.customer} cancelled`}
+          className={`w-full flex-1 rounded-lg border px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none ${c.note ? "border-slate-300" : "border-amber-300 bg-amber-50/40"}`} />
+        <button onClick={save} disabled={pending || !dirty}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40">
+          {pending ? "Saving…" : "Save"}
+        </button>
+      </div>
+      <div className="mt-1 text-[11px]">
+        {re.error ? <span className="text-rose-700">{re.error}</span>
+          : msg && !msg.ok ? <span className="text-rose-700">{msg.text}</span>
+          : dirty ? <span className="text-slate-400">Not saved yet</span>
+          : c.note ? <span className="text-slate-400">Saved by {c.noteBy ?? "—"} · {c.noteAt}</span>
+          : <span className="font-semibold text-amber-700">Reason needed</span>}
+      </div>
+    </div>
+  );
+}
+
+function RewriteAction({ c }: { c: CancellationView }) {
+  const re = useReclassify(c.id);
+  return (
+    <div className="text-right">
+      <button onClick={() => re.set(c.overridden ? null : "proper")} disabled={re.pending} className={smallButton}
+        title={c.overridden ? "Hand it back to the matching" : "It wasn't ordered again — count it as a cancellation"}>
+        {c.overridden ? "Undo" : "Not a Re-Write"}
+      </button>
+      {re.error && <div className="mt-1 text-[10px] text-rose-700">{re.error}</div>}
+    </div>
+  );
+}
+
+// Each Re-Write beside the order that replaced it, and what tied the two.
+function RewriteList({ rows }: { rows: CancellationView[] }) {
+  return (
+    <table className="w-full text-xs">
+      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th className="px-2 py-1 text-left font-semibold">Customer</th>
+          <th className="px-2 py-1 text-left font-semibold">Exec</th>
+          <th className="px-2 py-1 text-left font-semibold">Ordered</th>
+          <th className="px-2 py-1 text-left font-semibold">Cancelled</th>
+          <th className="px-2 py-1 text-left font-semibold">Re-ordered</th>
+          <th className="px-2 py-1" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((c) => (
+          <tr key={c.id} className="border-t border-slate-100 align-top">
+            <td className="px-2 py-1.5">
+              <div className="font-medium text-slate-800">{c.customer}</div>
+              <div className="max-w-[360px] truncate text-[11px] text-slate-500" title={c.vehicle}>{c.vehicle}</div>
+            </td>
+            <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{c.exec}</td>
+            <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{shortDate(c.orderDay)}</td>
+            <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{shortDate(c.day)}</td>
+            <td className="px-2 py-1.5 text-slate-700">
+              {c.reorder ? (
+                <>
+                  <span className="font-semibold">{shortDate(c.reorder.orderDay)}</span>
+                  {nameKey(c.reorder.customer) !== nameKey(c.customer) && <> · as {c.reorder.customer}</>}
+                  {c.reorder.registration && <> · {c.reorder.registration}</>}
+                  <div className="text-[10px] text-slate-400">matched on {c.reorder.on === "registration" ? "the same registration" : "the same customer and model"}</div>
+                </>
+              ) : (
+                <span className="text-slate-500">Marked a Re-Write by a manager</span>
+              )}
+            </td>
+            <td className="px-2 py-1.5"><RewriteAction c={c} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// The drill-down under By exec / By model.
+function CancellationList({ rows, showExec = true }: { rows: CancellationView[]; showExec?: boolean }) {
+  const sorted = useMemo(() => [...rows].sort((a, b) => Number(isProper(b)) - Number(isProper(a)) || b.day.localeCompare(a.day)), [rows]);
+  return (
+    <table className="w-full text-xs">
+      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th className="px-2 py-1 text-left font-semibold">Customer</th>
+          <th className="px-2 py-1 text-left font-semibold">Vehicle</th>
+          {showExec && <th className="px-2 py-1 text-left font-semibold">Exec</th>}
+          <th className="px-2 py-1 text-left font-semibold">Ordered</th>
+          <th className="px-2 py-1 text-left font-semibold">Cancelled</th>
+          <th className="px-2 py-1 text-left font-semibold">Reason</th>
+          <th className="px-2 py-1 text-right font-semibold">Counts as</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((c) => (
+          <tr key={c.id} className="border-t border-slate-100 align-top">
+            <td className="max-w-[220px] truncate px-2 py-1 font-medium text-slate-800" title={c.customer}>{c.customer}</td>
+            <td className="max-w-[320px] truncate px-2 py-1 text-slate-600" title={c.vehicle}>{c.vehicle}</td>
+            {showExec && <td className="whitespace-nowrap px-2 py-1 text-slate-600">{c.exec}</td>}
+            <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(c.orderDay)}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(c.day)}</td>
+            <td className="max-w-[320px] truncate px-2 py-1 text-slate-600" title={c.note}>
+              {isProper(c) ? (c.note || <span className="font-semibold text-amber-700">Reason needed</span>) : <span className="text-slate-400">—</span>}
+            </td>
+            <td className="whitespace-nowrap px-2 py-1 text-right">
+              {isProper(c) ? <span className="font-semibold text-rose-700">Cancellation</span> : <span className="text-slate-500">Re-Write</span>}
+            </td>
+          </tr>
+        ))}
       </tbody>
     </table>
   );

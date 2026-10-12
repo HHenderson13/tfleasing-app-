@@ -4,11 +4,18 @@
 //
 // Conversion is always orders ÷ enquiries, over enquiries RAISED in the
 // period: "of the enquiries that came in, how many have ordered so far".
+// It is reported three ways, always side by side (user, 2026-10-12):
+// inbound (the MotorComplete-fed sources), broker / prospect (everything
+// else), and overall, which the two make up.
 
 import { buildPeriod, fromDayKey, shiftAnchor, toDayKey, type Granularity } from "./period";
 
 export const SOURCES = ["TF Lead", "Leasing.com", "LeaseLoco", "CarWow", "Broker / Prospect"] as const;
 export type SourceName = (typeof SOURCES)[number];
+
+/** The sources fed by MotorComplete — inbound leads. Everything else is Broker / Prospect. */
+export const INBOUND_SOURCES: readonly string[] = ["TF Lead", "Leasing.com", "LeaseLoco", "CarWow"];
+export const isInboundSource = (source: string) => INBOUND_SOURCES.includes(source);
 export type Outcome = "order" | "live" | "lost" | "other";
 
 export const NOT_STATED = "Not stated";
@@ -165,13 +172,19 @@ export function decodeReport(p: ReportPayload): ReportRow[] {
 
 // ─── Stats ─────────────────────────────────────────────────────────────────
 
-export interface Stats { enquiries: number; orders: number; live: number; lost: number }
+export interface Stats {
+  enquiries: number; orders: number; live: number; lost: number;
+  /** The inbound (MotorComplete) share of enquiries and orders; broker / prospect is the rest. */
+  inboundEnquiries: number; inboundOrders: number;
+}
 
 export function statsOf(rows: readonly ReportRow[]): Stats {
-  const s: Stats = { enquiries: 0, orders: 0, live: 0, lost: 0 };
+  const s: Stats = { enquiries: 0, orders: 0, live: 0, lost: 0, inboundEnquiries: 0, inboundOrders: 0 };
   for (const r of rows) {
+    const inbound = isInboundSource(r.source);
     s.enquiries++;
-    if (r.outcome === "order") s.orders++;
+    if (inbound) s.inboundEnquiries++;
+    if (r.outcome === "order") { s.orders++; if (inbound) s.inboundOrders++; }
     else if (r.outcome === "live") s.live++;
     else if (r.outcome === "lost") s.lost++;
   }
@@ -181,6 +194,17 @@ export function statsOf(rows: readonly ReportRow[]): Stats {
 /** Orders ÷ enquiries × 100; null when there were no enquiries (shown "—"). */
 export function conversionPct(s: Stats): number | null {
   return s.enquiries > 0 ? (s.orders / s.enquiries) * 100 : null;
+}
+
+/** Inbound conversion: MotorComplete orders ÷ MotorComplete enquiries. */
+export function inboundPct(s: Stats): number | null {
+  return s.inboundEnquiries > 0 ? (s.inboundOrders / s.inboundEnquiries) * 100 : null;
+}
+
+/** Broker / prospect conversion: the rest of the orders ÷ the rest of the enquiries. */
+export function brokerPct(s: Stats): number | null {
+  const e = s.enquiries - s.inboundEnquiries;
+  return e > 0 ? ((s.orders - s.inboundOrders) / e) * 100 : null;
 }
 
 // ─── Breakdowns ────────────────────────────────────────────────────────────
@@ -200,7 +224,7 @@ export const DIMENSIONS: { key: DimKey; label: string }[] = [
 
 export const dimLabel = (k: DimKey) => DIMENSIONS.find((d) => d.key === k)?.label ?? k;
 
-export type SortKey = "enquiries" | "orders" | "conversion" | "live" | "lost" | "label";
+export type SortKey = "enquiries" | "orders" | "conversion" | "inbound" | "broker" | "live" | "lost" | "label";
 
 // Label order for the "A–Z" sort: sources, segments and profit bands in
 // their fixed order, numbers numerically ("6,000 miles" before "10,000
@@ -269,6 +293,8 @@ export type Group = Nested<Stats, ReportRow>;
 
 function sortValue(s: Stats, sort: SortKey): number {
   if (sort === "conversion") return conversionPct(s) ?? -1;
+  if (sort === "inbound") return inboundPct(s) ?? -1;
+  if (sort === "broker") return brokerPct(s) ?? -1;
   return sort === "label" ? 0 : s[sort];
 }
 
@@ -556,4 +582,41 @@ export function periodProgress(r: Range, today: string): { day: number; days: nu
   const days = last - first + 1;
   const day = Math.max(0, Math.min(days, now - first + 1));
   return { day, days, pct: days > 0 ? (day / days) * 100 : 0 };
+}
+
+// ─── Cancellations ─────────────────────────────────────────────────────────
+//
+// Built on the server (ten-at-ten-store.ts), where each cancellation is
+// matched against the Dealbook; small enough to ship as plain objects.
+
+export interface CancellationView {
+  id: string;
+  /** The day it was cancelled — what the period slices on. */
+  day: string;
+  orderDay: string;
+  /** Full name, as the Cancelled Orders export gives it. */
+  exec: string;
+  customer: string;
+  vehicle: string;
+  model: string;
+  segment: string;
+  registration: string | null;
+  /** What it counts as: a manager's call where there is one, else the matching's. */
+  status: "rewrite" | "proper";
+  /** The matching's verdict. */
+  auto: "rewrite" | "proper";
+  /** A manager has changed the verdict. */
+  overridden: boolean;
+  /** The order that replaced it, when one was found. */
+  reorder: { orderDay: string; customer: string; vehicle: string; registration: string | null; exec: string; on: "registration" | "customer" } | null;
+  /** Profit on the cancelled order, when we hold that order. */
+  orderProfit: number | null;
+  note: string;
+  noteBy: string | null;
+  noteAt: string | null;
+}
+
+/** Calendar days from order to cancellation. */
+export function daysToCancel(c: Pick<CancellationView, "orderDay" | "day">): number {
+  return dayNumber(c.day) - dayNumber(c.orderDay);
 }

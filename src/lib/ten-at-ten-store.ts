@@ -4,9 +4,14 @@ import { createHash } from "node:crypto";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads } from "@/db/schema";
+import { wallClockFromInstant } from "./business-hours";
 import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
+import {
+  execCodeFromName, matchCancellations, mergeDealbookLines,
+  type CancellationParse, type DealbookLine, type TenAtTenCancellation,
+} from "./ten-at-ten-cancellations";
 import type { OrderParse, TenAtTenOrder } from "./ten-at-ten-orders";
-import type { Budgets, OrderStoredRow, StoredRow } from "./ten-at-ten-report";
+import type { Budgets, CancellationView, OrderStoredRow, StoredRow } from "./ten-at-ten-report";
 
 export type { Budgets };
 
@@ -146,12 +151,12 @@ export async function ingestTenAtTen(parsed: TenAtTenParse, meta: { filename: st
 
 // ─── Orders ────────────────────────────────────────────────────────────────
 
-type OrderComparable = Pick<TenAtTenOrder, "exec" | "vehicleRaw" | "product" | "termMonths" | "funder" | "delivery" | "deliveryDay" | "deliveryStatus" | "profit">;
+type OrderComparable = Pick<TenAtTenOrder, "exec" | "vehicleRaw" | "product" | "termMonths" | "funder" | "delivery" | "deliveryDay" | "deliveryStatus" | "registration" | "profit">;
 
 function sameOrder(a: OrderComparable, b: OrderComparable): boolean {
   return a.exec === b.exec && a.vehicleRaw === b.vehicleRaw && a.product === b.product && a.termMonths === b.termMonths
     && a.funder === b.funder && a.delivery === b.delivery && a.deliveryDay === b.deliveryDay
-    && a.deliveryStatus === b.deliveryStatus && a.profit === b.profit;
+    && a.deliveryStatus === b.deliveryStatus && a.registration === b.registration && a.profit === b.profit;
 }
 
 // The two Dealbook reports share columns and keys, so one merge serves both;
@@ -200,14 +205,16 @@ export async function ingestDealbook(
   for (let i = 0; i < ids.length; i += 400) {
     const found = await db.all<{
       id: string; exec: string; vehicle_raw: string | null; product: string | null; term_months: number | null;
-      funder: string | null; delivery: string | null; delivery_day: string | null; delivery_status: string | null; profit: number | null;
-    }>(sql`SELECT id, exec, vehicle_raw, product, term_months, funder, delivery, delivery_day, delivery_status, profit
+      funder: string | null; delivery: string | null; delivery_day: string | null; delivery_status: string | null;
+      registration: string | null; profit: number | null;
+    }>(sql`SELECT id, exec, vehicle_raw, product, term_months, funder, delivery, delivery_day, delivery_status, registration, profit
            FROM ${table} WHERE id IN (${inList(ids.slice(i, i + 400))})`);
     for (const f of found) {
       existing.set(f.id, {
         exec: f.exec, vehicleRaw: f.vehicle_raw ?? "", product: f.product ?? "", termMonths: f.term_months,
         funder: f.funder ?? "", delivery: f.delivery ?? "", deliveryDay: f.delivery_day,
-        deliveryStatus: (f.delivery_status ?? "") as OrderComparable["deliveryStatus"], profit: f.profit,
+        deliveryStatus: (f.delivery_status ?? "") as OrderComparable["deliveryStatus"], registration: f.registration,
+        profit: f.profit,
       });
     }
   }
@@ -225,13 +232,13 @@ export async function ingestDealbook(
     const values = writes.slice(i, i + 50).map((r) => sql`(
       ${r.id}, ${r.orderedAt}, ${r.orderDay}, ${r.exec}, ${r.customer}, ${r.vehicleRaw}, ${r.model},
       ${r.derivative}, ${r.derivativeKey}, ${r.segment}, ${r.product}, ${r.termMonths}, ${r.funder},
-      ${r.delivery}, ${r.deliveryDay}, ${r.deliveryStatus}, ${r.profit}, ${nowSec}, ${nowSec}
+      ${r.delivery}, ${r.deliveryDay}, ${r.deliveryStatus}, ${r.registration}, ${r.profit}, ${nowSec}, ${nowSec}
     )`);
     await db.run(sql`
       INSERT INTO ${table} (
         id, ordered_at, order_day, exec, customer, vehicle_raw, model,
         derivative, derivative_key, segment, product, term_months, funder,
-        delivery, delivery_day, delivery_status, profit, first_uploaded_at, updated_at
+        delivery, delivery_day, delivery_status, registration, profit, first_uploaded_at, updated_at
       ) VALUES ${sql.join(values, sql`, `)}
       ON CONFLICT(id) DO UPDATE SET
         exec = excluded.exec,
@@ -246,9 +253,18 @@ export async function ingestDealbook(
         delivery = excluded.delivery,
         delivery_day = excluded.delivery_day,
         delivery_status = excluded.delivery_status,
+        registration = excluded.registration,
         profit = excluded.profit,
         updated_at = excluded.updated_at
     `);
+  }
+
+  // Every line in the file — unchanged ones too — was listed when this
+  // export was taken. Never moved backwards, so uploading an old export
+  // after a newer one changes nothing.
+  const seen = parsed.exportedAt ?? wallClockFromInstant(now);
+  for (let i = 0; i < ids.length; i += 400) {
+    await db.run(sql`UPDATE ${table} SET last_seen_at = MAX(COALESCE(last_seen_at, 0), ${seen}) WHERE id IN (${inList(ids.slice(i, i + 400))})`);
   }
 
   if (syncMonths.length > 0 && parsed.rows.length > 0) {
@@ -291,14 +307,14 @@ export async function ingestDealbook(
   return result;
 }
 
-export async function loadTenAtTenOrders(): Promise<OrderStoredRow[]> {
+export async function loadTenAtTenOrders(): Promise<(OrderStoredRow & { id: string })[]> {
   const rows = await db.all<{
-    order_day: string; exec: string; customer: string; model: string; derivative: string | null; derivative_key: string | null;
+    id: string; order_day: string; exec: string; customer: string; model: string; derivative: string | null; derivative_key: string | null;
     segment: string; product: string | null; term_months: number | null; funder: string | null; delivery: string | null; profit: number | null;
-  }>(sql`SELECT order_day, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder, delivery, profit
+  }>(sql`SELECT id, order_day, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder, delivery, profit
          FROM ten_at_ten_orders ORDER BY ordered_at`);
   return rows.map((r) => ({
-    orderDay: r.order_day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative,
+    id: r.id, orderDay: r.order_day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative,
     derivativeKey: r.derivative_key, segment: r.segment, product: r.product ?? "", termMonths: r.term_months,
     funder: r.funder ?? "", delivery: r.delivery ?? "", profit: r.profit == null ? null : Number(r.profit),
   }));
@@ -403,7 +419,7 @@ export async function saveBudgets(rows: { yearMonth: string; car: number; cv: nu
 
 export interface HeldSummary { rows: number; firstDay: string | null; lastDay: string | null }
 
-export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; deliveries: HeldSummary; response: HeldSummary }> {
+export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; deliveries: HeldSummary; response: HeldSummary; cancellations: HeldSummary }> {
   const [e] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(enquiry_day) AS lo, MAX(enquiry_day) AS hi FROM ten_at_ten_enquiries`,
   );
@@ -416,7 +432,232 @@ export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; order
   const [d] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(delivery_day) AS lo, MAX(delivery_day) AS hi FROM ten_at_ten_deliveries`,
   );
+  const [c] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
+    sql`SELECT COUNT(*) AS n, MIN(cancelled_day) AS lo, MAX(cancelled_day) AS hi FROM ten_at_ten_cancellations`,
+  );
   const held = (r: { n: number; lo: string | null; hi: string | null } | undefined): HeldSummary =>
     ({ rows: Number(r?.n ?? 0), firstDay: r?.lo ?? null, lastDay: r?.hi ?? null });
-  return { enquiries: held(e), orders: held(o), deliveries: held(d), response: held(x) };
+  return { enquiries: held(e), orders: held(o), deliveries: held(d), response: held(x), cancellations: held(c) };
+}
+
+// ─── Cancellations ─────────────────────────────────────────────────────────
+
+type CancelComparable = Pick<TenAtTenCancellation, "exec" | "cancelledAt" | "customer" | "saleType" | "vehicleRaw" | "registration">;
+
+const sameCancellation = (a: CancelComparable, b: CancelComparable) =>
+  a.exec === b.exec && a.cancelledAt === b.cancelledAt && a.customer === b.customer && a.saleType === b.saleType
+  && a.vehicleRaw === b.vehicleRaw && a.registration === b.registration;
+
+/**
+ * Merge a Cancelled Orders export, line by line, as every other upload.
+ * Notes live in their own table and are never touched here.
+ */
+export async function ingestCancellations(parsed: CancellationParse, meta: { filename: string; userId: string }): Promise<TenAtTenIngest> {
+  const now = new Date();
+  const nowSec = Math.floor(now.getTime() / 1000);
+  let removed = 0;
+
+  for (let i = 0; i < parsed.excludedIds.length; i += 400) {
+    const slice = parsed.excludedIds.slice(i, i + 400);
+    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ten_at_ten_cancellations WHERE id IN (${inList(slice)})`);
+    if (Number(c?.n ?? 0) > 0) {
+      await db.run(sql`DELETE FROM ten_at_ten_cancellations WHERE id IN (${inList(slice)})`);
+      removed += Number(c.n);
+    }
+  }
+
+  const existing = new Map<string, CancelComparable>();
+  const ids = parsed.rows.map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 400) {
+    const found = await db.all<{
+      id: string; exec: string; cancelled_at: number; customer: string; sale_type: string | null; vehicle_raw: string | null; registration: string | null;
+    }>(sql`SELECT id, exec, cancelled_at, customer, sale_type, vehicle_raw, registration
+           FROM ten_at_ten_cancellations WHERE id IN (${inList(ids.slice(i, i + 400))})`);
+    for (const f of found) {
+      existing.set(f.id, {
+        exec: f.exec, cancelledAt: Number(f.cancelled_at), customer: f.customer, saleType: f.sale_type,
+        vehicleRaw: f.vehicle_raw ?? "", registration: f.registration,
+      });
+    }
+  }
+
+  let inserted = 0, updated = 0, unchanged = 0;
+  const writes: TenAtTenCancellation[] = [];
+  for (const r of parsed.rows) {
+    const prev = existing.get(r.id);
+    if (!prev) { inserted++; writes.push(r); }
+    else if (sameCancellation(prev, r)) unchanged++;
+    else { updated++; writes.push(r); }
+  }
+
+  for (let i = 0; i < writes.length; i += 50) {
+    const values = writes.slice(i, i + 50).map((r) => sql`(
+      ${r.id}, ${r.orderedAt}, ${r.orderDay}, ${r.cancelledAt}, ${r.cancelledDay}, ${r.exec}, ${r.customer}, ${r.saleType},
+      ${r.vehicleRaw}, ${r.model}, ${r.derivative}, ${r.derivativeKey}, ${r.segment}, ${r.registration}, ${nowSec}, ${nowSec}
+    )`);
+    await db.run(sql`
+      INSERT INTO ten_at_ten_cancellations (
+        id, ordered_at, order_day, cancelled_at, cancelled_day, exec, customer, sale_type,
+        vehicle_raw, model, derivative, derivative_key, segment, registration, first_uploaded_at, updated_at
+      ) VALUES ${sql.join(values, sql`, `)}
+      ON CONFLICT(id) DO UPDATE SET
+        cancelled_at = excluded.cancelled_at,
+        cancelled_day = excluded.cancelled_day,
+        exec = excluded.exec,
+        customer = excluded.customer,
+        sale_type = excluded.sale_type,
+        vehicle_raw = excluded.vehicle_raw,
+        model = excluded.model,
+        derivative = excluded.derivative,
+        derivative_key = excluded.derivative_key,
+        segment = excluded.segment,
+        registration = excluded.registration,
+        updated_at = excluded.updated_at
+    `);
+  }
+
+  const days = parsed.rows.map((r) => r.cancelledDay).sort();
+  const result: TenAtTenIngest = {
+    rowsInFile: parsed.rowsInFile,
+    inserted, updated, unchanged,
+    excluded: parsed.skippedExcluded,
+    removed,
+    duplicatesCollapsed: 0,
+    unreadable: parsed.skippedUnreadable,
+    firstDay: days[0] ?? null,
+    lastDay: days[days.length - 1] ?? null,
+  };
+
+  await db.insert(tenAtTenUploads).values({
+    id: createHash("sha1").update(`${meta.filename}|${now.toISOString()}|cancellations`).digest("hex").slice(0, 16),
+    filename: meta.filename,
+    rowsInFile: result.rowsInFile,
+    inserted, updated, unchanged,
+    excluded: result.excluded,
+    removed,
+    firstDay: result.firstDay,
+    lastDay: result.lastDay,
+    uploadedAt: now,
+    uploadedByUserId: meta.userId,
+    kind: "cancellations",
+  });
+  return result;
+}
+
+const DEALBOOK_LINES = {
+  orders: sql`SELECT id, order_day, exec, customer, model, vehicle_raw, registration, last_seen_at, first_uploaded_at, profit FROM ten_at_ten_orders`,
+  deliveries: sql`SELECT id, order_day, exec, customer, model, vehicle_raw, registration, last_seen_at, first_uploaded_at, profit FROM ten_at_ten_deliveries`,
+} as const;
+
+async function loadDealbookLines(source: keyof typeof DEALBOOK_LINES): Promise<DealbookLine[]> {
+  const rows = await db.all<{
+    id: string; order_day: string; exec: string; customer: string; model: string; vehicle_raw: string | null;
+    registration: string | null; last_seen_at: number | null; first_uploaded_at: number; profit: number | null;
+  }>(DEALBOOK_LINES[source]);
+  return rows.map((r) => ({
+    id: r.id, source, orderDay: r.order_day, exec: r.exec, customer: r.customer, model: r.model,
+    vehicleRaw: r.vehicle_raw ?? "", registration: r.registration,
+    // Lines uploaded before exports were time-stamped fall back to when they
+    // were first uploaded — never earlier than the export itself.
+    seenAt: r.last_seen_at != null ? Number(r.last_seen_at) : wallClockFromInstant(Number(r.first_uploaded_at) * 1000),
+    profit: r.profit == null ? null : Number(r.profit),
+  }));
+}
+
+const fmtStamp = (sec: number) =>
+  new Date(sec * 1000).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/**
+ * Every cancellation, classified against the Dealbook, with its notes —
+ * and the held order lines that were cancelled, which Orders leaves out.
+ */
+export async function loadCancellationsReport(names: Map<string, string>): Promise<{ views: CancellationView[]; originalIds: Set<string> }> {
+  const [cancels, notes, orders, deliveries] = await Promise.all([
+    db.all<{
+      id: string; ordered_at: number; order_day: string; cancelled_at: number; cancelled_day: string; exec: string; customer: string;
+      vehicle_raw: string | null; model: string; segment: string; registration: string | null;
+    }>(sql`SELECT id, ordered_at, order_day, cancelled_at, cancelled_day, exec, customer, vehicle_raw, model, segment, registration
+           FROM ten_at_ten_cancellations ORDER BY cancelled_at`),
+    db.all<{ cancellation_id: string; note: string; classification: string | null; updated_by: string | null; updated_at: number }>(
+      sql`SELECT cancellation_id, note, classification, updated_by, updated_at FROM ten_at_ten_cancellation_notes`,
+    ),
+    loadDealbookLines("orders"),
+    loadDealbookLines("deliveries"),
+  ]);
+  if (cancels.length === 0) return { views: [], originalIds: new Set() };
+
+  // The export names execs in full; the Dealbook uses codes. A name's codes
+  // are whatever the Pole Position map gives it, plus Dealerweb's own
+  // convention (first two letters of first and last name).
+  const codesByName = new Map<string, string[]>();
+  for (const [code, name] of names) {
+    const k = name.toLowerCase();
+    codesByName.set(k, [...(codesByName.get(k) ?? []), code]);
+  }
+  const execCodesOf = (name: string) => [...(codesByName.get(name.toLowerCase()) ?? []), execCodeFromName(name)];
+
+  const rows = cancels.map((c) => ({
+    id: c.id, exec: c.exec, orderDay: c.order_day, cancelledAt: Number(c.cancelled_at), cancelledDay: c.cancelled_day,
+    customer: c.customer, model: c.model, registration: c.registration,
+  }));
+  const { matches, originalIds } = matchCancellations(rows, mergeDealbookLines(orders, deliveries), execCodesOf);
+  const noteOf = new Map(notes.map((n) => [n.cancellation_id, n]));
+
+  const views = cancels.map((c): CancellationView => {
+    const m = matches.get(c.id)!;
+    const n = noteOf.get(c.id);
+    const manual = n?.classification === "rewrite" || n?.classification === "proper" ? n.classification : null;
+    return {
+      id: c.id,
+      day: c.cancelled_day,
+      orderDay: c.order_day,
+      exec: c.exec,
+      customer: c.customer,
+      vehicle: c.vehicle_raw ?? c.model,
+      model: c.model,
+      segment: c.segment,
+      registration: c.registration,
+      status: manual ?? m.status,
+      auto: m.status,
+      overridden: manual != null && manual !== m.status,
+      reorder: m.reorder ? { ...m.reorder, exec: names.get(m.reorder.exec) ?? m.reorder.exec } : null,
+      orderProfit: m.originalProfit,
+      note: n?.note ?? "",
+      noteBy: n?.updated_by ?? null,
+      noteAt: n ? fmtStamp(Number(n.updated_at)) : null,
+    };
+  });
+  return { views, originalIds };
+}
+
+async function cancellationExists(id: string): Promise<boolean> {
+  const [r] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ten_at_ten_cancellations WHERE id = ${id}`);
+  return Number(r?.n ?? 0) > 0;
+}
+
+/** Save a manager's reason for a cancellation. False if there is no such cancellation. */
+export async function saveCancellationNote(id: string, note: string, by: string): Promise<boolean> {
+  if (!(await cancellationExists(id))) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  await db.run(sql`
+    INSERT INTO ten_at_ten_cancellation_notes (cancellation_id, note, classification, updated_by, updated_at)
+    VALUES (${id}, ${note}, NULL, ${by}, ${nowSec})
+    ON CONFLICT(cancellation_id) DO UPDATE SET note = excluded.note, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+  `);
+  return true;
+}
+
+/**
+ * A manager's call on Re-Write vs cancellation, overriding the matching;
+ * null hands it back to the matching. False if there is no such cancellation.
+ */
+export async function setCancellationClassification(id: string, classification: "rewrite" | "proper" | null, by: string): Promise<boolean> {
+  if (!(await cancellationExists(id))) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  await db.run(sql`
+    INSERT INTO ten_at_ten_cancellation_notes (cancellation_id, note, classification, updated_by, updated_at)
+    VALUES (${id}, '', ${classification}, ${by}, ${nowSec})
+    ON CONFLICT(cancellation_id) DO UPDATE SET classification = excluded.classification, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+  `);
+  return true;
 }

@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 55;
+const SCHEMA_VERSION = 56;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1029,6 +1029,44 @@ async function ensureTenAtTenTables() {
     )
   `));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_deliveries_day ON ten_at_ten_deliveries(delivery_day)`));
+  // Registration and when an export last listed the line: how Cancellations
+  // tells a Re-Write from a cancellation (lib/ten-at-ten-cancellations.ts).
+  for (const table of ["ten_at_ten_orders", "ten_at_ten_deliveries"]) {
+    await ensureColumns(table, [
+      { name: "registration", sqlType: "TEXT" },
+      { name: "last_seen_at", sqlType: "INTEGER" },
+    ]);
+  }
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_cancellations (
+      id TEXT PRIMARY KEY,
+      ordered_at INTEGER NOT NULL,
+      order_day TEXT NOT NULL,
+      cancelled_at INTEGER NOT NULL,
+      cancelled_day TEXT NOT NULL,
+      exec TEXT NOT NULL,
+      customer TEXT NOT NULL,
+      sale_type TEXT,
+      vehicle_raw TEXT,
+      model TEXT NOT NULL,
+      derivative TEXT,
+      derivative_key TEXT,
+      segment TEXT NOT NULL,
+      registration TEXT,
+      first_uploaded_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_cancellations_day ON ten_at_ten_cancellations(cancelled_day)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_cancellation_notes (
+      cancellation_id TEXT PRIMARY KEY,
+      note TEXT NOT NULL DEFAULT '',
+      classification TEXT,
+      updated_by TEXT,
+      updated_at INTEGER NOT NULL
+    )
+  `));
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS ten_at_ten_budgets (
       year_month TEXT NOT NULL,
@@ -1050,6 +1088,7 @@ async function ensureTenAtTenTables() {
   await db.run(sql.raw(`DELETE FROM ten_at_ten_enquiries WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_orders WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_deliveries WHERE lower(exec) IN ('hahe', 'joru')`));
+  await db.run(sql.raw(`DELETE FROM ten_at_ten_cancellations WHERE lower(exec) IN ('harry henderson', 'joseph rustigini')`));
 }
 
 async function ensureEnquiryTables() {

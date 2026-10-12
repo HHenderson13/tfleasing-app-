@@ -6,8 +6,12 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { NotAnEnquiryExportError, ingestEnquiries, parseEnquiryWorkbook } from "@/lib/enquiries";
 import { NotAnEnquiryLogError, parseTenAtTenWorkbook } from "@/lib/ten-at-ten";
+import { NotACancelledOrdersError, parseCancellationsWorkbook } from "@/lib/ten-at-ten-cancellations";
 import { NotAnOrderListError, classifyDealbook, detectTenAtTenFile, makeDeliveryKey, parseOrderWorkbook, type TenAtTenFileKind } from "@/lib/ten-at-ten-orders";
-import { ingestDealbook, ingestTenAtTen, recordResponseUpload, saveBudgets, type TenAtTenIngest } from "@/lib/ten-at-ten-store";
+import {
+  ingestCancellations, ingestDealbook, ingestTenAtTen, recordResponseUpload, saveBudgets, saveCancellationNote,
+  setCancellationClassification, type TenAtTenIngest,
+} from "@/lib/ten-at-ten-store";
 
 export interface TenAtTenUploadOutcome {
   ok: boolean;
@@ -21,7 +25,8 @@ export interface TenAtTenUploadOutcome {
 
 /**
  * Merge one export into 10 at 10, line by line. The file says what it is
- * — Enquiry Log, Enquiry Tracker (MotorComplete), or a Dealbook — told
+ * — Enquiry Log, Enquiry Tracker (MotorComplete), a Dealbook, or Cancelled
+ * Orders — told
  * apart by its header row, so one drop zone takes them all. The two
  * Dealbook reports share their columns and are told apart by their dates
  * (classifyDealbook); when a file could be either, the uploader is asked
@@ -38,7 +43,7 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     const buf = Buffer.from(await file.arrayBuffer());
     const detected = detectTenAtTenFile(buf);
     if (!detected) {
-      return { ok: false, error: `${file.name}: not an Enquiry Tracker, Enquiry Log or Dealbook export — the columns don't match any of them.` };
+      return { ok: false, error: `${file.name}: not an Enquiry Tracker, Enquiry Log, Dealbook or Cancelled Orders export — the columns don't match any of them.` };
     }
     const meta = { filename: file.name, userId: user.id };
     let kind: TenAtTenFileKind;
@@ -48,6 +53,11 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
       const parsed = parseTenAtTenWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
       result = await ingestTenAtTen(parsed, meta);
+    } else if (detected === "cancellations") {
+      kind = "cancellations";
+      const parsed = parseCancellationsWorkbook(buf);
+      if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
+      result = await ingestCancellations(parsed, meta);
     } else if (detected === "dealbook") {
       const parsed = parseOrderWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
@@ -95,7 +105,7 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     revalidatePath("/ten-at-ten/admin");
     return { ok: true, filename: file.name, kind, result };
   } catch (e) {
-    if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError || e instanceof NotAnEnquiryExportError) {
+    if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError || e instanceof NotAnEnquiryExportError || e instanceof NotACancelledOrdersError) {
       return { ok: false, error: `${file.name}: ${e.message}` };
     }
     logError("ten-at-ten/upload", e, { filename: file.name });
@@ -124,5 +134,44 @@ export async function saveBudgetsAction(input: { rows: { yearMonth: string; car:
   } catch (e) {
     logError("ten-at-ten/budgets", e);
     return { ok: false, error: e instanceof Error ? e.message : "Couldn't save budgets." };
+  }
+}
+
+const cancellationId = z.string().regex(/^[0-9a-f]{20}$/);
+const noteSchema = z.object({ id: cancellationId, note: z.string().max(2000) });
+const classificationSchema = z.object({ id: cancellationId, classification: z.enum(["rewrite", "proper"]).nullable() });
+
+/** A manager's reason for a cancellation. Admin only, like all of 10 at 10. */
+export async function saveCancellationNoteAction(input: { id: string; note: string }): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireAdmin();
+  const parsed = noteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That note couldn't be saved — keep it under 2,000 characters." };
+  try {
+    const ok = await saveCancellationNote(parsed.data.id, parsed.data.note.trim(), user.name || user.email);
+    if (!ok) return { ok: false, error: "That cancellation is no longer held — reload the page." };
+    revalidatePath("/ten-at-ten");
+    return { ok: true };
+  } catch (e) {
+    logError("ten-at-ten/cancellation-note", e, { id: parsed.data.id });
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save the note." };
+  }
+}
+
+/**
+ * A manager's call that a cancellation is (or isn't) a Re-Write, where the
+ * matching got it wrong; null hands it back to the matching. Admin only.
+ */
+export async function setCancellationStatusAction(input: { id: string; classification: "rewrite" | "proper" | null }): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireAdmin();
+  const parsed = classificationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+  try {
+    const ok = await setCancellationClassification(parsed.data.id, parsed.data.classification, user.name || user.email);
+    if (!ok) return { ok: false, error: "That cancellation is no longer held — reload the page." };
+    revalidatePath("/ten-at-ten");
+    return { ok: true };
+  } catch (e) {
+    logError("ten-at-ten/cancellation-status", e, { id: parsed.data.id });
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save that." };
   }
 }

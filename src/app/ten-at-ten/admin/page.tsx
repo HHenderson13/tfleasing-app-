@@ -6,15 +6,15 @@ import { UploadClient } from "./upload-client";
 
 export const dynamic = "force-dynamic";
 
-// The names the team uses for the three files. Keep in step with the
-// upload client's KIND_LABEL.
-const KIND_LABEL: Record<string, string> = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries" };
+// The names the team uses for the files. Keep in step with the upload
+// client's KIND_LABEL.
+const KIND_LABEL: Record<string, string> = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries", cancellations: "Cancelled Orders" };
 
 const fmtDay = (d: string | null) =>
   d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "—";
 
 interface FileGuide {
-  kind: "response" | "enquiries" | "orders" | "deliveries";
+  kind: "response" | "enquiries" | "orders" | "deliveries" | "cancellations";
   from: string;
   columns: string;
   feeds: string;
@@ -52,6 +52,7 @@ const FILES: FileGuide[] = [
     feeds: "Orders (profit)",
     rules: [
       "Profit is Total Gross; funder, product and term come from Finance Type. Vehicles split into ICE Car, BEV Car and Van.",
+      "Registrations and the time the export was taken are kept, which is how Cancellations spots a Re-Write.",
       "Same columns as Dealbook – Deliveries; recognised because its order dates sit in one month. If a file could be either, you'll be asked. HaHe and JoRu are stripped.",
     ],
     matched: "order date, customer and vehicle (identical vehicles on the same day stay separate)",
@@ -67,6 +68,17 @@ const FILES: FileGuide[] = [
       "Same columns as Dealbook – Orders; recognised because its delivery dates sit in one month. Profit is Total Gross. HaHe and JoRu are stripped.",
     ],
     matched: "order date, customer, vehicle and delivery month",
+  },
+  {
+    kind: "cancellations",
+    from: "Dealerweb cancelled orders",
+    columns: "Sales Executive · Order Date · Customer · Model · Registration Number · Cancelled Date",
+    feeds: "Cancellations",
+    rules: [
+      "Each cancellation is checked against Dealbook – Orders and Deliveries. Re-ordered within 30 days — same registration by the same exec, or same customer and model — it's a Re-Write: shown, but not counted as a cancellation.",
+      "An order we still hold that was later cancelled is left out of Orders, as Dealerweb's own order list now does. Notes added on the Cancellations tab are never touched by an upload. Harry Henderson and Joseph Rustigini are stripped.",
+    ],
+    matched: "order time, customer and vehicle",
   },
 ];
 
@@ -88,7 +100,7 @@ export default async function TenAtTenAdminPage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Upload data</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Four files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
+          Five files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
           each is recognised for you. Delivery budgets are set at the bottom of the page.
         </p>
 

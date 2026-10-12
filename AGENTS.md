@@ -743,6 +743,13 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
 - **Status:** Ordered, Delivered, Handover Arranged = order; Live = live;
   Lost Sale = lost. Conversion is always orders ÷ enquiries, over enquiries
   RAISED in the period.
+- **Three conversions, always shown separately** (user, 2026-10-12):
+  *inbound* — the MotorComplete-fed sources (TF Lead, Leasing.com,
+  LeaseLoco, CarWow; `INBOUND_SOURCES`) — *broker / prospect* (the rest),
+  and *overall*, which the two make up. The Enquiries tab leads with the
+  three side by side; By exec and the builder carry all three columns.
+  The by-source table keeps one rate, each source being wholly one or the
+  other. A side with no enquiries reads "—", never 0%.
 - **HaHe and JoRu are stripped from everything** — duplicates are moved
   onto those codes in Dealerweb. Ingest never stores them, deletes any
   stored enquiry a file shows was moved to them, and ensure-schema sweeps
@@ -792,10 +799,11 @@ reads its header check from too.
   stored non-MotorComplete row (it runs from ensure-schema; SCHEMA_VERSION was
   bumped to 54 so it ran once). Harry Henderson / Joseph Rustigini stay
   stripped by the existing any-column name rule.
-- **The team's names for the three uploads:** Enquiry Tracker (MotorComplete
+- **The team's names for the uploads:** Enquiry Tracker (MotorComplete
   export → Response times), Enquiry Log (Dealerweb → Enquiries), Dealbook –
-  Orders (Dealerweb order list → Orders). The upload page and results use
-  these; keep KIND_LABEL in the page and upload client in step.
+  Orders (Dealerweb order list → Orders), Dealbook – Deliveries, Cancelled
+  Orders. The upload page and results use these; keep KIND_LABEL in the page
+  and upload client in step.
 - **Access narrowed:** the tracker was open to every signed-in user; 10 at 10
   is admin-only, so non-admins no longer see response times.
 - `/enquiries` and `/enquiries/upload` redirect; the old page, client and
@@ -845,8 +853,10 @@ files; `detectTenAtTenFile` tells them apart by header.
 - **Key: order date + customer + vehicle + occurrence in the file.** One
   customer's three identical vans on one day (DEA Gate, 9 Oct 2026) are
   three orders and must line up with the same three next upload. Exec is
-  not in the key. Limitation: a cancelled order that drops out of a later
-  export keeps its stored line — line merging can't see an absence.
+  not in the key. A cancelled order that drops out of a later export keeps
+  its stored line — line merging can't see an absence — so Orders leaves out
+  any held order the Cancellations matching identifies as cancelled, and
+  says how many in the period.
 - The **delivered list has identical columns** and can't be told apart. That
   is harmless: its rows are the same orders under the same keys, so it adds
   or refreshes real orders (on the Sep 2026 files: 38 identical, 16 with a
@@ -897,6 +907,50 @@ real file follows that. When both sit in one month the uploader is asked
   (`periodProgress`, calendar days, today counted in) — "34% delivered vs
   39% through the month, 5 pts behind pace". Don't lead with delivered vs
   budget: early in a month it always reads as failure.
+
+### Cancellations section (Cancelled Orders)
+
+Dealerweb's Cancelled Orders export: A Sales Executive (a full NAME, not a
+code), B Order Date (with time), C Customer (sometimes led by an account
+code, "E0795 Mr James Robinson"), D Type, E Model (model then derivative,
+which repeats it), F Registration Number, G Cancelled Date. Parse and
+matching in `lib/ten-at-ten-cancellations.ts` (pure, tested on the real
+12 Oct 2026 export). Counted on the day it was cancelled.
+
+- **A Re-Write** is an order put on wrong, cancelled and ordered again. It
+  is listed but never counted as a cancellation (user, 2026-10-12). Proper
+  cancellations each get a manager's reason, saved in
+  `ten_at_ten_cancellation_notes` — its own table, so no upload can touch
+  what a person typed. Notes key off the cancellation id (order time +
+  customer + vehicle + occurrence), which must stay stable across uploads.
+- **Matching runs at read time** (`loadCancellationsReport`), never stored,
+  so it improves as more of the Dealbook is uploaded. It looks in both
+  Dealbook tables (`mergeDealbookLines` counts an order held in both once).
+  "The same vehicle" is the same registration *by the same exec or for the
+  same customer* — Braine's three vans were re-ordered under DEA Gate
+  Automation, but a plate moving to another exec's customer is reallocated
+  stock (CA Waters → Griffin Joinery's plate) — or the same customer and
+  model (ENAFLO re-ordered on new plates; HFS with the spec corrected). The
+  re-order must fall within 30 days of the cancellation; one order answers
+  for one cancellation.
+- **Dealerweb's order list drops a cancelled order, our store doesn't.**
+  So every Dealbook line carries `last_seen_at` — the wall-clock time of the
+  latest export listing it, from AG Grid's workbook `CreatedDate`
+  (`exportedAtOf`), NOT the upload time, since an old export can be
+  uploaded days later. A matching line on the original order day last seen
+  BEFORE the cancellation is the cancelled order itself (left out of
+  Orders); one listed AFTER it is a live order, which is how Omnia's
+  same-day order / cancel / re-order (9 Oct 2026) reads as a Re-Write.
+  Lines stored before this existed fall back to their first upload time,
+  so re-upload old Dealbook files once to backfill registration and seen
+  time — the merge never moves `last_seen_at` backwards.
+- A manager can overrule the matching either way ("It's a Re-Write" / "Not a
+  Re-Write"); `classification` on the notes row, null = automatic, Undo
+  clears it.
+- Exec names map to Dealbook codes through the Pole Position name map plus
+  Dealerweb's convention, first two letters of first and last name
+  (`execCodeFromName`: Deniz Durmaz → DeDu). That convention is also how
+  Harry Henderson / Joseph Rustigini (HaHe / JoRu) are stripped.
 
 ## Sales leaderboard (Pole Position)
 

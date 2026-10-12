@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  brokerPct,
   conversionPct,
+  daysToCancel,
   decodeReport,
   encodeReport,
   groupRows,
+  inboundPct,
   previousRange,
   rangeFor,
   statsOf,
@@ -43,16 +46,37 @@ describe("stats and grouping", () => {
 
   it("conversion is orders ÷ enquiries, and blank with no enquiries", () => {
     const s = statsOf(rows);
-    expect(s).toEqual({ enquiries: 4, orders: 2, live: 1, lost: 1 });
+    expect(s).toMatchObject({ enquiries: 4, orders: 2, live: 1, lost: 1 });
     expect(conversionPct(s)).toBe(50);
     expect(conversionPct(statsOf([]))).toBeNull();
+  });
+
+  it("splits conversion into inbound (MotorComplete) and broker / prospect, which make up overall", () => {
+    const mixed = decodeReport(encodeReport([
+      stored({ source: "TF Lead", outcome: "order" }),
+      stored({ source: "Leasing.com", outcome: "lost" }),
+      stored({ source: "LeaseLoco", outcome: "live" }),
+      stored({ source: "CarWow", outcome: "order" }),
+      stored({ source: "Broker / Prospect", outcome: "order" }),
+      stored({ source: "Broker / Prospect", outcome: "lost" }),
+      stored({ source: "Broker / Prospect", outcome: "lost" }),
+      stored({ source: "Broker / Prospect", outcome: "lost" }),
+    ]));
+    const s = statsOf(mixed);
+    expect(s).toMatchObject({ enquiries: 8, orders: 3, inboundEnquiries: 4, inboundOrders: 2 });
+    expect(inboundPct(s)).toBe(50);
+    expect(brokerPct(s)).toBe(25);
+    expect(conversionPct(s)).toBe(37.5);
+    // No broker enquiries: that rate is blank, not 0%.
+    expect(brokerPct(statsOf(mixed.slice(0, 4)))).toBeNull();
+    expect(inboundPct(statsOf(mixed.slice(4)))).toBeNull();
   });
 
   it("stacks source then model, each level carrying its share of the one above", () => {
     const g = groupRows(rows, ["source", "model"]);
     expect(g.map((x) => [x.label, x.stats.enquiries, x.share])).toEqual([["TF Lead", 3, 75], ["CarWow", 1, 25]]);
     const capri = g[0].children.find((c) => c.label === "Capri")!;
-    expect(capri.stats).toEqual({ enquiries: 2, orders: 0, live: 1, lost: 1 });
+    expect(capri.stats).toMatchObject({ enquiries: 2, orders: 0, live: 1, lost: 1 });
     expect(capri.share).toBeCloseTo(66.67, 1);
   });
 
@@ -94,5 +118,12 @@ describe("periods", () => {
     expect(weekly.length).toBeLessThan(30);
     expect(weekly.reduce((n, b) => n + b.stats.enquiries, 0)).toBe(2);
     expect(timeBuckets(rows, { startDay: "2026-10-01", endDay: "2026-10-01", label: "" })).toEqual([]);
+  });
+});
+
+describe("cancellations", () => {
+  it("counts calendar days from order to cancellation", () => {
+    expect(daysToCancel({ orderDay: "2026-09-29", day: "2026-10-09" })).toBe(10);
+    expect(daysToCancel({ orderDay: "2026-10-09", day: "2026-10-09" })).toBe(0);
   });
 });

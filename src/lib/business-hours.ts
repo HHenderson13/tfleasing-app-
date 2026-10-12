@@ -119,6 +119,21 @@ export function reportingHorizonFromInstant(instant: Date | number): number {
 }
 
 /**
+ * A real instant re-encoded as UK wall-clock time, to the minute — the same
+ * encoding the exports' own timestamps get, so the two can be compared.
+ */
+export function wallClockFromInstant(instant: Date | number): number {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) return Number.NaN;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: REPORT_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), 0, 0);
+}
+
+/**
  * The moment an enquiry becomes reportable: the close (17:30) of the
  * working day in which its clock starts.
  *

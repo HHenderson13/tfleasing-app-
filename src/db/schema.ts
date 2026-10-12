@@ -1071,6 +1071,8 @@ export const tenAtTenOrders = sqliteTable(
     deliveryDay: text("delivery_day"),                // AK date
     deliveryStatus: text("delivery_status"),          // AK Delivered | Arrived | Due
     profit: real("profit"),                           // AH Total Gross
+    registration: text("registration"),               // G, normalised plate
+    lastSeenAt: integer("last_seen_at"),              // wall clock of the latest export listing it
     firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
@@ -1102,6 +1104,8 @@ export const tenAtTenDeliveries = sqliteTable(
     deliveryDay: text("delivery_day"),                // AK date — the month it counts in
     deliveryStatus: text("delivery_status"),          // Delivered | Arrived | Due
     profit: real("profit"),
+    registration: text("registration"),
+    lastSeenAt: integer("last_seen_at"),
     firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
@@ -1109,6 +1113,46 @@ export const tenAtTenDeliveries = sqliteTable(
     byDeliveryDay: index("idx_ten_at_ten_deliveries_day").on(t.deliveryDay),
   }),
 );
+
+// Dealerweb's Cancelled Orders export. Whether each is a proper cancellation
+// or a Re-Write is worked out when the report is read
+// (lib/ten-at-ten-cancellations.ts), never stored, so it follows the
+// Dealbook as more of it is uploaded.
+export const tenAtTenCancellations = sqliteTable(
+  "ten_at_ten_cancellations",
+  {
+    id: text("id").primaryKey(),
+    orderedAt: integer("ordered_at").notNull(),       // B, wall clock as UTC
+    orderDay: text("order_day").notNull(),
+    cancelledAt: integer("cancelled_at").notNull(),   // G, wall clock as UTC
+    cancelledDay: text("cancelled_day").notNull(),
+    exec: text("exec").notNull(),                     // A, full name
+    customer: text("customer").notNull(),             // C, account code removed
+    saleType: text("sale_type"),                      // D
+    vehicleRaw: text("vehicle_raw"),                  // E, rebuilt as model + derivative
+    model: text("model").notNull(),
+    derivative: text("derivative"),
+    derivativeKey: text("derivative_key"),
+    segment: text("segment").notNull(),
+    registration: text("registration"),               // F, normalised plate
+    firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byCancelledDay: index("idx_ten_at_ten_cancellations_day").on(t.cancelledDay),
+  }),
+);
+
+// A manager's reason for a cancellation, and their call on Re-Write vs
+// cancellation where the matching got it wrong. Its own table, so no
+// upload can ever overwrite what a person typed.
+export const tenAtTenCancellationNotes = sqliteTable("ten_at_ten_cancellation_notes", {
+  cancellationId: text("cancellation_id").primaryKey(),
+  note: text("note").notNull().default(""),
+  classification: text("classification"),           // null = automatic | rewrite | proper
+  updatedBy: text("updated_by"),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
 
 // Monthly delivery budgets, Car and CV (commercial); combined is their sum.
 // Edited on the 10 at 10 upload page.
@@ -1126,7 +1170,7 @@ export const tenAtTenBudgets = sqliteTable(
 
 export const tenAtTenUploads = sqliteTable("ten_at_ten_uploads", {
   id: text("id").primaryKey(),
-  kind: text("kind").notNull().default("enquiries"), // enquiries | orders
+  kind: text("kind").notNull().default("enquiries"), // enquiries | orders | deliveries | response | cancellations
   filename: text("filename").notNull(),
   rowsInFile: integer("rows_in_file").notNull(),
   inserted: integer("inserted").notNull(),

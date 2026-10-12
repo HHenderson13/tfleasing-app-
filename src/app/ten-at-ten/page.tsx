@@ -3,7 +3,9 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { reportingHorizonFromInstant } from "@/lib/business-hours";
 import { loadEnquiries, loadLatestEnquiryUploadAt } from "@/lib/enquiries";
 import { encodeOrders, encodeReport } from "@/lib/ten-at-ten-report";
-import { listTenAtTenUploads, loadBudgets, loadExecNames, loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows } from "@/lib/ten-at-ten-store";
+import {
+  listTenAtTenUploads, loadBudgets, loadCancellationsReport, loadExecNames, loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows,
+} from "@/lib/ten-at-ten-store";
 import { ReportClient } from "./report";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +19,14 @@ export default async function TenAtTenPage() {
   // Response times only judges an enquiry once it has had a full working
   // day, measured from the latest MotorComplete upload (business-hours.ts).
   const reportHorizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
+  // Cancellations are matched against the Dealbook. An order we still hold
+  // that was later cancelled is left out of Orders, as Dealerweb's own
+  // order list drops it; the Orders tab says how many.
+  const { views: cancellations, originalIds } = await loadCancellationsReport(names);
+  const liveOrders = orders.filter((o) => !originalIds.has(o.id));
+  const cancelledOrderDays = orders.filter((o) => originalIds.has(o.id)).map((o) => o.orderDay);
   const payload = encodeReport(rows, names);
-  const ordersPayload = encodeOrders(orders, names);
+  const ordersPayload = encodeOrders(liveOrders, names);
   const deliveriesPayload = encodeOrders(deliveries, names);
   // "Today" in UK time, resolved on the server so the first render and the
   // browser agree on which day, week, month and quarter are current.
@@ -41,12 +49,13 @@ export default async function TenAtTenPage() {
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">10 at 10</h1>
-            <p className="text-sm text-slate-500">Enquiries and conversion, response times against target, orders and profit, and deliveries against budget.</p>
+            <p className="text-sm text-slate-500">Enquiries and conversion, response times against target, orders and profit, deliveries against budget, and cancellations.</p>
           </div>
           {lastUpload && <p className="text-xs text-slate-400">Last upload {lastUpload}</p>}
         </div>
         <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
-          responses={responses} reportHorizon={reportHorizon} today={today} />
+          responses={responses} reportHorizon={reportHorizon} today={today}
+          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} />
       </main>
     </div>
   );
