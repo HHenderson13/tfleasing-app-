@@ -785,6 +785,17 @@ ingest, business-hours maths, and "only judged after a full working day"
 export by `lib/enquiries-header.ts` (pure), which `lib/enquiries.ts` now
 reads its header check from too.
 
+- **MotorComplete leads only** (user, 2026-10-12): column G must be a
+  MotorComplete feed (`isMotorCompleteSource`, letters-only prefix) — FordLDS,
+  Customer, CarGurus, Autotrader, FR website etc. are stripped at parse and
+  their ids reported for deletion, and `purgeExcludedEnquiries` deletes any
+  stored non-MotorComplete row (it runs from ensure-schema; SCHEMA_VERSION was
+  bumped to 54 so it ran once). Harry Henderson / Joseph Rustigini stay
+  stripped by the existing any-column name rule.
+- **The team's names for the three uploads:** Enquiry Tracker (MotorComplete
+  export → Response times), Enquiry Log (Dealerweb → Enquiries), Dealbook –
+  Orders (Dealerweb order list → Orders). The upload page and results use
+  these; keep KIND_LABEL in the page and upload client in step.
 - **Access narrowed:** the tracker was open to every signed-in user; 10 at 10
   is admin-only, so non-admins no longer see response times.
 - `/enquiries` and `/enquiries/upload` redirect; the old page, client and

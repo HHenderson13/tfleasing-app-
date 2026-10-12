@@ -6,7 +6,8 @@ import { uploadTenAtTenAction } from "../actions";
 
 interface Totals { files: number; rowsInFile: number; inserted: number; updated: number; unchanged: number; excluded: number; removed: number; duplicatesCollapsed: number; unreadable: number }
 const blank = (): Totals => ({ files: 0, rowsInFile: 0, inserted: 0, updated: 0, unchanged: 0, excluded: 0, removed: 0, duplicatesCollapsed: 0, unreadable: 0 });
-const KIND_LABEL = { enquiries: "Enquiry log", orders: "Order list", response: "MotorComplete export (Response times)" } as const;
+// The team's names for the three files — keep in step with the upload page.
+const KIND_LABEL = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders" } as const;
 type Kind = keyof typeof KIND_LABEL;
 const KINDS = Object.keys(KIND_LABEL) as Kind[];
 
@@ -66,7 +67,7 @@ export function UploadClient() {
       >
         <input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(e) => pick(e.target.files)} />
         <div className="text-sm font-medium text-slate-800">
-          {queued.length > 0 ? `${queued.length} file${queued.length === 1 ? "" : "s"} ready: ${queued.map((f) => f.name).join(", ")}` : "Drop enquiry logs, order lists or MotorComplete exports here, or click to choose"}
+          {queued.length > 0 ? `${queued.length} file${queued.length === 1 ? "" : "s"} ready: ${queued.map((f) => f.name).join(", ")}` : "Drop Enquiry Tracker, Enquiry Log or Dealbook – Orders files here, or click to choose"}
         </div>
         <div className="mt-1 text-xs text-slate-500">.xlsx · several at once is fine — they&apos;re merged in the order chosen</div>
       </label>
@@ -91,7 +92,7 @@ export function UploadClient() {
             </div>
             <div className="mt-1 text-xs">
               <b>{x.inserted}</b> new · <b>{x.updated}</b> overwritten with newer values · {x.unchanged} already up to date
-              {x.excluded > 0 && <> · {x.excluded} lines left out ({k === "response" ? "excluded names, Prospect Call / Showroom, merged leads" : "HaHe / JoRu"})</>}
+              {x.excluded > 0 && <> · {x.excluded} lines left out ({k === "response" ? "not a MotorComplete lead, Harry Henderson / Joseph Rustigini, or a merged lead" : "HaHe / JoRu"})</>}
               {x.removed > 0 && <> · {x.removed} stored lines removed (moved to HaHe / JoRu)</>}
               {x.duplicatesCollapsed > 0 && <> · {x.duplicatesCollapsed} repeated lines collapsed</>}
               {x.unreadable > 0 && <> · {x.unreadable} unreadable lines skipped</>}

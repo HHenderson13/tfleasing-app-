@@ -56,6 +56,16 @@ export function rowMentionsExcluded(cells: readonly unknown[]): boolean {
   return false;
 }
 
+// Only MotorComplete leads are measured (user's rule, 2026-10-12): column G
+// must be one of the MotorComplete feeds — "MotorComplete Lead",
+// "MotorComplete - Leasing.com", "- LeaseLoco", "- carwow". Customer,
+// Broker Introduction, FordLDS, CarGurus, Autotrader, FR website and the
+// rest are left out. Letters-only prefix, so a new MotorComplete feed counts
+// without a code change and spacing drift can't let a row through or out.
+export function isMotorCompleteSource(source: unknown): boolean {
+  return lettersOnly(source).startsWith("motorcomplete");
+}
+
 // Lost Sale Reasons (column AD) that take the enquiry out of reporting
 // entirely. A lead merged into an existing customer is not a real enquiry
 // — it is bookkeeping — so counting it would inflate volumes and, because
@@ -154,6 +164,8 @@ export interface ParseOutcome {
   skippedLostSaleReason: number;
   /** Rows dropped because column F was not "Lead". */
   skippedNotLead: number;
+  /** Rows dropped because column G was not a MotorComplete source. */
+  skippedNotMotorComplete: number;
   /**
    * Natural-key ids of every row this file excluded. Ingest deletes these
    * from the store, so re-uploading a file retroactively clears rows that
@@ -211,7 +223,7 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
-  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, skippedNotLead: 0, excludedIds: [] };
+  if (!ws) return { rows: [], rowsInFile: 0, skippedExcluded: 0, skippedUnparseable: 0, duplicatesCollapsed: 0, skippedLostSaleReason: 0, skippedNotLead: 0, skippedNotMotorComplete: 0, excludedIds: [] };
 
   // header:1 → array-of-arrays, so columns stay positional.
   const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: null });
@@ -224,6 +236,7 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
   let skippedUnparseable = 0;
   let skippedLostSaleReason = 0;
   let skippedNotLead = 0;
+  let skippedNotMotorComplete = 0;
 
   for (const raw of body) {
     if (!Array.isArray(raw)) { skippedUnparseable++; continue; }
@@ -244,6 +257,11 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
 
     if (rowMentionsExcluded(raw)) {
       skippedExcluded++;
+      if (idIfUsable) excludedIds.push(idIfUsable);
+      continue;
+    }
+    if (!isMotorCompleteSource(raw[COL.source])) {
+      skippedNotMotorComplete++;
       if (idIfUsable) excludedIds.push(idIfUsable);
       continue;
     }
@@ -319,6 +337,7 @@ export function parseEnquiryWorkbook(buf: ArrayBuffer | Buffer): ParseOutcome {
     duplicatesCollapsed,
     skippedLostSaleReason,
     skippedNotLead,
+    skippedNotMotorComplete,
     excludedIds,
   };
 }
@@ -332,6 +351,7 @@ export interface IngestResult {
   duplicatesCollapsed: number;
   skippedLostSaleReason: number;
   skippedNotLead: number;
+  skippedNotMotorComplete: number;
   /** Previously-stored rows deleted because they are now excluded. */
   removedRetroactively: number;
   rowsInFile: number;
@@ -460,7 +480,7 @@ export async function ingestEnquiries(
     rowsInserted: inserted,
     rowsUpdated: updated,
     rowsSkipped: parsed.skippedExcluded + parsed.skippedUnparseable +
-      parsed.skippedLostSaleReason + parsed.skippedNotLead,
+      parsed.skippedLostSaleReason + parsed.skippedNotLead + parsed.skippedNotMotorComplete,
     uploadedAt: now,
     uploadedByUserId: meta.userId,
   });
@@ -472,6 +492,7 @@ export async function ingestEnquiries(
     duplicatesCollapsed: parsed.duplicatesCollapsed,
     skippedLostSaleReason: parsed.skippedLostSaleReason,
     skippedNotLead: parsed.skippedNotLead,
+    skippedNotMotorComplete: parsed.skippedNotMotorComplete,
     removedRetroactively,
     rowsInFile: parsed.rowsInFile,
   };
@@ -738,6 +759,15 @@ export async function purgeExcludedEnquiries(): Promise<number> {
         await db.run(sql`DELETE FROM enquiries WHERE ${predicate}`);
         removed += n;
       }
+    }
+    // Only MotorComplete leads are kept (see isMotorCompleteSource). The
+    // SQL match drops spaces and case to follow the letters-only rule.
+    const notMotorComplete = sql`(source IS NULL OR REPLACE(LOWER(source), ' ', '') NOT LIKE 'motorcomplete%')`;
+    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM enquiries WHERE ${notMotorComplete}`);
+    const n = Number(c?.n ?? 0);
+    if (n > 0) {
+      await db.run(sql`DELETE FROM enquiries WHERE ${notMotorComplete}`);
+      removed += n;
     }
   } catch (e) {
     if (isMissingTable(e)) return 0;

@@ -17,6 +17,7 @@ function sheet(rows: Array<Partial<Record<string, unknown>> & {
   raised: string; transferred?: string | null; contacted?: string | null;
   lostSaleReason?: string | null;
   type?: string | null;
+  source?: string | null;
 }>) {
   const header = Array.from({ length: 30 }, (_, i) => `col${i}`);
   header[1] = "Created By";
@@ -32,6 +33,7 @@ function sheet(rows: Array<Partial<Record<string, unknown>> & {
     a[3] = r.ref ?? null;   // D Customer Id
     a[4] = r.raised;        // E Date Raised
     a[5] = r.type === undefined ? "Lead" : r.type; // F Type
+    a[6] = r.source === undefined ? "MotorComplete Lead" : r.source; // G Source
     a[11] = r.contacted ?? null;    // L first contact
     a[15] = r.transferred ?? null;  // P transferred
     a[29] = r.lostSaleReason ?? null; // AD Lost Sale Reason
@@ -222,5 +224,33 @@ describe("wrong-file guard", () => {
     expect(() => parseEnquiryWorkbook(sheet([
       { exec: "A", customer: "B", raised: "17 August 2026 09:00" },
     ]))).not.toThrow();
+  });
+});
+
+describe("only MotorComplete leads, never Harry Henderson or Joseph Rustigini", () => {
+  it("keeps the four MotorComplete feeds and strips every other source", () => {
+    const p = parseEnquiryWorkbook(sheet([
+      { exec: "Helen Mort", customer: "A", raised: "1 October 2026 09:00", source: "MotorComplete Lead" },
+      { exec: "Helen Mort", customer: "B", raised: "1 October 2026 09:05", source: "MotorComplete - Leasing.com" },
+      { exec: "Helen Mort", customer: "C", raised: "1 October 2026 09:10", source: "MotorComplete - LeaseLoco" },
+      { exec: "Helen Mort", customer: "D", raised: "1 October 2026 09:15", source: "MotorComplete - carwow" },
+      { exec: "Helen Mort", customer: "E", raised: "1 October 2026 09:20", source: "Customer" },
+      { exec: "Helen Mort", customer: "F", raised: "1 October 2026 09:25", source: "FordLDS" },
+      { exec: "Helen Mort", customer: "G", raised: "1 October 2026 09:30", source: null },
+    ]));
+    expect(p.rows.map((r) => r.customer)).toEqual(["A", "B", "C", "D"]);
+    expect(p.skippedNotMotorComplete).toBe(3);
+    // Reported for removal, so a re-upload clears copies stored before the rule.
+    expect(p.excludedIds).toHaveLength(3);
+  });
+
+  it("strips anything Harry Henderson or Joseph Rustigini is on", () => {
+    const p = parseEnquiryWorkbook(sheet([
+      { exec: "Harry Henderson", customer: "H", raised: "1 October 2026 10:00" },
+      { exec: "Joseph Rustigini", customer: "J", raised: "1 October 2026 10:05" },
+      { exec: "Helen Mort", customer: "K", raised: "1 October 2026 10:10" },
+    ]));
+    expect(p.rows.map((r) => r.customer)).toEqual(["K"]);
+    expect(p.skippedExcluded).toBe(2);
   });
 });

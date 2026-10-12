@@ -33,7 +33,7 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     const buf = Buffer.from(await file.arrayBuffer());
     const kind = detectTenAtTenFile(buf);
     if (!kind) {
-      return { ok: false, error: `${file.name}: not the enquiry log, the order list or the MotorComplete enquiry export — the columns don't match any of them.` };
+      return { ok: false, error: `${file.name}: not an Enquiry Tracker, Enquiry Log or Dealbook – Orders export — the columns don't match any of them.` };
     }
     const meta = { filename: file.name, userId: user.id };
     let result: TenAtTenIngest;
@@ -56,7 +56,7 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
         inserted: r.inserted,
         updated: r.updated,
         unchanged: r.unchanged,
-        excluded: r.skippedExcluded + r.skippedNotLead + r.skippedLostSaleReason,
+        excluded: r.skippedExcluded + r.skippedNotLead + r.skippedLostSaleReason + r.skippedNotMotorComplete,
         removed: r.removedRetroactively,
         duplicatesCollapsed: r.duplicatesCollapsed,
         unreadable: r.skippedUnparseable,
