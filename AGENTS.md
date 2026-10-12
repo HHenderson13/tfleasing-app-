@@ -772,6 +772,37 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
   stretch of the previous one (October so far vs 1–9 September), never the
   whole previous period, which reads as a collapse every morning.
 - Exec codes show as names via the Pole Position name map where known.
+- No over-time chart, and "Build a breakdown" opens collapsed (user,
+  2026-10-12: too much screen space). Every nested table starts collapsed.
+
+### Orders section
+
+Built from the Dealerweb **order list** (B SE, D Customer, E Order Date,
+F Vehicle Details, R Finance Type, AH Total Gross = profit, AK Delivery
+Date). Rules in `lib/ten-at-ten-orders.ts`. One upload screen takes both
+files; `detectTenAtTenFile` tells them apart by header.
+
+- **Segments are ICE Car, BEV Car and Van** (user's split). Vans: the Transit
+  family, Ranger, Explorer Van, Tourneo — whatever their fuel. A car is BEV
+  when the model only comes electric (Capri, Explorer, Puma Gen-E, Mach-E)
+  or the text says kWh/Electric; Puma mHEV, Kuga PHEV, Focus are ICE.
+- **Average profit is over units with a figure** — an order with a blank
+  Total Gross counts as a unit but not in the average.
+- Column R reads `<product> <term> <funder code> <amount>`; codes Nov → Novuna,
+  Arv → Arval, ALD, Lex, For → Ford Credit (assumed). "Cash" is its own funder.
+- Dealerweb appends a stray "1", ".", "n" or "N" to some vehicle text;
+  `cleanVehicle` strips it or one vehicle splits four ways.
+- The list ends in a totals block (numbers in column B) — skipped.
+- **Key: order date + customer + vehicle + occurrence in the file.** One
+  customer's three identical vans on one day (DEA Gate, 9 Oct 2026) are
+  three orders and must line up with the same three next upload. Exec is
+  not in the key. Limitation: a cancelled order that drops out of a later
+  export keeps its stored line — line merging can't see an absence.
+- The **delivered list has identical columns** and can't be told apart. That
+  is harmless: its rows are the same orders under the same keys, so it adds
+  or refreshes real orders (on the Sep 2026 files: 38 identical, 16 with a
+  settled profit or delivery overwritten).
+- HaHe / JoRu are stripped from orders too ("all data").
 
 ## Sales leaderboard (Pole Position)
 

@@ -240,6 +240,10 @@ export class NotAnEnquiryLogError extends Error {
   }
 }
 
+export function isEnquiryLogHeader(header: readonly unknown[]): boolean {
+  return REQUIRED_HEADERS.every(([i, want]) => letters(header[i]) === want);
+}
+
 // The downloads folder holds several "export (N).xlsx" reports on the same
 // ag-grid sheet with different columns (the order list has "Order Date"
 // in E). Columns are read by position, so check the header first.

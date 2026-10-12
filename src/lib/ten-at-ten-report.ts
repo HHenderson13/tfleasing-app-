@@ -13,6 +13,21 @@ export type Outcome = "order" | "live" | "lost" | "other";
 
 export const NOT_STATED = "Not stated";
 
+export const SEGMENTS = ["ICE Car", "BEV Car", "Van"] as const;
+export type Segment = (typeof SEGMENTS)[number];
+
+// Profit bands for orders, in display order.
+export const PROFIT_BANDS = ["Loss", "£0–£499", "£500–£999", "£1,000–£1,999", "£2,000+", "No profit figure"] as const;
+
+export function profitBand(p: number | null): string {
+  if (p == null) return "No profit figure";
+  if (p < 0) return "Loss";
+  if (p < 500) return "£0–£499";
+  if (p < 1000) return "£500–£999";
+  if (p < 2000) return "£1,000–£1,999";
+  return "£2,000+";
+}
+
 // ─── Wire format ───────────────────────────────────────────────────────────
 //
 // Strings are interned into one table and each row is a tuple of indexes,
@@ -71,7 +86,7 @@ export function mileageLabel(miles: number | null): string {
  * the spelling used most often, so "Explorer Estate 140kW Style" and
  * "Explorer 140kW Style" show once, under the commoner name.
  */
-export function encodeReport(rows: StoredRow[], execNames: Map<string, string> = new Map()): ReportPayload {
+function derivativeLabeller(rows: readonly { model: string; derivative: string | null; derivativeKey: string | null }[]) {
   const spellings = new Map<string, Map<string, number>>();
   for (const r of rows) {
     if (!r.derivativeKey || !r.derivative) continue;
@@ -83,7 +98,11 @@ export function encodeReport(rows: StoredRow[], execNames: Map<string, string> =
   for (const [key, m] of spellings) {
     labelOf.set(key, [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]);
   }
+  return (r: { model: string; derivative: string | null; derivativeKey: string | null }) =>
+    r.derivativeKey ? labelOf.get(r.derivativeKey) ?? r.derivative ?? r.model : `${r.model} (model only)`;
+}
 
+function interner() {
   const strings: string[] = [];
   const index = new Map<string, number>();
   const intern = (s: string) => {
@@ -91,11 +110,15 @@ export function encodeReport(rows: StoredRow[], execNames: Map<string, string> =
     if (i === undefined) { i = strings.length; strings.push(s); index.set(s, i); }
     return i;
   };
+  return { strings, intern };
+}
+
+export function encodeReport(rows: StoredRow[], execNames: Map<string, string> = new Map()): ReportPayload {
+  const labelOf = derivativeLabeller(rows);
+  const { strings, intern } = interner();
 
   const out: number[][] = rows.map((r) => {
-    const derivative = r.derivativeKey
-      ? labelOf.get(r.derivativeKey) ?? r.derivative ?? r.model
-      : `${r.model} (model only)`;
+    const derivative = labelOf(r);
     const outcome = Math.max(0, OUTCOME_CODES.indexOf(r.outcome as Outcome));
     return [
       dayNumber(r.enquiryDay),
@@ -168,59 +191,206 @@ export const dimLabel = (k: DimKey) => DIMENSIONS.find((d) => d.key === k)?.labe
 
 export type SortKey = "enquiries" | "orders" | "conversion" | "live" | "lost" | "label";
 
-export interface Group {
-  key: string;
-  label: string;
-  stats: Stats;
-  /** Share of the enquiries in the level above (or the whole selection). */
-  share: number;
-  children: Group[];
-}
+// Label order for the "A–Z" sort: sources, segments and profit bands in
+// their fixed order, numbers numerically ("6,000 miles" before "10,000
+// miles"), "Not stated" and model-only buckets last.
+const FIXED_ORDER: Record<string, readonly string[]> = { source: SOURCES, segment: SEGMENTS, profitBand: PROFIT_BANDS };
 
-// Label order for the "A–Z" sort: sources in their fixed order, numbers
-// numerically ("6,000 miles" before "10,000 miles"), "Not stated" last.
-function compareLabels(dim: DimKey, a: string, b: string): number {
+function compareLabels(dim: string, a: string, b: string): number {
   if (a === b) return 0;
-  if (a === NOT_STATED || a.endsWith("(model only)")) return 1;
-  if (b === NOT_STATED || b.endsWith("(model only)")) return -1;
-  if (dim === "source") {
-    return SOURCES.indexOf(a as SourceName) - SOURCES.indexOf(b as SourceName);
-  }
+  const fixed = FIXED_ORDER[dim];
+  if (fixed) return (fixed.indexOf(a) + 1 || 99) - (fixed.indexOf(b) + 1 || 99);
+  const last = (x: string) => x === NOT_STATED || x.endsWith("(model only)") || x === "Not specified";
+  if (last(a) !== last(b)) return last(a) ? 1 : -1;
   return a.localeCompare(b, "en-GB", { numeric: true, sensitivity: "base" });
 }
 
-function sortValue(g: Group, sort: SortKey): number {
-  if (sort === "conversion") return conversionPct(g.stats) ?? -1;
-  if (sort === "label") return 0;
-  return g.stats[sort];
+export interface Nested<S> {
+  key: string;
+  label: string;
+  stats: S;
+  /** Share of the rows in the level above (or the whole selection). */
+  share: number;
+  children: Nested<S>[];
 }
 
 /**
- * Group rows by one or two dimensions — e.g. source, then model within
- * each source. Each level carries its share of the level above.
+ * Group rows by one or more dimensions — source then model, segment then
+ * funder — each level carrying its share of the level above. `value`
+ * returns the number to sort on (largest first), or null to sort by label.
  */
-export function groupRows(rows: readonly ReportRow[], dims: DimKey[], sort: SortKey = "enquiries", parentTotal?: number): Group[] {
+function nest<R, S>(
+  rows: readonly R[],
+  dims: string[],
+  keyOf: (r: R, dim: string) => string,
+  statsOf: (rs: readonly R[]) => S,
+  value: ((s: S) => number) | null,
+  tiebreak: (s: S) => number,
+  parentTotal?: number,
+): Nested<S>[] {
   if (dims.length === 0) return [];
   const [dim, ...rest] = dims;
   const total = parentTotal ?? rows.length;
-  const buckets = new Map<string, ReportRow[]>();
+  const buckets = new Map<string, R[]>();
   for (const r of rows) {
-    const k = r[dim];
+    const k = keyOf(r, dim);
     const b = buckets.get(k);
     if (b) b.push(r); else buckets.set(k, [r]);
   }
-  const groups: Group[] = [...buckets].map(([key, rs]) => ({
+  const groups = [...buckets].map(([key, rs]) => ({
     key,
     label: key,
     stats: statsOf(rs),
     share: total > 0 ? (rs.length / total) * 100 : 0,
-    children: groupRows(rs, rest, sort, rs.length),
+    children: nest(rs, rest, keyOf, statsOf, value, tiebreak, rs.length),
   }));
-  return groups.sort((a, b) =>
-    sort === "label"
-      ? compareLabels(dim, a.label, b.label)
-      : sortValue(b, sort) - sortValue(a, sort) || b.stats.enquiries - a.stats.enquiries || compareLabels(dim, a.label, b.label),
+  return groups.sort((x, y) =>
+    value == null
+      ? compareLabels(dim, x.label, y.label)
+      : value(y.stats) - value(x.stats) || tiebreak(y.stats) - tiebreak(x.stats) || compareLabels(dim, x.label, y.label),
   );
+}
+
+export type Group = Nested<Stats>;
+
+function sortValue(s: Stats, sort: SortKey): number {
+  if (sort === "conversion") return conversionPct(s) ?? -1;
+  return sort === "label" ? 0 : s[sort];
+}
+
+/** Enquiries grouped by one or two dimensions — e.g. source, then model. */
+export function groupRows(rows: readonly ReportRow[], dims: DimKey[], sort: SortKey = "enquiries"): Group[] {
+  return nest(rows, dims, (r, d) => r[d as DimKey], statsOf, sort === "label" ? null : (s) => sortValue(s, sort), (s) => s.enquiries);
+}
+
+// ─── Orders ────────────────────────────────────────────────────────────────
+
+export interface OrderStoredRow {
+  orderDay: string;
+  exec: string;
+  customer: string;
+  model: string;
+  derivative: string | null;
+  derivativeKey: string | null;
+  segment: string;
+  product: string;
+  termMonths: number | null;
+  funder: string;
+  delivery: string;
+  profit: number | null;
+}
+
+export interface OrderRow {
+  day: string;
+  exec: string;
+  customer: string;
+  model: string;
+  derivative: string;
+  segment: string;
+  product: string;
+  term: string;
+  funder: string;
+  delivery: string;
+  profitBand: string;
+  profit: number | null;
+}
+
+export interface OrdersPayload {
+  strings: string[];
+  /** [dayNumber, exec, customer, model, derivative, segment, product, term, funder, delivery, profit|null] */
+  rows: (number | null)[][];
+}
+
+export function encodeOrders(rows: OrderStoredRow[], execNames: Map<string, string> = new Map()): OrdersPayload {
+  const labelOf = derivativeLabeller(rows);
+  const { strings, intern } = interner();
+  return {
+    strings,
+    rows: rows.map((r) => [
+      dayNumber(r.orderDay),
+      intern(execNames.get(r.exec) ?? r.exec),
+      intern(r.customer),
+      intern(r.model),
+      intern(labelOf(r)),
+      intern(r.segment),
+      intern(r.product || NOT_STATED),
+      intern(termLabel(r.termMonths)),
+      intern(r.funder || NOT_STATED),
+      intern(r.delivery || NOT_STATED),
+      r.profit,
+    ]),
+  };
+}
+
+export function decodeOrders(p: OrdersPayload): OrderRow[] {
+  const s = p.strings;
+  return p.rows.map((r) => {
+    const profit = r[10] ?? null;
+    return {
+      day: dayFromNumber(r[0] as number),
+      exec: s[r[1] as number],
+      customer: s[r[2] as number],
+      model: s[r[3] as number],
+      derivative: s[r[4] as number],
+      segment: s[r[5] as number],
+      product: s[r[6] as number],
+      term: s[r[7] as number],
+      funder: s[r[8] as number],
+      delivery: s[r[9] as number],
+      profitBand: profitBand(profit),
+      profit,
+    };
+  });
+}
+
+/** Units, total profit over the units that have a figure, how many have one, and how many lost money. */
+export interface OrderStats { orders: number; profit: number; priced: number; loss: number }
+
+export function orderStatsOf(rows: readonly OrderRow[]): OrderStats {
+  const s: OrderStats = { orders: 0, profit: 0, priced: 0, loss: 0 };
+  for (const r of rows) {
+    s.orders++;
+    if (r.profit == null) continue;
+    s.priced++;
+    s.profit += r.profit;
+    if (r.profit < 0) s.loss++;
+  }
+  return s;
+}
+
+/** Average profit per unit, over the units that carry a profit figure. */
+export function avgProfit(s: OrderStats): number | null {
+  return s.priced > 0 ? s.profit / s.priced : null;
+}
+
+export type OrderDimKey = "segment" | "exec" | "model" | "derivative" | "funder" | "product" | "term" | "delivery" | "profitBand";
+
+export const ORDER_DIMENSIONS: { key: OrderDimKey; label: string }[] = [
+  { key: "segment", label: "Segment" },
+  { key: "exec", label: "Exec" },
+  { key: "model", label: "Model" },
+  { key: "derivative", label: "Derivative" },
+  { key: "funder", label: "Funder" },
+  { key: "product", label: "Finance product" },
+  { key: "term", label: "Term" },
+  { key: "delivery", label: "Delivery" },
+  { key: "profitBand", label: "Profit band" },
+];
+
+export const orderDimLabel = (k: OrderDimKey) => ORDER_DIMENSIONS.find((d) => d.key === k)?.label ?? k;
+
+export type OrderSortKey = "orders" | "profit" | "avg" | "loss" | "label";
+
+export type OrderGroup = Nested<OrderStats>;
+
+function orderSortValue(s: OrderStats, sort: OrderSortKey): number {
+  if (sort === "avg") return avgProfit(s) ?? -Infinity;
+  return sort === "label" ? 0 : s[sort];
+}
+
+/** Orders grouped by one or two dimensions — e.g. segment, then model. */
+export function groupOrders(rows: readonly OrderRow[], dims: OrderDimKey[], sort: OrderSortKey = "orders"): OrderGroup[] {
+  return nest(rows, dims, (r, d) => r[d as OrderDimKey] as string, orderStatsOf, sort === "label" ? null : (s) => orderSortValue(s, sort), (s) => s.orders);
 }
 
 // ─── Periods ───────────────────────────────────────────────────────────────

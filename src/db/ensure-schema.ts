@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 52;
+const SCHEMA_VERSION = 53;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -978,9 +978,33 @@ async function ensureTenAtTenTables() {
       uploaded_by_user_id TEXT NOT NULL
     )
   `));
-  // HaHe and JoRu hold enquiries identified as duplicates. Ingest never
-  // stores them; this sweep is the backstop. Idempotent.
+  await ensureColumns("ten_at_ten_uploads", [{ name: "kind", sqlType: "TEXT NOT NULL DEFAULT 'enquiries'" }]);
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_orders (
+      id TEXT PRIMARY KEY,
+      ordered_at INTEGER NOT NULL,
+      order_day TEXT NOT NULL,
+      exec TEXT NOT NULL,
+      customer TEXT NOT NULL,
+      vehicle_raw TEXT,
+      model TEXT NOT NULL,
+      derivative TEXT,
+      derivative_key TEXT,
+      segment TEXT NOT NULL,
+      product TEXT,
+      term_months INTEGER,
+      funder TEXT,
+      delivery TEXT,
+      profit REAL,
+      first_uploaded_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_orders_day ON ten_at_ten_orders(order_day)`));
+  // HaHe and JoRu are stripped from all 10 at 10 data. Ingest never stores
+  // them; this sweep is the backstop. Idempotent.
   await db.run(sql.raw(`DELETE FROM ten_at_ten_enquiries WHERE lower(exec) IN ('hahe', 'joru')`));
+  await db.run(sql.raw(`DELETE FROM ten_at_ten_orders WHERE lower(exec) IN ('hahe', 'joru')`));
 }
 
 async function ensureEnquiryTables() {

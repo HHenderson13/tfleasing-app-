@@ -1048,8 +1048,38 @@ export const tenAtTenEnquiries = sqliteTable(
   }),
 );
 
+// One row per order from the Dealerweb order list, merged line by line on
+// order date + customer + vehicle + occurrence (makeOrderKey in
+// lib/ten-at-ten-orders.ts). Profit is column AH, Total Gross.
+export const tenAtTenOrders = sqliteTable(
+  "ten_at_ten_orders",
+  {
+    id: text("id").primaryKey(),
+    orderedAt: integer("ordered_at").notNull(),       // E, wall clock as UTC
+    orderDay: text("order_day").notNull(),            // YYYY-MM-DD
+    exec: text("exec").notNull(),                     // B
+    customer: text("customer").notNull(),             // D
+    vehicleRaw: text("vehicle_raw"),                  // F, stray suffix removed
+    model: text("model").notNull(),
+    derivative: text("derivative"),
+    derivativeKey: text("derivative_key"),
+    segment: text("segment").notNull(),               // ICE Car | BEV Car | Van
+    product: text("product"),                         // R  HP | Contract Hire | Cash …
+    termMonths: integer("term_months"),               // R
+    funder: text("funder"),                           // R  ALD | Lex | Novuna | Arval | Ford Credit
+    delivery: text("delivery"),                       // AK Delivered | Awaiting delivery
+    profit: real("profit"),                           // AH Total Gross
+    firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byDay: index("idx_ten_at_ten_orders_day").on(t.orderDay),
+  }),
+);
+
 export const tenAtTenUploads = sqliteTable("ten_at_ten_uploads", {
   id: text("id").primaryKey(),
+  kind: text("kind").notNull().default("enquiries"), // enquiries | orders
   filename: text("filename").notNull(),
   rowsInFile: integer("rows_in_file").notNull(),
   inserted: integer("inserted").notNull(),
