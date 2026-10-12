@@ -869,6 +869,13 @@ real file follows that. When both sit in one month the uploader is asked
   narrow it.
 - Rows are loaded as order rows (`loadTenAtTenDeliveries`: day = delivery
   day, delivery = status) so the Orders views serve both tabs.
+- **Budget cards ask two questions, in this order** (user, 2026-10-12):
+  first *going vs budget* — everything Dealbook says is going in the period
+  (delivered + arrived + due) against budget, with the gap; then *delivered
+  of what's going*, benchmarked against how far through the period today is
+  (`periodProgress`, calendar days, today counted in) — "34% delivered vs
+  39% through the month, 5 pts behind pace". Don't lead with delivered vs
+  budget: early in a month it always reads as failure.
 
 ## Sales leaderboard (Pole Position)
 

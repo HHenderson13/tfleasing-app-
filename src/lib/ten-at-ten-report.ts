@@ -475,9 +475,11 @@ export function timeBuckets(rows: readonly ReportRow[], r: Range): Bucket[] {
 // ─── Deliveries vs budget ──────────────────────────────────────────────────
 //
 // Budgets are monthly units for Car and CV (commercial); combined is their
-// sum. Deliveries count in the month of their delivery date. "Delivered"
-// is handed over; "still to deliver" is Arrived + Due in the period — so a
-// month in progress reads as delivered so far, and what it's on course for.
+// sum. Deliveries count in the month of their delivery date. Two separate
+// questions, in this order (user, 2026-10-12):
+//   1. Going vs budget — everything Dealbook says is going in the period
+//      (delivered + arrived + due) against the budget. The overall number.
+//   2. Delivered of going — how much of what's going has been handed over.
 
 /** Delivery budgets by month: { "2026-10": { car: 106, cv: 40 } }. */
 export type Budgets = Record<string, { car: number; cv: number }>;
@@ -509,6 +511,8 @@ export interface BudgetLine {
   budget: number | null;
   /** Months in the period with no budget set (shown, never treated as 0). */
   missing: string[];
+  /** Everything in the period's report: delivered + arrived + due. */
+  going: number;
   delivered: number;
   arrived: number;
   due: number;
@@ -523,6 +527,7 @@ export function budgetLines(rows: readonly OrderRow[], budgets: Budgets, months:
     return {
       budget,
       missing,
+      going: rs.length,
       delivered: rs.filter((r) => r.delivery === "Delivered").length,
       arrived: rs.filter((r) => r.delivery === "Arrived").length,
       due: rs.filter((r) => r.delivery !== "Delivered" && r.delivery !== "Arrived").length,
@@ -534,4 +539,17 @@ export function budgetLines(rows: readonly OrderRow[], budgets: Budgets, months:
     cv: line(cv, (r) => departmentOf(r.segment) === "cv"),
     combined: line(car == null || cv == null ? null : car + cv, () => true),
   };
+}
+
+/**
+ * How far through a period "today" is, by calendar day — the pace the
+ * delivered share is benchmarked against (user, 2026-10-12). Today counts as
+ * a day in: on 12 October the month is 12 of 31 days through. A finished
+ * period is 100%, one not started 0%.
+ */
+export function periodProgress(r: Range, today: string): { day: number; days: number; pct: number } {
+  const first = dayNumber(r.startDay), last = dayNumber(r.endDay), now = dayNumber(today);
+  const days = last - first + 1;
+  const day = Math.max(0, Math.min(days, now - first + 1));
+  return { day, days, pct: days > 0 ? (day / days) * 100 : 0 };
 }

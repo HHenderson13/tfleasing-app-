@@ -11,7 +11,7 @@ import {
   parseOrderWorkbook,
   segmentOf,
 } from "./ten-at-ten-orders";
-import { avgProfit, budgetLines, budgetMonths, decodeOrders, encodeOrders, groupOrders, orderStatsOf, profitBand, rangeFor } from "./ten-at-ten-report";
+import { avgProfit, budgetLines, budgetMonths, decodeOrders, encodeOrders, groupOrders, orderStatsOf, periodProgress, profitBand, rangeFor } from "./ten-at-ten-report";
 
 const HEADER = ["Status", "SE", "Sales Type", "Customer", "Order Date", "Vehicle Details", ...new Array(11).fill("x"), "Finance Type",
   ...new Array(15).fill("x"), "Total Gross", "DMS Total Gross", "Difference", "Delivery Date"];
@@ -188,9 +188,9 @@ describe("deliveries vs budget", () => {
 
   it("splits Car and CV, and combines them", () => {
     const l = budgetLines(deliveries, budgets, ["2026-10"]);
-    expect(l.car).toMatchObject({ budget: 106, delivered: 3, arrived: 0, due: 1 });
-    expect(l.cv).toMatchObject({ budget: 40, delivered: 1, arrived: 1, due: 1 });
-    expect(l.combined).toMatchObject({ budget: 146, delivered: 4, arrived: 1, due: 2 });
+    expect(l.car).toMatchObject({ budget: 106, going: 4, delivered: 3, arrived: 0, due: 1 });
+    expect(l.cv).toMatchObject({ budget: 40, going: 3, delivered: 1, arrived: 1, due: 1 });
+    expect(l.combined).toMatchObject({ budget: 146, going: 7, delivered: 4, arrived: 1, due: 2 });
     expect(budgetLines(deliveries, budgets, ["2026-10", "2026-11", "2026-12"]).combined.budget).toBe(337);
   });
 
@@ -198,5 +198,19 @@ describe("deliveries vs budget", () => {
     const l = budgetLines(deliveries, budgets, ["2027-01"]);
     expect(l.combined.budget).toBeNull();
     expect(l.car.missing).toEqual(["2027-01"]);
+  });
+});
+
+describe("pace through the period", () => {
+  const oct = rangeFor("month", "2026-10-12", { from: "", to: "" });
+  it("counts today as a day in", () => {
+    expect(periodProgress(oct, "2026-10-12")).toMatchObject({ day: 12, days: 31 });
+    expect(Math.round(periodProgress(oct, "2026-10-12").pct)).toBe(39);
+  });
+  it("is 100% for a finished period and 0% for one not started", () => {
+    expect(periodProgress(oct, "2026-11-03").pct).toBe(100);
+    expect(periodProgress(oct, "2026-09-30").pct).toBe(0);
+    const q4 = rangeFor("quarter", "2026-10-12", { from: "", to: "" });
+    expect(periodProgress(q4, "2026-10-12")).toMatchObject({ day: 12, days: 92 });
   });
 });

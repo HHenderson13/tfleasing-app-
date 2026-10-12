@@ -20,6 +20,7 @@ import {
   avgProfit,
   budgetLines,
   budgetMonths,
+  periodProgress,
   conversionPct,
   decodeOrders,
   decodeReport,
@@ -155,7 +156,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
       {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range} />}
-      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} />}
+      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
     </div>
   );
 }
@@ -478,7 +479,7 @@ const STATUS_COLOURS: Record<string, string> = { Delivered: "#047857", Arrived: 
 // Orders and Deliveries are the same Dealbook report counted two ways —
 // by order date, or by delivery date with a status — so one section serves
 // both. Deliveries adds the status filter and the department budget panel.
-function DealbookSection({ all, range, variant, budgets }: { all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets }) {
+function DealbookSection({ all, range, variant, budgets, today }: { all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets; today?: string }) {
   const isDel = variant === "deliveries";
   const [segments, setSegments] = useState<Set<SegmentName>>(new Set());
   const [statuses, setStatuses] = useState<Set<StatusName>>(new Set());
@@ -512,7 +513,8 @@ function DealbookSection({ all, range, variant, budgets }: { all: OrderRow[]; ra
   const delivered = rows.filter((r) => r.delivery === "Delivered").length;
   const tiles = isDel
     ? [
-      { label: "Delivered", value: int(delivered), sub: "handed over" },
+      { label: "Going", value: int(rows.length), sub: "delivered + arrived + due" },
+      { label: "Delivered", value: int(delivered), sub: rows.length ? `${Math.round((delivered / rows.length) * 100)}% of what's going` : undefined },
       { label: "Still to deliver", value: int(rows.length - delivered), sub: `${int(rows.filter((r) => r.delivery === "Arrived").length)} arrived · ${int(rows.filter((r) => r.delivery !== "Delivered" && r.delivery !== "Arrived").length)} due` },
       { label: "Total profit", value: gbp(s.priced ? s.profit : null) },
       { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true },
@@ -534,7 +536,7 @@ function DealbookSection({ all, range, variant, budgets }: { all: OrderRow[]; ra
         <Select value={funder} onChange={setFunder} all="All funders" options={options.funder} />
         {filtersOn && <button onClick={() => { setSegments(new Set()); setStatuses(new Set()); setExec(""); setModel(""); setFunder(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
       </div>
-      {isDel && budgets && <BudgetPanel rows={periodAll} range={range} budgets={budgets} />}
+      {isDel && budgets && today && <BudgetPanel rows={periodAll} range={range} budgets={budgets} today={today} />}
       <Tiles tiles={tiles} />
       {rows.length === 0 ? (
         <Empty>No {noun} in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
@@ -558,7 +560,7 @@ function DealbookSection({ all, range, variant, budgets }: { all: OrderRow[]; ra
 
 // Department vs budget: Car, CV and combined, for the whole months in the
 // period. Always the department — the filters above don't narrow it.
-function BudgetPanel({ rows, range, budgets }: { rows: OrderRow[]; range: Range; budgets: Budgets }) {
+function BudgetPanel({ rows, range, budgets, today }: { rows: OrderRow[]; range: Range; budgets: Budgets; today: string }) {
   const months = budgetMonths(range);
   if (!months) {
     return (
@@ -568,45 +570,70 @@ function BudgetPanel({ rows, range, budgets }: { rows: OrderRow[]; range: Range;
     );
   }
   const lines = budgetLines(rows, budgets, months);
+  const pace = { ...periodProgress(range, today), word: months.length === 1 ? "month" : months.length === 3 && range.label.startsWith("Q") ? "quarter" : "period" };
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {([["car", "Car", "#b45309"], ["cv", "CV", "#1d4ed8"], ["combined", "Combined", "#312e81"]] as const).map(([k, title, colour]) => (
-        <BudgetCard key={k} title={title} colour={colour} line={lines[k]} />
+      {([["car", "Car", "#b45309"], ["cv", "CV (commercial)", "#1d4ed8"], ["combined", "Combined", "#312e81"]] as const).map(([k, title, colour]) => (
+        <BudgetCard key={k} title={title} colour={colour} line={lines[k]} pace={pace} />
       ))}
     </div>
   );
 }
 
-function BudgetCard({ title, colour, line }: { title: string; colour: string; line: BudgetLine }) {
-  const { budget, delivered, arrived, due, missing } = line;
-  const onCourse = delivered + arrived + due;
-  const pctOf = (n: number) => (budget ? Math.min(100, (n / budget) * 100) : 0);
-  const gap = budget == null ? null : onCourse - budget;
+// Two questions, kept apart. First the overall number: everything Dealbook
+// says is going in the period against budget, and the gap. Then, separately,
+// how much of what's going has actually been handed over.
+function BudgetCard({ title, colour, line, pace }: { title: string; colour: string; line: BudgetLine; pace: { day: number; days: number; pct: number; word: string } }) {
+  const { budget, going, delivered, arrived, due, missing } = line;
+  const gap = budget == null ? null : going - budget;
+  const ofBudget = budget ? Math.round((going / budget) * 100) : null;
+  const deliveredPct = going ? Math.round((delivered / going) * 100) : null;
+  const bar = (n: number, of: number) => `${of ? Math.min(100, (n / of) * 100) : 0}%`;
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${colour}` }}>
       <div className="flex items-baseline justify-between">
-        <div className="text-sm font-semibold text-slate-900">{title} vs budget</div>
+        <div className="text-sm font-semibold text-slate-900">{title}</div>
         <div className="text-xs text-slate-500">{budget == null ? "No budget set" : `Budget ${int(budget)}`}</div>
       </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-3xl font-bold tabular-nums text-slate-900">{int(delivered)}</span>
-        <span className="text-sm text-slate-500">delivered{budget ? ` · ${Math.round((delivered / budget) * 100)}% of budget` : ""}</span>
+
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Going vs budget</div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold tabular-nums text-slate-900">{int(going)}</span>
+        {budget != null && <span className="text-sm text-slate-500">of {int(budget)} · {ofBudget}%</span>}
       </div>
       {budget != null && (
-        <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100" title={`${delivered} delivered, ${arrived + due} still to deliver, budget ${budget}`}>
-          <div style={{ width: `${pctOf(delivered)}%`, background: colour }} />
-          <div style={{ width: `${Math.max(0, pctOf(onCourse) - pctOf(delivered))}%`, background: colour, opacity: 0.3 }} />
-        </div>
+        <>
+          <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-slate-100" title={`${going} going against a budget of ${budget}`}>
+            <div className="h-full rounded-full" style={{ width: bar(going, budget), background: colour }} />
+          </div>
+          <div className={`mt-1 text-sm font-semibold ${gap! >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+            {gap! >= 0 ? `${int(gap!)} over budget` : `${int(-gap!)} short of budget`}
+          </div>
+        </>
       )}
-      <div className="mt-2 space-y-0.5 text-xs text-slate-600">
-        <div>Still to deliver <b className="tabular-nums">{int(arrived + due)}</b> <span className="text-slate-400">({int(arrived)} arrived · {int(due)} due)</span></div>
-        {gap != null && (
-          <div>
-            On course for <b className="tabular-nums">{int(onCourse)}</b> —{" "}
-            <b className={gap >= 0 ? "text-emerald-700" : "text-rose-700"}>{gap >= 0 ? `${int(gap)} over budget` : `${int(-gap)} short of budget`}</b>
+      {missing.length > 0 && budget != null && <div className="text-xs text-amber-700">No budget set for {missing.join(", ")}</div>}
+
+      <div className="mt-3 border-t border-slate-100 pt-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Delivered of what&apos;s going</div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-bold tabular-nums text-slate-900">{deliveredPct == null ? "—" : `${deliveredPct}%`}</span>
+          <span className="text-xs text-slate-500">{int(delivered)} of {int(going)} delivered</span>
+        </div>
+        {/* The marker is how far through the period today is — delivered
+            share against time gone is the pace check. */}
+        <div className="relative mt-1 h-1.5 w-full rounded-full bg-slate-100" title={`${pace.pct.toFixed(0)}% through the ${pace.word} (day ${pace.day} of ${pace.days})`}>
+          <div className="h-full rounded-full" style={{ width: bar(delivered, going), background: colour, opacity: 0.7 }} />
+          <div className="absolute -top-1 h-3.5 w-0.5 rounded bg-slate-900" style={{ left: `calc(${Math.min(100, pace.pct)}% - 1px)` }} />
+        </div>
+        {deliveredPct != null && (
+          <div className="mt-1 text-xs text-slate-600">
+            vs <b>{pace.pct.toFixed(0)}%</b> through the {pace.word} <span className="text-slate-400">(day {pace.day} of {pace.days})</span> —{" "}
+            <b className={deliveredPct >= Math.round(pace.pct) ? "text-emerald-700" : "text-rose-700"}>
+              {deliveredPct >= Math.round(pace.pct) ? `${deliveredPct - Math.round(pace.pct)} pts ahead of pace` : `${Math.round(pace.pct) - deliveredPct} pts behind pace`}
+            </b>
           </div>
         )}
-        {missing.length > 0 && budget != null && <div className="text-amber-700">No budget set for {missing.join(", ")}</div>}
+        <div className="mt-0.5 text-xs text-slate-500">{int(arrived + due)} still to deliver · {int(arrived)} arrived · {int(due)} due</div>
       </div>
     </div>
   );
