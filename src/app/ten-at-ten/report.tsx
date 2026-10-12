@@ -131,12 +131,13 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
   return (
     <div className="mt-5 space-y-5">
       {/* Section */}
-      <div className="flex gap-1 border-b border-slate-200">
+      {/* Seven tabs don't fit a phone: they scroll sideways in their own row. */}
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200">
         {SECTIONS.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSection(key)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition ${section === key ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition ${section === key ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
           >
             {label}
           </button>
@@ -203,7 +204,8 @@ function Empty({ children }: { children: ReactNode }) {
 
 function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    // min-w-0 lets a card in a grid shrink, so a wide table scrolls inside it rather than widening the page.
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {note && <span className="text-[11px] text-slate-400">{note}</span>}
@@ -1305,6 +1307,7 @@ function RewriteAction({ c }: { c: CancellationView }) {
 // Each Re-Write beside the order that replaced it, and what tied the two.
 function RewriteList({ rows }: { rows: CancellationView[] }) {
   return (
+    <div className="overflow-x-auto">
     <table className="w-full text-xs">
       <thead className="text-[10px] uppercase tracking-wide text-slate-400">
         <tr>
@@ -1343,6 +1346,7 @@ function RewriteList({ rows }: { rows: CancellationView[] }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -1391,48 +1395,84 @@ function CancellationList({ rows, showExec = true }: { rows: CancellationView[];
 
 interface SummaryStat { label: string; value: string; sub?: string; tone?: "good" | "bad" }
 
-function SummaryCard({ title, onOpen, stats, note }: { title: string; onOpen: () => void; stats: SummaryStat[]; note?: ReactNode }) {
+// Headline figures on top; under them, a few lines of the detail worth
+// knowing — a split, the names behind a number — never a full table.
+function SummaryCard({ title, onOpen, stats, note, children }: { title: string; onOpen: () => void; stats: SummaryStat[]; note?: ReactNode; children?: ReactNode }) {
   return (
-    <section className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         <button onClick={onOpen} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Open →</button>
       </div>
-      <div className={`mt-3 grid gap-x-4 gap-y-3 ${stats.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+      <div className={`mt-3 grid grid-cols-2 gap-x-4 gap-y-3 ${stats.length >= 4 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         {stats.map((st) => (
           <div key={st.label} className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{st.label}</div>
-            <div className={`text-2xl font-bold tabular-nums ${st.tone === "good" ? "text-emerald-700" : st.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{st.value}</div>
+            <div className={`text-xl font-bold tabular-nums sm:text-2xl ${st.tone === "good" ? "text-emerald-700" : st.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{st.value}</div>
             {st.sub && <div className="text-[11px] leading-snug text-slate-500">{st.sub}</div>}
           </div>
         ))}
       </div>
+      {children && <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">{children}</div>}
       {note && <div className="mt-auto pt-3 text-[11px] text-slate-400">{note}</div>}
     </section>
   );
 }
 
+// One line of detail: a small label, then the facts.
+function Line({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex gap-2">
+      <span className="w-28 shrink-0 pt-px text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="min-w-0">{children}</span>
+    </div>
+  );
+}
+
+// A thin bar of one figure against another — budget, or share of a whole.
+function MiniBar({ value, of, colour }: { value: number; of: number; colour: string }) {
+  return (
+    <div className="h-1.5 w-full rounded-full bg-slate-100">
+      <div className="h-full rounded-full" style={{ width: `${of > 0 ? Math.min(100, (value / of) * 100) : 0}%`, background: colour }} />
+    </div>
+  );
+}
+
 const share = (n: number, of: number) => (of > 0 ? (n / of) * 100 : null);
+const firstName = (name: string) => name.split(" ")[0];
 
 function SummarySection({ range, today, enquiries, responses, reportHorizon, orders, deliveries, budgets, cancellations, cancelledOrderDays, market, open }: {
   range: Range; today: string; enquiries: ReportRow[]; responses: EnquiryRow[]; reportHorizon: number | null;
   orders: OrderRow[]; deliveries: OrderRow[]; budgets: Budgets; cancellations: CancellationView[]; cancelledOrderDays: string[];
   market: MarketOverview | null; open: (s: Section) => void;
 }) {
-  const e = useMemo(() => statsOf(inRange(enquiries, range)), [enquiries, range]);
+  const eRows = useMemo(() => inRange(enquiries, range), [enquiries, range]);
+  const e = useMemo(() => statsOf(eRows), [eRows]);
+  const eSources = useMemo(() => groupRows(eRows, ["source"], "label"), [eRows]);
+  const eTop = useMemo(() => groupRows(eRows, ["exec"], "orders").filter((g) => g.stats.orders > 0).slice(0, 3), [eRows]);
+
   const r = useMemo(() => {
     const period = responses.filter((x) => x.enquiryDay >= range.startDay && x.enquiryDay <= range.endDay);
     const { reportable, held } = partitionByReportability(period, reportHorizon);
-    return { s: summariseResponse(reportable), held: held.length };
+    // Execs who missed same-day contact on leads that reached them in time.
+    const misses = new Map<string, number>();
+    for (const x of reportable) if (sameDayMissOwner(x) === "exec") misses.set(x.salesExec, (misses.get(x.salesExec) ?? 0) + 1);
+    return { s: summariseResponse(reportable), held: held.length, misses: [...misses].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) };
   }, [responses, range, reportHorizon]);
-  const o = useMemo(() => orderStatsOf(inRange(orders, range)), [orders, range]);
+
+  const oRows = useMemo(() => inRange(orders, range), [orders, range]);
+  const o = useMemo(() => orderStatsOf(oRows), [oRows]);
+  const oSegments = useMemo(() => new Map(groupOrders(oRows, ["segment"]).map((g) => [g.label, g])), [oRows]);
+  const oTop = useMemo(() => groupOrders(oRows, ["exec"], "orders").slice(0, 3), [oRows]);
+
   const d = useMemo(() => inRange(deliveries, range), [deliveries, range]);
   const c = useMemo(() => inRange(cancellations, range), [cancellations, range]);
   const cancelledHere = cancelledOrderDays.filter((x) => x >= range.startDay && x <= range.endDay).length;
 
   // Deliveries: against budget when the period is whole months.
   const months = budgetMonths(range);
-  const line = months ? budgetLines(d, budgets, months).combined : null;
+  const lines = months ? budgetLines(d, budgets, months) : null;
+  const line = lines?.combined ?? null;
   const pace = periodProgress(range, today);
   const delivered = d.filter((x) => x.delivery === "Delivered").length;
   const arrived = d.filter((x) => x.delivery === "Arrived").length;
@@ -1441,11 +1481,26 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
 
   const rs = r.s;
   const sameDay = share(rs.sameDayMet, rs.sameDayExpected);
-  const proper = c.filter(isProper).length;
+  const properRows = c.filter(isProper).sort((a, b) => Number(needsReason(b)) - Number(needsReason(a)) || b.day.localeCompare(a.day));
+  const proper = properRows.length;
   const unexplained = c.filter(needsReason).length;
+
   const cars = market?.segments.find((x) => x.segment === "car");
   const vans = market?.segments.find((x) => x.segment === "van");
   const all = market ? marketTotals(market.segments) : null;
+  // Ranges with enough deals to mean something, strongest and weakest.
+  const rangesRanked = useMemo(() => (market?.segments ?? [])
+    .flatMap((sg) => sg.ranges.filter((x) => x.stats.compared >= 40).map((x) => ({ name: x.name, pct: share(x.stats.cheapest, x.stats.compared) ?? 0 })))
+    .sort((a, b) => b.pct - a.pct), [market]);
+  const undercutter = useMemo(() => {
+    const m = new Map<string, { undercuts: number; headToHead: number }>();
+    for (const sg of market?.segments ?? []) for (const x of sg.competitors) {
+      const t = m.get(x.broker) ?? { undercuts: 0, headToHead: 0 };
+      t.undercuts += x.undercuts; t.headToHead += x.headToHead;
+      m.set(x.broker, t);
+    }
+    return [...m].sort((a, b) => b[1].undercuts - a[1].undercuts)[0] ?? null;
+  }, [market]);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -1454,17 +1509,73 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
         { label: "Inbound conv.", value: pct(inboundPct(e)), sub: "MotorComplete leads" },
         { label: "Broker conv.", value: pct(brokerPct(e)), sub: "broker / prospect" },
         { label: "Overall conv.", value: pct(conversionPct(e)), sub: `${int(e.orders)} orders` },
-      ]} />
+      ]}>
+        {e.enquiries > 0 && (
+          <>
+            <div className="flex h-2 w-full overflow-hidden rounded-full">
+              {eSources.map((g) => <div key={g.key} style={{ width: `${g.share}%`, background: SOURCE_COLOURS[g.label] ?? "#94a3b8", borderRight: "2px solid white" }} />)}
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {eSources.map((g) => (
+                <span key={g.key} className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full" style={{ background: SOURCE_COLOURS[g.label] ?? "#94a3b8" }} />
+                  {g.label} <b className="tabular-nums text-slate-800">{g.share.toFixed(0)}%</b>
+                </span>
+              ))}
+            </div>
+            <Line label="Most orders">
+              {eTop.length ? eTop.map((g, i) => <Fragment key={g.key}>{i > 0 && " · "}<b className="text-slate-800">{g.label}</b> {int(g.stats.orders)}</Fragment>) : "None yet"}
+            </Line>
+            <Line label="Still open">{int(e.live)} live · {int(e.lost)} lost</Line>
+          </>
+        )}
+      </SummaryCard>
+
       <SummaryCard title="Response times" onOpen={() => open("response")} stats={[
         { label: "First contact", value: formatMins(rs.contactAvg), tone: timeTone(rs.contactAvg, CONTACT_TARGET_MINS), sub: `target ${CONTACT_TARGET_MINS}m · ${int(rs.contactMissed)} over` },
         { label: "Same-day contact", value: sameDay == null ? "—" : `${Math.round(sameDay)}%`, tone: rs.sameDayExpected ? (rs.sameDayMissed ? "bad" : "good") : undefined, sub: `${int(rs.sameDayMissed)} missed · ${int(rs.sameDayMissedSupport)} late allocation` },
         { label: "Never contacted", value: int(rs.neverContacted), tone: rs.neverContacted ? "bad" : undefined, sub: `of ${int(rs.total)} judged` },
-      ]} note={r.held > 0 ? `${int(r.held)} more not judged yet — they need a full working day first.` : undefined} />
+      ]} note={r.held > 0 ? `${int(r.held)} more not judged yet — they need a full working day first.` : undefined}>
+        {rs.total > 0 && (
+          <>
+            <Line label="Allocation">
+              <span className={`font-semibold ${rs.allocAvg == null ? "" : rs.allocAvg <= ALLOCATION_TARGET_MINS ? "text-emerald-700" : "text-rose-700"}`}>{formatMins(rs.allocAvg)}</span> average, target {ALLOCATION_TARGET_MINS}m · {int(rs.allocMissed)} over · Sales Support
+            </Line>
+            <Line label="Missed same day">
+              {r.misses.length ? r.misses.slice(0, 4).map(([name, n], i) => <Fragment key={name}>{i > 0 && " · "}<b className="text-rose-700">{name}</b> {n}</Fragment>)
+                : <span className="text-emerald-700">No exec missed one</span>}
+            </Line>
+          </>
+        )}
+      </SummaryCard>
+
       <SummaryCard title="Orders" onOpen={() => open("orders")} stats={[
         { label: "Orders", value: int(o.orders), sub: cancelledHere ? `${int(cancelledHere)} cancelled since, left out` : undefined },
         { label: "Total profit", value: gbp(o.priced ? o.profit : null) },
         { label: "Avg per unit", value: gbp(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined },
-      ]} />
+      ]}>
+        {o.orders > 0 && (
+          <>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {SEGMENTS.map((seg) => {
+                const g = oSegments.get(seg);
+                const avg = g ? avgProfit(g.stats) : null;
+                return (
+                  <div key={seg} className="rounded-lg bg-slate-50 px-2 py-1.5" style={{ borderLeft: `3px solid ${SEGMENT_META[seg].colour}` }}>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{SEGMENT_META[seg].title}</div>
+                    <div><b className="tabular-nums text-slate-800">{int(g?.stats.orders ?? 0)}</b> · <span className="tabular-nums"><Money n={avg} /></span> avg</div>
+                  </div>
+                );
+              })}
+            </div>
+            <Line label="Most orders">
+              {oTop.map((g, i) => <Fragment key={g.key}>{i > 0 && " · "}<b className="text-slate-800">{g.label}</b> {int(g.stats.orders)}</Fragment>)}
+            </Line>
+            <Line label="Loss-making"><b className={o.loss ? "text-rose-700" : "text-slate-800"}>{int(o.loss)}</b> of {int(o.priced)} priced</Line>
+          </>
+        )}
+      </SummaryCard>
+
       <SummaryCard title="Deliveries" onOpen={() => open("deliveries")} stats={line ? [
         { label: "Going vs budget", value: line.budget == null ? int(line.going) : `${int(line.going)} / ${int(line.budget)}`, tone: gap == null ? undefined : gap >= 0 ? "good" : "bad",
           sub: gap == null ? "no budget set" : gap >= 0 ? `${int(gap)} over budget` : `${int(-gap)} short of budget` },
@@ -1475,19 +1586,70 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
         { label: "Going", value: int(d.length), sub: "delivered + arrived + due" },
         { label: "Delivered", value: int(delivered), sub: deliveredPct == null ? undefined : `${deliveredPct}% of what's going` },
         { label: "Still to deliver", value: int(d.length - delivered), sub: `${int(arrived)} arrived · ${int(d.length - delivered - arrived)} due` },
-      ]} note={line ? "Car and CV combined." : "Budget is monthly — choose Month or Quarter to measure against it."} />
+      ]} note={line ? undefined : "Budget is monthly — choose Month or Quarter to measure against it."}>
+        {lines && (["car", "cv"] as const).map((k) => {
+          const l = lines[k];
+          const g = l.budget == null ? null : l.going - l.budget;
+          return (
+            <div key={k}>
+              <div className="flex justify-between gap-2">
+                <span className="font-medium text-slate-700">{k === "car" ? "Car" : "CV"}</span>
+                <span className="tabular-nums">
+                  <b className="text-slate-800">{int(l.going)}</b>{l.budget != null && <> of {int(l.budget)}</>} going · {int(l.delivered)} delivered
+                  {g != null && <b className={`ml-1 ${g >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{g >= 0 ? `+${int(g)}` : `−${int(-g)}`}</b>}
+                </span>
+              </div>
+              <MiniBar value={l.going} of={l.budget ?? l.going} colour={k === "car" ? "#334155" : SEGMENT_META.Van.colour} />
+            </div>
+          );
+        })}
+      </SummaryCard>
+
       <SummaryCard title="Cancellations" onOpen={() => open("cancellations")} stats={[
         { label: "Cancellations", value: int(proper), sub: "cancelled, not re-ordered" },
         { label: "Re-Writes", value: int(c.length - proper), sub: "re-ordered — not counted" },
         { label: "Reasons to add", value: int(unexplained), tone: proper ? (unexplained ? "bad" : "good") : undefined, sub: proper ? `${int(proper - unexplained)} of ${int(proper)} explained` : undefined },
-      ]} />
+      ]}>
+        {proper > 0 && (
+          <>
+            {properRows.slice(0, 3).map((x) => (
+              <div key={x.id} className="flex gap-2">
+                <span className="min-w-0 flex-1 truncate">
+                  <b className="text-slate-800">{x.customer}</b> · {x.model} · {firstName(x.exec)}
+                </span>
+                <span className={`min-w-0 max-w-[55%] truncate ${x.note ? "text-slate-600" : "font-semibold text-amber-700"}`} title={x.note}>
+                  {x.note || "Reason needed"}
+                </span>
+              </div>
+            ))}
+            {proper > 3 && <div className="text-slate-400">and {int(proper - 3)} more</div>}
+          </>
+        )}
+      </SummaryCard>
+
       <SummaryCard title="Market Analysis" onOpen={() => open("market")} stats={market && all ? [
         { label: "Cars · cheapest", value: pct(cars ? share(cars.overall.cheapest, cars.overall.compared) : null, 0), sub: cars ? gapText(cars.overall.gap) : "not scraped" },
         { label: "Vans · cheapest", value: pct(vans ? share(vans.overall.cheapest, vans.overall.compared) : null, 0), sub: vans ? gapText(vans.overall.gap) : "not scraped" },
         { label: "Lowest headline", value: pct(share(all.headlineLowest, all.headlineCompared), 0), sub: "our best price at any term" },
       ] : [
         { label: "Cheapest", value: "—", sub: "no scrape yet" },
-      ]} note={market ? `Latest scrape, ${scrapeWhen(market.run.startedAt)} — not tied to the period above.` : undefined} />
+      ]} note={market ? `Latest scrape, ${scrapeWhen(market.run.startedAt)} — not tied to the period above.` : undefined}>
+        {rangesRanked.length >= 2 && (
+          <>
+            <Line label="Strongest">
+              {rangesRanked.slice(0, 2).map((x, i) => <Fragment key={x.name}>{i > 0 && " · "}<b className="text-emerald-700">{x.name}</b> {x.pct.toFixed(0)}%</Fragment>)}
+            </Line>
+            <Line label="Weakest">
+              {rangesRanked.slice(-2).reverse().map((x, i) => <Fragment key={x.name}>{i > 0 && " · "}<b className="text-rose-700">{x.name}</b> {x.pct.toFixed(0)}%</Fragment>)}
+            </Line>
+          </>
+        )}
+        {undercutter && (
+          <Line label="Top undercutter">
+            <b className="text-slate-800">{undercutter[0]}</b> — cheaper on {int(undercutter[1].undercuts)} of {int(undercutter[1].headToHead)} deals
+          </Line>
+        )}
+      </SummaryCard>
     </div>
   );
 }

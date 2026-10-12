@@ -791,6 +791,19 @@ same stats functions the tabs use — so a Summary figure always matches the
 tab behind it. Deliveries measures against budget only on whole months, as
 the tab does. Summary is cards, with no indigo hero of its own.
 
+Under each card's figures sits a short detail layer (user, 2026-10-12: "a
+little more detail, but not overwhelming") — a split or the names behind a
+number, a few lines at most, never a table: the source mix and top execs
+by orders; allocation and who missed same-day contact; ICE / BEV / Van
+units and average profit, loss-making count; Car and CV against budget;
+the latest cancellations with their reason or "Reason needed"; the
+strongest and weakest ranges (40+ deals) and the rival who undercuts us
+most. Keep it to that weight.
+
+Seven tabs don't fit a phone, so the tab row scrolls sideways in place, and
+`Card` carries `min-w-0` so a wide table scrolls inside its card instead of
+widening the page. Check new views at 390px wide for horizontal scroll.
+
 **Market Analysis is an overview, not a second copy of `/scraper`.** It
 reads the latest finished scrape's digest — the same `summariseRun` digest
 the Trends tab plots, cached in `scraper_run_summaries`
