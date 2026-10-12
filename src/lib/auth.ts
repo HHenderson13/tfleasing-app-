@@ -172,7 +172,6 @@ export interface SectionAccess {
   // Enquiry Tracker is readable by anyone signed in — the numbers are the
   // department's own performance, not customer or commercial data. Only the
   // upload route is admin-gated.
-  enquiries: boolean;
 }
 
 export function sectionAccess(u: CurrentUser | null): SectionAccess {
@@ -188,6 +187,5 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     // separately from view access.
     leaderboard: isAdmin(u) || isExec(u),
     myScorecard: !!u?.salesExecId,
-    enquiries: !!u,
   };
 }

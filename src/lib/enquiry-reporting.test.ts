@@ -4,7 +4,7 @@ import {
   reportableAfter,
   reportingHorizonFromInstant,
 } from "./business-hours";
-import { partitionByReportability } from "./enquiry-reporting";
+import { partitionByReportability, summariseResponse } from "./enquiry-reporting";
 
 const at = (y: number, m: number, d: number, hh = 0, mm = 0) =>
   Date.UTC(y, m - 1, d, hh, mm, 0, 0);
@@ -89,5 +89,28 @@ describe("partitionByReportability", () => {
     const { reportable, held } = partitionByReportability([row(17, 9)], null);
     expect(reportable).toHaveLength(1);
     expect(held).toHaveLength(0);
+  });
+});
+
+describe("summariseResponse", () => {
+  const row = (over: Partial<Parameters<typeof summariseResponse>[0][number]>) => ({
+    enquiryAt: 0, transferredAt: 1, contactedAt: 2, sameDayExpected: true, enquiryDay: "2026-10-01",
+    allocMins: 3, contactMins: 10, sameDayMet: true, ...over,
+  });
+
+  it("scores allocation and contact against target, and counts the misses", () => {
+    const s = summariseResponse([
+      row({}),
+      row({ allocMins: 9, contactMins: 40, sameDayMet: false }),
+      row({ contactedAt: null, contactMins: null, sameDayMet: false }),
+      row({ transferredAt: null, allocMins: null, sameDayExpected: false }),
+    ]);
+    expect(s).toMatchObject({
+      total: 4,
+      allocMeasured: 3, allocHit: 2, allocMissed: 1, allocAvg: 5,
+      contactMeasured: 3, contactHit: 2, contactMissed: 1, contactAvg: 20,
+      neverContacted: 1, noTransfer: 1,
+      sameDayExpected: 3, sameDayMet: 1, sameDayMissed: 2,
+    });
   });
 });

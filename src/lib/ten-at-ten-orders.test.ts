@@ -102,6 +102,8 @@ describe("parseOrderWorkbook", () => {
     expect(detectTenAtTenFile(file)).toBe("orders");
     const enquiryHeader = ["Date Time", "SE", "Dealer Location", "Customer", "Source", "NU", "Model", ...new Array(9).fill("x"), "Status"];
     expect(detectTenAtTenFile(workbook([enquiryHeader]))).toBe("enquiries");
+    const motorComplete = ["Dealer", "Created By", "Customer", "Customer Id", "Date Raised", "Type", ...new Array(9).fill("x"), "Date Transferred"];
+    expect(detectTenAtTenFile(workbook([motorComplete]))).toBe("response");
     expect(detectTenAtTenFile(workbook([["Created By", "Customer"]]))).toBeNull();
     expect(() => parseOrderWorkbook(workbook([["Created By", "Customer"]]))).toThrow(NotAnOrderListError);
   });
@@ -122,11 +124,19 @@ describe("order stats", () => {
   });
 
   it("groups by segment in fixed order and bands profit", () => {
-    expect(groupOrders(rows, ["segment"], "label").map((g) => g.label)).toEqual(["BEV Car", "Van"]);
-    expect(rows[0]).toMatchObject({ exec: "Declan Dunn", profitBand: "Loss", term: "60 months" });
-    expect(profitBand(0)).toBe("£0–£499");
-    expect(profitBand(1999.99)).toBe("£1,000–£1,999");
-    expect(profitBand(2000)).toBe("£2,000+");
+    const segs = groupOrders(rows, ["segment"], "label");
+    expect(segs.map((g) => g.label)).toEqual(["BEV Car", "Van"]);
+    // Each group carries its orders, for the customer drill-down.
+    expect(segs[0].rows.map((r) => r.customer).sort()).toEqual(["B", "C"]);
+    expect(groupOrders(rows, ["profitBand"], "label").map((g) => g.label)).toEqual(["−£1,000 and below", "£2,000 and above", "No profit figure"]);
+    expect(rows[0]).toMatchObject({ exec: "Declan Dunn", profitBand: "−£1,000 and below", term: "60 months" });
+    expect(profitBand(-1000)).toBe("−£1,000 and below");
+    expect(profitBand(-999.5)).toBe("−£999 to −£500");
+    expect(profitBand(-500)).toBe("−£999 to −£500");
+    expect(profitBand(-0.5)).toBe("−£499 to −£1");
+    expect(profitBand(0)).toBe("£0 to £499");
+    expect(profitBand(1999.99)).toBe("£1,000 to £1,999");
+    expect(profitBand(2000)).toBe("£2,000 and above");
     expect(profitBand(null)).toBe("No profit figure");
   });
 });

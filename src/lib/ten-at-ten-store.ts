@@ -296,16 +296,44 @@ export async function listTenAtTenUploads(limit = 25) {
   return db.select().from(tenAtTenUploads).orderBy(desc(tenAtTenUploads.uploadedAt)).limit(limit);
 }
 
+/**
+ * Log a MotorComplete export (Response times) in the 10 at 10 upload
+ * history. Its rows go through the Enquiry Tracker's own ingest
+ * (lib/enquiries.ts), which keeps its own audit table too; this row is so
+ * the one upload screen lists every file, whatever it fed.
+ */
+export async function recordResponseUpload(result: TenAtTenIngest, meta: { filename: string; userId: string }): Promise<void> {
+  const now = new Date();
+  await db.insert(tenAtTenUploads).values({
+    id: createHash("sha1").update(`${meta.filename}|${now.toISOString()}|response`).digest("hex").slice(0, 16),
+    filename: meta.filename,
+    rowsInFile: result.rowsInFile,
+    inserted: result.inserted,
+    updated: result.updated,
+    unchanged: result.unchanged,
+    excluded: result.excluded,
+    removed: result.removed,
+    firstDay: result.firstDay,
+    lastDay: result.lastDay,
+    uploadedAt: now,
+    uploadedByUserId: meta.userId,
+    kind: "response",
+  });
+}
+
 export interface HeldSummary { rows: number; firstDay: string | null; lastDay: string | null }
 
-export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary }> {
+export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; response: HeldSummary }> {
   const [e] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(enquiry_day) AS lo, MAX(enquiry_day) AS hi FROM ten_at_ten_enquiries`,
   );
   const [o] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(order_day) AS lo, MAX(order_day) AS hi FROM ten_at_ten_orders`,
   );
+  const [x] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
+    sql`SELECT COUNT(*) AS n, MIN(enquiry_day) AS lo, MAX(enquiry_day) AS hi FROM enquiries`,
+  );
   const held = (r: { n: number; lo: string | null; hi: string | null } | undefined): HeldSummary =>
     ({ rows: Number(r?.n ?? 0), firstDay: r?.lo ?? null, lastDay: r?.hi ?? null });
-  return { enquiries: held(e), orders: held(o) };
+  return { enquiries: held(e), orders: held(o), response: held(x) };
 }

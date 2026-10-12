@@ -5,6 +5,8 @@ import { UploadClient } from "./upload-client";
 
 export const dynamic = "force-dynamic";
 
+const KIND_LABEL: Record<string, string> = { enquiries: "Enquiry log", orders: "Order list", response: "MotorComplete export" };
+
 const fmtDay = (d: string | null) =>
   d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "—";
 
@@ -24,17 +26,18 @@ export default async function TenAtTenAdminPage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Upload data</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Upload Dealerweb exports — the <strong>enquiry log</strong> and the <strong>order list</strong> both go
-          in here, and each file is recognised from its columns. Files are merged <strong>line by line</strong>:
-          an enquiry is matched on when it was raised, the customer and the source; an order on its order date,
-          customer and vehicle. A line already held is overwritten with the newer file&apos;s values (Live becoming
-          Ordered, a profit settling) and a new one is added. Nothing else already stored is touched.
+          Three exports go in here, and each file is recognised from its columns: the Dealerweb{" "}
+          <strong>enquiry log</strong> (Enquiries), the Dealerweb <strong>order list</strong> (Orders) and the
+          MotorComplete <strong>enquiry export</strong> (Response times). Files are merged <strong>line by line</strong>:
+          a line already held is overwritten with the newer file&apos;s values (Live becoming Ordered, a profit
+          settling, a contact time corrected) and a new one is added. Nothing else already stored is touched.
           Anything under <strong>HaHe</strong> or <strong>JoRu</strong> is stripped out — and if a file shows a line
-          has been moved to either, it is removed from what&apos;s stored too.
+          has been moved to either, it is removed from what&apos;s stored too. Response times also leaves out
+          Prospect Call and Showroom enquiries and merged leads, as the Enquiry Tracker did.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-          {([["Enquiries", summary.enquiries], ["Orders", summary.orders]] as const).map(([label, h]) => (
+          {([["Enquiries", summary.enquiries], ["Orders", summary.orders], ["Response times", summary.response]] as const).map(([label, h]) => (
             <span key={label}>
               {label}:{" "}
               {h.rows > 0 ? (
@@ -62,7 +65,7 @@ export default async function TenAtTenAdminPage() {
                     <th className="px-3 py-2 text-right font-semibold">New</th>
                     <th className="px-3 py-2 text-right font-semibold">Overwritten</th>
                     <th className="px-3 py-2 text-right font-semibold">Unchanged</th>
-                    <th className="px-3 py-2 text-right font-semibold">HaHe / JoRu</th>
+                    <th className="px-3 py-2 text-right font-semibold">Left out</th>
                     <th className="px-3 py-2 text-right font-semibold">When</th>
                   </tr>
                 </thead>
@@ -70,7 +73,7 @@ export default async function TenAtTenAdminPage() {
                   {uploads.map((u) => (
                     <tr key={u.id}>
                       <td className="max-w-[220px] truncate px-4 py-2 font-medium text-slate-900" title={u.filename}>{u.filename}</td>
-                      <td className="px-3 py-2 text-xs text-slate-600">{u.kind === "orders" ? "Order list" : "Enquiry log"}</td>
+                      <td className="px-3 py-2 text-xs text-slate-600">{KIND_LABEL[u.kind] ?? u.kind}</td>
                       <td className="px-3 py-2 text-xs text-slate-600">{fmtDay(u.firstDay)} – {fmtDay(u.lastDay)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-slate-600">{u.rowsInFile}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-emerald-700">+{u.inserted}</td>

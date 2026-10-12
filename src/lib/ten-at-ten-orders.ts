@@ -12,6 +12,7 @@
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { dayKey, parseExportTimestamp } from "./business-hours";
+import { isMotorCompleteExportHeader } from "./enquiries-header";
 import { isEnquiryLogHeader, isExcludedExec, vehicleOf } from "./ten-at-ten";
 import type { Segment } from "./ten-at-ten-report";
 
@@ -162,18 +163,22 @@ export function isOrderListHeader(header: readonly unknown[]): boolean {
   return REQUIRED_HEADERS.every(([i, want]) => letters(header[i]) === want);
 }
 
+export type TenAtTenFileKind = "enquiries" | "orders" | "response";
+
 /**
- * Which 10 at 10 report a file is, from its header row: the enquiry log
- * and the order list are both "ag-grid" exports but lay their columns out
- * differently. null for anything else.
+ * Which 10 at 10 report a file is, from its header row: the Dealerweb
+ * enquiry log and order list, and the MotorComplete enquiry export that
+ * drives Response times, are all "ag-grid" exports with different column
+ * layouts. null for anything else.
  */
-export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): "enquiries" | "orders" | null {
+export function detectTenAtTenFile(buf: ArrayBuffer | Buffer): TenAtTenFileKind | null {
   const wb = XLSX.read(buf, { type: Buffer.isBuffer(buf) ? "buffer" : "array", sheetRows: 1 });
   const ws = wb.Sheets[wb.SheetNames.includes("ag-grid") ? "ag-grid" : wb.SheetNames[0]];
   if (!ws) return null;
   const header = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null })[0] ?? [];
   if (isEnquiryLogHeader(header)) return "enquiries";
   if (isOrderListHeader(header)) return "orders";
+  if (isMotorCompleteExportHeader(header)) return "response";
   return null;
 }
 

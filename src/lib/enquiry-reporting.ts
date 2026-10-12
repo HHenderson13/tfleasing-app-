@@ -1,4 +1,4 @@
-import { isEnquiryReportable, reportableAfter } from "./business-hours";
+import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, isEnquiryReportable, reportableAfter } from "./business-hours";
 
 export interface ReportingRow {
   enquiryAt: number;
@@ -64,4 +64,59 @@ export function isSameDayReportable(row: ReportingRow): boolean {
 /** When a held-back enquiry will become reportable — for the UI note. */
 export function heldUntil(row: ReportingRow): number {
   return reportableAfter(row.enquiryAt);
+}
+
+// ─── Summary ───────────────────────────────────────────────────────────
+
+export interface ResponseRow extends ReportingRow {
+  allocMins: number | null;
+  contactMins: number | null;
+  sameDayMet: boolean;
+}
+
+export interface ResponseSummary {
+  total: number;
+  allocMeasured: number;
+  allocHit: number;
+  allocMissed: number;
+  allocAvg: number | null;
+  contactMeasured: number;
+  contactHit: number;
+  contactMissed: number;
+  contactAvg: number | null;
+  neverContacted: number;
+  noTransfer: number;
+  sameDayExpected: number;
+  sameDayMet: number;
+  sameDayMissed: number;
+}
+
+/**
+ * Response-time figures for a set of REPORTABLE enquiries (see
+ * partitionByReportability): every row has had a full working day, so a
+ * blank transfer or contact is a genuine miss rather than data in flight.
+ * Allocation is sales support's clock (raised → transferred); contact is
+ * the exec's (transferred → first contact). Both in business minutes.
+ */
+export function summariseResponse(rows: readonly ResponseRow[]): ResponseSummary {
+  const alloc = rows.map((r) => r.allocMins).filter((n): n is number => n != null);
+  const contact = rows.map((r) => r.contactMins).filter((n): n is number => n != null);
+  const sde = rows.filter((r) => isSameDayReportable(r));
+  const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  return {
+    total: rows.length,
+    allocMeasured: alloc.length,
+    allocHit: alloc.filter((n) => n <= ALLOCATION_TARGET_MINS).length,
+    allocMissed: alloc.filter((n) => n > ALLOCATION_TARGET_MINS).length,
+    allocAvg: avg(alloc),
+    contactMeasured: contact.length,
+    contactHit: contact.filter((n) => n <= CONTACT_TARGET_MINS).length,
+    contactMissed: contact.filter((n) => n > CONTACT_TARGET_MINS).length,
+    contactAvg: avg(contact),
+    neverContacted: rows.filter((r) => isContactMissing(r)).length,
+    noTransfer: rows.filter((r) => isTransferMissing(r)).length,
+    sameDayExpected: sde.length,
+    sameDayMet: sde.filter((r) => r.sameDayMet).length,
+    sameDayMissed: sde.filter((r) => !r.sameDayMet).length,
+  };
 }

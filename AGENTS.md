@@ -50,8 +50,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/email/test`                  | `requireAdmin` |
 | `/api/blob/upload`                 | session + admin role check on token issue |
 | `/ten-at-ten`, `/ten-at-ten/admin` | `requireAdmin` (10 at 10 report + its uploads; the upload action re-checks) |
-| `/enquiries`                       | `requireUser`                  |
-| `/enquiries/upload`                | `requireAdmin`                 |
+| `/enquiries`, `/enquiries/upload`  | redirect to `/ten-at-ten`, `/ten-at-ten/admin` — the Enquiry Tracker moved into 10 at 10 (Response times) |
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
 | `/broker/terms`                    | `requireBrokerUser` (must be reachable BEFORE acceptance) |
 | `/broker/login`, `/broker/setup/[token]` | public (broker portal)   |
@@ -775,6 +774,24 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
 - No over-time chart, and "Build a breakdown" opens collapsed (user,
   2026-10-12: too much screen space). Every nested table starts collapsed.
 
+### Response times (was the Enquiry Tracker)
+
+Merged into 10 at 10 at the user's request (2026-10-12) — one place, one
+upload screen, 10 at 10's format. Data and rules are the Enquiry Tracker's,
+unchanged: the MotorComplete enquiry export, `lib/enquiries.ts` parse and
+ingest, business-hours maths, and "only judged after a full working day"
+(`partitionByReportability`). `summariseResponse` moved into
+`lib/enquiry-reporting.ts` so the tab shares it. The upload router knows the
+export by `lib/enquiries-header.ts` (pure), which `lib/enquiries.ts` now
+reads its header check from too.
+
+- **Access narrowed:** the tracker was open to every signed-in user; 10 at 10
+  is admin-only, so non-admins no longer see response times.
+- `/enquiries` and `/enquiries/upload` redirect; the old page, client and
+  upload action are deleted; the homepage card is gone.
+- The PWA manifest moved with it: start_url / scope are `/ten-at-ten`.
+- Every exec, day and "needs attention" line opens into its customers.
+
 ### Orders section
 
 Built from the Dealerweb **order list** (B SE, D Customer, E Order Date,
@@ -803,6 +820,10 @@ files; `detectTenAtTenFile` tells them apart by header.
   or refreshes real orders (on the Sep 2026 files: 38 identical, 16 with a
   settled profit or delivery overwritten).
 - HaHe / JoRu are stripped from orders too ("all data").
+- Headline tiles: orders, total profit, average profit — no loss-making
+  tile (user, 2026-10-12). Profit bands split losses three ways (−£1,000 and
+  below, −£999 to −£500, −£499 to −£1). By exec and profit bands open into
+  the individual orders; groups carry their `rows` for exactly this.
 
 ## Sales leaderboard (Pole Position)
 

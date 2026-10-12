@@ -16,16 +16,23 @@ export const NOT_STATED = "Not stated";
 export const SEGMENTS = ["ICE Car", "BEV Car", "Van"] as const;
 export type Segment = (typeof SEGMENTS)[number];
 
-// Profit bands for orders, in display order.
-export const PROFIT_BANDS = ["Loss", "£0–£499", "£500–£999", "£1,000–£1,999", "£2,000+", "No profit figure"] as const;
+// Profit bands for orders, in display order — losses split by size, since
+// "a loss" covers everything from a rounding error to a £1,800 hit.
+export const PROFIT_BANDS = [
+  "−£1,000 and below", "−£999 to −£500", "−£499 to −£1",
+  "£0 to £499", "£500 to £999", "£1,000 to £1,999", "£2,000 and above",
+  "No profit figure",
+] as const;
 
 export function profitBand(p: number | null): string {
   if (p == null) return "No profit figure";
-  if (p < 0) return "Loss";
-  if (p < 500) return "£0–£499";
-  if (p < 1000) return "£500–£999";
-  if (p < 2000) return "£1,000–£1,999";
-  return "£2,000+";
+  if (p <= -1000) return "−£1,000 and below";
+  if (p <= -500) return "−£999 to −£500";
+  if (p < 0) return "−£499 to −£1";
+  if (p < 500) return "£0 to £499";
+  if (p < 1000) return "£500 to £999";
+  if (p < 2000) return "£1,000 to £1,999";
+  return "£2,000 and above";
 }
 
 // ─── Wire format ───────────────────────────────────────────────────────────
@@ -205,13 +212,15 @@ function compareLabels(dim: string, a: string, b: string): number {
   return a.localeCompare(b, "en-GB", { numeric: true, sensitivity: "base" });
 }
 
-export interface Nested<S> {
+export interface Nested<S, R = unknown> {
   key: string;
   label: string;
   stats: S;
   /** Share of the rows in the level above (or the whole selection). */
   share: number;
-  children: Nested<S>[];
+  /** The rows behind the figures, for drilling down to individual customers. */
+  rows: R[];
+  children: Nested<S, R>[];
 }
 
 /**
@@ -227,7 +236,7 @@ function nest<R, S>(
   value: ((s: S) => number) | null,
   tiebreak: (s: S) => number,
   parentTotal?: number,
-): Nested<S>[] {
+): Nested<S, R>[] {
   if (dims.length === 0) return [];
   const [dim, ...rest] = dims;
   const total = parentTotal ?? rows.length;
@@ -242,6 +251,7 @@ function nest<R, S>(
     label: key,
     stats: statsOf(rs),
     share: total > 0 ? (rs.length / total) * 100 : 0,
+    rows: rs,
     children: nest(rs, rest, keyOf, statsOf, value, tiebreak, rs.length),
   }));
   return groups.sort((x, y) =>
@@ -251,7 +261,7 @@ function nest<R, S>(
   );
 }
 
-export type Group = Nested<Stats>;
+export type Group = Nested<Stats, ReportRow>;
 
 function sortValue(s: Stats, sort: SortKey): number {
   if (sort === "conversion") return conversionPct(s) ?? -1;
@@ -381,7 +391,7 @@ export const orderDimLabel = (k: OrderDimKey) => ORDER_DIMENSIONS.find((d) => d.
 
 export type OrderSortKey = "orders" | "profit" | "avg" | "loss" | "label";
 
-export type OrderGroup = Nested<OrderStats>;
+export type OrderGroup = Nested<OrderStats, OrderRow>;
 
 function orderSortValue(s: OrderStats, sort: OrderSortKey): number {
   if (sort === "avg") return avgProfit(s) ?? -Infinity;

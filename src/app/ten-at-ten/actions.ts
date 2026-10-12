@@ -3,22 +3,24 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
+import { NotAnEnquiryExportError, ingestEnquiries, parseEnquiryWorkbook } from "@/lib/enquiries";
 import { NotAnEnquiryLogError, parseTenAtTenWorkbook } from "@/lib/ten-at-ten";
-import { NotAnOrderListError, detectTenAtTenFile, parseOrderWorkbook } from "@/lib/ten-at-ten-orders";
-import { ingestTenAtTen, ingestTenAtTenOrders, type TenAtTenIngest } from "@/lib/ten-at-ten-store";
+import { NotAnOrderListError, detectTenAtTenFile, parseOrderWorkbook, type TenAtTenFileKind } from "@/lib/ten-at-ten-orders";
+import { ingestTenAtTen, ingestTenAtTenOrders, recordResponseUpload, type TenAtTenIngest } from "@/lib/ten-at-ten-store";
 
 export interface TenAtTenUploadOutcome {
   ok: boolean;
   error?: string;
   filename?: string;
-  kind?: "enquiries" | "orders";
+  kind?: TenAtTenFileKind;
   result?: TenAtTenIngest;
 }
 
 /**
- * Merge one Dealerweb export into 10 at 10, line by line. The file says
- * what it is: the enquiry log and the order list are told apart by their
- * header row, so one drop zone takes both. Admin only.
+ * Merge one export into 10 at 10, line by line. The file says what it is
+ * — the Dealerweb enquiry log, the Dealerweb order list, or the
+ * MotorComplete enquiry export behind Response times — told apart by its
+ * header row, so one drop zone takes all three. Admin only.
  */
 export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTenUploadOutcome> {
   const user = await requireAdmin();
@@ -31,7 +33,7 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     const buf = Buffer.from(await file.arrayBuffer());
     const kind = detectTenAtTenFile(buf);
     if (!kind) {
-      return { ok: false, error: `${file.name}: not the enquiry log or the order list — the columns don't match either.` };
+      return { ok: false, error: `${file.name}: not the enquiry log, the order list or the MotorComplete enquiry export — the columns don't match any of them.` };
     }
     const meta = { filename: file.name, userId: user.id };
     let result: TenAtTenIngest;
@@ -39,16 +41,37 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
       const parsed = parseTenAtTenWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
       result = await ingestTenAtTen(parsed, meta);
-    } else {
+    } else if (kind === "orders") {
       const parsed = parseOrderWorkbook(buf);
       if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
       result = await ingestTenAtTenOrders(parsed, meta);
+    } else {
+      // The Enquiry Tracker's own parse and merge, rules unchanged.
+      const parsed = parseEnquiryWorkbook(buf);
+      if (parsed.rows.length === 0 && parsed.rowsInFile === 0) return { ok: false, error: `${file.name}: no rows found.` };
+      const r = await ingestEnquiries(parsed, meta);
+      const days = parsed.rows.map((x) => x.enquiryDay).sort();
+      result = {
+        rowsInFile: r.rowsInFile,
+        inserted: r.inserted,
+        updated: r.updated,
+        unchanged: r.unchanged,
+        excluded: r.skippedExcluded + r.skippedNotLead + r.skippedLostSaleReason,
+        removed: r.removedRetroactively,
+        duplicatesCollapsed: r.duplicatesCollapsed,
+        unreadable: r.skippedUnparseable,
+        firstDay: days[0] ?? null,
+        lastDay: days[days.length - 1] ?? null,
+      };
+      await recordResponseUpload(result, meta);
     }
     revalidatePath("/ten-at-ten");
     revalidatePath("/ten-at-ten/admin");
     return { ok: true, filename: file.name, kind, result };
   } catch (e) {
-    if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError) return { ok: false, error: `${file.name}: ${e.message}` };
+    if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError || e instanceof NotAnEnquiryExportError) {
+      return { ok: false, error: `${file.name}: ${e.message}` };
+    }
     logError("ten-at-ten/upload", e, { filename: file.name });
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
   }

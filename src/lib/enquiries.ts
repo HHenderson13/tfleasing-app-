@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { db } from "@/db";
 import { enquiryUploads } from "@/db/schema";
+import { MOTORCOMPLETE_REQUIRED_HEADERS } from "./enquiries-header";
 import { sql } from "drizzle-orm";
 import {
   ALLOCATION_TARGET_MINS,
@@ -172,13 +173,9 @@ export interface ParseOutcome {
  * uploading one by mistake would read whatever happened to sit in those
  * positions and silently ingest nonsense.
  */
-const REQUIRED_HEADERS: ReadonlyArray<readonly [number, string]> = [
-  [COL.salesExec, "created by"],
-  [COL.customer, "customer"],
-  [COL.enquiryAt, "date raised"],
-  [COL.type, "type"],
-  [COL.transferredAt, "date transferred"],
-];
+// Shared with the 10 at 10 upload router (lib/enquiries-header.ts), which
+// uses it to recognise this export among the Dealerweb ones.
+const REQUIRED_HEADERS = MOTORCOMPLETE_REQUIRED_HEADERS;
 
 export class NotAnEnquiryExportError extends Error {
   constructor(readonly found: string) {

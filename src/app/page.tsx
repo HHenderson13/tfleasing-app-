@@ -16,7 +16,7 @@ const TILES: Tile[] = [
   { key: "orders",    href: "/orders/delivered", title: "Delivered", desc: "Deals handed over to the customer.", tone: "from-emerald-500 to-emerald-700" },
   { key: "reports",   href: "/reports",   title: "Reports",   desc: "Funder, source, model and EV performance.",      tone: "from-rose-500 to-fuchsia-600" },
   { key: "forecast",  href: "/forecast",  title: "Forecast",  desc: "Monthly profit forecasts — Lease Car, Lease CV and General Overheads from dealbook uploads.", tone: "from-cyan-500 to-blue-700" },
-  { key: "admin",     href: "/ten-at-ten", title: "10 at 10", desc: "Enquiries, orders and conversion by source, exec and model — any day, week, month, quarter or range.", tone: "from-indigo-600 to-blue-800" },
+  { key: "admin",     href: "/ten-at-ten", title: "10 at 10", desc: "Enquiries and conversion, response times against target, and orders and profit — any day, week, month, quarter or range.", tone: "from-indigo-600 to-blue-800" },
   { key: "admin",     href: "/scraper", title: "Market Analysis", desc: "Compare our rates to competitors across the market.",    tone: "from-indigo-500 to-indigo-700" },
   { key: "admin",     href: "/funders", title: "Funder Comparison", desc: "Compare funder rates side by side across our ratebooks.", tone: "from-fuchsia-500 to-purple-700" },
   { key: "admin",     href: "/broker-ratebooks", title: "Broker Ratebooks", desc: "Export MotorComplete & Manual broker ratebooks across commission tiers.", tone: "from-amber-500 to-orange-700" },
@@ -24,7 +24,6 @@ const TILES: Tile[] = [
   { key: "admin",     href: "/admin/brokers", title: "Brokers", desc: "Add brokers and provision their users for the broker portal.", tone: "from-sky-600 to-indigo-700" },
   { key: "myScorecard", href: "/sales-leaderboard/me", title: "My Scorecard", desc: "Your rank, your badges, your numbers — month and year to date.", tone: "from-rose-500 to-pink-600" },
   { key: "leaderboard", href: "/sales-leaderboard", title: "Pole Position", desc: "Who's leading the pack — orders, deliveries, insurance and conversion.", tone: "from-pink-500 to-rose-600" },
-  { key: "enquiries", href: "/enquiries", title: "Enquiry Tracker", desc: "Allocation and first-contact speed against target, by department and exec.", tone: "from-emerald-500 to-teal-700" },
 ];
 
 export const dynamic = "force-dynamic";
