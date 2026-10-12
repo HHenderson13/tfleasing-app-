@@ -3,47 +3,32 @@
 import { db } from "@/db";
 import {
   salesExecs,
-  salesLeaderboardMonthly,
   salesLeaderboardNameMap,
   salesLeaderboardParticipants,
-  salesLeaderboardUploads,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { revalidatePath, updateTag } from "next/cache";
-import { LEADERBOARD_CACHE_TAG } from "@/lib/sales-leaderboard-data";
 
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { del } from "@vercel/blob";
 import {
-  attributeReportRows,
   enquiryInbound,
   enquirySales,
-  parseDeliveredList,
-  parseEnquiryLog,
-  parseOrderList,
   type DeliveredParseRow,
   type EnquiryParseRow,
   type LeaderboardReportType,
   type OrderListParseRow,
 } from "@/lib/sales-leaderboard";
+import {
+  feedPolePositionFromTenAtTen,
+  invalidateLeaderboard,
+  reattributeAllStoredMonths,
+  type ParsedRows,
+} from "@/lib/sales-leaderboard-store";
 
 type ReportType = LeaderboardReportType;
 const REPORT_TYPES: ReportType[] = ["orders", "delivered", "enquiry"];
-
-// Single helper — every admin mutation invalidates both the cross-request
-// cache tag (so loadMonthSnapshot/Ytd/Archive/Dashboard rebuild on the next
-// read) and the per-path render caches.
-function invalidateLeaderboard() {
-  // Next 16's updateTag is the server-action-friendly cache-bust — it
-  // signals read-your-own-writes so the next read on the same request
-  // sees fresh data, not the previous cached value.
-  updateTag(LEADERBOARD_CACHE_TAG);
-  revalidatePath("/sales-leaderboard");
-  revalidatePath("/sales-leaderboard/admin");
-  revalidatePath("/sales-leaderboard/me");
-}
 
 // ─── Participants ──────────────────────────────────────────────────────────
 
@@ -135,187 +120,24 @@ export async function removeNameMappingAction(reportCode: string) {
   return { ok: true as const };
 }
 
-// ─── Report uploads ────────────────────────────────────────────────────────
+// ─── Re-process ────────────────────────────────────────────────────────────
+//
+// The files are uploaded to 10 at 10, which feeds the board as it goes
+// (lib/sales-leaderboard-store.ts). Re-process pulls from 10 at 10 again,
+// then re-applies every stored month — history included — through the
+// current name map and participants.
 
-const uploadSchema = z.object({
-  yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-  reportType: z.enum(["orders", "delivered", "enquiry"]),
-});
-
-export interface UploadResult {
-  ok: boolean;
-  error?: string;
-  reportType?: string;
-  yearMonth?: string;
-  parsed?: { rowsTotal: number; rowsAttributed: number };
-  matched?: number;
-  unmapped?: { reportCode: string; count: number }[];
-}
-
-export async function uploadReportAction(formData: FormData): Promise<UploadResult> {
-  const me = await requireAdmin();
-  try {
-    const file = formData.get("file") as File | null;
-    const yearMonth = String(formData.get("yearMonth") ?? "");
-    const reportType = String(formData.get("reportType") ?? "");
-    const parsed = uploadSchema.safeParse({ yearMonth, reportType });
-    if (!file) return { ok: false, error: "No file uploaded" };
-    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
-    if (file.size > 10 * 1024 * 1024) return { ok: false, error: "File over 10 MB" };
-
-    const buffer = await file.arrayBuffer();
-    const now = new Date();
-
-    // Parse the XLSX into per-report-code aggregates. We persist these as
-    // JSON so a later change to the name map / participants can re-attribute
-    // without the admin re-uploading. See `attributeUpload` below.
-    const parsedRows = runParse(parsed.data.reportType, buffer);
-    const rowsTotal = parsedRows.rowsTotal;
-
-    await db.insert(salesLeaderboardUploads).values({
-      yearMonth: parsed.data.yearMonth,
-      reportType: parsed.data.reportType,
-      rowCount: rowsTotal,
-      uploadedAt: now,
-      uploadedByUserId: me.id,
-      parsedData: JSON.stringify(parsedRows.rows),
-    });
-
-    const attribution = await attributeUpload(parsed.data.yearMonth, parsed.data.reportType, parsedRows.rows, now);
-
-  invalidateLeaderboard();
-
-    return {
-      ok: true,
-      reportType: parsed.data.reportType,
-      yearMonth: parsed.data.yearMonth,
-      parsed: { rowsTotal, rowsAttributed: parsedRows.rowsAttributed },
-      matched: attribution.matched,
-      unmapped: attribution.unmapped,
-    };
-  } catch (e) {
-    logError("sales-leaderboard/upload", e);
-    return { ok: false, error: e instanceof Error ? e.message : "Upload failed" };
-  }
-}
-
-// Manually trigger a re-attribute (exposed for the "Re-process" button on
-// the Uploads tab — useful when the admin's just done a bunch of mapping
-// changes and wants to confirm the numbers look right).
 export async function reattributeAction() {
-  await requireAdmin();
+  const me = await requireAdmin();
+  let fed = 0;
+  try {
+    fed = (await feedPolePositionFromTenAtTen(me.id)).length;
+  } catch (e) {
+    logError("sales-leaderboard/feed", e);
+  }
   const count = await reattributeAllStoredMonths();
   invalidateLeaderboard();
-  return { ok: true as const, processed: count };
-}
-
-// ─── Attribution core ──────────────────────────────────────────────────────
-//
-// Single source of truth for "given parsed report rows for a (yearMonth,
-// reportType) slot, apply them to the monthly stats table using the
-// current name map + participants". Used by uploads and by re-attribute.
-
-type ParsedRows = OrderListParseRow[] | DeliveredParseRow[] | EnquiryParseRow[];
-
-function runParse(reportType: ReportType, buffer: ArrayBuffer): { rows: ParsedRows; rowsTotal: number; rowsAttributed: number } {
-  if (reportType === "orders") {
-    const out = parseOrderList(buffer);
-    return { rows: out.rows, rowsTotal: out.summary.rowsTotal, rowsAttributed: out.summary.rowsAttributed };
-  }
-  if (reportType === "delivered") {
-    const out = parseDeliveredList(buffer);
-    return { rows: out.rows, rowsTotal: out.summary.rowsTotal, rowsAttributed: out.summary.rowsAttributed };
-  }
-  const out = parseEnquiryLog(buffer);
-  return { rows: out.rows, rowsTotal: out.summary.rowsTotal, rowsAttributed: out.summary.rowsAttributed };
-}
-
-interface AttributionResult { matched: number; unmapped: { reportCode: string; count: number }[] }
-
-async function attributeUpload(
-  yearMonth: string,
-  reportType: ReportType,
-  rows: ParsedRows,
-  now: Date,
-): Promise<AttributionResult> {
-  const [mapRows, participants] = await Promise.all([
-    db.select().from(salesLeaderboardNameMap),
-    db
-      .select({ salesExecId: salesLeaderboardParticipants.salesExecId })
-      .from(salesLeaderboardParticipants)
-      .where(eq(salesLeaderboardParticipants.active, true)),
-  ]);
-  const codeToExec = new Map(mapRows.map((m) => [m.reportCode, m.salesExecId]));
-  const participantIds = new Set(participants.map((p) => p.salesExecId));
-
-  const { byExec, matched, unmapped } = attributeReportRows(reportType, rows, codeToExec, participantIds);
-
-  const writes: Promise<void>[] = [];
-  for (const [execId, vals] of byExec) {
-    const setFields: Record<string, unknown> = {};
-    if (reportType === "orders") {
-      setFields.orderCount = vals.orderCount;
-      setFields.latestVehicle = vals.latestVehicle;
-      setFields.ordersUpdatedAt = now;
-    } else if (reportType === "delivered") {
-      setFields.deliveryCount = vals.deliveryCount;
-      setFields.insuranceCount = vals.insuranceCount;
-      setFields.deliveriesUpdatedAt = now;
-    } else {
-      setFields.enquiryCount = vals.enquiryCount;
-      setFields.salesCount = vals.salesCount;
-      // Written every time, NULL included, so a re-processed old upload
-      // clears an inbound figure rather than leaving a stale one behind.
-      setFields.inboundEnquiryCount = vals.inboundEnquiryCount;
-      setFields.inboundSalesCount = vals.inboundSalesCount;
-      setFields.enquiriesUpdatedAt = now;
-    }
-    writes.push(
-      db
-        .insert(salesLeaderboardMonthly)
-        .values({ yearMonth, salesExecId: execId, ...setFields })
-        .onConflictDoUpdate({
-          target: [salesLeaderboardMonthly.yearMonth, salesLeaderboardMonthly.salesExecId],
-          set: setFields,
-        })
-        .then(() => undefined),
-    );
-  }
-  await Promise.all(writes);
-
-  return { matched, unmapped };
-}
-
-// Walk every (yearMonth, reportType) slot we have parsed data for, take the
-// most recent upload per slot, and re-apply the attribution. Cheap — at most
-// 12 months × 3 reports = 36 slots per year, and each slot writes ≤ a dozen
-// rows.
-async function reattributeAllStoredMonths(): Promise<number> {
-  let processed = 0;
-  const now = new Date();
-  for (const reportType of REPORT_TYPES) {
-    const slots = await db.all<{ year_month: string; id: number; parsed_data: string | null }>(sql`
-      SELECT year_month, id, parsed_data
-      FROM sales_leaderboard_uploads
-      WHERE report_type = ${reportType}
-        AND id IN (
-          SELECT MAX(id) FROM sales_leaderboard_uploads
-          WHERE report_type = ${reportType}
-          GROUP BY year_month
-        )
-    `);
-    for (const slot of slots) {
-      if (!slot.parsed_data) continue; // Pre-self-healing upload — admin needs to re-upload that one
-      try {
-        const rows = JSON.parse(slot.parsed_data) as ParsedRows;
-        await attributeUpload(slot.year_month, reportType, rows, now);
-        processed++;
-      } catch (e) {
-        logError("sales-leaderboard/reattribute", e, { reportType, yearMonth: slot.year_month });
-      }
-    }
-  }
-  return processed;
+  return { ok: true as const, processed: count, fed };
 }
 
 // ─── Diagnostic ────────────────────────────────────────────────────────────
@@ -359,7 +181,7 @@ export async function loadUploadDetailAction(input: { yearMonth: string; reportT
     SELECT id, uploaded_at, parsed_data
     FROM sales_leaderboard_uploads
     WHERE year_month = ${yearMonth} AND report_type = ${reportType}
-    ORDER BY uploaded_at DESC LIMIT 1
+    ORDER BY id DESC LIMIT 1
   `);
   if (slot.length === 0) return { ok: false, error: "No upload for that month yet" };
   const top = slot[0];
@@ -437,22 +259,14 @@ export async function loadAdminContext() {
     db.select().from(salesExecs).orderBy(salesExecs.name),
     db.select().from(salesLeaderboardParticipants),
     db.select().from(salesLeaderboardNameMap),
-    db.all<{ year_month: string; report_type: string; uploaded_at: number; row_count: number; has_parsed: number; has_sources: number }>(sql`
-      SELECT year_month, report_type, MAX(uploaded_at) as uploaded_at,
-             (SELECT row_count FROM sales_leaderboard_uploads u2
-               WHERE u2.year_month = u.year_month AND u2.report_type = u.report_type
-               ORDER BY u2.uploaded_at DESC LIMIT 1) as row_count,
-             (SELECT CASE WHEN parsed_data IS NOT NULL THEN 1 ELSE 0 END
-                FROM sales_leaderboard_uploads u3
-                WHERE u3.year_month = u.year_month AND u3.report_type = u.report_type
-                ORDER BY u3.uploaded_at DESC LIMIT 1) as has_parsed,
-             (SELECT CASE WHEN parsed_data LIKE '%"sourceStatusCounts"%' THEN 1 ELSE 0 END
-                FROM sales_leaderboard_uploads u4
-                WHERE u4.year_month = u.year_month AND u4.report_type = u.report_type
-                ORDER BY u4.uploaded_at DESC LIMIT 1) as has_sources
+    // The latest upload per (month, report) — the one the board shows.
+    db.all<{ year_month: string; report_type: string; uploaded_at: number; row_count: number; has_parsed: number; has_sources: number; source: string | null }>(sql`
+      SELECT u.year_month, u.report_type, u.uploaded_at, u.row_count, u.source,
+             CASE WHEN u.parsed_data IS NOT NULL THEN 1 ELSE 0 END AS has_parsed,
+             CASE WHEN u.parsed_data LIKE '%"sourceStatusCounts"%' THEN 1 ELSE 0 END AS has_sources
       FROM sales_leaderboard_uploads u
-      GROUP BY year_month, report_type
-      ORDER BY year_month DESC, report_type ASC
+      WHERE u.id IN (SELECT MAX(id) FROM sales_leaderboard_uploads GROUP BY year_month, report_type)
+      ORDER BY u.year_month DESC, u.report_type ASC
     `),
   ]);
   const participantByExec = new Map(participantsRows.map((p) => [p.salesExecId, p]));
@@ -475,6 +289,8 @@ export async function loadAdminContext() {
       // Enquiry logs only: false means the month has no Inbound Conversion
       // until the log is uploaded again.
       hasSourceData: Number(u.has_sources) === 1,
+      // 'ten-at-ten' once 10 at 10 feeds the month; 'upload' for history.
+      source: u.source === "ten-at-ten" ? "ten-at-ten" as const : "upload" as const,
     })),
   };
 }

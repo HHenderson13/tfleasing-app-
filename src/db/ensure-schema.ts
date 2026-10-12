@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 56;
+const SCHEMA_VERSION = 57;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -883,6 +883,10 @@ async function ensureSalesLeaderboardTables() {
   // src/app/sales-leaderboard/admin/actions.ts.
   await ensureColumns("sales_leaderboard_uploads", [
     { name: "parsed_data", sqlType: "TEXT" },
+    // Where the figures came from: 'upload' (Pole Position's own upload
+    // screen, the history) or 'ten-at-ten' (derived from 10 at 10's data —
+    // see lib/sales-leaderboard-store.ts).
+    { name: "source", sqlType: "TEXT NOT NULL DEFAULT 'upload'" },
   ]);
   await db.run(sql.raw(`
     CREATE INDEX IF NOT EXISTS idx_sales_leaderboard_uploads_slot
@@ -1035,6 +1039,9 @@ async function ensureTenAtTenTables() {
     await ensureColumns(table, [
       { name: "registration", sqlType: "TEXT" },
       { name: "last_seen_at", sqlType: "INTEGER" },
+      // Insurance products on the line (non-zero cells in W:AC) — Pole
+      // Position's Insurance metric, now fed from here.
+      { name: "insurance_count", sqlType: "INTEGER" },
     ]);
   }
   await db.run(sql.raw(`

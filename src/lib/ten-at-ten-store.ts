@@ -151,12 +151,13 @@ export async function ingestTenAtTen(parsed: TenAtTenParse, meta: { filename: st
 
 // ─── Orders ────────────────────────────────────────────────────────────────
 
-type OrderComparable = Pick<TenAtTenOrder, "exec" | "vehicleRaw" | "product" | "termMonths" | "funder" | "delivery" | "deliveryDay" | "deliveryStatus" | "registration" | "profit">;
+type OrderComparable = Pick<TenAtTenOrder, "exec" | "vehicleRaw" | "product" | "termMonths" | "funder" | "delivery" | "deliveryDay" | "deliveryStatus" | "registration" | "profit"> & { insuranceCount: number | null };
 
 function sameOrder(a: OrderComparable, b: OrderComparable): boolean {
   return a.exec === b.exec && a.vehicleRaw === b.vehicleRaw && a.product === b.product && a.termMonths === b.termMonths
     && a.funder === b.funder && a.delivery === b.delivery && a.deliveryDay === b.deliveryDay
-    && a.deliveryStatus === b.deliveryStatus && a.registration === b.registration && a.profit === b.profit;
+    && a.deliveryStatus === b.deliveryStatus && a.registration === b.registration && a.profit === b.profit
+    && a.insuranceCount === b.insuranceCount;
 }
 
 // The two Dealbook reports share columns and keys, so one merge serves both;
@@ -206,15 +207,15 @@ export async function ingestDealbook(
     const found = await db.all<{
       id: string; exec: string; vehicle_raw: string | null; product: string | null; term_months: number | null;
       funder: string | null; delivery: string | null; delivery_day: string | null; delivery_status: string | null;
-      registration: string | null; profit: number | null;
-    }>(sql`SELECT id, exec, vehicle_raw, product, term_months, funder, delivery, delivery_day, delivery_status, registration, profit
+      registration: string | null; profit: number | null; insurance_count: number | null;
+    }>(sql`SELECT id, exec, vehicle_raw, product, term_months, funder, delivery, delivery_day, delivery_status, registration, profit, insurance_count
            FROM ${table} WHERE id IN (${inList(ids.slice(i, i + 400))})`);
     for (const f of found) {
       existing.set(f.id, {
         exec: f.exec, vehicleRaw: f.vehicle_raw ?? "", product: f.product ?? "", termMonths: f.term_months,
         funder: f.funder ?? "", delivery: f.delivery ?? "", deliveryDay: f.delivery_day,
         deliveryStatus: (f.delivery_status ?? "") as OrderComparable["deliveryStatus"], registration: f.registration,
-        profit: f.profit,
+        profit: f.profit, insuranceCount: f.insurance_count == null ? null : Number(f.insurance_count),
       });
     }
   }
@@ -232,13 +233,13 @@ export async function ingestDealbook(
     const values = writes.slice(i, i + 50).map((r) => sql`(
       ${r.id}, ${r.orderedAt}, ${r.orderDay}, ${r.exec}, ${r.customer}, ${r.vehicleRaw}, ${r.model},
       ${r.derivative}, ${r.derivativeKey}, ${r.segment}, ${r.product}, ${r.termMonths}, ${r.funder},
-      ${r.delivery}, ${r.deliveryDay}, ${r.deliveryStatus}, ${r.registration}, ${r.profit}, ${nowSec}, ${nowSec}
+      ${r.delivery}, ${r.deliveryDay}, ${r.deliveryStatus}, ${r.registration}, ${r.insuranceCount}, ${r.profit}, ${nowSec}, ${nowSec}
     )`);
     await db.run(sql`
       INSERT INTO ${table} (
         id, ordered_at, order_day, exec, customer, vehicle_raw, model,
         derivative, derivative_key, segment, product, term_months, funder,
-        delivery, delivery_day, delivery_status, registration, profit, first_uploaded_at, updated_at
+        delivery, delivery_day, delivery_status, registration, insurance_count, profit, first_uploaded_at, updated_at
       ) VALUES ${sql.join(values, sql`, `)}
       ON CONFLICT(id) DO UPDATE SET
         exec = excluded.exec,
@@ -254,6 +255,7 @@ export async function ingestDealbook(
         delivery_day = excluded.delivery_day,
         delivery_status = excluded.delivery_status,
         registration = excluded.registration,
+        insurance_count = excluded.insurance_count,
         profit = excluded.profit,
         updated_at = excluded.updated_at
     `);

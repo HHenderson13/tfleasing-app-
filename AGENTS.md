@@ -1031,10 +1031,47 @@ matching in `lib/ten-at-ten-cancellations.ts` (pure, tested on the real
 ## Sales leaderboard (Pole Position)
 
 `/sales-leaderboard` scores execs 3/2/1 per metric from three Dealerweb
-exports uploaded per month at `/sales-leaderboard/admin`: order list
-(Orders), delivered list (Deliveries, Insurance), enquiry log (Inbound
-Conversion). Parsing, attribution and scoring are pure, in
-`lib/sales-leaderboard.ts`.
+reports: order list (Orders), delivered list (Deliveries, Insurance),
+enquiry log (Inbound Conversion). Scoring and attribution are pure, in
+`lib/sales-leaderboard.ts`; stored attribution, re-processing and the feed
+in `lib/sales-leaderboard-store.ts`.
+
+### Fed from 10 at 10 (user, 2026-10-12)
+
+**The files are uploaded once, to 10 at 10, and it feeds the board** — the
+upload form on `/sales-leaderboard/admin` is gone; its Uploads tab now shows
+where each month's figures came from, with Re-process and the per-code
+diagnostics. `lib/pole-position-feed.ts` (pure, tested for parity with the
+file parsers) builds exactly the per-exec rows Pole Position's own parsers
+produced, and each change is stored as a `sales_leaderboard_uploads` row
+with `source = 'ten-at-ten'`, so attribution, Re-process and the
+diagnostics carry on unchanged.
+
+- **History is kept.** `FEED_FROM_MONTH` (2026-10) is the cut-over: earlier
+  months keep the figures their own uploads gave them (`source = 'upload'`)
+  and are never rewritten from 10 at 10 — even where 10 at 10 holds lines
+  for them (the October enquiry log carries 8 late-September enquiries; a
+  fed September would have replaced a whole month with eight rows).
+- From the cut-over, a month's report is fed only once 10 at 10 actually
+  holds it, so a report not yet uploaded there never zeroes the board.
+- Every 10 at 10 upload except the Enquiry Tracker re-feeds (Cancelled
+  Orders included — it takes cancelled orders out of Order Take); the
+  upload result says which months moved. A slot is only stored again when
+  its rows changed (`rowsFingerprint`).
+- **What each metric now counts:** Order Take — orders by order date, less
+  held orders the Cancellations matching found cancelled (Dealerweb's own
+  order list drops them too). Deliveries — every line in the month by
+  delivery date (delivered, arrived and due, as the delivered list always
+  counted). Insurance — non-zero W:AC cells, read by 10 at 10's Dealbook
+  parser through the shared `countInsuranceProducts`. Inbound Conversion —
+  enquiries by the month they were **raised**, where the old upload
+  counted every row of the file as the chosen month.
+- **Insurance waits for a re-upload.** Dealbook lines stored before
+  `insurance_count` existed have none, and a month with any such line is
+  not fed (`deliveredRowsFrom` → null) — it keeps its previous figures
+  until that month's Dealbook – Deliveries is uploaded to 10 at 10 again.
+- Checked on real October files: Order Take, Deliveries and Insurance
+  match the old uploads exec for exec.
 
 - **Inbound Conversion counts MotorComplete enquiries only** (user's rule,
   2026-10-10): column E (Source) of the enquiry log must be a MotorComplete

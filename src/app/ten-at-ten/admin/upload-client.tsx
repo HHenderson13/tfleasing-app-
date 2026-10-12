@@ -4,6 +4,14 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadTenAtTenAction, type TenAtTenUploadOutcome } from "../actions";
 
+// Pole Position's metric names, kept here so this client doesn't pull the
+// spreadsheet parser into the browser. Keep in step with FEED_REPORT_LABEL.
+type Fed = { yearMonth: string; reportType: "orders" | "delivered" | "enquiry" };
+const FED_LABEL: Record<Fed["reportType"], string> = { orders: "Order Take", delivered: "Deliveries & Insurance", enquiry: "Inbound Conversion" };
+const formatMonthLabel = (ym: string) =>
+  new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", month: "long", year: "numeric" });
+const fedKey = (f: Fed) => `${f.yearMonth}|${f.reportType}`;
+
 interface Totals { files: number; rowsInFile: number; inserted: number; updated: number; unchanged: number; excluded: number; removed: number; duplicatesCollapsed: number; unreadable: number }
 const blank = (): Totals => ({ files: 0, rowsInFile: 0, inserted: 0, updated: 0, unchanged: 0, excluded: 0, removed: 0, duplicatesCollapsed: 0, unreadable: 0 });
 // The team's names for the files — keep in step with the upload page.
@@ -22,7 +30,14 @@ export function UploadClient() {
   const [failures, setFailures] = useState<{ name: string; error: string }[]>([]);
   // Dealbook files whose dates fit either report, waiting for a choice.
   const [undecided, setUndecided] = useState<File[]>([]);
+  // Pole Position months the uploads moved, and any feed problem.
+  const [fed, setFed] = useState<Fed[]>([]);
+  const [feedErrors, setFeedErrors] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const noteFeed = (res: TenAtTenUploadOutcome) => {
+    if (res.polePosition?.length) setFed((cur) => { const m = new Map(cur.map((f) => [fedKey(f), f])); for (const f of res.polePosition!) m.set(fedKey(f), f); return [...m.values()]; });
+    if (res.polePositionError) setFeedErrors((cur) => (cur.includes(res.polePositionError!) ? cur : [...cur, res.polePositionError!]));
+  };
 
   function pick(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -30,6 +45,8 @@ export function UploadClient() {
     setTotals(null);
     setFailures([]);
     setUndecided([]);
+    setFed([]);
+    setFeedErrors([]);
   }
 
   function add(t: Record<Kind, Totals>, res: TenAtTenUploadOutcome) {
@@ -56,6 +73,7 @@ export function UploadClient() {
         if (res.needsChoice) { ask.push(file); continue; }
         if (!res.ok || !res.result || !res.kind) { failed.push({ name: file.name, error: res.error ?? "Upload failed." }); continue; }
         add(t, res);
+        noteFeed(res);
       }
       setProgress(null);
       setFailures(failed);
@@ -80,6 +98,7 @@ export function UploadClient() {
       setUndecided((u) => u.filter((f) => f !== file));
       if (!res.ok || !res.result) { setFailures((f) => [...f, { name: file.name, error: res.error ?? "Upload failed." }]); return; }
       setTotals((cur) => { const t = cur ? structuredClone(cur) : emptyTotals(); add(t, res); return t; });
+      noteFeed(res);
       router.refresh();
     });
   }
@@ -141,6 +160,15 @@ export function UploadClient() {
           </div>
         );
       })}
+      {fed.length > 0 && (
+        <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs text-indigo-900">
+          <span className="font-semibold">Pole Position updated</span> —{" "}
+          {[...new Set(fed.map((f) => f.yearMonth))].sort().map((m, i) => (
+            <span key={m}>{i > 0 && "; "}{formatMonthLabel(m)}: {fed.filter((f) => f.yearMonth === m).map((f) => FED_LABEL[f.reportType]).join(", ")}</span>
+          ))}.
+        </div>
+      )}
+      {feedErrors.map((e) => <div key={e} className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">{e}</div>)}
       {failures.length > 0 && (
         <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
           {failures.map((f) => <div key={f.name}>{f.error}</div>)}

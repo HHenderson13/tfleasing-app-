@@ -614,6 +614,9 @@ export const salesLeaderboardUploads = sqliteTable("sales_leaderboard_uploads", 
   // monthly stats to be re-attributed when the name map or participants
   // change without the admin having to re-upload the file.
   parsedData: text("parsed_data"),
+  // 'upload' — Pole Position's own upload screen (history before 10 at 10);
+  // 'ten-at-ten' — derived from 10 at 10's data, which now feeds the board.
+  source: text("source").notNull().default("upload"),
 });
 // Each failed sign-in records one row. We rate-limit by IP over a sliding 15
 // minute window — older rows are ignored, fresh rows count toward the limit.
@@ -1073,6 +1076,7 @@ export const tenAtTenOrders = sqliteTable(
     profit: real("profit"),                           // AH Total Gross
     registration: text("registration"),               // G, normalised plate
     lastSeenAt: integer("last_seen_at"),              // wall clock of the latest export listing it
+    insuranceCount: integer("insurance_count"),       // W:AC non-zero cells (Pole Position Insurance)
     firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
@@ -1106,6 +1110,7 @@ export const tenAtTenDeliveries = sqliteTable(
     profit: real("profit"),
     registration: text("registration"),
     lastSeenAt: integer("last_seen_at"),
+    insuranceCount: integer("insurance_count"),
     firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },

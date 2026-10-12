@@ -34,7 +34,7 @@ export default async function SalesLeaderboardAdminPage() {
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Pole Position admin</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Pick which execs compete, map their report short-codes, and upload the Dealerweb reports each day.
+          Pick which execs compete and map their report short-codes. The Dealerweb reports are uploaded once, on 10 at 10, which feeds the board.
         </p>
         <LeaderboardAdminView
           execs={ctx.execs}

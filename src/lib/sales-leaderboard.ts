@@ -138,6 +138,21 @@ export function parseOrderList(buffer: ArrayBuffer): { rows: OrderListParseRow[]
   };
 }
 
+/**
+ * Insurance products on one Dealbook line: the non-zero cells in W:AC
+ * (Paint Protection through Key Cover). Shared with 10 at 10, which now
+ * feeds the board, so the count can't drift between the two.
+ */
+export function countInsuranceProducts(row: readonly unknown[]): number {
+  let nz = 0;
+  for (let c = INSURANCE_FIRST; c <= INSURANCE_LAST; c++) {
+    const v = row[c];
+    const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+    if (Number.isFinite(n) && n !== 0) nz++;
+  }
+  return nz;
+}
+
 export function parseDeliveredList(buffer: ArrayBuffer): { rows: DeliveredParseRow[]; summary: ParseSummary } {
   const aoa = loadSheet(buffer);
   const counts = new Map<string, DeliveredParseRow>();
@@ -147,12 +162,7 @@ export function parseDeliveredList(buffer: ArrayBuffer): { rows: DeliveredParseR
     if (!row) continue;
     const code = execCode(row[COL_SE]);
     if (!code) continue;
-    let nz = 0;
-    for (let c = INSURANCE_FIRST; c <= INSURANCE_LAST; c++) {
-      const v = row[c];
-      const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
-      if (Number.isFinite(n) && n !== 0) nz++;
-    }
+    const nz = countInsuranceProducts(row);
     const cur = counts.get(code) ?? { reportCode: code, deliveryCount: 0, insuranceCount: 0 };
     cur.deliveryCount++;
     cur.insuranceCount += nz;

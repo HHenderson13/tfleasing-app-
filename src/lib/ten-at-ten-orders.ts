@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { dayKey, parseExportTimestamp, wallClockFromInstant } from "./business-hours";
 import { isMotorCompleteExportHeader } from "./enquiries-header";
+import { countInsuranceProducts } from "./sales-leaderboard";
 import { isEnquiryLogHeader, isExcludedExec, vehicleOf } from "./ten-at-ten";
 import type { Segment } from "./ten-at-ten-report";
 
@@ -192,6 +193,8 @@ export interface TenAtTenOrder {
   deliveryStatus: DeliveryStatus;
   /** Column G, normalised by plateOf — how a Re-Write is recognised. */
   registration: string | null;
+  /** Insurance products sold on the line (W:AC) — Pole Position's Insurance. */
+  insuranceCount: number;
   profit: number | null;
 }
 
@@ -335,6 +338,7 @@ export function parseOrderWorkbook(buf: ArrayBuffer | Buffer): OrderParse {
       deliveryDay: deliveredAtDay(raw[COL.delivery]),
       deliveryStatus: deliveryStatusOf(raw[COL.delivery]),
       registration: plateOf(raw[COL.registration]),
+      insuranceCount: countInsuranceProducts(raw),
       profit: money(raw[COL.profit]),
     });
   }

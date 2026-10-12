@@ -11,10 +11,9 @@ import {
   setNameMappingAction,
   setParticipantAction,
   setPhotoUrlAction,
-  uploadReportAction,
   type UploadDetail,
-  type UploadResult,
 } from "./actions";
+import { FEED_FROM_MONTH, isFedMonth } from "@/lib/pole-position-feed";
 import { formatMonthLabel, MONTH_LABELS } from "@/lib/sales-leaderboard";
 import type { DeptDashboard } from "@/lib/sales-leaderboard-data";
 
@@ -44,6 +43,9 @@ export interface AdminLastUpload {
   // Enquiry logs only: false when the upload was parsed before column E
   // (source) was read, so the month has no Inbound Conversion figure.
   hasSourceData: boolean;
+  // Where the month's figures came from: 10 at 10, or an upload made here
+  // before 10 at 10 fed the board (history).
+  source: "ten-at-ten" | "upload";
 }
 
 type Tab = "dashboard" | "participants" | "names" | "uploads";
@@ -466,23 +468,26 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
 }
 
 // ─── Uploads tab ───────────────────────────────────────────────────────────
+//
+// Nothing is uploaded here any more. The Dealerweb files go to 10 at 10
+// once, and it feeds the board (lib/sales-leaderboard-store.ts). Months
+// before FEED_FROM_MONTH keep the figures their own uploads gave them.
 
-const REPORTS: { type: "orders" | "delivered" | "enquiry"; label: string; note: string }[] = [
-  { type: "orders",    label: "Order list",     note: "Upload the Order List report from Dealerweb. Counts rows per exec (col B) for Order Take; vehicle text in col F is used for the interesting-fact line." },
-  { type: "delivered", label: "Delivered list", note: "Upload the Dealbook (delivered list) from Dealerweb. Counts rows per exec for Deliveries, and non-zero values in cols W:AC (Diamondbrite, GAP, TrustFord Protect, Tyre, Alloy) for Insurance Products." },
-  { type: "enquiry",   label: "Enquiry log",    note: "Upload the Enquiry Log. Inbound Conversion % counts only enquiries whose source (col E) is MotorComplete — Lead, Leasing.com, LeaseLoco, carwow. Of those, rows where col Q is Ordered, Handover Arranged or Delivered count as sales." },
+const REPORTS: { type: "orders" | "delivered" | "enquiry"; label: string; file: string; note: string }[] = [
+  { type: "orders",    label: "Order Take",            file: "Dealbook – Orders",     note: "Orders per exec by order date. An order later cancelled is left out, as Dealerweb's own order list does. The vehicle on their latest order is the scorecard's fun fact." },
+  { type: "delivered", label: "Deliveries & Insurance", file: "Dealbook – Deliveries", note: "Every line in the month by delivery date, and insurance products — non-zero values in cols W:AC. A month waits until its Deliveries file has been uploaded to 10 at 10 since insurance was read there." },
+  { type: "enquiry",   label: "Inbound Conversion",    file: "Enquiry Log",           note: "Enquiries by enquiry date. Only MotorComplete sources (col E) count; of those, Ordered, Handover Arranged and Delivered (col Q) are sales." },
 ];
 
 function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: string; lastUploads: AdminLastUpload[] }) {
   const [yearMonth, setYearMonth] = useState(initialYearMonth);
   const months = useMemo(() => {
-    // Show the last 18 months ending at next month, so admins can both
-    // back-fill earlier months and start a new month early.
+    // The last 18 months, newest first.
     const [yStr, mStr] = initialYearMonth.split("-");
     const y = parseInt(yStr, 10);
     const m = parseInt(mStr, 10);
     const opts: { value: string; label: string }[] = [];
-    for (let i = -2; i <= 15; i++) {
+    for (let i = 0; i <= 17; i++) {
       const totalMonths = (y * 12 + (m - 1)) - i;
       const yy = Math.floor(totalMonths / 12);
       const mm = (totalMonths % 12) + 1;
@@ -500,32 +505,33 @@ function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: strin
     }
     return m;
   }, [lastUploads, yearMonth]);
+  const fed = isFedMonth(yearMonth);
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+        <div className="font-semibold">Pole Position is fed from 10 at 10.</div>
+        <p className="mt-0.5 text-xs text-indigo-900">
+          Upload the Enquiry Log, Dealbook – Orders and Dealbook – Deliveries once, on{" "}
+          <a href="/ten-at-ten/admin" className="font-semibold underline underline-offset-2">10 at 10 → Upload data</a>, and the board updates
+          from them. From {formatMonthLabel(FEED_FROM_MONTH)} every month is built from 10 at 10; earlier months keep the figures their
+          own uploads here gave them.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm">
           <span className="font-medium text-slate-700">Month:</span>
-          <select
-            value={yearMonth}
-            onChange={(e) => setYearMonth(e.target.value)}
-            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-          >
-            {months.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+          <select value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+            {months.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
-          <span className="text-xs text-slate-500">Re-uploading replaces this month&apos;s figures for that report.</span>
+          <span className="text-xs text-slate-500">{fed ? "Built from 10 at 10." : "History — from uploads made here before 10 at 10."}</span>
         </label>
         <ReprocessButton />
       </div>
 
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-        Stats now self-heal: changing the name map or participant list re-runs every stored upload automatically. Just upload each report once per day.
-      </div>
-
       {REPORTS.map((r) => (
-        <UploadCard key={r.type} yearMonth={yearMonth} report={r} last={lastByType.get(r.type) ?? null} />
+        <SourceCard key={r.type} yearMonth={yearMonth} report={r} last={lastByType.get(r.type) ?? null} fed={fed} />
       ))}
     </div>
   );
@@ -543,33 +549,31 @@ function ReprocessButton() {
           setMsg(null);
           const res = await reattributeAction();
           if (res.ok) {
-            setMsg(`Re-processed ${res.processed} upload${res.processed === 1 ? "" : "s"}.`);
+            setMsg(`${res.fed ? `${res.fed} month report${res.fed === 1 ? "" : "s"} updated from 10 at 10 · ` : ""}re-processed ${res.processed} month report${res.processed === 1 ? "" : "s"}.`);
             router.refresh();
           }
         })}
         disabled={pending}
         className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        title="Pull the latest from 10 at 10, then re-apply every month through the current name map and participants"
       >
-        {pending ? "Re-processing…" : "Re-process all uploads"}
+        {pending ? "Re-processing…" : "Re-process"}
       </button>
     </div>
   );
 }
 
-function UploadCard({
+function SourceCard({
   yearMonth,
   report,
   last,
+  fed,
 }: {
   yearMonth: string;
-  report: { type: "orders" | "delivered" | "enquiry"; label: string; note: string };
+  report: (typeof REPORTS)[number];
   last: AdminLastUpload | null;
+  fed: boolean;
 }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState<UploadResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<UploadDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
@@ -585,102 +589,50 @@ function UploadCard({
     setDetailOpen(true);
   }
 
-  function submit() {
-    if (!file) { setError("Pick a file first"); return; }
-    setError(null);
-    setResult(null);
-    start(async () => {
-      const fd = new FormData();
-      fd.set("file", file);
-      fd.set("yearMonth", yearMonth);
-      fd.set("reportType", report.type);
-      const res = await uploadReportAction(fd);
-      if (!res.ok) setError(res.error ?? "Upload failed");
-      else {
-        setResult(res);
-        setFile(null);
-        router.refresh();
-      }
-    });
-  }
-
+  const when = last ? new Date(last.uploadedAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">{report.label}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-slate-900">{report.label} <span className="font-normal text-slate-500">· from {report.file}</span></h3>
           <p className="mt-1 max-w-2xl text-xs text-slate-500">{report.note}</p>
         </div>
         <div className="text-right text-xs text-slate-500">
           {last ? (
             <>
-              Last upload:&nbsp;
-              <span className="font-medium text-slate-700">{new Date(last.uploadedAt).toLocaleString("en-GB")}</span>
-              <div>{last.rowCount} rows</div>
-              {!last.hasParsedData && (
-                <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                  Re-upload once to enable self-healing
-                </div>
-              )}
+              <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${last.source === "ten-at-ten" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-700"}`}>
+                {last.source === "ten-at-ten" ? "From 10 at 10" : "Uploaded here (history)"}
+              </span>
+              <div className="mt-1">Updated <span className="font-medium text-slate-700">{when}</span></div>
+              <div>{last.rowCount} lines</div>
               {report.type === "enquiry" && last.hasParsedData && !last.hasSourceData && (
-                <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                  Re-upload for Inbound Conversion
-                </div>
+                <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">No Inbound Conversion for this month</div>
               )}
             </>
           ) : (
-            <span>No upload yet for this month</span>
+            <span>{fed ? `Waiting for ${report.file} on 10 at 10` : "No figures for this month"}</span>
           )}
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-xs"
-        />
-        <button
-          onClick={submit}
-          disabled={pending || !file}
-          className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          {pending ? "Uploading…" : "Upload"}
-        </button>
-      </div>
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      {result?.ok && (
-        <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-          Parsed <strong>{result.parsed?.rowsTotal}</strong> rows; attributed <strong>{result.parsed?.rowsAttributed}</strong>; matched to <strong>{result.matched}</strong> participants.
-          {result.unmapped && result.unmapped.length > 0 && (
-            <div className="mt-1">
-              Unmapped codes:&nbsp;
-              {result.unmapped.map((u) => (
-                <span key={u.reportCode} className="mr-2 inline-block rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[11px]">
-                  {u.reportCode} ×{u.count}
-                </span>
-              ))}
-              <div className="mt-1 text-emerald-700">Add these on the Name map tab to include them next time.</div>
-            </div>
-          )}
-        </div>
+      {fed && last?.source === "upload" && (
+        <p className="mt-2 text-xs text-amber-700">
+          Still showing the upload made here — it switches to 10 at 10 once {report.file} for {formatMonthLabel(yearMonth)} is on 10 at 10
+          {report.type === "delivered" ? " (uploaded since insurance was read there)" : ""}.
+        </p>
       )}
 
-      {/* Diagnostic — explicit list of how each report code attributes */}
+      {/* Diagnostic — how each report code attributes */}
       {last && last.hasParsedData && (
         <div className="mt-3 border-t border-slate-100 pt-3">
           {!detailOpen ? (
-            <button
-              onClick={loadDetail}
-              disabled={detailLoading}
-              className="text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-50"
-            >
-              {detailLoading ? "Loading…" : "Show what each row attributed to"}
+            <button onClick={loadDetail} disabled={detailLoading}
+              className="text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-50">
+              {detailLoading ? "Loading…" : "Show what each code attributed to"}
             </button>
           ) : (
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attribution from the latest upload</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attribution for this month</h4>
                 <button onClick={() => setDetailOpen(false)} className="text-xs text-slate-500 hover:text-slate-800">Hide</button>
               </div>
               {detail && <UploadDetailTable detail={detail} />}

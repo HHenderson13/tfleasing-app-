@@ -38,7 +38,7 @@ const FILES: FileGuide[] = [
     kind: "enquiries",
     from: "Dealerweb enquiry log",
     columns: "Date Time · SE · Customer · Source · Model · Status",
-    feeds: "Enquiries (volumes and conversion)",
+    feeds: "Enquiries · Pole Position Inbound Conversion",
     rules: [
       "Sources are named TF Lead, Leasing.com, LeaseLoco and CarWow; anything else counts as Broker / Prospect.",
       "Ordered, Handover Arranged and Delivered are orders; Live is live; Lost Sale is lost. HaHe and JoRu are stripped.",
@@ -49,7 +49,7 @@ const FILES: FileGuide[] = [
     kind: "orders",
     from: "Dealerweb order list (dealbook)",
     columns: "SE · Customer · Order Date · Vehicle Details · Finance Type · Total Gross",
-    feeds: "Orders (profit)",
+    feeds: "Orders · Pole Position Order Take",
     rules: [
       "Profit is Total Gross; funder, product and term come from Finance Type. Vehicles split into ICE Car, BEV Car and Van.",
       "Registrations and the time the export was taken are kept, which is how Cancellations spots a Re-Write.",
@@ -61,11 +61,12 @@ const FILES: FileGuide[] = [
     kind: "deliveries",
     from: "Dealerweb delivered list (dealbook)",
     columns: "SE · Customer · Vehicle Details · Total Gross · Delivery Date",
-    feeds: "Deliveries (vs budget, profit)",
+    feeds: "Deliveries · Pole Position Deliveries & Insurance",
     rules: [
       "Counted in the month of its Delivery Date (column AK): Dlv is delivered, Arr arrived, Est due.",
       "Upload the full month: each upload is that month's complete list, so a vehicle no longer on it (slipped to another month, or cancelled) is removed from the month. A filtered export would drop the lines it leaves out.",
       "Same columns as Dealbook – Orders; recognised because its delivery dates sit in one month. Profit is Total Gross. HaHe and JoRu are stripped.",
+      "Insurance products (non-zero cells in W:AC) are counted for Pole Position.",
     ],
     matched: "order date, customer, vehicle and delivery month",
   },
@@ -125,6 +126,12 @@ export default async function TenAtTenAdminPage() {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs text-indigo-900">
+          <span className="font-semibold">These uploads also drive Pole Position.</span>{" "}The Enquiry Log, Dealbook – Orders and Dealbook – Deliveries
+          are uploaded here only — Pole Position&apos;s Order Take, Deliveries, Insurance and Inbound Conversion are built from them, from October
+          2026 on. Earlier months keep the figures Pole Position already had.
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-3 text-xs text-slate-600">

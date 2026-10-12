@@ -12,6 +12,7 @@ import {
   ingestCancellations, ingestDealbook, ingestTenAtTen, recordResponseUpload, saveBudgets, saveCancellationNote,
   setCancellationClassification, type TenAtTenIngest,
 } from "@/lib/ten-at-ten-store";
+import { feedPolePositionFromTenAtTen, invalidateLeaderboard, type FedSlot } from "@/lib/sales-leaderboard-store";
 
 export interface TenAtTenUploadOutcome {
   ok: boolean;
@@ -21,6 +22,10 @@ export interface TenAtTenUploadOutcome {
   result?: TenAtTenIngest;
   /** A Dealbook file that could be either report: ask which, then re-send with `kind`. */
   needsChoice?: boolean;
+  /** Pole Position months this upload changed — 10 at 10 feeds the board. */
+  polePosition?: FedSlot[];
+  /** Set when the upload landed but Pole Position couldn't be updated from it. */
+  polePositionError?: string;
 }
 
 /**
@@ -103,7 +108,23 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     }
     revalidatePath("/ten-at-ten");
     revalidatePath("/ten-at-ten/admin");
-    return { ok: true, filename: file.name, kind, result };
+
+    // 10 at 10 feeds Pole Position: the enquiry log, both Dealbook reports
+    // and Cancelled Orders (which takes cancelled orders out of Order Take)
+    // all move the board. The upload itself has landed either way, so a
+    // problem here is reported rather than failing it.
+    let polePosition: FedSlot[] | undefined;
+    let polePositionError: string | undefined;
+    if (kind !== "response") {
+      try {
+        polePosition = await feedPolePositionFromTenAtTen(user.id);
+        if (polePosition.length) invalidateLeaderboard();
+      } catch (e) {
+        logError("ten-at-ten/feed-pole-position", e, { filename: file.name });
+        polePositionError = "Pole Position wasn't updated from this file — use Re-process on Pole Position's admin page.";
+      }
+    }
+    return { ok: true, filename: file.name, kind, result, polePosition, polePositionError };
   } catch (e) {
     if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError || e instanceof NotAnEnquiryExportError || e instanceof NotACancelledOrdersError) {
       return { ok: false, error: `${file.name}: ${e.message}` };
