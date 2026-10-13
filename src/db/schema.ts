@@ -586,6 +586,12 @@ export const salesLeaderboardMonthly = sqliteTable(
     // before sources were read — it shows "—" until re-uploaded.
     inboundEnquiryCount: integer("inbound_enquiry_count"),
     inboundSalesCount: integer("inbound_sales_count"),
+    // Response Time: MotorComplete leads contacted, working minutes to first
+    // contact in total (average = minutes ÷ count), and how many within the
+    // 15-minute target. Fed from 10 at 10; NULL before it.
+    responseCount: integer("response_count"),
+    responseMinutes: real("response_minutes"),
+    responseOnTarget: integer("response_on_target"),
     // One "interesting fact" per exec per month — picked at upload time from
     // the order_list to flavour the scorecard. Currently the most recent
     // vehicle they ordered.
@@ -593,6 +599,7 @@ export const salesLeaderboardMonthly = sqliteTable(
     ordersUpdatedAt: integer("orders_updated_at", { mode: "timestamp" }),
     deliveriesUpdatedAt: integer("deliveries_updated_at", { mode: "timestamp" }),
     enquiriesUpdatedAt: integer("enquiries_updated_at", { mode: "timestamp" }),
+    responsesUpdatedAt: integer("responses_updated_at", { mode: "timestamp" }),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.yearMonth, t.salesExecId] }),
@@ -606,7 +613,7 @@ export const salesLeaderboardMonthly = sqliteTable(
 export const salesLeaderboardUploads = sqliteTable("sales_leaderboard_uploads", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   yearMonth: text("year_month").notNull(),
-  reportType: text("report_type").notNull(), // 'orders' | 'delivered' | 'enquiry'
+  reportType: text("report_type").notNull(), // 'orders' | 'delivered' | 'enquiry' | 'response'
   rowCount: integer("row_count").notNull(),
   uploadedAt: integer("uploaded_at", { mode: "timestamp" }).notNull(),
   uploadedByUserId: text("uploaded_by_user_id").notNull(),

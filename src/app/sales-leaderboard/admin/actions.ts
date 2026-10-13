@@ -19,6 +19,7 @@ import {
   type EnquiryParseRow,
   type LeaderboardReportType,
   type OrderListParseRow,
+  type ResponseParseRow,
 } from "@/lib/sales-leaderboard";
 import {
   feedPolePositionFromTenAtTen,
@@ -28,7 +29,7 @@ import {
 } from "@/lib/sales-leaderboard-store";
 
 type ReportType = LeaderboardReportType;
-const REPORT_TYPES: ReportType[] = ["orders", "delivered", "enquiry"];
+const REPORT_TYPES: ReportType[] = ["orders", "delivered", "enquiry", "response"];
 
 // ─── Participants ──────────────────────────────────────────────────────────
 
@@ -205,6 +206,8 @@ export async function loadUploadDetailAction(input: { yearMonth: string; reportT
     ? { primary: "Orders", secondary: null }
     : reportType === "delivered"
       ? { primary: "Deliveries", secondary: "Insurance" }
+      : reportType === "response"
+        ? { primary: "Leads contacted", secondary: "Avg first contact (mins)" }
       : hasSources
         ? { primary: "Inbound enquiries", secondary: "Inbound sales" }
         : { primary: "All enquiries (re-upload for inbound)", secondary: "All sales" };
@@ -217,6 +220,10 @@ export async function loadUploadDetailAction(input: { yearMonth: string; reportT
     } else if (reportType === "delivered") {
       primary = (r as DeliveredParseRow).deliveryCount;
       secondary = (r as DeliveredParseRow).insuranceCount;
+    } else if (reportType === "response") {
+      const x = r as ResponseParseRow;
+      primary = x.contactCount;
+      secondary = x.contactCount ? Math.round(x.contactMinutes / x.contactCount) : null;
     } else {
       const inbound = enquiryInbound(r as EnquiryParseRow);
       primary = inbound ? inbound.enquiries : (r as EnquiryParseRow).enquiryCount;

@@ -12,6 +12,8 @@ import { eq, inArray } from "drizzle-orm";
 import {
   applyPoints,
   currentYearMonth,
+  emptyMetricRecord,
+  responseAverage,
   type ExecMonthStats,
 } from "./sales-leaderboard";
 
@@ -73,11 +75,29 @@ function emptyStats(p: ParticipantRow): ExecMonthStats {
     enquiryCount: 0,
     salesCount: 0,
     conversionPct: 0,
+    responseCount: 0,
+    responseAvg: null,
     latestVehicle: null,
-    metricPoints: { orders: 0, deliveries: 0, insurance: 0, conversion: 0 },
+    metricPoints: emptyMetricRecord(0),
     totalPoints: 0,
-    metricRanks: { orders: null, deliveries: null, insurance: null, conversion: null },
+    metricRanks: emptyMetricRecord<number | null>(null),
   };
+}
+
+type MonthlyRow = typeof salesLeaderboardMonthly.$inferSelect;
+
+/** A month's stored counts onto an exec's stats — the one mapping month, YTD and the archive share. */
+function fillFromMonthly(base: ExecMonthStats, m: Pick<MonthlyRow, "orderCount" | "deliveryCount" | "insuranceCount" | "inboundEnquiryCount" | "inboundSalesCount" | "responseCount" | "responseMinutes" | "latestVehicle">): ExecMonthStats {
+  base.orderCount = m.orderCount ?? 0;
+  base.deliveryCount = m.deliveryCount ?? 0;
+  base.insuranceCount = m.insuranceCount ?? 0;
+  base.enquiryCount = m.inboundEnquiryCount ?? 0;
+  base.salesCount = m.inboundSalesCount ?? 0;
+  base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
+  base.responseCount = m.responseCount ?? 0;
+  base.responseAvg = responseAverage(m.responseMinutes ?? 0, base.responseCount);
+  base.latestVehicle = m.latestVehicle ?? null;
+  return base;
 }
 
 export interface LeaderboardSnapshot {
@@ -106,17 +126,8 @@ export const loadMonthSnapshot = unstable_cache(
       .where(eq(salesLeaderboardMonthly.yearMonth, yearMonth));
     const byExec = new Map(monthly.map((m) => [m.salesExecId, m]));
     const rows = participants.map((p) => {
-      const base = emptyStats(p);
       const m = byExec.get(p.salesExecId);
-      if (!m) return base;
-      base.orderCount = m.orderCount ?? 0;
-      base.deliveryCount = m.deliveryCount ?? 0;
-      base.insuranceCount = m.insuranceCount ?? 0;
-      base.enquiryCount = m.inboundEnquiryCount ?? 0;
-      base.salesCount = m.inboundSalesCount ?? 0;
-      base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
-      base.latestVehicle = m.latestVehicle ?? null;
-      return base;
+      return m ? fillFromMonthly(emptyStats(p), m) : emptyStats(p);
     });
     applyPoints(rows);
     rows.sort((a, b) => b.totalPoints - a.totalPoints || b.orderCount - a.orderCount);
@@ -151,13 +162,14 @@ export const loadYtdSnapshot = unstable_cache(
 
   const agg = new Map<string, {
     orders: number; deliveries: number; insurance: number; enquiries: number; sales: number;
+    responses: number; responseMinutes: number;
     latestVehicle: string | null;
     latestVehicleMonth: string | null;
   }>();
 
   for (const m of filtered) {
     const cur = agg.get(m.salesExecId) ?? {
-      orders: 0, deliveries: 0, insurance: 0, enquiries: 0, sales: 0,
+      orders: 0, deliveries: 0, insurance: 0, enquiries: 0, sales: 0, responses: 0, responseMinutes: 0,
       latestVehicle: null as string | null, latestVehicleMonth: null as string | null,
     };
     cur.orders     += m.orderCount     ?? 0;
@@ -167,6 +179,10 @@ export const loadYtdSnapshot = unstable_cache(
     // Inbound Conversion covers the months that can actually be measured.
     cur.enquiries  += m.inboundEnquiryCount ?? 0;
     cur.sales      += m.inboundSalesCount   ?? 0;
+    // Response Time YTD is the average over every contacted lead in the
+    // year — months before it was measured add nothing.
+    cur.responses       += m.responseCount   ?? 0;
+    cur.responseMinutes += m.responseMinutes ?? 0;
     if (m.latestVehicle && (cur.latestVehicleMonth === null || m.yearMonth > cur.latestVehicleMonth)) {
       cur.latestVehicle = m.latestVehicle;
       cur.latestVehicleMonth = m.yearMonth;
@@ -184,6 +200,8 @@ export const loadYtdSnapshot = unstable_cache(
     base.enquiryCount   = a.enquiries;
     base.salesCount     = a.sales;
     base.conversionPct  = a.enquiries > 0 ? (a.sales / a.enquiries) * 100 : 0;
+    base.responseCount  = a.responses;
+    base.responseAvg    = responseAverage(a.responseMinutes, a.responses);
     base.latestVehicle  = a.latestVehicle;
     return base;
   });
@@ -210,12 +228,16 @@ export interface DeptKpi {
   label: string;
   current: number;
   previous: number;
-  // Whole numbers for counts; conversion is a percentage.
-  format: "int" | "pct";
+  // Whole numbers for counts; conversion is a percentage; response is minutes.
+  format: "int" | "pct" | "mins";
+  /** A fall is the improvement (Response Time). */
+  lowerIsBetter?: boolean;
+  /** No figure this month — shown as "—". */
+  empty?: boolean;
 }
 
 export interface CoachingFocus {
-  metric: "orders" | "deliveries" | "insurance" | "conversion" | "attach";
+  metric: "orders" | "deliveries" | "insurance" | "conversion" | "attach" | "response";
   metricLabel: string;
   // The participant with the lowest score on this metric this month. null
   // when there's nothing meaningful to highlight (e.g. no enquiries logged).
@@ -231,6 +253,8 @@ export interface MonthlyTrendCell {
   insuranceCount: number;
   enquiryCount: number;   // inbound (MotorComplete) only
   salesCount: number;     // sales among those inbound enquiries
+  responseCount: number;  // leads contacted (Response Time)
+  responseMinutes: number;
 }
 
 export interface DeptDashboard {
@@ -241,7 +265,7 @@ export interface DeptDashboard {
   trend: MonthlyTrendCell[];
 }
 
-function sumDept(rows: ExecMonthStats[]): { orders: number; deliveries: number; insurance: number; enquiries: number; sales: number } {
+function sumDept(rows: ExecMonthStats[]): { orders: number; deliveries: number; insurance: number; enquiries: number; sales: number; responses: number; responseMinutes: number } {
   return rows.reduce(
     (acc, r) => ({
       orders:     acc.orders     + r.orderCount,
@@ -249,8 +273,12 @@ function sumDept(rows: ExecMonthStats[]): { orders: number; deliveries: number; 
       insurance:  acc.insurance  + r.insuranceCount,
       enquiries:  acc.enquiries  + r.enquiryCount,
       sales:      acc.sales      + r.salesCount,
+      responses:  acc.responses  + r.responseCount,
+      // Back to a total from each exec's average, so the department figure
+      // weights each lead equally rather than each exec.
+      responseMinutes: acc.responseMinutes + (r.responseAvg ?? 0) * r.responseCount,
     }),
-    { orders: 0, deliveries: 0, insurance: 0, enquiries: 0, sales: 0 },
+    { orders: 0, deliveries: 0, insurance: 0, enquiries: 0, sales: 0, responses: 0, responseMinutes: 0 },
   );
 }
 
@@ -292,6 +320,14 @@ export const loadDeptDashboard = unstable_cache(
       previous: prevTotals.enquiries > 0 ? (prevTotals.sales / prevTotals.enquiries) * 100 : 0,
       format: "pct",
     },
+    {
+      label: "Dept avg response time",
+      current:  responseAverage(curTotals.responseMinutes, curTotals.responses) ?? 0,
+      previous: responseAverage(prevTotals.responseMinutes, prevTotals.responses) ?? 0,
+      format: "mins",
+      lowerIsBetter: true,
+      empty: curTotals.responses === 0,
+    },
   ];
 
   // Coaching focus: who's at the bottom of each metric this month, with the
@@ -324,6 +360,8 @@ export const loadDeptDashboard = unstable_cache(
                                                  (s) => s.deliveryCount > 0),
     pickPair("orders",     "Order Take",         (s) => s.orderCount,       (s) => String(s.orderCount),             () => true),
     pickPair("deliveries", "Deliveries",         (s) => s.deliveryCount,    (s) => String(s.deliveryCount),          () => true),
+    // Fastest is best, so the slowest average sits at the bottom.
+    pickPair("response",   "Response Time",      (s) => -(s.responseAvg ?? 0),  (s) => `${Math.round(s.responseAvg ?? 0)}m`,  (s) => s.responseAvg != null && s.responseCount > 0),
   ];
 
   // Trend — last 6 months including this one.
@@ -335,7 +373,7 @@ export const loadDeptDashboard = unstable_cache(
   const participants = await loadParticipants();
   const participantIds = new Set(participants.map((p) => p.salesExecId));
   const trend: MonthlyTrendCell[] = months.map((ym) => {
-    const cell: MonthlyTrendCell = { yearMonth: ym, orderCount: 0, deliveryCount: 0, insuranceCount: 0, enquiryCount: 0, salesCount: 0 };
+    const cell: MonthlyTrendCell = { yearMonth: ym, orderCount: 0, deliveryCount: 0, insuranceCount: 0, enquiryCount: 0, salesCount: 0, responseCount: 0, responseMinutes: 0 };
     for (const m of trendRows) {
       if (m.yearMonth !== ym) continue;
       if (!participantIds.has(m.salesExecId)) continue;
@@ -344,6 +382,8 @@ export const loadDeptDashboard = unstable_cache(
       cell.insuranceCount += m.insuranceCount ?? 0;
       cell.enquiryCount   += m.inboundEnquiryCount ?? 0;
       cell.salesCount     += m.inboundSalesCount   ?? 0;
+      cell.responseCount  += m.responseCount       ?? 0;
+      cell.responseMinutes += m.responseMinutes    ?? 0;
     }
     return cell;
   });
@@ -392,16 +432,8 @@ export const loadChampionArchive = unstable_cache(
     const monthRows = byMonth.get(ym) ?? [];
     const byExec = new Map(monthRows.map((m) => [m.salesExecId, m]));
     const rows = participants.map((p) => {
-      const base = emptyStats(p);
       const m = byExec.get(p.salesExecId);
-      if (!m) return base;
-      base.orderCount = m.orderCount ?? 0;
-      base.deliveryCount = m.deliveryCount ?? 0;
-      base.insuranceCount = m.insuranceCount ?? 0;
-      base.enquiryCount = m.inboundEnquiryCount ?? 0;
-      base.salesCount = m.inboundSalesCount ?? 0;
-      base.conversionPct = base.enquiryCount > 0 ? (base.salesCount / base.enquiryCount) * 100 : 0;
-      return base;
+      return m ? fillFromMonthly(emptyStats(p), m) : emptyStats(p);
     });
     applyPoints(rows);
     rows.sort((a, b) => b.totalPoints - a.totalPoints);

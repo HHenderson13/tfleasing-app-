@@ -4,9 +4,12 @@ import { requireLeaderboardAccess } from "@/lib/auth-guard";
 import { signOutAction } from "../../login/actions";
 import {
   currentYearMonth,
+  emptyMetricRecord,
   formatConversion,
   formatMonthLabel,
+  formatResponse,
   overtakeTargets,
+  responseAverage,
   type ExecMonthStats,
   type LeaderboardMetric,
   type OvertakeTarget,
@@ -22,6 +25,7 @@ const METRIC_META: { key: LeaderboardMetric; label: string; tone: string; format
   { key: "deliveries", label: "Deliveries",        tone: "from-emerald-500 to-teal-500", format: (n) => String(n) },
   { key: "insurance",  label: "Insurance Products", tone: "from-violet-500 to-fuchsia-500", format: (n) => String(n) },
   { key: "conversion", label: "Inbound Conversion %", tone: "from-sky-500 to-indigo-500", format: (n) => `${n.toFixed(1)}%` },
+  { key: "response",   label: "Response Time",      tone: "from-rose-500 to-red-500",     format: (n) => formatResponse({ responseAvg: n }) },
 ];
 
 const TROPHIES: Record<1 | 2 | 3, string> = { 1: "🏆", 2: "🥈", 3: "🥉" };
@@ -30,6 +34,7 @@ function metricValue(s: ExecMonthStats, key: LeaderboardMetric): number {
   if (key === "orders") return s.orderCount;
   if (key === "deliveries") return s.deliveryCount;
   if (key === "insurance") return s.insuranceCount;
+  if (key === "response") return s.responseAvg ?? NaN;
   return s.conversionPct;
 }
 
@@ -148,17 +153,25 @@ export default async function MyScorecardPage() {
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         {METRIC_META.map((meta) => {
           const myVal = metricValue(mine, meta.key);
-          const top = Math.max(...mtd.rows.map((r) => metricValue(r, meta.key)));
+          // Response Time: the "top" is the fastest, and the bar fills as
+          // you close in on it.
+          const fastest = meta.key === "response";
+          const values = mtd.rows.map((r) => metricValue(r, meta.key)).filter((v) => Number.isFinite(v));
+          const top = values.length ? (fastest ? Math.min(...values) : Math.max(...values)) : NaN;
           const avg = deptAvg[meta.key];
           const rank = mine.metricRanks[meta.key];
+          const fill = !Number.isFinite(myVal) || !Number.isFinite(top) ? 0
+            : fastest ? (myVal > 0 ? (top / myVal) * 100 : 100)
+            : top > 0 ? (myVal / top) * 100 : 0;
           return (
             <MetricBreakdownCard
               key={meta.key}
               meta={meta}
-              myValue={myVal}
-              myLabel={meta.key === "conversion" ? formatConversion(mine) : meta.format(myVal)}
-              avgValue={avg}
-              topValue={top}
+              fill={fill}
+              myLabel={meta.key === "conversion" ? formatConversion(mine) : meta.key === "response" ? formatResponse(mine) : meta.format(myVal)}
+              avgLabel={meta.key === "response" ? formatResponse({ responseAvg: Number.isFinite(avg) ? avg : null }) : meta.format(avg)}
+              topLabel={meta.key === "response" ? formatResponse({ responseAvg: Number.isFinite(top) ? top : null }) : meta.format(Number.isFinite(top) ? top : 0)}
+              topWord={fastest ? "Fastest" : "Top"}
               rank={rank}
             />
           );
@@ -203,7 +216,7 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
 }
 
 function computeDeptAverages(rows: ExecMonthStats[]): Record<LeaderboardMetric, number> {
-  if (rows.length === 0) return { orders: 0, deliveries: 0, insurance: 0, conversion: 0 };
+  if (rows.length === 0) return emptyMetricRecord(0);
   // Inbound Conversion is the department's own rate (inbound sales ÷
   // inbound enquiries),
   // the same figure the leaderboard shows as the team total. Averaging the
@@ -215,6 +228,11 @@ function computeDeptAverages(rows: ExecMonthStats[]): Record<LeaderboardMetric, 
     deliveries: rows.reduce((a, r) => a + r.deliveryCount, 0)  / rows.length,
     insurance:  rows.reduce((a, r) => a + r.insuranceCount, 0) / rows.length,
     conversion: enquiries > 0 ? (sales / enquiries) * 100 : 0,
+    // The team's average over every contacted lead; NaN with none.
+    response: responseAverage(
+      rows.reduce((a, r) => a + (r.responseAvg ?? 0) * r.responseCount, 0),
+      rows.reduce((a, r) => a + r.responseCount, 0),
+    ) ?? NaN,
   };
 }
 
@@ -256,20 +274,23 @@ function BadgeChip({ badge, large }: { badge: Badge; large?: boolean }) {
 
 function MetricBreakdownCard({
   meta,
-  myValue,
+  fill,
   myLabel,
-  avgValue,
-  topValue,
+  avgLabel,
+  topLabel,
+  topWord,
   rank,
 }: {
   meta: { key: LeaderboardMetric; label: string; tone: string; format: (n: number) => string };
-  myValue: number;
+  /** How close to the best on the team, 0–100. */
+  fill: number;
   myLabel: string;
-  avgValue: number;
-  topValue: number;
+  avgLabel: string;
+  topLabel: string;
+  topWord: string;
   rank: number | null;
 }) {
-  const pct = topValue > 0 ? Math.max(2, Math.min(100, (myValue / topValue) * 100)) : 0;
+  const pct = fill > 0 ? Math.max(2, Math.min(100, fill)) : 0;
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className={`flex items-center justify-between bg-gradient-to-r ${meta.tone} px-4 py-3 text-white`}>
@@ -290,8 +311,8 @@ function MetricBreakdownCard({
           <div className="h-full rounded-full bg-slate-900" style={{ width: `${pct}%` }} />
         </div>
         <div className="mt-2 flex justify-between text-slate-500">
-          <span>Dept avg <span className="font-medium text-slate-700 tabular-nums">{meta.format(avgValue)}</span></span>
-          <span>Top <span className="font-medium text-slate-700 tabular-nums">{meta.format(topValue)}</span></span>
+          <span>Dept avg <span className="font-medium text-slate-700 tabular-nums">{avgLabel}</span></span>
+          <span>{topWord} <span className="font-medium text-slate-700 tabular-nums">{topLabel}</span></span>
         </div>
       </div>
     </div>

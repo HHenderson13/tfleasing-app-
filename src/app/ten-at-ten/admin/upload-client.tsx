@@ -6,8 +6,8 @@ import { uploadTenAtTenAction, type TenAtTenUploadOutcome } from "../actions";
 
 // Pole Position's metric names, kept here so this client doesn't pull the
 // spreadsheet parser into the browser. Keep in step with FEED_REPORT_LABEL.
-type Fed = { yearMonth: string; reportType: "orders" | "delivered" | "enquiry" };
-const FED_LABEL: Record<Fed["reportType"], string> = { orders: "Order Take", delivered: "Deliveries & Insurance", enquiry: "Inbound Conversion" };
+type Fed = { yearMonth: string; reportType: "orders" | "delivered" | "enquiry" | "response" };
+const FED_LABEL: Record<Fed["reportType"], string> = { orders: "Order Take", delivered: "Deliveries & Insurance", enquiry: "Inbound Conversion", response: "Response Time" };
 const formatMonthLabel = (ym: string) =>
   new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", month: "long", year: "numeric" });
 const fedKey = (f: Fed) => `${f.yearMonth}|${f.reportType}`;

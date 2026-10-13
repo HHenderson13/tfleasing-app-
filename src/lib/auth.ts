@@ -153,6 +153,13 @@ export function canSeeProposals(u: CurrentUser | null): boolean {
 export function canSeeOrders(u: CurrentUser | null): boolean {
   return isAdmin(u) || isExec(u);
 }
+/**
+ * 10 at 10, the report and its PDF: admins and execs (user, 2026-10-13).
+ * Uploads, budgets and the manager's cancellation notes stay admin-only.
+ */
+export function canSeeTenAtTen(u: CurrentUser | null): boolean {
+  return isAdmin(u) || isExec(u);
+}
 export interface SectionAccess {
   quote: boolean;
   stock: boolean;
@@ -169,9 +176,8 @@ export interface SectionAccess {
   // record linked to their account, regardless of leaderboard participation
   // (the /me page handles the "not a participant yet" case itself).
   myScorecard: boolean;
-  // Enquiry Tracker is readable by anyone signed in — the numbers are the
-  // department's own performance, not customer or commercial data. Only the
-  // upload route is admin-gated.
+  // 10 at 10 — admins and execs; its upload page stays admin-only.
+  tenAtTen: boolean;
 }
 
 export function sectionAccess(u: CurrentUser | null): SectionAccess {
@@ -187,5 +193,6 @@ export function sectionAccess(u: CurrentUser | null): SectionAccess {
     // separately from view access.
     leaderboard: isAdmin(u) || isExec(u),
     myScorecard: !!u?.salesExecId,
+    tenAtTen: canSeeTenAtTen(u),
   };
 }

@@ -10,7 +10,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 57;
+const SCHEMA_VERSION = 58;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -865,6 +865,13 @@ async function ensureSalesLeaderboardTables() {
   await ensureColumns("sales_leaderboard_monthly", [
     { name: "inbound_enquiry_count", sqlType: "INTEGER" },
     { name: "inbound_sales_count", sqlType: "INTEGER" },
+    // Response Time (user, 2026-10-13): leads contacted, working minutes to
+    // first contact in total, and how many inside the 15-minute target —
+    // fed from 10 at 10's MotorComplete data. NULL for months before it.
+    { name: "response_count", sqlType: "INTEGER" },
+    { name: "response_minutes", sqlType: "REAL" },
+    { name: "response_on_target", sqlType: "INTEGER" },
+    { name: "responses_updated_at", sqlType: "INTEGER" },
   ]);
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS sales_leaderboard_uploads (

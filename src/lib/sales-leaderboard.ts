@@ -2,6 +2,7 @@
 // the vitest suite can import directly. Nothing here touches the DB.
 
 import * as XLSX from "xlsx";
+import { formatMins } from "./business-hours";
 
 // ─── Parsers ───────────────────────────────────────────────────────────────
 //
@@ -17,6 +18,9 @@ import * as XLSX from "xlsx";
 //                     col E a MotorComplete   =  Inbound — the only
 //                       source                   enquiries Inbound
 //                                                Conversion % counts
+//
+// A fifth metric, Response Time, has no file of its own: it comes from the
+// MotorComplete enquiry export 10 at 10 holds (see pole-position-feed.ts).
 //
 // Each parser returns a Map<reportCode, counts>. The admin action maps the
 // codes onto sales_execs IDs using sales_leaderboard_name_map.
@@ -92,6 +96,34 @@ export function enquiryInbound(row: EnquiryParseRow): { enquiries: number; sales
     }
   }
   return { enquiries, sales };
+}
+
+/**
+ * Response Time rows, one per exec: their judged MotorComplete leads with a
+ * first-contact time, the working minutes those took in total, and how many
+ * were inside the 15-minute target. Built by 10 at 10's feed.
+ */
+export interface ResponseParseRow {
+  reportCode: string;
+  /** The name MotorComplete gives, which the code was derived from. */
+  name: string;
+  contactCount: number;
+  contactMinutes: number;
+  onTarget: number;
+}
+
+/**
+ * Dealerweb's exec code from a full name — the first two letters of the
+ * first and last names: "Deniz Durmaz" is DeDu, "Minny Hope-Lindley" MiHo.
+ * MotorComplete and the Cancelled Orders export name execs in full; the
+ * name map is keyed on codes. "" for a single name.
+ */
+export function execCodeFromName(name: unknown): string {
+  const parts = String(name ?? "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  if (parts.length < 2) return "";
+  const two = (x: string) => x.replace(/[^A-Za-z]/g, "").slice(0, 2).toLowerCase();
+  const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+  return cap(two(parts[0])) + cap(two(parts[parts.length - 1]));
 }
 
 export interface ParseSummary { rowsTotal: number; rowsAttributed: number }
@@ -210,8 +242,8 @@ export function parseEnquiryLog(buffer: ArrayBuffer): { rows: EnquiryParseRow[];
 // gets a row, zeroed if the report never mentions them, so a re-upload
 // resets a count instead of leaving the previous one stuck.
 
-export type LeaderboardReportType = "orders" | "delivered" | "enquiry";
-export type ParsedReportRow = OrderListParseRow | DeliveredParseRow | EnquiryParseRow;
+export type LeaderboardReportType = "orders" | "delivered" | "enquiry" | "response";
+export type ParsedReportRow = OrderListParseRow | DeliveredParseRow | EnquiryParseRow | ResponseParseRow;
 
 export interface AttributedCounts {
   orderCount: number;
@@ -224,6 +256,11 @@ export interface AttributedCounts {
   // has no source tally, so the month reads "—" rather than a wrong figure.
   inboundEnquiryCount: number | null;
   inboundSalesCount: number | null;
+  // Response Time: leads contacted, working minutes to first contact in
+  // total, and how many inside the 15-minute target.
+  responseCount: number;
+  responseMinutes: number;
+  responseOnTarget: number;
 }
 
 export interface Attribution {
@@ -247,6 +284,7 @@ export function attributeReportRows(
     byExec.set(id, {
       orderCount: 0, latestVehicle: null, deliveryCount: 0, insuranceCount: 0, enquiryCount: 0, salesCount: 0,
       inboundEnquiryCount: inboundStart, inboundSalesCount: inboundStart,
+      responseCount: 0, responseMinutes: 0, responseOnTarget: 0,
     });
   }
   const unmappedCounts = new Map<string, number>();
@@ -268,6 +306,11 @@ export function attributeReportRows(
       const d = r as DeliveredParseRow;
       t.deliveryCount += d.deliveryCount;
       t.insuranceCount += d.insuranceCount;
+    } else if (reportType === "response") {
+      const x = r as ResponseParseRow;
+      t.responseCount += x.contactCount;
+      t.responseMinutes += x.contactMinutes;
+      t.responseOnTarget += x.onTarget;
     } else {
       const e = r as EnquiryParseRow;
       t.enquiryCount += e.enquiryCount;
@@ -299,8 +342,14 @@ export function attributeReportRows(
 //   • insurance     — higher is better
 //   • conversionPct — higher is better. Inbound Conversion: MotorComplete
 //                     sales ÷ MotorComplete enquiries (see isInboundSource)
+//   • responseAvg   — LOWER is better. Average working minutes from a lead
+//                     reaching the exec to their first contact, over the
+//                     leads 10 at 10 has judged (user, 2026-10-13)
 
-export type LeaderboardMetric = "orders" | "deliveries" | "insurance" | "conversion";
+export type LeaderboardMetric = "orders" | "deliveries" | "insurance" | "conversion" | "response";
+
+/** Every metric, in display order. */
+export const LEADERBOARD_METRICS: LeaderboardMetric[] = ["orders", "deliveries", "insurance", "conversion", "response"];
 
 export interface ExecMonthStats {
   salesExecId: string;
@@ -314,6 +363,10 @@ export interface ExecMonthStats {
   enquiryCount: number;
   salesCount: number;
   conversionPct: number; // salesCount / enquiryCount × 100, 0 when no enquiries
+  // Response Time: leads contacted, and the average working minutes to
+  // first contact over them — null with none, which earns no rank.
+  responseCount: number;
+  responseAvg: number | null;
   latestVehicle: string | null;
   metricPoints: Record<LeaderboardMetric, number>;
   totalPoints: number;
@@ -326,6 +379,14 @@ export interface ExecMonthStats {
 export function formatConversion(s: Pick<ExecMonthStats, "enquiryCount" | "conversionPct">): string {
   return s.enquiryCount > 0 ? `${s.conversionPct.toFixed(1)}%` : "—";
 }
+
+/** Response Time for display: "12m", or "—" with no contacted leads. */
+export function formatResponse(s: Pick<ExecMonthStats, "responseAvg">): string {
+  return s.responseAvg == null ? "—" : formatMins(Math.round(s.responseAvg));
+}
+
+/** Average working minutes from a total and a count; null when there's nothing to average. */
+export const responseAverage = (minutes: number, count: number): number | null => (count > 0 ? minutes / count : null);
 
 function rankBy(rows: ExecMonthStats[], key: (s: ExecMonthStats) => number): Map<string, number> {
   // Standard sports ranking — tied scores share the same rank, and the next
@@ -358,23 +419,46 @@ function pointsForRank(rank: number): number {
   return 0;
 }
 
+// Response Time ranks the other way: fastest first. Only execs with a
+// figure are ranked — no contacted leads is the same as a zero elsewhere,
+// no rank and no points. Ties share a rank, as rankBy.
+function rankFastest(rows: ExecMonthStats[]): Map<string, number> {
+  const sorted = rows.filter((r) => r.responseAvg != null && r.responseCount > 0)
+    .sort((a, b) => (a.responseAvg as number) - (b.responseAvg as number));
+  const ranks = new Map<string, number>();
+  let prev: number | null = null;
+  let rank = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    // Compared as whole minutes, the figure everyone sees — 12.2 and 12.4
+    // both read "12m" and share the place.
+    const v = Math.round(sorted[i].responseAvg as number);
+    if (prev === null || v !== prev) { rank = i + 1; prev = v; }
+    ranks.set(sorted[i].salesExecId, rank);
+  }
+  return ranks;
+}
+
+export const emptyMetricRecord = <T,>(v: T): Record<LeaderboardMetric, T> =>
+  ({ orders: v, deliveries: v, insurance: v, conversion: v, response: v });
+
 // Apply the 3/2/1 scoring to an array of monthly stats. Mutates in place by
 // filling metricPoints/totalPoints/metricRanks. A zero earns no rank and no
 // points, so a metric with zero across the board awards nothing.
 export function applyPoints(rows: ExecMonthStats[]): void {
-  const metrics: { key: LeaderboardMetric; pick: (s: ExecMonthStats) => number }[] = [
-    { key: "orders",      pick: (s) => s.orderCount },
-    { key: "deliveries",  pick: (s) => s.deliveryCount },
-    { key: "insurance",   pick: (s) => s.insuranceCount },
-    { key: "conversion",  pick: (s) => s.conversionPct },
+  const metrics: { key: LeaderboardMetric; ranks: () => Map<string, number> }[] = [
+    { key: "orders",      ranks: () => rankBy(rows, (s) => s.orderCount) },
+    { key: "deliveries",  ranks: () => rankBy(rows, (s) => s.deliveryCount) },
+    { key: "insurance",   ranks: () => rankBy(rows, (s) => s.insuranceCount) },
+    { key: "conversion",  ranks: () => rankBy(rows, (s) => s.conversionPct) },
+    { key: "response",    ranks: () => rankFastest(rows) },
   ];
   for (const r of rows) {
-    r.metricPoints = { orders: 0, deliveries: 0, insurance: 0, conversion: 0 };
-    r.metricRanks = { orders: null, deliveries: null, insurance: null, conversion: null };
+    r.metricPoints = emptyMetricRecord(0);
+    r.metricRanks = emptyMetricRecord<number | null>(null);
     r.totalPoints = 0;
   }
   for (const m of metrics) {
-    const ranks = rankBy(rows, m.pick);
+    const ranks = m.ranks();
     for (const r of rows) {
       const rank = ranks.get(r.salesExecId) ?? null;
       r.metricRanks[m.key] = rank;
@@ -439,10 +523,14 @@ export function closestRace(rows: ExecMonthStats[]): ClosestRace | null {
     { metric: "conversion", label: "Inbound Conversion %", pick: (s) => s.conversionPct, gapLabel: (g) => `${g.toFixed(1)} percentage point${g === 1 ? "" : "s"} apart` },
   ];
 
+  // Response Time races the other way: the leader is the faster one.
+  const fastest = (s: ExecMonthStats) => (s.responseAvg == null || s.responseCount === 0 ? 0 : -Math.round(s.responseAvg));
+  candidates.push({ metric: "response", label: "Response Time", pick: fastest, gapLabel: (g) => `${g} min${g === 1 ? "" : "s"} apart` });
+
   let best: ClosestRace | null = null;
   for (const c of candidates) {
     const sorted = [...rows]
-      .filter((r) => c.pick(r) > 0)
+      .filter((r) => (c.metric === "response" ? r.responseAvg != null && r.responseCount > 0 : c.pick(r) > 0))
       .sort((a, b) => c.pick(b) - c.pick(a));
     for (let i = 1; i < sorted.length; i++) {
       const leader = sorted[i - 1];
@@ -480,12 +568,20 @@ export function overtakeTargets(rows: ExecMonthStats[], me: ExecMonthStats): Ove
     { metric: "insurance",  label: "Insurance Products",  pick: (s) => s.insuranceCount, gapLabel: (g) => `${Math.ceil(g)} more product${Math.ceil(g) === 1 ? "" : "s"}` },
     { metric: "conversion", label: "Inbound Conversion %", pick: (s) => s.conversionPct, gapLabel: (g) => `${g.toFixed(1)}pp` },
   ];
+  // Fastest wins: the target is whoever is next-quickest ahead of me.
+  candidates.push({
+    metric: "response", label: "Response Time",
+    pick: (s) => (s.responseAvg == null || s.responseCount === 0 ? -Infinity : -Math.round(s.responseAvg)),
+    gapLabel: (g) => `${Math.ceil(g)} min${Math.ceil(g) === 1 ? "" : "s"} faster`,
+  });
   const out: OvertakeTarget[] = [];
   for (const c of candidates) {
     // No enquiries means no conversion rate to improve — the gap would be
-    // measured from a 0% that doesn't exist.
+    // measured from a 0% that doesn't exist. Same for no contacted leads.
     if (c.metric === "conversion" && me.enquiryCount === 0) continue;
-    const sorted = [...rows].sort((a, b) => c.pick(b) - c.pick(a));
+    if (c.metric === "response" && (me.responseAvg == null || me.responseCount === 0)) continue;
+    const sorted = [...rows].filter((r) => c.metric !== "response" || (r.responseAvg != null && r.responseCount > 0))
+      .sort((a, b) => c.pick(b) - c.pick(a));
     const myIdx = sorted.findIndex((r) => r.salesExecId === me.salesExecId);
     if (myIdx <= 0) continue;
     const myVal = c.pick(me);

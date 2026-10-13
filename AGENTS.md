@@ -49,7 +49,8 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/cron/stock-match-debug`      | `requireAdmin` |
 | `/api/email/test`                  | `requireAdmin` |
 | `/api/blob/upload`                 | session + admin role check on token issue |
-| `/ten-at-ten`, `/ten-at-ten/admin` | `requireAdmin` (10 at 10 report + its uploads; the upload action re-checks) |
+| `/ten-at-ten`                      | `requireTenAtTenAccess` — admin or exec (report + PDF). Notes and Re-Write overrides are admin-only in the UI and their actions |
+| `/ten-at-ten/admin`                | `requireAdmin` (uploads + budgets; the upload action re-checks) |
 | `/enquiries`, `/enquiries/upload`  | redirect to `/ten-at-ten`, `/ten-at-ten/admin` — the Enquiry Tracker moved into 10 at 10 (Response times) |
 | `/broker`, `/broker/stock`         | `requireBrokerUser` (broker portal — separate auth, see below) |
 | `/broker/terms`                    | `requireBrokerUser` (must be reachable BEFORE acceptance) |
@@ -781,6 +782,14 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
 - No over-time chart, and "Build a breakdown" opens collapsed (user,
   2026-10-12: too much screen space). Every nested table starts collapsed.
 
+### Who sees it
+
+Admins and execs (user, 2026-10-13): the tile, every tab and the PDF.
+Admin-only: Upload data and budgets (`/ten-at-ten/admin`), the manager's
+reason on a cancellation, and overruling the Re-Write matching — execs see
+those read-only. `CanManage` in `report.tsx` shapes the page; the server
+actions keep `requireAdmin`, which is the actual control.
+
 ### Summary and Market Analysis tabs
 
 Tabs run Summary, Enquiries, Response times, Orders, Deliveries,
@@ -1072,6 +1081,33 @@ diagnostics carry on unchanged.
   until that month's Dealbook – Deliveries is uploaded to 10 at 10 again.
 - Checked on real October files: Order Take, Deliveries and Insurance
   match the old uploads exec for exec.
+
+### Response Time — the fifth metric (user, 2026-10-13)
+
+Scored 3/2/1 like the rest, **fastest wins**: each exec's average working
+minutes from a MotorComplete lead reaching them to their first contact —
+the exec's own clock, so late allocation (Sales Support) never counts
+against them. Same leads and same figure as 10 at 10's Response times "By
+exec", which is the check: October 2026 matched exec for exec.
+
+- Fed from 10 at 10's Enquiry Tracker data (the `enquiries` table), only
+  leads already judged (`partitionByReportability` against the latest
+  MotorComplete upload), by the month the lead came in, from
+  `FEED_FROM_MONTH`. Earlier months have no Response Time, so their points
+  and champions are unchanged.
+- MotorComplete names execs in full; `execCodeFromName` turns "Helen Mort"
+  into HeMo and the name map attributes it, like every other metric. That
+  rule lives in `lib/sales-leaderboard.ts` and Cancellations shares it.
+- Stored as total minutes + count (+ on-target) on the monthly row, so
+  several codes for one exec and YTD both average over leads, not over
+  averages. No contacted leads → `responseAvg` null → no rank (the zero
+  rule). Ties are by the whole minute shown: 12.2 and 12.4 both read 12m
+  and share the place.
+- Closest race, overtake targets ("3 mins faster"), badges (⚡ Fastest
+  Responder), the department KPI (a fall is shown green) and coaching all
+  run it the fast way round. Clean Sweep / Podium-in-every-metric count
+  only the metrics scored that month, so a pre-October month can still
+  earn them on four.
 
 - **Inbound Conversion counts MotorComplete enquiries only** (user's rule,
   2026-10-10): column E (Source) of the enquiry log must be a MotorComplete

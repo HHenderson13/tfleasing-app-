@@ -6,8 +6,11 @@ import { signOutAction } from "../login/actions";
 import {
   closestRace,
   currentYearMonth,
+  emptyMetricRecord,
   formatConversion,
   formatMonthLabel,
+  formatResponse,
+  responseAverage,
   MONTH_LABELS,
   type ExecMonthStats,
   type LeaderboardMetric,
@@ -29,6 +32,7 @@ const METRIC_META: { key: LeaderboardMetric; label: string; tone: string; format
   { key: "deliveries", label: "Deliveries",        tone: "from-emerald-500 to-teal-500", format: (s) => String(s.deliveryCount) },
   { key: "insurance",  label: "Insurance Products", tone: "from-violet-500 to-fuchsia-500", format: (s) => String(s.insuranceCount) },
   { key: "conversion", label: "Inbound Conversion %", tone: "from-sky-500 to-indigo-500", format: formatConversion },
+  { key: "response",   label: "Response Time",      tone: "from-rose-500 to-red-500",     format: formatResponse },
 ];
 
 const TROPHIES: Record<1 | 2 | 3, string> = { 1: "🏆", 2: "🥈", 3: "🥉" };
@@ -47,9 +51,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
   ]);
   const year = yearMonth.slice(0, 4);
 
-  const leaders: Record<LeaderboardMetric, ExecMonthStats[]> = {
-    orders: [], deliveries: [], insurance: [], conversion: [],
-  };
+  const leaders: Record<LeaderboardMetric, ExecMonthStats[]> = emptyMetricRecord<ExecMonthStats[]>([]);
   for (const m of METRIC_META) {
     leaders[m.key] = [...snapshot.rows]
       .filter((r) => r.metricRanks[m.key] !== null && r.metricRanks[m.key]! <= 3)
@@ -225,7 +227,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
 
         {/* Metric leader cards — team total per metric instead of the
             old scoring-key subtitle. */}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {METRIC_META.map((m) => (
             <MetricCard key={m.key} meta={m} leaders={leaders[m.key]} teamTotal={teamTotalFor(snapshot.rows, m.key)} />
           ))}
@@ -243,6 +245,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                 <th className="px-2 py-3 text-right">Deliveries</th>
                 <th className="px-2 py-3 text-right">Insurance</th>
                 <th className="px-2 py-3 text-right">Inbound conv %</th>
+                <th className="px-2 py-3 text-right">Response</th>
                 <th className="px-4 py-3 text-right">Points</th>
               </tr>
             </thead>
@@ -273,18 +276,20 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     <Cell n={r.deliveryCount}  pts={r.metricPoints.deliveries} />
                     <Cell n={r.insuranceCount} pts={r.metricPoints.insurance} />
                     <Cell n={formatConversion(r)} pts={r.metricPoints.conversion} />
+                    <Cell n={formatResponse(r)} pts={r.metricPoints.response} />
                     <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-slate-900">{r.totalPoints}</td>
                   </tr>
                 );
               })}
               {snapshot.rows.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">No participants yet. Admin can add execs on the Manage page.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-500">No participants yet. Admin can add execs on the Manage page.</td></tr>
               )}
             </tbody>
           </table>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">
-          Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt — per metric, per period.
+          Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt — per metric, per period. Response Time is the average working minutes from a
+          MotorComplete lead reaching the exec to their first contact — fastest wins; scored from October 2026.
         </p>
 
         {/* Champion archive — Hall of Fame strip of past 6 monthly winners. */}
@@ -381,6 +386,7 @@ function Scorecard({ rank, stats, badges }: { rank: number; stats: ExecMonthStat
         <ScoreLine label="Deliveries" n={stats.deliveryCount}  rank={stats.metricRanks.deliveries} />
         <ScoreLine label="Insurance"  n={stats.insuranceCount} rank={stats.metricRanks.insurance} />
         <ScoreLine label="Inbound conv %" n={formatConversion(stats)} rank={stats.metricRanks.conversion} sub={`${stats.salesCount}/${stats.enquiryCount}`} />
+        <ScoreLine label="Response time" n={formatResponse(stats)} rank={stats.metricRanks.response} sub={stats.responseCount ? `${stats.responseCount} lead${stats.responseCount === 1 ? "" : "s"} contacted` : undefined} />
       </div>
       {badges.length > 0 && (
         <div className="flex flex-wrap gap-1 border-t border-slate-100 bg-slate-50 px-4 py-2">
@@ -460,6 +466,12 @@ function teamTotalFor(rows: ExecMonthStats[], key: LeaderboardMetric): string {
     const enq = rows.reduce((a, r) => a + r.enquiryCount, 0);
     const sales = rows.reduce((a, r) => a + r.salesCount, 0);
     return enq > 0 ? `${((sales / enq) * 100).toFixed(1)}%` : "—";
+  }
+  if (key === "response") {
+    // The team's average over every contacted lead, not an average of averages.
+    const count = rows.reduce((a, r) => a + r.responseCount, 0);
+    const minutes = rows.reduce((a, r) => a + (r.responseAvg ?? 0) * r.responseCount, 0);
+    return formatResponse({ responseAvg: responseAverage(minutes, count) });
   }
   if (key === "orders")     return String(rows.reduce((a, r) => a + r.orderCount, 0));
   if (key === "deliveries") return String(rows.reduce((a, r) => a + r.deliveryCount, 0));

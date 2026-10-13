@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { shiftAnchor } from "@/lib/period";
 import { ALLOCATION_TARGET_MINS, CONTACT_TARGET_MINS, formatMins, formatWall } from "@/lib/business-hours";
@@ -79,7 +79,20 @@ const SECTIONS: [Section, string][] = [
   ["deliveries", "Deliveries"], ["cancellations", "Cancellations"], ["market", "Market Analysis"],
 ];
 
-export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, market }: {
+// Admins manage: upload files, write the reason for a cancellation, and
+// overrule the Re-Write matching. Execs read everything else (user,
+// 2026-10-13). The server actions re-check — this only shapes the page.
+const CanManage = createContext(false);
+
+/** Where an empty tab's data comes from — a link for admins, a plain word for execs. */
+function UploadHint({ file }: { file: string }) {
+  const canManage = useContext(CanManage);
+  return canManage
+    ? <> Upload {file} from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</>
+    : <> It appears once {file} has been uploaded.</>;
+}
+
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, market, canManage = false }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
   /** Every cancellation, already classified on the server. */
@@ -88,6 +101,8 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
   cancelledOrderDays: string[];
   /** The latest scrape, summarised; null before the first one. */
   market: MarketOverview | null;
+  /** Admin: uploads, cancellation notes, Re-Write overrides. */
+  canManage?: boolean;
 }) {
   const enquiryRows = useMemo(() => decodeReport(payload), [payload]);
   const orderRows = useMemo(() => decodeOrders(orders), [orders]);
@@ -115,8 +130,8 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
   const atCurrent = mode !== "custom" && range.startDay <= today && range.endDay >= today;
 
   return (
+    <CanManage.Provider value={canManage}>
     <div className="mt-5 space-y-5">
-      {/* Section */}
       {/* Seven tabs don't fit a phone: they scroll sideways in their own row,
           and Export PDF stays put beside them. */}
       <div className="flex items-center gap-3 border-b border-slate-200">
@@ -187,6 +202,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
       {section === "market" && <MarketSection market={market} />}
     </div>
+    </CanManage.Provider>
   );
 }
 
@@ -458,7 +474,7 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
   const filtersOn = sources.size > 0 || !!exec || !!model;
   const s = statsOf(rows);
 
-  if (all.length === 0) return <Empty>No enquiries yet. Upload an enquiry log from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+  if (all.length === 0) return <Empty>No enquiries yet.<UploadHint file="the Enquiry Log" /></Empty>;
 
   return (
     <div className="space-y-5">
@@ -656,7 +672,7 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, o
   const cols = isDel ? DELIVERY_COLS : ORDER_COLS;
 
   if (all.length === 0) {
-    return <Empty>No {noun} yet. Upload {isDel ? "Dealbook – Deliveries" : "Dealbook – Orders"} from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+    return <Empty>No {noun} yet.<UploadHint file={isDel ? "Dealbook – Deliveries" : "Dealbook – Orders"} /></Empty>;
   }
 
   const delivered = rows.filter((r) => r.delivery === "Delivered").length;
@@ -990,7 +1006,7 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
   const byDay = useMemo(() => rGroups(reportable, (r) => r.enquiryDay, dayLabel).sort((a, b) => b.key.localeCompare(a.key)), [reportable]);
 
   if (all.length === 0) {
-    return <Empty>No response-time data yet. Upload a MotorComplete enquiry export from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+    return <Empty>No response-time data yet.<UploadHint file="the Enquiry Tracker" /></Empty>;
   }
 
   const sameDayPct = s.sameDayExpected ? Math.round((s.sameDayMet / s.sameDayExpected) * 100) : null;
@@ -1190,7 +1206,7 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
   const byModel = useMemo(() => cGroups(rows, (c) => c.model), [rows]);
 
   if (all.length === 0) {
-    return <Empty>No cancellations yet. Upload Cancelled Orders from <a href="/ten-at-ten/admin" className="font-medium text-indigo-600">Upload data</a>.</Empty>;
+    return <Empty>No cancellations yet.<UploadHint file="Cancelled Orders" /></Empty>;
   }
 
   const unexplained = proper.filter(needsReason).length;
@@ -1215,7 +1231,7 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
         <Empty>No cancellations in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
       ) : (
         <>
-          <Card title="Cancellations" note="Add the reason for each · saved for everyone">
+          <Card title="Cancellations" note="The manager's reason for each">
             {proper.length === 0
               ? <p className="text-sm text-slate-500">None — everything cancelled in {range.label} was ordered again.</p>
               : <div className="divide-y divide-slate-100">{proper.map((c) => <CancellationItem key={c.id} c={c} />)}</div>}
@@ -1259,6 +1275,7 @@ function CancellationItem({ c }: { c: CancellationView }) {
   const [text, setText] = useState(c.note);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const re = useReclassify(c.id);
+  const canManage = useContext(CanManage);
   const dirty = text.trim() !== c.note.trim();
 
   function save() {
@@ -1284,12 +1301,18 @@ function CancellationItem({ c }: { c: CancellationView }) {
         </div>
         <div className="flex items-center gap-2">
           {c.overridden && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Manager&apos;s call</span>}
-          <button onClick={() => re.set(c.overridden ? null : "rewrite")} disabled={re.pending} className={smallButton}
+          {canManage && <button onClick={() => re.set(c.overridden ? null : "rewrite")} disabled={re.pending} className={smallButton}
             title={c.overridden ? `Hand it back to the matching, which found a re-order${c.reorder ? ` on ${shortDate(c.reorder.orderDay)}` : ""}` : "It was ordered again — count it as a Re-Write"}>
             {c.overridden ? "Undo" : "It's a Re-Write"}
-          </button>
+          </button>}
         </div>
       </div>
+      {!canManage ? (
+        <div className={`mt-2 rounded-lg px-3 py-2 text-sm ${c.note ? "bg-slate-50 text-slate-800" : "bg-amber-50 font-semibold text-amber-800"}`}>
+          {c.note || "Reason needed — a manager adds it"}
+          {c.note && c.noteBy && <div className="mt-0.5 text-[11px] font-normal text-slate-400">{c.noteBy} · {c.noteAt}</div>}
+        </div>
+      ) : (<>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
         <textarea value={text} onChange={(e) => { setText(e.target.value); setMsg(null); }} rows={2} maxLength={2000}
           placeholder="Reason for the cancellation…" aria-label={`Reason ${c.customer} cancelled`}
@@ -1306,12 +1329,15 @@ function CancellationItem({ c }: { c: CancellationView }) {
           : c.note ? <span className="text-slate-400">Saved by {c.noteBy ?? "—"} · {c.noteAt}</span>
           : <span className="font-semibold text-amber-700">Reason needed</span>}
       </div>
+      </>)}
     </div>
   );
 }
 
 function RewriteAction({ c }: { c: CancellationView }) {
   const re = useReclassify(c.id);
+  const canManage = useContext(CanManage);
+  if (!canManage) return c.overridden ? <span className="text-[10px] font-semibold uppercase text-amber-700">Manager&apos;s call</span> : null;
   return (
     <div className="text-right">
       <button onClick={() => re.set(c.overridden ? null : "proper")} disabled={re.pending} className={smallButton}

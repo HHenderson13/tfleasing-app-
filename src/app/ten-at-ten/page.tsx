@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth-guard";
+import { isAdmin } from "@/lib/auth";
+import { requireTenAtTenAccess } from "@/lib/auth-guard";
 import { reportingHorizonFromInstant } from "@/lib/business-hours";
 import { loadEnquiries, loadLatestEnquiryUploadAt } from "@/lib/enquiries";
 import { logError } from "@/lib/logger";
@@ -13,7 +14,10 @@ import { ReportClient } from "./report";
 export const dynamic = "force-dynamic";
 
 export default async function TenAtTenPage() {
-  await requireAdmin();
+  // Admins and execs read the report; uploads and the manager's
+  // cancellation notes stay admin-only (the actions re-check).
+  const user = await requireTenAtTenAccess();
+  const canManage = isAdmin(user);
   const [rows, orders, deliveries, budgets, names, uploads, responses, latestResponseUpload, market] = await Promise.all([
     loadTenAtTenRows(), loadTenAtTenOrders(), loadTenAtTenDeliveries(), loadBudgets(), loadExecNames(), listTenAtTenUploads(1),
     loadEnquiries(), loadLatestEnquiryUploadAt(),
@@ -45,9 +49,11 @@ export default async function TenAtTenPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 text-sm">
           <Link href="/" className="text-slate-500 hover:text-slate-900">← Home</Link>
-          <Link href="/ten-at-ten/admin" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
-            Upload data
-          </Link>
+          {canManage && (
+            <Link href="/ten-at-ten/admin" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
+              Upload data
+            </Link>
+          )}
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-6">
@@ -60,7 +66,7 @@ export default async function TenAtTenPage() {
         </div>
         <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
           responses={responses} reportHorizon={reportHorizon} today={today}
-          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} market={market} />
+          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} market={market} canManage={canManage} />
       </main>
     </div>
   );

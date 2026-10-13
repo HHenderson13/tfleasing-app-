@@ -109,20 +109,19 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     revalidatePath("/ten-at-ten");
     revalidatePath("/ten-at-ten/admin");
 
-    // 10 at 10 feeds Pole Position: the enquiry log, both Dealbook reports
-    // and Cancelled Orders (which takes cancelled orders out of Order Take)
-    // all move the board. The upload itself has landed either way, so a
-    // problem here is reported rather than failing it.
+    // 10 at 10 feeds Pole Position: every file moves the board — the
+    // enquiry log, both Dealbook reports, Cancelled Orders (which takes
+    // cancelled orders out of Order Take) and the Enquiry Tracker (Response
+    // Time). The upload itself has landed either way, so a problem here is
+    // reported rather than failing it.
     let polePosition: FedSlot[] | undefined;
     let polePositionError: string | undefined;
-    if (kind !== "response") {
-      try {
-        polePosition = await feedPolePositionFromTenAtTen(user.id);
-        if (polePosition.length) invalidateLeaderboard();
-      } catch (e) {
-        logError("ten-at-ten/feed-pole-position", e, { filename: file.name });
-        polePositionError = "Pole Position wasn't updated from this file — use Re-process on Pole Position's admin page.";
-      }
+    try {
+      polePosition = await feedPolePositionFromTenAtTen(user.id);
+      if (polePosition.length) invalidateLeaderboard();
+    } catch (e) {
+      logError("ten-at-ten/feed-pole-position", e, { filename: file.name });
+      polePositionError = "Pole Position wasn't updated from this file — use Re-process on Pole Position's admin page.";
     }
     return { ok: true, filename: file.name, kind, result, polePosition, polePositionError };
   } catch (e) {

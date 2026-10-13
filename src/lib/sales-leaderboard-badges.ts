@@ -1,4 +1,4 @@
-import type { ExecMonthStats, LeaderboardMetric } from "./sales-leaderboard";
+import { LEADERBOARD_METRICS, type ExecMonthStats, type LeaderboardMetric } from "./sales-leaderboard";
 
 // Badges are derived from the ranking + total points on a single snapshot
 // (either MTD or YTD). Same logic applies to both views — the calling page
@@ -41,6 +41,12 @@ const METRIC_TITLES: Record<LeaderboardMetric, { gold: string; silver: string; b
     bronze: "Conversion Podium",
     emoji:  "🎯",
   },
+  response: {
+    gold:   "Fastest Responder",
+    silver: "Response Runner-Up",
+    bronze: "Response Podium",
+    emoji:  "⚡",
+  },
 };
 
 const TROPHY_BY_TIER: Record<1 | 2 | 3, string> = {
@@ -81,7 +87,7 @@ export function computeBadgesFor(
   }
 
   // Per-metric podiums.
-  const metrics: LeaderboardMetric[] = ["orders", "deliveries", "insurance", "conversion"];
+  const metrics = LEADERBOARD_METRICS;
   for (const m of metrics) {
     const rank = stats.metricRanks[m];
     if (rank === 1 || rank === 2 || rank === 3) {
@@ -95,13 +101,16 @@ export function computeBadgesFor(
     return r === 1 || r === 2 || r === 3;
   });
   const firsts = metrics.filter((m) => stats.metricRanks[m] === 1);
-  if (firsts.length >= 4) {
-    out.push({ key: "clean-sweep", emoji: "✨", title: "Clean Sweep — 1st in all 4", tier: 1, isSpecial: true });
-  } else if (firsts.length === 3) {
-    out.push({ key: "triple-threat", emoji: "🔥", title: "Triple Threat — 1st in 3 metrics", tier: 1, isSpecial: true });
-  } else if (podiums.length === 4 && firsts.length < 3) {
+  // Months before Response Time was measured only have four metrics in
+  // play, so "every metric" means every one that was scored.
+  const scored = metrics.filter((m) => m !== "response" || stats.responseCount > 0 || stats.metricRanks.response !== null);
+  if (firsts.length >= scored.length && scored.length >= 4) {
+    out.push({ key: "clean-sweep", emoji: "✨", title: `Clean Sweep — 1st in all ${scored.length}`, tier: 1, isSpecial: true });
+  } else if (firsts.length >= 3) {
+    out.push({ key: "triple-threat", emoji: "🔥", title: `Triple Threat — 1st in ${firsts.length} metrics`, tier: 1, isSpecial: true });
+  } else if (podiums.length >= scored.length && scored.length >= 4) {
     // Made the podium across the board even without sweeping the golds.
-    out.push({ key: "podium-everywhere", emoji: "🌟", title: "Quadruple Podium", tier: 1, isSpecial: true });
+    out.push({ key: "podium-everywhere", emoji: "🌟", title: "Podium in every metric", tier: 1, isSpecial: true });
   }
 
   // Sort specials first, then tier ascending.

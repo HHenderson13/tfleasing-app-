@@ -12,11 +12,21 @@
 //                    list leaves those out too)
 //   • Delivered list → lines whose delivery date is in the month — every
 //                    line, delivered or due, as the delivered list counted
+//   • Response Time → the MotorComplete leads 10 at 10 has judged (a full
+//                    working day gone), by the month they came in: each
+//                    exec's working minutes from the lead reaching them to
+//                    first contact. Execs are named in full there, so the
+//                    code is derived the Dealerweb way (execCodeFromName)
+//                    and the name map does the rest
 //
 // History is kept: months before FEED_FROM_MONTH keep the figures their own
 // uploads gave them and are never rewritten from here.
 
-import { isSaleStatus, type DeliveredParseRow, type EnquiryParseRow, type LeaderboardReportType, type OrderListParseRow } from "./sales-leaderboard";
+import { CONTACT_TARGET_MINS } from "./business-hours";
+import {
+  execCodeFromName, isSaleStatus,
+  type DeliveredParseRow, type EnquiryParseRow, type LeaderboardReportType, type OrderListParseRow, type ResponseParseRow,
+} from "./sales-leaderboard";
 
 /**
  * The first month fed from 10 at 10 — the first it holds complete files
@@ -29,6 +39,8 @@ export const isFedMonth = (yearMonth: string) => yearMonth >= FEED_FROM_MONTH;
 export interface FeedEnquiryLine { exec: string; status: string | null; sourceRaw: string | null }
 export interface FeedOrderLine { exec: string; orderedAt: number; vehicle: string | null }
 export interface FeedDeliveryLine { exec: string; insuranceCount: number | null }
+/** One judged MotorComplete lead: who it reached, and the working minutes to their first contact (null if none yet). */
+export interface FeedResponseLine { salesExec: string; contactMins: number | null }
 
 export function enquiryRowsFrom(lines: readonly FeedEnquiryLine[]): EnquiryParseRow[] {
   const byExec = new Map<string, EnquiryParseRow>();
@@ -76,6 +88,26 @@ export function deliveredRowsFrom(lines: readonly FeedDeliveryLine[]): Delivered
   return [...byExec.values()];
 }
 
+/**
+ * Response Time per exec: leads with a first-contact time, the minutes they
+ * took, and how many were inside the target. A lead never contacted has no
+ * time to average and is left to Response times' own "never contacted".
+ */
+export function responseRowsFrom(lines: readonly FeedResponseLine[]): ResponseParseRow[] {
+  const byCode = new Map<string, ResponseParseRow>();
+  for (const l of lines) {
+    const name = l.salesExec.replace(/\s+/g, " ").trim();
+    if (!name || l.contactMins == null) continue;
+    const code = execCodeFromName(name) || name;
+    const r = byCode.get(code) ?? { reportCode: code, name, contactCount: 0, contactMinutes: 0, onTarget: 0 };
+    r.contactCount++;
+    r.contactMinutes += l.contactMins;
+    if (l.contactMins <= CONTACT_TARGET_MINS) r.onTarget++;
+    byCode.set(code, r);
+  }
+  return [...byCode.values()];
+}
+
 /** A stable form of a slot's rows, to tell whether anything changed since it was last fed. */
 export function rowsFingerprint(rows: readonly { reportCode: string }[]): string {
   const sortKeys = (v: unknown): unknown =>
@@ -89,4 +121,5 @@ export const FEED_REPORT_LABEL: Record<LeaderboardReportType, string> = {
   orders: "Order Take",
   delivered: "Deliveries & Insurance",
   enquiry: "Inbound Conversion",
+  response: "Response Time",
 };

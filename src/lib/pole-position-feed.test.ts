@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import {
-  FEED_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, isFedMonth, orderRowsFrom, rowsFingerprint,
+  FEED_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, isFedMonth, orderRowsFrom, responseRowsFrom, rowsFingerprint,
 } from "./pole-position-feed";
 import {
   attributeReportRows, countInsuranceProducts, parseDeliveredList, parseEnquiryLog, parseOrderList,
@@ -91,5 +91,21 @@ describe("fed from 10 at 10", () => {
     expect(rowsFingerprint(a)).toBe(rowsFingerprint(b));
     const c = enquiryRowsFrom([{ exec: "DeDu", sourceRaw: "MotorComplete Lead", status: "Ordered" }, { exec: "MiHo", sourceRaw: "Customer", status: "Ordered" }]);
     expect(rowsFingerprint(c)).not.toBe(rowsFingerprint(a));
+  });
+
+  it("builds Response Time per exec from judged leads, by their Dealerweb code", () => {
+    const rows = responseRowsFrom([
+      { salesExec: "Helen Mort", contactMins: 10 },
+      { salesExec: "Helen  Mort", contactMins: 30 },   // spacing drift is the same person
+      { salesExec: "Helen Mort", contactMins: null },  // never contacted: no time to average
+      { salesExec: "Douglas James", contactMins: 15 },
+      { salesExec: "", contactMins: 4 },               // no exec: nothing to credit
+    ]);
+    expect(rows).toEqual([
+      { reportCode: "HeMo", name: "Helen Mort", contactCount: 2, contactMinutes: 40, onTarget: 1 },
+      { reportCode: "DoJa", name: "Douglas James", contactCount: 1, contactMinutes: 15, onTarget: 1 },
+    ]);
+    const a = attributeReportRows("response", rows, codeToExec, participants);
+    expect(a.unmapped.map((u) => u.reportCode)).toEqual(["HeMo", "DoJa"]); // not in this test's name map
   });
 });

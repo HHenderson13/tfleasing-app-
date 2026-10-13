@@ -16,7 +16,10 @@
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { dayKey, parseExportTimestamp } from "./business-hours";
+import { execCodeFromName } from "./sales-leaderboard";
 import { isExcludedExec, vehicleOf } from "./ten-at-ten";
+
+export { execCodeFromName };
 import { cancelledHeaderFound, cleanVehicle, exportedAtOf, isCancelledOrdersHeader, plateOf, segmentOf } from "./ten-at-ten-orders";
 import type { Segment } from "./ten-at-ten-report";
 
@@ -61,18 +64,6 @@ export function cancelledVehicle(raw: unknown): string {
   return cleanVehicle([...model, ...rest].join(" "));
 }
 
-/**
- * Dealerweb's exec code from a full name — the first two letters of the
- * first and last names: "Deniz Durmaz" is DeDu, "Minny Hope-Lindley" MiHo.
- * The Dealbook uses codes; this export uses names.
- */
-export function execCodeFromName(name: unknown): string {
-  const parts = norm(name).split(" ").filter(Boolean);
-  if (parts.length < 2) return "";
-  const two = (s: string) => s.replace(/[^A-Za-z]/g, "").slice(0, 2).toLowerCase();
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  return cap(two(parts[0])) + cap(two(parts[parts.length - 1]));
-}
 
 /**
  * Order time + customer + vehicle, plus the occurrence within the file —

@@ -3,7 +3,11 @@ import * as XLSX from "xlsx";
 import {
   applyPoints,
   attributeReportRows,
+  closestRace,
   currentYearMonth,
+  execCodeFromName,
+  formatResponse,
+  overtakeTargets,
   enquiryInbound,
   enquirySales,
   formatConversion,
@@ -34,10 +38,12 @@ function makeRow(
     enquiryCount,
     salesCount,
     conversionPct: enquiryCount > 0 ? (salesCount / enquiryCount) * 100 : 0,
+    responseCount: 0,
+    responseAvg: null,
     latestVehicle: null,
-    metricPoints: { orders: 0, deliveries: 0, insurance: 0, conversion: 0 },
+    metricPoints: { orders: 0, deliveries: 0, insurance: 0, conversion: 0, response: 0 },
     totalPoints: 0,
-    metricRanks: { orders: null, deliveries: null, insurance: null, conversion: null },
+    metricRanks: { orders: null, deliveries: null, insurance: null, conversion: null, response: null },
   };
 }
 
@@ -306,5 +312,59 @@ describe("date helpers", () => {
   it("currentYearMonth returns YYYY-MM in UK time", () => {
     const ym = currentYearMonth(new Date("2026-06-15T10:00:00Z"));
     expect(ym).toBe("2026-06");
+  });
+});
+
+describe("Response Time", () => {
+  const withResponse = (id: string, count: number, avg: number | null): ExecMonthStats => ({ ...makeRow(id), responseCount: count, responseAvg: avg });
+
+  it("scores the fastest average first 3/2/1, and ranks nobody without contacted leads", () => {
+    const rows = [withResponse("slow", 10, 22), withResponse("fast", 8, 7), withResponse("mid", 12, 13), withResponse("none", 0, null), withResponse("fourth", 3, 30)];
+    applyPoints(rows);
+    const pts = Object.fromEntries(rows.map((r) => [r.salesExecId, r.metricPoints.response]));
+    expect(pts).toEqual({ fast: 3, mid: 2, slow: 1, fourth: 0, none: 0 });
+    expect(rows.find((r) => r.salesExecId === "none")!.metricRanks.response).toBeNull();
+    expect(rows.find((r) => r.salesExecId === "fourth")!.metricRanks.response).toBe(4);
+  });
+
+  it("shares a place when the averages read the same whole minute", () => {
+    const rows = [withResponse("a", 5, 12.2), withResponse("b", 5, 12.4), withResponse("c", 5, 15)];
+    applyPoints(rows);
+    expect(rows.map((r) => [r.salesExecId, r.metricRanks.response, r.metricPoints.response])).toEqual([["a", 1, 3], ["b", 1, 3], ["c", 3, 1]]);
+  });
+
+  it("adds to the other four metrics' points", () => {
+    const rows = [{ ...withResponse("x", 4, 5), orderCount: 3 }, { ...withResponse("y", 4, 9), orderCount: 5 }];
+    applyPoints(rows);
+    expect(rows.map((r) => r.totalPoints)).toEqual([2 + 3, 3 + 2]);
+  });
+
+  it("formats for display, with a dash for no contacted leads", () => {
+    expect(formatResponse({ responseAvg: 12.4 })).toBe("12m");
+    expect(formatResponse({ responseAvg: null })).toBe("—");
+  });
+
+  it("sums several codes for one exec, as every other metric", () => {
+    const rows = [
+      { reportCode: "HeMo", name: "Helen Mort", contactCount: 4, contactMinutes: 40, onTarget: 3 },
+      { reportCode: "HeMo2", name: "Helen Mort", contactCount: 1, contactMinutes: 20, onTarget: 0 },
+    ];
+    const a = attributeReportRows("response", rows, new Map([["HeMo", "helen"], ["HeMo2", "helen"]]), new Set(["helen"]));
+    expect(a.byExec.get("helen")).toMatchObject({ responseCount: 5, responseMinutes: 60, responseOnTarget: 3 });
+  });
+
+  it("derives the Dealerweb code from a MotorComplete name", () => {
+    expect(execCodeFromName("Helen Mort")).toBe("HeMo");
+    expect(execCodeFromName("Douglas James")).toBe("DoJa");
+    expect(execCodeFromName("Minny Hope-Lindley")).toBe("MiHo");
+  });
+
+  it("races and overtakes the fast way round", () => {
+    const rows = [withResponse("me", 5, 14), withResponse("ahead", 5, 11), withResponse("leader", 5, 6)];
+    applyPoints(rows);
+    const race = closestRace(rows.map((r) => ({ ...r, orderCount: 0 })));
+    expect(race).toMatchObject({ metric: "response", leader: { salesExecId: "ahead" }, challenger: { salesExecId: "me" }, gap: 3 });
+    const targets = overtakeTargets(rows, rows[0]).filter((t) => t.metric === "response");
+    expect(targets).toEqual([expect.objectContaining({ target: expect.objectContaining({ salesExecId: "ahead" }), gapLabel: "3 mins faster" })]);
   });
 });

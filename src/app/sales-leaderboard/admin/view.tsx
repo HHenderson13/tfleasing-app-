@@ -90,7 +90,7 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
     <div className="space-y-6">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{monthLabel} — department totals</h3>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {dashboard.kpis.map((k) => (
             <KpiTile key={k.label} kpi={k} />
           ))}
@@ -119,7 +119,8 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
                 <th className="px-2 py-3 text-right">Insurance</th>
                 <th className="px-2 py-3 text-right">Inbound enq.</th>
                 <th className="px-2 py-3 text-right">Inbound sales</th>
-                <th className="px-4 py-3 text-right">Inbound conv %</th>
+                <th className="px-2 py-3 text-right">Inbound conv %</th>
+                <th className="px-4 py-3 text-right">Avg response</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -134,7 +135,8 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
                     <td className="px-2 py-2 text-right tabular-nums">{t.insuranceCount}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{t.enquiryCount}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{t.salesCount}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{t.enquiryCount > 0 ? `${conv.toFixed(1)}%` : "—"}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{t.enquiryCount > 0 ? `${conv.toFixed(1)}%` : "—"}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{t.responseCount > 0 ? `${Math.round(t.responseMinutes / t.responseCount)}m` : "—"}</td>
                   </tr>
                 );
               })}
@@ -147,16 +149,21 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
 }
 
 function KpiTile({ kpi }: { kpi: DeptDashboard["kpis"][number] }) {
-  const fmt = (n: number) => kpi.format === "pct" ? `${n.toFixed(1)}%` : String(Math.round(n));
+  const fmt = (n: number) => kpi.empty ? "—" : kpi.format === "pct" ? `${n.toFixed(1)}%` : kpi.format === "mins" ? `${Math.round(n)}m` : String(Math.round(n));
   const delta = kpi.current - kpi.previous;
-  const deltaText = kpi.format === "pct" ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pts` : `${delta >= 0 ? "+" : ""}${Math.round(delta)}`;
-  const tone = delta > 0 ? "text-emerald-600" : delta < 0 ? "text-red-600" : "text-slate-400";
+  const deltaText = kpi.format === "pct" ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pts`
+    : kpi.format === "mins" ? `${delta >= 0 ? "+" : ""}${Math.round(delta)}m`
+    : `${delta >= 0 ? "+" : ""}${Math.round(delta)}`;
+  // Response Time improves as it falls.
+  const better = kpi.lowerIsBetter ? delta < 0 : delta > 0;
+  const worse = kpi.lowerIsBetter ? delta > 0 : delta < 0;
+  const tone = better ? "text-emerald-600" : worse ? "text-red-600" : "text-slate-400";
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{kpi.label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{fmt(kpi.current)}</div>
       <div className={`mt-1 text-xs font-medium ${tone}`}>
-        {kpi.previous === 0 && kpi.current === 0 ? "—" : `${deltaText} vs last month`}
+        {kpi.empty || (kpi.previous === 0 && kpi.current === 0) ? "—" : kpi.previous === 0 && kpi.format === "mins" ? "first month measured" : `${deltaText} vs last month`}
       </div>
     </div>
   );
@@ -473,10 +480,11 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
 // once, and it feeds the board (lib/sales-leaderboard-store.ts). Months
 // before FEED_FROM_MONTH keep the figures their own uploads gave them.
 
-const REPORTS: { type: "orders" | "delivered" | "enquiry"; label: string; file: string; note: string }[] = [
+const REPORTS: { type: "orders" | "delivered" | "enquiry" | "response"; label: string; file: string; note: string }[] = [
   { type: "orders",    label: "Order Take",            file: "Dealbook – Orders",     note: "Orders per exec by order date. An order later cancelled is left out, as Dealerweb's own order list does. The vehicle on their latest order is the scorecard's fun fact." },
   { type: "delivered", label: "Deliveries & Insurance", file: "Dealbook – Deliveries", note: "Every line in the month by delivery date, and insurance products — non-zero values in cols W:AC. A month waits until its Deliveries file has been uploaded to 10 at 10 since insurance was read there." },
   { type: "enquiry",   label: "Inbound Conversion",    file: "Enquiry Log",           note: "Enquiries by enquiry date. Only MotorComplete sources (col E) count; of those, Ordered, Handover Arranged and Delivered (col Q) are sales." },
+  { type: "response",  label: "Response Time",         file: "Enquiry Tracker",       note: "Average working minutes from a MotorComplete lead reaching the exec to their first contact, over the leads 10 at 10 has judged (a full working day gone). Fastest wins. Execs are matched through the name map by their Dealerweb code (Helen Mort → HeMo)." },
 ];
 
 function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: string; lastUploads: AdminLastUpload[] }) {
@@ -512,7 +520,7 @@ function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: strin
       <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
         <div className="font-semibold">Pole Position is fed from 10 at 10.</div>
         <p className="mt-0.5 text-xs text-indigo-900">
-          Upload the Enquiry Log, Dealbook – Orders and Dealbook – Deliveries once, on{" "}
+          Upload the Enquiry Log, Enquiry Tracker, Dealbook – Orders and Dealbook – Deliveries once, on{" "}
           <a href="/ten-at-ten/admin" className="font-semibold underline underline-offset-2">10 at 10 → Upload data</a>, and the board updates
           from them. From {formatMonthLabel(FEED_FROM_MONTH)} every month is built from 10 at 10; earlier months keep the figures their
           own uploads here gave them.

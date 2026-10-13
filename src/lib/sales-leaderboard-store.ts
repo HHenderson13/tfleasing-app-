@@ -8,9 +8,12 @@ import { eq, sql } from "drizzle-orm";
 import { revalidatePath, updateTag } from "next/cache";
 import { db } from "@/db";
 import { salesLeaderboardMonthly, salesLeaderboardNameMap, salesLeaderboardParticipants, salesLeaderboardUploads } from "@/db/schema";
+import { reportingHorizonFromInstant } from "./business-hours";
+import { loadEnquiries, loadLatestEnquiryUploadAt } from "./enquiries";
+import { partitionByReportability } from "./enquiry-reporting";
 import { logError } from "./logger";
 import {
-  FEED_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, orderRowsFrom, rowsFingerprint,
+  FEED_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, orderRowsFrom, responseRowsFrom, rowsFingerprint,
 } from "./pole-position-feed";
 import {
   attributeReportRows,
@@ -18,12 +21,13 @@ import {
   type EnquiryParseRow,
   type LeaderboardReportType,
   type OrderListParseRow,
+  type ResponseParseRow,
 } from "./sales-leaderboard";
 import { LEADERBOARD_CACHE_TAG } from "./sales-leaderboard-data";
 import { loadCancellationsReport, loadExecNames } from "./ten-at-ten-store";
 
-export type ParsedRows = OrderListParseRow[] | DeliveredParseRow[] | EnquiryParseRow[];
-const REPORT_TYPES: LeaderboardReportType[] = ["orders", "delivered", "enquiry"];
+export type ParsedRows = OrderListParseRow[] | DeliveredParseRow[] | EnquiryParseRow[] | ResponseParseRow[];
+const REPORT_TYPES: LeaderboardReportType[] = ["orders", "delivered", "enquiry", "response"];
 
 /**
  * Every change to the board's data busts the cross-request cache tag and the
@@ -65,6 +69,11 @@ export async function attributeUpload(yearMonth: string, reportType: Leaderboard
       setFields.deliveryCount = vals.deliveryCount;
       setFields.insuranceCount = vals.insuranceCount;
       setFields.deliveriesUpdatedAt = now;
+    } else if (reportType === "response") {
+      setFields.responseCount = vals.responseCount;
+      setFields.responseMinutes = vals.responseMinutes;
+      setFields.responseOnTarget = vals.responseOnTarget;
+      setFields.responsesUpdatedAt = now;
     } else {
       setFields.enquiryCount = vals.enquiryCount;
       setFields.salesCount = vals.salesCount;
@@ -129,12 +138,19 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
   const from = `${FEED_FROM_MONTH}-01`;
   const months = async (table: "ten_at_ten_enquiries" | "ten_at_ten_orders" | "ten_at_ten_deliveries", col: "enquiry_day" | "order_day" | "delivery_day") =>
     (await db.all<{ m: string }>(sql`SELECT DISTINCT substr(${sql.raw(col)}, 1, 7) AS m FROM ${sql.raw(table)} WHERE ${sql.raw(col)} >= ${from} ORDER BY m`)).map((r) => r.m);
-  const [enquiryMonths, orderMonths, deliveryMonths] = await Promise.all([
+  const [enquiryMonths, orderMonths, deliveryMonths, responseLines, latestResponseUpload] = await Promise.all([
     months("ten_at_ten_enquiries", "enquiry_day"),
     months("ten_at_ten_orders", "order_day"),
     months("ten_at_ten_deliveries", "delivery_day"),
+    loadEnquiries({ from }),
+    loadLatestEnquiryUploadAt(),
   ]);
-  if (enquiryMonths.length + orderMonths.length + deliveryMonths.length === 0) return [];
+  // Response Time judges only what Response times judges: leads that have
+  // had a full working day, measured from the latest MotorComplete upload.
+  const horizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
+  const judged = horizon == null ? [] : partitionByReportability(responseLines, horizon).reportable;
+  const responseMonths = [...new Set(judged.map((r) => r.enquiryDay.slice(0, 7)))].sort();
+  if (enquiryMonths.length + orderMonths.length + deliveryMonths.length + responseMonths.length === 0) return [];
 
   // Held orders that were later cancelled are left out, as on 10 at 10's Orders.
   const { originalIds } = orderMonths.length ? await loadCancellationsReport(await loadExecNames()) : { originalIds: new Set<string>() };
@@ -157,6 +173,11 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
       sql`SELECT exec, insurance_count FROM ten_at_ten_deliveries WHERE substr(delivery_day, 1, 7) = ${m}`,
     );
     slots.push({ yearMonth: m, reportType: "delivered", lines: lines.length, rows: deliveredRowsFrom(lines.map((l) => ({ exec: l.exec, insuranceCount: l.insurance_count == null ? null : Number(l.insurance_count) }))) });
+  }
+
+  for (const m of responseMonths) {
+    const lines = judged.filter((r) => r.enquiryDay.startsWith(m));
+    slots.push({ yearMonth: m, reportType: "response", lines: lines.length, rows: responseRowsFrom(lines.map((r) => ({ salesExec: r.salesExec, contactMins: r.contactMins }))) });
   }
 
   const changed: FedSlot[] = [];

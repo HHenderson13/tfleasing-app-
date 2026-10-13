@@ -1,14 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import {
-  canQuote,
-  canSeeOrders,
-  canSeeProposals,
-  canStock,
-  getCurrentUser,
-  isAdmin,
-  type CurrentUser,
-} from "./auth";
+import { canQuote, canSeeOrders, canSeeProposals, canStock, getCurrentUser, isAdmin, type CurrentUser, canSeeTenAtTen } from "./auth";
 
 export async function requireUser(): Promise<CurrentUser> {
   const u = await getCurrentUser();
@@ -43,6 +35,13 @@ export async function requireQuoteAccess(): Promise<CurrentUser> {
 export async function requireStockAccess(): Promise<CurrentUser> {
   const u = await requireUser();
   if (!canStock(u)) redirect("/forbidden");
+  return u;
+}
+
+/** 10 at 10 and its PDF: admins and execs. Uploads keep requireAdmin. */
+export async function requireTenAtTenAccess(): Promise<CurrentUser> {
+  const u = await requireUser();
+  if (!canSeeTenAtTen(u)) redirect("/forbidden");
   return u;
 }
 
