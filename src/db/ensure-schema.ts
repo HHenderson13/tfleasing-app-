@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "./index";
+import { fuelVehicleId } from "../lib/fuel-vehicle-id";
+import { SEED_SOURCE, SEED_VEHICLES } from "../lib/fuel-vehicles-seed";
 
 type TableInfoRow = {
   name: string;
@@ -10,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 58;
+const SCHEMA_VERSION = 59;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -120,6 +122,7 @@ async function runEnsureAppSchema() {
   await ensureForecastTables();
   await ensureEnquiryTables();
   await ensureTenAtTenTables();
+  await ensureFuelCalculatorTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await seedSeriesMappings();
@@ -1103,6 +1106,70 @@ async function ensureTenAtTenTables() {
   await db.run(sql.raw(`DELETE FROM ten_at_ten_orders WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_deliveries WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_cancellations WHERE lower(exec) IN ('harry henderson', 'joseph rustigini')`));
+}
+
+// Fuel Cost Calculator (user, 2026-10-14). The vehicle library — petrol /
+// diesel with MPG, electric with miles per kWh — and the prices, stored as
+// their source publishes them, refreshed daily by /api/cron/fuel-prices.
+async function ensureFuelCalculatorTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS fuel_vehicles (
+      id TEXT PRIMARY KEY,
+      powertrain TEXT NOT NULL,
+      segment TEXT NOT NULL,
+      make TEXT NOT NULL,
+      model TEXT NOT NULL,
+      derivative TEXT NOT NULL,
+      fuel TEXT NOT NULL,
+      efficiency REAL NOT NULL,
+      source TEXT,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS fuel_prices (
+      key TEXT PRIMARY KEY,
+      value REAL NOT NULL,
+      as_of TEXT,
+      period TEXT,
+      source TEXT NOT NULL,
+      source_url TEXT,
+      fetched_at INTEGER NOT NULL,
+      checked_at INTEGER NOT NULL,
+      last_error TEXT,
+      override_value REAL,
+      override_by TEXT,
+      override_at INTEGER
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS fuel_price_history (
+      key TEXT NOT NULL,
+      as_of TEXT NOT NULL,
+      value REAL NOT NULL,
+      fetched_at INTEGER NOT NULL,
+      PRIMARY KEY (key, as_of)
+    )
+  `));
+  // The vehicles the old calculator held, and today's figures from each
+  // source so the page works before the first daily refresh. INSERT OR
+  // IGNORE: an admin's edit, or a refreshed price, is never put back.
+  const now = Math.floor(Date.now() / 1000);
+  for (let i = 0; i < SEED_VEHICLES.length; i += 50) {
+    const values = SEED_VEHICLES.slice(i, i + 50).map((v) => sql`(
+      ${fuelVehicleId(v)}, ${v.powertrain}, ${v.segment}, ${v.make}, ${v.model}, ${v.derivative}, ${v.fuel}, ${v.efficiency}, ${SEED_SOURCE}, ${now}
+    )`);
+    await db.run(sql`INSERT OR IGNORE INTO fuel_vehicles (id, powertrain, segment, make, model, derivative, fuel, efficiency, source, updated_at) VALUES ${sql.join(values, sql`, `)}`);
+  }
+  await db.run(sql`
+    INSERT OR IGNORE INTO fuel_prices (key, value, as_of, period, source, source_url, fetched_at, checked_at) VALUES
+      ('petrol', 175.28, '2026-10-12', 'week of 12 Oct 2026', 'DESNZ weekly road fuel prices', 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices', ${now}, ${now}),
+      ('diesel', 200.04, '2026-10-12', 'week of 12 Oct 2026', 'DESNZ weekly road fuel prices', 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices', ${now}, ${now}),
+      ('home_standard', 26.32, '2026-10-01', '1 October to 31 December 2026', 'Ofgem energy price cap', 'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges', ${now}, ${now}),
+      ('home_overnight', 8.21, '2026-10-14', '14 Oct 2026', 'Octopus Go off-peak, GB average', 'https://octopus.energy/smart/go/', ${now}, ${now}),
+      ('depot', 28.59, '2026-04-01', 'Q2 2026', 'DESNZ non-domestic electricity, small business (incl. CCL, ex VAT)', 'https://www.gov.uk/government/statistical-data-sets/gas-and-electricity-prices-in-the-non-domestic-sector', ${now}, ${now}),
+      ('public_rapid', 79, '2026-09-01', 'September 2026', 'Zapmap Price Index, rapid / ultra-rapid PAYG', 'https://www.zapmap.com/ev-stats/charging-price-index', ${now}, ${now})
+  `);
 }
 
 async function ensureEnquiryTables() {

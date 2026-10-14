@@ -32,6 +32,9 @@ explicitly — see `daily-summary/route.ts`.
 |------------------------------------|--------------------------------|
 | `/`                                | `requireUser`                  |
 | `/quote`                           | `requireQuoteAccess`           |
+| `/fuel-calculator`                 | `requireQuoteAccess` (admin, exec, quote) |
+| `/fuel-calculator/admin`           | `requireAdmin` (vehicle library + price overrides) |
+| `/api/cron/fuel-prices`            | `CRON_SECRET` only — no bypass header |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |
 | `/orders`, `/orders/awaiting`, `/orders/delivered`, `/orders/[id]`, `/customers/[id]` | `requireOrdersAccess` |
@@ -1036,6 +1039,67 @@ matching in `lib/ten-at-ten-cancellations.ts` (pure, tested on the real
   Dealerweb's convention, first two letters of first and last name
   (`execCodeFromName`: Deniz Durmaz → DeDu). That convention is also how
   Harry Henderson / Joseph Rustigini (HaHe / JoRu) are stripped.
+
+## Fuel Cost Calculator (`/fuel-calculator`)
+
+Petrol or diesel against electric, for the conversation with a customer,
+exported as a one-page PDF (user, 2026-10-14). The maths is pure and tested
+in `lib/fuel-calc.ts`; page and PDF both print its `workings()`, carried to
+enough decimal places that every line multiplies out to the next by hand.
+
+- **Like for like:** official (WLTP) efficiency on both sides, UK average
+  prices, one annual mileage. Petrol/diesel cost a mile = price a litre ×
+  4.54609 ÷ MPG. Electric = blended price a kWh ÷ miles per kWh. WLTP kWh is
+  measured at the plug, so no charging-loss factor is added.
+- **The verdict is honest either way** — "Electric saves £X a month" or
+  "Electric costs £X a month more than diesel" (`verdict`).
+- **VAT:** prices are stored exactly as published. Private shows everything
+  incl. VAT; Business takes reclaimable VAT off fuel, depot and public
+  charging, but not home electricity (not reclaimable on a domestic bill).
+  `PRICE_META` holds each price's VAT basis — the depot figure is published
+  ex VAT.
+
+### Prices refresh themselves (`lib/fuel-prices.ts`, parsers in `fuel-price-parsers.ts`)
+
+Checked daily at 05:15 UTC by `/api/cron/fuel-prices` (vercel.json) and on
+"Check sources now". Each source stands alone: one failing keeps its last
+good price with the error shown, never blocks the rest.
+
+| Price | Source | Publishes |
+|---|---|---|
+| Petrol, diesel | DESNZ weekly road fuel prices CSV (found via the gov.uk content API) | weekly, Mondays |
+| Home daytime | Ofgem price cap, direct-debit electricity unit rate | quarterly |
+| Home overnight | Octopus Go off-peak, average of the 14 GB regions (public API) | daily |
+| Depot | DESNZ QEP 3.4.2, electricity "Small" (20–499 MWh), incl. CCL, ex VAT | quarterly, ~3 months behind |
+| Public rapid | Zapmap Price Index, rapid / ultra-rapid PAYG | monthly |
+
+Overnight and public are the only ones that aren't official statistics —
+there is no official national average for an EV night tariff or for public
+charging — and each is labelled with its source on screen and on the PDF.
+Parsers return null on a page they don't recognise rather than guess, and
+the tests pin each format; if a source changes layout the price is marked
+"Last check failed" on the admin page. A manager's override (admin page)
+wins until cleared. Each price carries a staleness threshold by its
+cadence and is flagged "may be out of date" past it.
+
+### Vehicles
+
+`fuel_vehicles` — petrol/diesel with MPG, electric with miles per kWh, car
+or van. Seeded from the old calculator (Ford Transit Custom, Transit Courier,
+E-Transit Custom, E-Transit Courier). The old tool filed the Courier 1.0
+EcoBoost under diesel; it is petrol, and is seeded as such. More are added
+by pasting rows on the admin page (`parseVehiclePaste`): a plausible-range
+check catches kWh per 100 miles pasted as miles per kWh, and nothing saves
+if any row is wrong. The id is what the vehicle is, so a re-paste updates.
+
+**There is no free MPG look-up for a customer's existing vehicle** (checked
+2026-10-14): the VCA's car download is down "due to technical issues", the
+government van checker is unavailable, and DVLA has closed new Vehicle
+Enquiry API registrations. So the current vehicle is picked from the list,
+typed as MPG, or worked back from the CO₂ on the V5C: official MPG is
+itself calculated from CO₂ by carbon balance (`mpgFromCo2`, WLTP and NEDC
+constants, checked against Ford's published figures). NEDC (cars before
+Sept 2018, vans before Sept 2019) flatters economy and the screen says so.
 
 ## Sales leaderboard (Pole Position)
 
