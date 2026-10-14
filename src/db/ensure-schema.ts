@@ -1108,8 +1108,8 @@ async function ensureTenAtTenTables() {
   await db.run(sql.raw(`DELETE FROM ten_at_ten_cancellations WHERE lower(exec) IN ('harry henderson', 'joseph rustigini')`));
 }
 
-// Fuel Cost Calculator (user, 2026-10-14). The vehicle library — petrol /
-// diesel with MPG, electric with miles per kWh — and the prices, stored as
+// Fuel Cost Calculator (user, 2026-10-14). The vehicle library (petrol and
+// diesel with MPG, electric with miles per kWh) and the prices, stored as
 // their source publishes them, refreshed daily by /api/cron/fuel-prices.
 async function ensureFuelCalculatorTables() {
   await db.run(sql.raw(`

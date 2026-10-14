@@ -111,5 +111,17 @@ describe("workings", () => {
     expect(all).toContain("Blended price: 80% × 8.00p + 10% × 26.00p + 10% × 79.00p = 16.900p a kWh");
     expect(all).toContain("Difference: £171.59 a month");
     expect(all).not.toContain("Depot"); // a source with no share isn't listed
+    expect(all).toContain("£2,059.03 a year and £8,236.14 over 48 months, in favour of electric");
+  });
+
+  it("never prints a dash the customer would read as a pause", async () => {
+    const { workings, verdict, PRICE_META } = await import("./fuel-calc");
+    const r = compare(base);
+    const text = [
+      ...workings(base, r, { iceFuel: "diesel", chargeLabels: { home_overnight: "a", home_standard: "b", depot: "c", public_rapid: "d" } }).flatMap((s) => [s.title, ...s.lines]),
+      verdict(r, "diesel").headline,
+      ...Object.values(PRICE_META).flatMap((m) => [m.label, m.short]),
+    ].join("\n");
+    expect(text).not.toMatch(/[—–]/);
   });
 });

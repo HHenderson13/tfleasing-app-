@@ -1,4 +1,4 @@
-// Fuel Cost Calculator — reading each price out of its source. Pure, so the
+// Fuel Cost Calculator: reading each price out of its source. Pure, so the
 // tests can pin every format; the fetching is in fuel-prices.ts. Each parser
 // returns null when the source doesn't look as expected, and the stored
 // price then stands (marked as not refreshed) rather than taking a guess.
@@ -85,14 +85,14 @@ export function octopusOffPeak(rates: { value_inc_vat: number; valid_from: strin
   return values.length ? Math.min(...values) : null;
 }
 
-/** GB regions in Octopus's tariff codes (A–P, no I or O). */
+/** GB regions in Octopus's tariff codes (A to P, no I or O). */
 export const OCTOPUS_REGIONS = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P"];
 
 // ─── DESNZ non-domestic electricity ────────────────────────────────────────
 
 /**
  * Latest quarter's "Electricity: Small" price, incl. Climate Change Levy, ex
- * VAT — table 3.4.2. Small is 20–499 MWh a year: a small business site,
+ * VAT, table 3.4.2. Small is 20 to 499 MWh a year: a small business site,
  * which a depot charging a few vans usually is.
  */
 export function parseDesnzNonDomestic(buf: ArrayBuffer | Buffer): { value: number; asOf: string; period: string } | null {

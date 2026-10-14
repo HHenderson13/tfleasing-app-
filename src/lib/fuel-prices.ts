@@ -1,6 +1,6 @@
 import "server-only";
 
-// Fuel Cost Calculator — prices and the vehicle library on the server.
+// Fuel Cost Calculator: prices and the vehicle library on the server.
 // refreshFuelPrices() checks every source (daily, from /api/cron/fuel-prices,
 // or "Check sources now" on the admin page). Each source stands alone: one
 // failing keeps its last good price, marked with the error, and never blocks
@@ -97,7 +97,7 @@ export async function refreshFuelPrices(): Promise<RefreshReport[]> {
   for (const src of SOURCES) {
     try {
       const got = await src.run(today);
-      if (!got) throw new Error("The source didn't look as expected — the last good price is kept.");
+      if (!got) throw new Error("The source didn't look as expected, so the last good price is kept.");
       const changed: PriceKey[] = [];
       for (const f of got) {
         const [cur] = await db.all<{ value: number; as_of: string | null }>(sql`SELECT value, as_of FROM fuel_prices WHERE key = ${f.key}`);
@@ -200,7 +200,7 @@ export async function loadFuelVehicles(): Promise<FuelVehicle[]> {
   return rows.map((r) => ({ ...r, efficiency: Number(r.efficiency) }) as FuelVehicle);
 }
 
-/** Add or update vehicles — the same vehicle pasted twice updates its row. */
+/** Add or update vehicles. The same vehicle pasted twice updates its row. */
 export async function upsertFuelVehicles(rows: Omit<FuelVehicle, "id">[]): Promise<{ added: number; updated: number }> {
   const now = Math.floor(Date.now() / 1000);
   let added = 0, updated = 0;

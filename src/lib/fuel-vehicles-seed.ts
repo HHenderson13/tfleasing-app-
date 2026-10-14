@@ -1,7 +1,7 @@
-// Fuel Cost Calculator — the vehicles it starts with, from the earlier
+// Fuel Cost Calculator: the vehicles it starts with, from the earlier
 // calculator (Ford's official WLTP combined figures). Seeded INSERT OR IGNORE,
-// so a figure changed on the admin page is never put back. More vehicles —
-// every electric car and van — are added on /fuel-calculator/admin.
+// so a figure changed on the admin page is never put back. More vehicles can
+// be added on /fuel-calculator/admin.
 //
 // One correction on the way in: the old calculator listed the Transit
 // Courier 1.0 EcoBoost under Diesel. EcoBoost is petrol; only the 1.5

@@ -1043,7 +1043,7 @@ matching in `lib/ten-at-ten-cancellations.ts` (pure, tested on the real
 ## Fuel Cost Calculator (`/fuel-calculator`)
 
 Petrol or diesel against electric, for the conversation with a customer,
-exported as a one-page PDF (user, 2026-10-14). The maths is pure and tested
+exported as a PDF (user, 2026-10-14). The maths is pure and tested
 in `lib/fuel-calc.ts`; page and PDF both print its `workings()`, carried to
 enough decimal places that every line multiplies out to the next by hand.
 
@@ -1092,14 +1092,58 @@ by pasting rows on the admin page (`parseVehiclePaste`): a plausible-range
 check catches kWh per 100 miles pasted as miles per kWh, and nothing saves
 if any row is wrong. The id is what the vehicle is, so a re-paste updates.
 
-**There is no free MPG look-up for a customer's existing vehicle** (checked
-2026-10-14): the VCA's car download is down "due to technical issues", the
-government van checker is unavailable, and DVLA has closed new Vehicle
-Enquiry API registrations. So the current vehicle is picked from the list,
-typed as MPG, or worked back from the CO₂ on the V5C: official MPG is
-itself calculated from CO₂ by carbon balance (`mpgFromCo2`, WLTP and NEDC
-constants, checked against Ford's published figures). NEDC (cars before
-Sept 2018, vans before Sept 2019) flatters economy and the screen says so.
+**Finding the customer's current vehicle.** Free MPG look-ups are all
+closed (checked 2026-10-14): the VCA's car download is down "due to
+technical issues", the government van checker is unavailable, and DVLA has
+closed new Vehicle Enquiry API registrations. What is open is the European
+Environment Agency's CO2 monitoring data, which records every new car and
+van registered with its make, commercial name (which carries the trim),
+fuel, engine size and official CO2, through a free SQL API.
+
+- `scripts/build-fuel-reference.ts` pulls it into
+  `public/fuel-reference.json` (~22,000 versions, 58 makes, 240KB gzipped):
+  UK registrations 2012 to 2020 (the UK left the dataset after 2020) and
+  Ireland 2021 to 2022, which is right-hand drive with near-identical
+  ranges. It is a static file the page fetches once; re-run the script to
+  refresh it. Plug-in hybrids are left out (their CO2 says nothing about
+  fuel bought), as are bodybuilders, wheelchair conversions and junk makes;
+  names are tidied (`MAKE_ALIASES`, `modelOf`) and clipped Ford names such
+  as "TRAN CUSTOM" and "TRCON" folded into their families.
+- MPG is worked back from the official CO2 by carbon balance
+  (`mpgFromCo2`), the way the official figure is calculated, so it is the
+  official MPG, not an estimate. About 60% of versions are NEDC, which
+  flatters economy by around a fifth; the page and PDF say so whenever one
+  is chosen, and the saving is then understated, never overstated.
+- `lib/fuel-catalogue.ts` (pure, tested) merges it with the library's
+  petrol and diesel vehicles. Library vehicles have no registration years,
+  so they appear as **"Current model"**, never under invented dates. The
+  dropdowns are Make, Model, Year registered, Engine, Version; until a
+  version is chosen the commonest registered one is shown, and the page
+  says so. The search box takes any mix of make, model, engine and year.
+- Not possible from free data: vehicles first registered after 2022, and
+  trim-perfect derivatives or gearboxes (the EEA name is the badge, not a
+  full derivative). For those, "From the V5C" (CO2 box V.7 plus first
+  registration date) gives the official MPG exactly, and "Enter MPG" is
+  always there.
+
+### Look (user, 2026-10-14: "world class", no em dashes, mobile)
+
+- Numbered steps on the left, the answer sticky on the right; on a phone
+  the answer follows the steps and a bottom bar keeps the saving and Export
+  PDF in reach until the answer card itself is on screen.
+- Building blocks are in `fuel-calculator/ui.tsx`. Inputs are 16px on
+  phones, because anything smaller makes iOS zoom the page on focus.
+- Amber is petrol or diesel, emerald is electric and any saving. The four
+  charging sources have fixed colours (`CHARGE_COLOUR`), always shown with
+  their names beside them.
+- **No em or en dashes in anything a customer or user reads.** A test in
+  `fuel-calc.test.ts` pins the workings, verdict and price labels; ranges
+  read "2019 to 2021".
+- **The PDF is set in Geist** from `public/fonts` (SIL OFL), registered
+  with `Font.register`; it carries £, −, ×, ÷ and ₂. Page 1 is the answer,
+  page 2 how it's worked out. **Never set `lineHeight` on the `<Page>`
+  style**: it silently drops the `fixed` footer from every page. Set it on
+  the text that needs it.
 
 ## Sales leaderboard (Pole Position)
 

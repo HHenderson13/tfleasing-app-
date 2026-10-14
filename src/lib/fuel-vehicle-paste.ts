@@ -1,4 +1,4 @@
-// Fuel Cost Calculator — adding vehicles by pasting rows, straight from
+// Fuel Cost Calculator: adding vehicles by pasting rows, straight from
 // Excel (tab-separated) or typed with "|". Every row is checked before
 // anything is saved; a bad row is named, never guessed at.
 //
@@ -21,7 +21,7 @@ export interface PasteResult { rows: PastedVehicle[]; errors: { line: number; te
 
 const clean = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
-// Plausible ranges — outside them it's almost certainly a typo (or the
+// Plausible ranges. Outside them it's almost certainly a typo (or the
 // wrong unit: kWh per 100 miles, or litres per 100 km).
 const MPG_RANGE = [10, 120] as const;
 const MI_PER_KWH_RANGE = [1, 8] as const;
@@ -40,7 +40,7 @@ export function parseVehiclePaste(text: string, powertrain: "ice" | "ev"): Paste
     if (!/\d/.test(effCell ?? "")) { if (i === 0 || out.rows.length === 0) return; return fail("The last column must be a number."); }
     const seg = cells[0].toLowerCase();
     const segment = seg.startsWith("car") ? "car" : seg.startsWith("van") || seg === "lcv" || seg === "cv" ? "van" : null;
-    if (!segment) return fail(`"${cells[0]}" — the first column must be Car or Van.`);
+    if (!segment) return fail(`"${cells[0]}": the first column must be Car or Van.`);
     const [, make, model, derivative] = cells;
     if (!make || !model || !derivative) return fail("Make, model and derivative are all needed.");
     let fuel: PastedVehicle["fuel"] = "electric";
@@ -48,13 +48,13 @@ export function parseVehiclePaste(text: string, powertrain: "ice" | "ev"): Paste
       const f = cells[4].toLowerCase();
       if (f.startsWith("petrol") || f === "p") fuel = "petrol";
       else if (f.startsWith("diesel") || f === "d") fuel = "diesel";
-      else return fail(`"${cells[4]}" — fuel must be Petrol or Diesel.`);
+      else return fail(`"${cells[4]}": fuel must be Petrol or Diesel.`);
     }
     const [lo, hi] = powertrain === "ice" ? MPG_RANGE : MI_PER_KWH_RANGE;
     if (!(eff >= lo && eff <= hi)) {
       return fail(powertrain === "ice"
-        ? `${effCell} MPG is outside ${lo}–${hi} — check it's miles per gallon.`
-        : `${effCell} is outside ${lo}–${hi} miles per kWh — check it isn't kWh per 100 miles.`);
+        ? `${effCell} MPG is outside ${lo} to ${hi}. Check it's miles per gallon.`
+        : `${effCell} is outside ${lo} to ${hi} miles per kWh. Check it isn't kWh per 100 miles.`);
     }
     out.rows.push({ powertrain, segment, make, model, derivative, fuel, efficiency: eff });
   });

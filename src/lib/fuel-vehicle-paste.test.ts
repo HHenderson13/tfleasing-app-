@@ -33,7 +33,7 @@ describe("pasting vehicles", () => {
     );
     expect(r.rows).toHaveLength(1);
     expect(r.errors.map((e) => e.line)).toEqual([2, 3, 4, 5]);
-    expect(r.errors[2].message).toMatch(/outside 10–120/);
+    expect(r.errors[2].message).toMatch(/outside 10 to 120/);
   });
 
   it("catches kWh per 100 miles pasted as miles per kWh", () => {

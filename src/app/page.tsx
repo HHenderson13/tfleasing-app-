@@ -9,7 +9,7 @@ type Tile = { href: string; title: string; desc: string; tone: string; key: keyo
 
 const TILES: Tile[] = [
   { key: "quote",     href: "/quote",     title: "Quote",     desc: "Rank funders for a vehicle, term and mileage.",  tone: "from-violet-500 to-violet-700" },
-  { key: "quote",     href: "/fuel-calculator", title: "Fuel Calculator", desc: "Petrol or diesel against electric — running costs at today's UK prices, as a PDF for the customer.", tone: "from-lime-600 to-emerald-700" },
+  { key: "quote",     href: "/fuel-calculator", title: "Fuel Calculator", desc: "Petrol or diesel against electric: running costs at today's UK prices, as a PDF for the customer.", tone: "from-lime-600 to-emerald-700" },
   { key: "stock",     href: "/stock",     title: "Stock",     desc: "Browse, filter and export Ford stock vehicles.", tone: "from-emerald-500 to-emerald-700" },
   { key: "proposals", href: "/proposals", title: "Proposals", desc: "Live proposals — accept, decline, refer.",       tone: "from-sky-500 to-sky-700" },
   { key: "orders",    href: "/orders",    title: "Orders",    desc: "Accepted deals moving through to delivery.",     tone: "from-amber-500 to-amber-700" },

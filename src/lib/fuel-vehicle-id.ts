@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 /**
- * A library vehicle's id: what it is, not when it was added — so the same
+ * A library vehicle's id: what it is, not when it was added, so the same
  * vehicle pasted in twice updates one row instead of making two.
  */
 export function fuelVehicleId(v: { powertrain: string; segment: string; make: string; model: string; derivative: string; fuel: string }): string {

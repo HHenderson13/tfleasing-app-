@@ -43,7 +43,7 @@ export async function importFuelVehiclesAction(input: { text: string; powertrain
   if (input.powertrain !== "ice" && input.powertrain !== "ev") return { ok: false, error: "Choose petrol / diesel or electric." };
   if (typeof input.text !== "string" || input.text.length > 500_000) return { ok: false, error: "That paste is too large." };
   const parsed = parseVehiclePaste(input.text, input.powertrain);
-  if (parsed.errors.length) return { ok: false, parsed, error: `${parsed.errors.length} row${parsed.errors.length === 1 ? "" : "s"} need fixing — nothing was saved.` };
+  if (parsed.errors.length) return { ok: false, parsed, error: `${parsed.errors.length} row${parsed.errors.length === 1 ? "" : "s"} need fixing, so nothing was saved.` };
   if (!parsed.rows.length) return { ok: false, parsed, error: "No vehicles found in that paste." };
   const source = String(input.source ?? "").trim().slice(0, 200) || (input.powertrain === "ev" ? "WLTP miles per kWh" : "WLTP combined MPG");
   try {

@@ -1,14 +1,26 @@
 "use client";
 
 // The customer's copy of a fuel comparison: one A4 page with the answer,
-// both vehicles, every price with its source and date, and the workings —
-// so anyone can check it by hand. Loaded only when Export PDF is pressed.
-// Helvetica covers Latin-1 only: "−" becomes "-", "CO₂" is written CO2.
+// both vehicles, every price with its source and date, and the workings, so
+// anyone can check it by hand. Loaded only when Export PDF is pressed.
+//
+// Set in Geist, the app's own typeface, from public/fonts (SIL Open Font
+// Licence). It carries £, −, ×, ÷ and ₂, so nothing needs swapping out.
 
 import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
-import type { ComparisonResult, CustomerType, FuelType, Segment } from "@/lib/fuel-calc";
+import type { ComparisonResult, CustomerType, FuelType, PriceKey, Segment } from "@/lib/fuel-calc";
 
+const origin = typeof window !== "undefined" ? window.location.origin : "";
+Font.register({
+  family: "Geist",
+  fonts: [
+    { src: `${origin}/fonts/Geist-Regular.ttf`, fontWeight: 400 },
+    { src: `${origin}/fonts/Geist-Medium.ttf`, fontWeight: 500 },
+    { src: `${origin}/fonts/Geist-SemiBold.ttf`, fontWeight: 600 },
+    { src: `${origin}/fonts/Geist-Bold.ttf`, fontWeight: 700 },
+  ],
+});
 Font.registerHyphenationCallback((word) => [word]);
 
 export interface FuelPdfInput {
@@ -19,52 +31,94 @@ export interface FuelPdfInput {
   customer: CustomerType;
   termMonths: number;
   annualMiles: number;
-  ice: { name: string; fuel: FuelType; mpg: number; basis: string };
-  ev: { name: string; milesPerKwh: number; basis: string };
+  ice: { name: string; detail: string | null; fuel: FuelType; mpg: number; basis: string; nedc: boolean };
+  ev: { name: string; detail: string | null; milesPerKwh: number; basis: string };
   result: ComparisonResult;
-  verdict: { tone: "saving" | "cost" | "level"; headline: string };
+  tone: "saving" | "cost" | "level";
+  headline: string;
   workings: { title: string; lines: string[] }[];
-  prices: { label: string; short: string; unit: "litre" | "kWh"; published: number; paid: number; incVat: boolean; share: number | null; source: string; period: string | null }[];
+  prices: { key: PriceKey; label: string; unit: "litre" | "kWh"; paid: number; incVat: boolean; share: number | null; source: string; period: string | null }[];
 }
 
-const C = { ink: "#0f172a", body: "#334155", muted: "#64748b", faint: "#94a3b8", line: "#e2e8f0", wash: "#f8fafc", good: "#047857", goodWash: "#ecfdf5", warn: "#b45309", warnWash: "#fffbeb", petrol: "#b45309", ev: "#047857" };
+const C = {
+  ink: "#0f172a", body: "#334155", muted: "#64748b", faint: "#94a3b8", line: "#e2e8f0", wash: "#f8fafc",
+  onInk: "#cbd5e1", onInkMuted: "#94a3b8",
+  fossil: "#d97706", fossilText: "#b45309",
+  electric: "#059669", electricText: "#047857", electricLight: "#6ee7b7", amberLight: "#fcd34d",
+  amberWash: "#fffbeb", amberInk: "#78350f",
+};
+const CHARGE_COLOUR: Record<string, string> = { home_overnight: "#065f46", home_standard: "#34d399", depot: "#075985", public_rapid: "#8b5cf6" };
 
-const tx = (s: string) => s.replace(/−/g, "-").replace(/CO₂/g, "CO2").replace(/₂/g, "2");
-const money = (n: number, dp = 0) => `${n < 0 ? "-" : ""}£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
+const money = (n: number, dp = 0) => `${n < 0 ? "−" : ""}£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 const pence = (n: number, dp = 1) => `${n.toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp })}p`;
+const co2 = (t: string) => t.replace(/CO2/g, "CO₂");
 
 const s = StyleSheet.create({
-  page: { paddingTop: 34, paddingBottom: 40, paddingHorizontal: 40, fontFamily: "Helvetica", fontSize: 9, color: C.body },
-  kicker: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.muted, letterSpacing: 1.2 },
-  h1: { fontSize: 20, fontFamily: "Helvetica-Bold", color: C.ink, marginTop: 2 },
-  label: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted, letterSpacing: 0.6 },
-  box: { borderWidth: 0.75, borderColor: C.line, borderRadius: 6, padding: 10 },
-  th: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted, letterSpacing: 0.5 },
-  td: { fontSize: 9, color: C.body },
-  section: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 5 },
-  footer: { position: "absolute", bottom: 18, left: 40, right: 40, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: C.faint, borderTopWidth: 0.5, borderTopColor: C.line, paddingTop: 5 },
+  page: { paddingTop: 32, paddingBottom: 40, paddingHorizontal: 42, fontFamily: "Geist", fontSize: 8.5, color: C.body },
+  kicker: { fontSize: 7, fontWeight: 600, color: C.muted, letterSpacing: 1.3 },
+  h2: { fontSize: 9.5, fontWeight: 600, color: C.ink, marginBottom: 5 },
+  card: { borderWidth: 0.75, borderColor: C.line, borderRadius: 8 },
+  th: { fontSize: 7, fontWeight: 500, color: C.muted },
+  footer: { position: "absolute", bottom: 18, left: 42, right: 42, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: C.faint },
 });
 
-function VehicleBox({ title, colour, name, lines, monthly, perMile }: { title: string; colour: string; name: string; lines: string[]; monthly: number; perMile: number }) {
+function Dot({ colour, size = 6 }: { colour: string; size?: number }) {
+  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colour }} />;
+}
+
+function KeyValue({ k, children }: { k: string; children: ReactNode }) {
   return (
-    <View style={[s.box, { flex: 1, borderTopWidth: 3, borderTopColor: colour }]}>
-      <Text style={s.label}>{title.toUpperCase()}</Text>
-      <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold", color: C.ink, marginTop: 3 }}>{tx(name)}</Text>
-      {lines.map((l) => <Text key={l} style={{ fontSize: 8, color: C.muted, marginTop: 2 }}>{tx(l)}</Text>)}
-      <View style={{ flexDirection: "row", alignItems: "baseline", marginTop: 8, gap: 4 }}>
-        <Text style={{ fontSize: 17, fontFamily: "Helvetica-Bold", color: C.ink }}>{money(monthly)}</Text>
-        <Text style={{ fontSize: 8.5, color: C.muted }}>a month · {pence(perMile)} a mile</Text>
-      </View>
+    <View style={{ flexDirection: "row", marginTop: 4 }}>
+      <Text style={{ width: 58, fontSize: 7.5, color: C.muted }}>{k}</Text>
+      <View style={{ flex: 1 }}>{typeof children === "string" ? <Text style={{ fontSize: 8, color: C.body }}>{children}</Text> : children}</View>
     </View>
   );
 }
 
-function Row({ cells, bold, shade }: { cells: ReactNode[]; bold?: boolean; shade?: boolean }) {
+function VehicleCard({ kicker, colour, name, detail, figure, unit, rows, note }: {
+  kicker: string; colour: string; name: string; detail: string | null; figure: string; unit: string; rows: ReactNode; note?: ReactNode;
+}) {
   return (
-    <View style={{ flexDirection: "row", paddingVertical: 4, paddingHorizontal: 6, borderBottomWidth: 0.5, borderBottomColor: C.line, backgroundColor: shade ? C.wash : undefined }}>
-      {cells.map((c, i) => (
-        <Text key={i} style={[s.td, { flex: i === 0 ? 1.6 : 1, textAlign: i === 0 ? "left" : "right" }, bold ? { fontFamily: "Helvetica-Bold", color: C.ink } : {}]}>{c}</Text>
-      ))}
+    <View style={[s.card, { flex: 1, padding: 13 }]}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+        <Dot colour={colour} />
+        <Text style={s.kicker}>{kicker}</Text>
+      </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6, gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 11.5, fontWeight: 600, color: C.ink, lineHeight: 1.25 }}>{name}</Text>
+          {detail && <Text style={{ fontSize: 8, color: C.muted, marginTop: 2 }}>{detail}</Text>}
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.1 }}>{figure}</Text>
+          <Text style={{ fontSize: 7, color: C.muted, marginTop: 1 }}>{unit}</Text>
+        </View>
+      </View>
+      <View style={{ marginTop: 7, paddingTop: 3, borderTopWidth: 0.5, borderTopColor: C.line }}>{rows}</View>
+      {note}
+    </View>
+  );
+}
+
+function Footer({ d }: { d: FuelPdfInput }) {
+  return (
+    <View style={s.footer} fixed>
+      <Text>TrustFord Leasing · Fuel cost comparison{d.customerName ? ` for ${d.customerName}` : ""}</Text>
+      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+    </View>
+  );
+}
+
+function HeroBar({ label, colour, value, max }: { label: string; colour: string; value: number; max: number }) {
+  return (
+    <View style={{ marginTop: 8 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 8, color: C.onInk }}>{label}</Text>
+        <Text style={{ fontSize: 8, fontWeight: 600, color: "#ffffff" }}>{money(value)} a month</Text>
+      </View>
+      <View style={{ height: 5, borderRadius: 2.5, backgroundColor: "#1e293b", marginTop: 3.5 }}>
+        <View style={{ height: 5, borderRadius: 2.5, backgroundColor: colour, width: `${Math.max(2, (value / max) * 100)}%` }} />
+      </View>
     </View>
   );
 }
@@ -72,105 +126,199 @@ function Row({ cells, bold, shade }: { cells: ReactNode[]; bold?: boolean; shade
 export function FuelComparisonPdf(d: FuelPdfInput) {
   const r = d.result;
   const fuel = d.ice.fuel === "petrol" ? "Petrol" : "Diesel";
-  const saving = d.verdict.tone === "saving";
-  const tone = d.verdict.tone === "saving" ? { fg: C.good, bg: C.goodWash } : d.verdict.tone === "cost" ? { fg: C.warn, bg: C.warnWash } : { fg: C.ink, bg: C.wash };
-  const mix = d.prices.filter((p) => p.share != null && p.share > 0).map((p) => `${p.share}% ${p.short.toLowerCase()}`).join(", ");
+  const fuelPrice = d.prices.find((p) => p.key === d.ice.fuel);
+  const charging = d.prices.filter((p) => p.share != null && p.share > 0);
+  const cost = d.tone === "cost";
+  const accent = cost ? C.amberLight : C.electricLight;
+  const max = Math.max(r.ice.monthly, r.ev.monthly, 1);
+  const vat = d.customer === "business" ? "Business prices, reclaimable VAT excluded" : "Prices include VAT";
+  const title = d.customerName || `${fuel} against electric`;
+
   return (
-    <Document title={`Fuel cost comparison${d.customerName ? ` — ${d.customerName}` : ""}`} author="TrustFord Leasing" subject="Fuel cost comparison">
+    <Document title={`Fuel cost comparison${d.customerName ? `, ${d.customerName}` : ""}`} author="TrustFord Leasing" subject="Fuel cost comparison" creator="TF Leasing">
       <Page size="A4" style={s.page}>
         {/* Header */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", borderBottomWidth: 1.2, borderBottomColor: C.ink, paddingBottom: 8 }}>
-          <View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingBottom: 10, borderBottomWidth: 0.75, borderBottomColor: C.line }}>
+          <View style={{ flex: 1, paddingRight: 16 }}>
             <Text style={s.kicker}>FUEL COST COMPARISON</Text>
-            <Text style={s.h1}>{d.customerName ? tx(d.customerName) : `Petrol or diesel against electric`}</Text>
+            <Text style={{ fontSize: 21, fontWeight: 600, color: C.ink, marginTop: 4, lineHeight: 1.15, letterSpacing: -0.3 }}>{title}</Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontSize: 9, color: C.ink, fontFamily: "Helvetica-Bold" }}>{d.date}</Text>
-            <Text style={{ fontSize: 8, color: C.muted, marginTop: 1 }}>Prepared by {tx(d.preparedBy)}, TrustFord Leasing</Text>
+            <Text style={{ fontSize: 8.5, fontWeight: 600, color: C.ink }}>{d.date}</Text>
+            <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 2 }}>Prepared by {d.preparedBy}</Text>
+            <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 1 }}>TrustFord Leasing</Text>
           </View>
         </View>
 
         {/* The answer */}
-        <View style={{ marginTop: 14, borderRadius: 6, backgroundColor: tone.bg, padding: 12 }}>
-          <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color: tone.fg }}>{tx(d.verdict.headline)}</Text>
-          <Text style={{ fontSize: 9.5, color: C.body, marginTop: 4 }}>
-            {money(Math.abs(r.saving.annual))} a year · {money(Math.abs(r.saving.overTerm))} over {d.termMonths} months ·{" "}
-            {d.annualMiles.toLocaleString("en-GB")} miles a year · {d.customer === "business" ? "business prices, reclaimable VAT excluded" : "prices include VAT"}
-          </Text>
+        <View style={{ marginTop: 16, backgroundColor: C.ink, borderRadius: 10, paddingVertical: 18, paddingHorizontal: 18, flexDirection: "row", gap: 26 }}>
+          <View style={{ flex: 1.15 }}>
+            <Text style={{ fontSize: 9.5, fontWeight: 500, color: accent }}>
+              {d.tone === "saving" ? "Electric saves" : cost ? "Electric costs more by" : "Electric costs about the same"}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline", marginTop: 3 }}>
+              <Text style={{ fontSize: 34, fontWeight: 600, color: "#ffffff", letterSpacing: -0.8, lineHeight: 1.05 }}>{money(Math.abs(r.saving.monthly))}</Text>
+              <Text style={{ fontSize: 10, color: C.onInk, marginLeft: 5 }}>a month</Text>
+            </View>
+            <Text style={{ fontSize: 9, color: C.onInk, marginTop: 5 }}>
+              <Text style={{ fontWeight: 600, color: "#ffffff" }}>{money(Math.abs(r.saving.annual))}</Text> a year, and{" "}
+              <Text style={{ fontWeight: 600, color: "#ffffff" }}>{money(Math.abs(r.saving.overTerm))}</Text> over {d.termMonths} months
+            </Text>
+            <Text style={{ fontSize: 7.5, color: C.onInkMuted, marginTop: 4 }}>
+              {d.annualMiles.toLocaleString("en-GB")} miles a year · {vat}
+            </Text>
+          </View>
+          <View style={{ flex: 1, justifyContent: "center" }}>
+            <Text style={{ fontSize: 7, fontWeight: 600, color: C.onInkMuted, letterSpacing: 1.1 }}>MONTHLY RUNNING COST</Text>
+            <HeroBar label={fuel} colour={C.fossil} value={r.ice.monthly} max={max} />
+            <HeroBar label="Electric" colour={C.electric} value={r.ev.monthly} max={max} />
+          </View>
         </View>
 
         {/* The two vehicles */}
         <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-          <VehicleBox title={`Current ${d.segment} — ${fuel.toLowerCase()}`} colour={C.petrol} name={d.ice.name}
-            lines={[`${d.ice.mpg.toFixed(1)} MPG — ${d.ice.basis}`, `${fuel} at ${r.ice.effectivePrice.toFixed(2)}p a litre`]}
-            monthly={r.ice.monthly} perMile={r.ice.pencePerMile} />
-          <VehicleBox title={`Electric ${d.segment}`} colour={C.ev} name={d.ev.name}
-            lines={[`${d.ev.milesPerKwh.toFixed(1)} miles per kWh — ${d.ev.basis}`, `Charging: ${mix || "—"} — ${r.ev.blendedPence.toFixed(2)}p a kWh blended`]}
-            monthly={r.ev.monthly} perMile={r.ev.pencePerMile} />
+          <VehicleCard kicker={`CURRENT ${d.segment.toUpperCase()}`} colour={C.fossil} name={d.ice.name} detail={d.ice.detail}
+            figure={d.ice.mpg.toFixed(1)} unit="MPG"
+            rows={<>
+              <KeyValue k="Efficiency">{co2(d.ice.basis)}</KeyValue>
+              <KeyValue k={fuel}>{`${pence(fuelPrice?.paid ?? r.ice.effectivePrice, 2)} a litre, ${fuelPrice?.incVat === false ? "ex VAT" : "incl. VAT"}`}</KeyValue>
+              <KeyValue k="Cost">{`${pence(r.ice.pencePerMile)} a mile`}</KeyValue>
+            </>}
+            note={d.ice.nedc ? (
+              <View style={{ marginTop: 6, backgroundColor: C.amberWash, borderRadius: 5, paddingVertical: 4, paddingHorizontal: 7 }}>
+                <Text style={{ fontSize: 7, color: C.amberInk }}>
+                  Tested on NEDC, the older test, which flatters economy. The saving shown is if anything on the low side.
+                </Text>
+              </View>
+            ) : undefined} />
+          <VehicleCard kicker={`ELECTRIC ${d.segment.toUpperCase()}`} colour={C.electric} name={d.ev.name} detail={d.ev.detail}
+            figure={d.ev.milesPerKwh.toFixed(1)} unit="miles per kWh"
+            rows={<>
+              <KeyValue k="Efficiency">{co2(d.ev.basis)}</KeyValue>
+              <KeyValue k="Charging">
+                <View style={{ flexDirection: "row", height: 4, borderRadius: 2, overflow: "hidden", marginTop: 2.5, marginBottom: 3 }}>
+                  {charging.map((p, i) => (
+                    <View key={p.key} style={{ flexGrow: p.share!, flexBasis: 0, backgroundColor: CHARGE_COLOUR[p.key], marginLeft: i ? 1 : 0 }} />
+                  ))}
+                </View>
+                <Text style={{ fontSize: 8, color: C.body }}>{charging.map((p) => `${p.share}% ${p.label.toLowerCase()}`).join(", ")}</Text>
+              </KeyValue>
+              <KeyValue k="Cost">{`${pence(r.ev.blendedPence, 2)} a kWh blended, ${pence(r.ev.pencePerMile)} a mile`}</KeyValue>
+            </>} />
         </View>
 
-        {/* Costs */}
-        <View style={{ marginTop: 12 }}>
-          <Text style={s.section}>Running costs</Text>
-          <View style={[s.box, { padding: 0 }]}>
-            <View style={{ flexDirection: "row", paddingVertical: 4, paddingHorizontal: 6, borderBottomWidth: 0.75, borderBottomColor: C.line }}>
-              {["", "A mile", "A month", "A year", `Over ${d.termMonths} months`].map((h, i) => (
-                <Text key={h || "x"} style={[s.th, { flex: i === 0 ? 1.6 : 1, textAlign: i === 0 ? "left" : "right" }]}>{h.toUpperCase()}</Text>
+        {/* Running costs */}
+        <View style={{ marginTop: 18 }}>
+          <Text style={s.h2}>Running costs</Text>
+          <View style={[s.card, { paddingHorizontal: 10 }]}>
+            <View style={{ flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: C.line }}>
+              {["", fuel, "Electric", cost ? "Electric costs more" : "Electric saves"].map((h, i) => (
+                <Text key={i} style={[s.th, { flex: i === 0 ? 1.2 : 1, textAlign: i === 0 ? "left" : "right" }]}>{h}</Text>
               ))}
             </View>
-            <Row cells={[fuel, pence(r.ice.pencePerMile), money(r.ice.monthly, 2), money(r.ice.annual), money(r.ice.overTerm)]} />
-            <Row cells={["Electric", pence(r.ev.pencePerMile), money(r.ev.monthly, 2), money(r.ev.annual), money(r.ev.overTerm)]} />
-            <Row bold shade cells={[saving ? "Electric saves" : d.verdict.tone === "cost" ? "Electric costs more by" : "Difference",
-              pence(Math.abs(r.saving.pencePerMile)), money(Math.abs(r.saving.monthly), 2), money(Math.abs(r.saving.annual)), money(Math.abs(r.saving.overTerm))]} />
+            {([
+              ["A mile", pence(r.ice.pencePerMile), pence(r.ev.pencePerMile), pence(Math.abs(r.saving.pencePerMile))],
+              ["A month", money(r.ice.monthly, 2), money(r.ev.monthly, 2), money(Math.abs(r.saving.monthly), 2)],
+              ["A year", money(r.ice.annual), money(r.ev.annual), money(Math.abs(r.saving.annual))],
+              [`Over ${d.termMonths} months`, money(r.ice.overTerm), money(r.ev.overTerm), money(Math.abs(r.saving.overTerm))],
+            ] as const).map(([label, a, b, c], i, all) => (
+              <View key={label} style={{ flexDirection: "row", paddingVertical: 5.5, borderBottomWidth: i < all.length - 1 ? 0.5 : 0, borderBottomColor: C.line }}>
+                <Text style={{ flex: 1.2, fontSize: 8.5, color: C.muted }}>{label}</Text>
+                <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", color: C.body }}>{a}</Text>
+                <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", color: C.body }}>{b}</Text>
+                <Text style={{ flex: 1, fontSize: 8.5, textAlign: "right", fontWeight: 600, color: cost ? C.fossilText : C.electricText }}>{c}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
         {/* Prices */}
-        <View style={{ marginTop: 12 }}>
-          <Text style={s.section}>Prices used</Text>
-          <View style={[s.box, { padding: 0 }]}>
-            <View style={{ flexDirection: "row", paddingVertical: 4, paddingHorizontal: 6, borderBottomWidth: 0.75, borderBottomColor: C.line }}>
-              {["Price", "Share", "Paid", "Source"].map((h, i) => (
-                <Text key={h} style={[s.th, { flex: [1.3, 0.5, 0.8, 2.4][i], textAlign: i === 0 || i === 3 ? "left" : "right", paddingLeft: i === 3 ? 8 : 0 }]}>{h.toUpperCase()}</Text>
+        <View style={{ marginTop: 18 }}>
+          <Text style={s.h2}>Prices used</Text>
+          <View style={[s.card, { paddingHorizontal: 10 }]}>
+            <View style={{ flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: C.line }}>
+              {["", "Share", "Price paid", "Source"].map((h, i) => (
+                <Text key={i} style={[s.th, { flex: [1.2, 0.45, 0.9, 2.6][i], textAlign: i === 1 || i === 2 ? "right" : "left", paddingLeft: i === 3 ? 14 : 0 }]}>{h}</Text>
               ))}
             </View>
-            {d.prices.map((p) => (
-              <View key={p.label} style={{ flexDirection: "row", paddingVertical: 4, paddingHorizontal: 6, borderBottomWidth: 0.5, borderBottomColor: C.line }}>
-                <Text style={[s.td, { flex: 1.3 }]}>{p.label}</Text>
-                <Text style={[s.td, { flex: 0.5, textAlign: "right" }]}>{p.share == null ? "" : `${p.share}%`}</Text>
-                <Text style={[s.td, { flex: 0.8, textAlign: "right", fontFamily: "Helvetica-Bold", color: C.ink }]}>{p.paid.toFixed(2)}p/{p.unit === "litre" ? "L" : "kWh"}</Text>
-                <Text style={[s.td, { flex: 2.4, paddingLeft: 8, fontSize: 7.5, color: C.muted }]}>
-                  {tx(p.source)}{p.period ? ` · ${p.period}` : ""} · {p.incVat ? "incl. VAT" : "ex VAT"}
+            {d.prices.map((p, i) => (
+              <View key={p.key} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 5.5, borderBottomWidth: i < d.prices.length - 1 ? 0.5 : 0, borderBottomColor: C.line }}>
+                <View style={{ flex: 1.2, flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <Dot colour={p.share == null ? C.fossil : CHARGE_COLOUR[p.key]} size={5} />
+                  <Text style={{ fontSize: 8.5, color: C.ink }}>{p.label}</Text>
+                </View>
+                <Text style={{ flex: 0.45, fontSize: 8.5, textAlign: "right", color: C.body }}>{p.share == null ? "" : `${p.share}%`}</Text>
+                <Text style={{ flex: 0.9, fontSize: 8.5, textAlign: "right", fontWeight: 600, color: C.ink }}>
+                  {p.paid.toFixed(2)}p<Text style={{ fontWeight: 400, color: C.muted }}>/{p.unit}</Text>
+                </Text>
+                <Text style={{ flex: 2.6, fontSize: 7.5, color: C.muted, paddingLeft: 14 }}>
+                  {p.source}{p.period ? `, ${p.period}` : ""}. {p.incVat ? "Incl. VAT" : "Ex VAT"}
                 </Text>
               </View>
             ))}
           </View>
         </View>
 
-        {/* Workings */}
-        <View style={{ marginTop: 12 }} wrap={false}>
-          <Text style={s.section}>The workings</Text>
-          <View style={[s.box, { backgroundColor: C.wash, borderColor: C.wash }]}>
-            {d.workings.map((w) => (
-              <View key={w.title} style={{ marginBottom: 4 }}>
-                <Text style={[s.label, { marginBottom: 1.5 }]}>{w.title.toUpperCase()}</Text>
-                {w.lines.map((l, i) => <Text key={i} style={{ fontSize: 7.8, color: l.startsWith("  ") ? C.muted : C.body, marginLeft: l.startsWith("  ") ? 10 : 0, lineHeight: 1.35 }}>{tx(l.trim())}</Text>)}
+        <Footer d={d} />
+      </Page>
+
+      {/* Page 2: how it was worked out */}
+      <Page size="A4" style={s.page}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingBottom: 10, borderBottomWidth: 0.75, borderBottomColor: C.line }}>
+          <View style={{ flex: 1, paddingRight: 16 }}>
+            <Text style={s.kicker}>FUEL COST COMPARISON</Text>
+            <Text style={{ fontSize: 16, fontWeight: 600, color: C.ink, marginTop: 4, letterSpacing: -0.2 }}>{"How it’s worked out"}</Text>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            {d.customerName ? <Text style={{ fontSize: 8.5, fontWeight: 600, color: C.ink }}>{d.customerName}</Text> : null}
+            <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 2 }}>{d.date}</Text>
+          </View>
+        </View>
+
+        <View style={{ marginTop: 16 }}>
+          <Text style={s.h2}>The workings</Text>
+          <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8 }}>Every step from the figures on page 1 to the answer, so it can be checked by hand.</Text>
+          <View style={{ backgroundColor: C.wash, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 14 }}>
+            {d.workings.map((w, i) => (
+              <View key={w.title} style={{ flexDirection: "row", marginTop: i ? 9 : 0, paddingTop: i ? 9 : 0, borderTopWidth: i ? 0.5 : 0, borderTopColor: C.line }}>
+                <View style={{ width: 86, flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                  <View style={{ width: 13, height: 13, borderRadius: 6.5, backgroundColor: "#e2e8f0", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 7, fontWeight: 600, color: C.body, lineHeight: 1 }}>{i + 1}</Text>
+                  </View>
+                  <Text style={{ fontSize: 8.5, fontWeight: 600, color: C.ink }}>{w.title}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  {w.lines.map((l, j) => (
+                    <Text key={j} style={{ fontSize: 8.3, color: l.startsWith("  ") ? C.muted : C.body, marginLeft: l.startsWith("  ") ? 12 : 0, lineHeight: 1.55 }}>{l.trim()}</Text>
+                  ))}
+                </View>
               </View>
             ))}
           </View>
         </View>
 
-        <Text style={{ marginTop: 10, fontSize: 6.8, color: C.muted, lineHeight: 1.4 }}>
-          For comparison purposes only — this is not a formal quotation. Figures are estimates based on official (WLTP) efficiency figures
-          and UK average prices on the date shown, and may not reflect real-life results. Costs change with fuel and electricity prices, driving
-          style, journey type and vehicle load. Electric range and efficiency vary with temperature, driver behaviour, vehicle maintenance and
-          battery age.
-        </Text>
-
-        <View style={s.footer} fixed>
-          <Text>TrustFord Leasing · Fuel cost comparison · {d.date}</Text>
-          <Text render={({ pageNumber, totalPages }) => (totalPages > 1 ? `Page ${pageNumber} of ${totalPages}` : "")} />
+        <View style={{ marginTop: 18 }}>
+          <Text style={s.h2}>About these figures</Text>
+          {[
+            ["Efficiency", "Both vehicles are judged on official figures: WLTP where the vehicle has one. Older vehicles were tested on NEDC, which flatters economy, so a saving against one is if anything understated. An electric vehicle's official miles per kWh is measured at the plug, so charging losses are already in it."],
+            ["Prices", "UK averages, checked every day: petrol and diesel from the government's weekly road fuel prices, home electricity from the Ofgem price cap and the Octopus Go overnight rate, depot electricity from government non-domestic prices, and public rapid charging from the Zapmap Price Index."],
+            ["VAT", d.customer === "business"
+              ? "Business prices leave out the VAT a VAT-registered business reclaims on fuel, depot and public charging. Home electricity keeps its 5% VAT, as it isn't reclaimable on a domestic bill."
+              : "Every price includes VAT, as a private customer pays it."],
+          ].map(([k, v]) => (
+            <View key={k} style={{ flexDirection: "row", marginTop: 7 }}>
+              <Text style={{ width: 86, fontSize: 8.5, fontWeight: 600, color: C.ink }}>{k}</Text>
+              <Text style={{ flex: 1, fontSize: 8.3, color: C.body, lineHeight: 1.55 }}>{v}</Text>
+            </View>
+          ))}
         </View>
+
+        <Text style={{ marginTop: 18, paddingTop: 10, borderTopWidth: 0.5, borderTopColor: C.line, fontSize: 7.2, color: C.muted, lineHeight: 1.55 }}>
+          For comparison only, and not a formal quotation. Figures are estimates from official efficiency figures and UK average prices on the
+          date shown, and real results will differ. Running costs change with fuel and electricity prices, driving style, journey type and load.
+          Electric range and efficiency also vary with temperature, maintenance and battery age.
+        </Text>
+        <Footer d={d} />
       </Page>
     </Document>
   );

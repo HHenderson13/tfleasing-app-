@@ -1,4 +1,4 @@
-// Fuel Cost Calculator — the maths. Pure and client-safe: the page runs it
+// Fuel Cost Calculator: the maths. Pure and client-safe: the page runs it
 // live as figures change, the PDF prints its workings, and the tests pin it.
 //
 // Like for like on both sides: official (WLTP) efficiency for each vehicle,
@@ -8,7 +8,7 @@
 //   Electric          cost a mile = blended price per kWh ÷ miles per kWh
 //
 // WLTP electric consumption is measured at the plug, so charging losses are
-// already in the miles-per-kWh figure — nothing is added for them.
+// already in the miles-per-kWh figure, so nothing is added for them.
 
 export const LITRES_PER_UK_GALLON = 4.54609;
 export const MONTHS_PER_YEAR = 12;
@@ -25,15 +25,15 @@ export const CHARGE_KEYS: ChargeKey[] = ["home_overnight", "home_standard", "dep
  * How each price is published, and the VAT treatment. Prices are stored
  * exactly as their source publishes them; the customer type decides what is
  * shown. A VAT-registered business reclaims VAT on fuel, depot and public
- * charging — not on a domestic electricity bill, so home charging is the
+ * charging, but not on a domestic electricity bill, so home charging is the
  * same for both.
  */
 export const PRICE_META: Record<PriceKey, { label: string; short: string; unit: "litre" | "kWh"; includesVat: boolean; vat: number; reclaimable: boolean }> = {
   petrol:         { label: "Petrol",                 short: "Petrol",          unit: "litre", includesVat: true,  vat: 0.20, reclaimable: true },
   diesel:         { label: "Diesel",                 short: "Diesel",          unit: "litre", includesVat: true,  vat: 0.20, reclaimable: true },
-  home_overnight: { label: "Home — overnight (EV tariff)", short: "Home overnight", unit: "kWh", includesVat: true,  vat: 0.05, reclaimable: false },
-  home_standard:  { label: "Home — daytime (standard rate)", short: "Home daytime", unit: "kWh", includesVat: true,  vat: 0.05, reclaimable: false },
-  depot:          { label: "Depot / workplace",      short: "Depot",           unit: "kWh",   includesVat: false, vat: 0.20, reclaimable: true },
+  home_overnight: { label: "Home overnight (EV tariff)", short: "Home overnight", unit: "kWh", includesVat: true,  vat: 0.05, reclaimable: false },
+  home_standard:  { label: "Home daytime (standard rate)", short: "Home daytime", unit: "kWh", includesVat: true,  vat: 0.05, reclaimable: false },
+  depot:          { label: "Depot or workplace",     short: "Depot",           unit: "kWh",   includesVat: false, vat: 0.20, reclaimable: true },
   public_rapid:   { label: "Public rapid charging",  short: "Public rapid",    unit: "kWh",   includesVat: true,  vat: 0.20, reclaimable: true },
 };
 
@@ -180,7 +180,7 @@ export const fmtPence = (n: number, dp = 1) => `${n.toLocaleString("en-GB", { mi
 
 // ─── The workings ──────────────────────────────────────────────────────────
 //
-// Every step from inputs to answer, with the numbers — shown on the page and
+// Every step from inputs to answer, with the numbers. Shown on the page and
 // printed on the PDF, so the figure can be checked by hand.
 
 export interface WorkingsLabels { iceFuel: FuelType; chargeLabels: Record<ChargeKey, string> }
@@ -226,7 +226,7 @@ export function workings(input: ComparisonInput, r: ComparisonResult, labels: Wo
       lines: [
         `${fuel}: ${miles(r.monthlyMiles)} miles × ${n2(r.ice.pencePerMile, 3)}p = £${n2(r.ice.monthly)} a month, £${n2(r.ice.annual)} a year`,
         `Electric: ${miles(r.monthlyMiles)} miles × ${n2(r.ev.pencePerMile, 3)}p = £${n2(r.ev.monthly)} a month, £${n2(r.ev.annual)} a year`,
-        `Difference: £${n2(Math.abs(r.saving.monthly))} a month, £${n2(Math.abs(r.saving.annual))} a year, £${n2(Math.abs(r.saving.overTerm))} over ${input.termMonths} months — ${r.saving.monthly >= 0 ? "in favour of electric" : `in favour of ${labels.iceFuel}`}`,
+        `Difference: £${n2(Math.abs(r.saving.monthly))} a month, £${n2(Math.abs(r.saving.annual))} a year and £${n2(Math.abs(r.saving.overTerm))} over ${input.termMonths} months, ${r.saving.monthly >= 0 ? "in favour of electric" : `in favour of ${labels.iceFuel}`}`,
       ],
     },
   ];
