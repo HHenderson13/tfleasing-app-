@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { FuelPrice, FuelVehicle } from "@/lib/fuel-prices";
 import {
-  CHARGE_KEYS, DEFAULT_MIX, PRICE_META, compare, effectivePence, fmtPence, fmtPounds, mpgFromCo2, showsVat, testCycleFor, verdict, workings,
-  type ChargeKey, type ChargeMix, type ComparisonInput, type CustomerType, type FuelType, type PriceKey, type Segment, type TestCycle,
+  CHARGE_KEYS, DEFAULT_MIX, DEPOT_CHARGER_KW, HOME_CHARGER_KW, PRICE_META, chargingInsight, chargingWorkings, compare, effectivePence, fmtMilesPerKwh,
+  fmtPence, fmtPounds, hoursText, howOften, mpgFromCo2, showsVat, testCycleFor, verdict, workings,
+  type ChargeKey, type ChargeMix, type ChargingInsight, type ComparisonInput, type CustomerType, type EvRange, type FuelType, type PriceKey, type Segment, type TestCycle,
 } from "@/lib/fuel-calc";
 import { decodeReference, type ReferenceFile } from "@/lib/fuel-reference";
 import {
@@ -122,6 +123,11 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
   const evVehicle = evModel?.vehicles.find((v) => v.id === evId) ?? evModel?.vehicles[0];
   const evFromRange = evMode === "range" && !!evVehicle;
   const milesPerKwh = evFromRange ? (evEdit != null ? num(evEdit) : evVehicle!.efficiency) : num(manualEff);
+  const [manualBattery, setManualBattery] = useState("");
+  const [manualRange, setManualRange] = useState("");
+  const evRange: EvRange = evFromRange
+    ? { batteryKwh: evVehicle!.batteryKwh, rangeMiles: evVehicle!.rangeMiles, motorwayMiles: evVehicle!.motorwayMiles, dcKw: evVehicle!.dcKw, dcMinutes: evVehicle!.dcMinutes }
+    : { batteryKwh: num(manualBattery) || null, rangeMiles: num(manualRange) || null, motorwayMiles: null, dcKw: null, dcMinutes: null };
 
   const [mix, setMix] = useState<ChargeMix>(DEFAULT_MIX.van);
 
@@ -135,7 +141,11 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
   };
   const r = compare(input);
   const v = verdict(r, iceFuel);
-  const steps = workings(input, r, { iceFuel, chargeLabels: CHARGE_NAME });
+  const charging = r.valid ? chargingInsight(input.annualMiles, milesPerKwh, evRange) : null;
+  const steps = [
+    ...workings(input, r, { iceFuel, chargeLabels: CHARGE_NAME }),
+    ...(charging ? [{ title: "Charging", lines: chargingWorkings(input.annualMiles, milesPerKwh, evRange, charging) }] : []),
+  ];
   const mixTotal = CHARGE_KEYS.reduce((n, k) => n + (mix[k] || 0), 0);
   const fuelName = cap(iceFuel);
 
@@ -176,7 +186,8 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
         date: new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric" }),
         segment, customer, termMonths, annualMiles: input.annualMiles,
         ice: { ...ice, fuel: iceFuel, mpg: iceMpg, nedc: iceNedc },
-        ev: { ...ev, milesPerKwh },
+        ev: { ...ev, milesPerKwh, ...evRange },
+        charging,
         result: r,
         tone: v.tone,
         headline: v.headline,
@@ -389,8 +400,13 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
                 </Field>
               </div>
               <VehicleCard title={`${evVehicle!.make} ${evVehicle!.model}`} subtitle={evVehicle!.derivative}
-                tags={<><Tag tone="emerald">Electric</Tag><Tag tone="emerald">WLTP</Tag></>}
-                figure={<BigFigure label="Miles per kWh" unit="miles per kWh" value={evEdit ?? evVehicle!.efficiency.toFixed(1)} onChange={setEvEdit} edited={evEdit != null} onReset={() => setEvEdit(null)} />}
+                tags={<>
+                  <Tag tone="emerald">Electric</Tag>
+                  {evVehicle!.batteryKwh ? <Tag>{evVehicle!.batteryKwh} kWh battery</Tag> : null}
+                  {evVehicle!.rangeMiles ? <Tag>{evVehicle!.rangeMiles}-mile range</Tag> : null}
+                  <Tag tone="emerald">WLTP</Tag>
+                </>}
+                figure={<BigFigure label="Miles per kWh" unit="miles per kWh" value={evEdit ?? fmtMilesPerKwh(evVehicle!.efficiency)} onChange={setEvEdit} edited={evEdit != null} onReset={() => setEvEdit(null)} />}
                 foot={evEdit != null ? "Efficiency adjusted for this comparison." : `${evVehicle!.source ?? "Manufacturer WLTP"}. Measured at the plug, so charging losses are already in it.`} />
             </div>
           ) : (
@@ -407,6 +423,12 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
                 </Field>
                 <Field label="Vehicle" hint="Optional. How it reads on the PDF.">
                   <TextInput value={evName} onChange={setEvName} placeholder={segment === "van" ? "e.g. Ford E-Transit Custom" : "e.g. Ford Explorer Extended Range RWD"} label="Electric vehicle name" />
+                </Field>
+                <Field label="Usable battery" hint="Optional, for the charging picture.">
+                  <UnitInput value={manualBattery} onChange={setManualBattery} unit="kWh" label="Usable battery in kWh" placeholder="e.g. 77" />
+                </Field>
+                <Field label="Official range" hint="Optional. The WLTP combined range.">
+                  <UnitInput value={manualRange} onChange={setManualRange} unit="miles" label="Official range in miles" placeholder="e.g. 300" />
                 </Field>
               </div>
             </div>
@@ -448,8 +470,9 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
           onExport={exportPdf} exporting={exporting} exportError={exportError} onWorkings={openWorkings} />
       </aside>
 
-      {/* ── The workings ── */}
+      {/* ── Charging, then the workings ── */}
       <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-2">
+        <ChargingCard c={charging} ev={evRange} shares={r.ev.shares} annualMiles={input.annualMiles} />
         <section ref={workingsRef} className="scroll-mt-6 rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <button type="button" onClick={() => setShowWorkings((s) => !s)} aria-expanded={showWorkings}
             className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left sm:px-6">
@@ -668,6 +691,82 @@ function ChargeRow(p: PriceProps & { share: string; onShare: (s: string) => void
         )}
       </div>
       <UnitInput value={p.share} onChange={p.onShare} unit="%" label={`${CHARGE_NAME[k]} share of charging`} />
+    </div>
+  );
+}
+
+function ChargingCard({ c, ev, shares, annualMiles }: { c: ChargingInsight | null; ev: EvRange; shares: ChargeMix; annualMiles: number }) {
+  return (
+    <section className="rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+      <header className="px-5 pt-5 sm:px-6 sm:pt-6">
+        <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">Charging it</h2>
+        <p className="mt-0.5 text-[13px] leading-5 text-slate-500">
+          {c ? `What ${annualMiles.toLocaleString("en-GB")} miles a year means each week, from the official figures.` : "How often it needs charging, and how long that takes."}
+        </p>
+      </header>
+      <div className="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
+        {!c ? (
+          <p className="text-[14px] text-slate-500">This appears once the electric vehicle and the mileage are in.</p>
+        ) : (
+          <>
+            <div className="flex flex-col gap-4 rounded-xl bg-emerald-50 p-4 ring-1 ring-inset ring-emerald-100 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div>
+                <div className="text-[13px] font-medium text-emerald-800">Full charges</div>
+                <div className="mt-0.5 text-[22px] font-semibold leading-7 tracking-tight text-slate-900">
+                  {c.chargesPerWeek != null ? howOften(c.chargesPerWeek) : "Add the official range"}
+                </div>
+                <div className="mt-1 text-[13px] leading-5 text-slate-600">
+                  {ev.rangeMiles
+                    ? <>{Math.round(c.weeklyMiles)} miles a week on a {ev.rangeMiles}-mile official range{ev.motorwayMiles ? <>, or {ev.motorwayMiles} miles at motorway speeds{c.motorwayChargesPerWeek != null && howOften(c.motorwayChargesPerWeek) !== howOften(c.chargesPerWeek!) ? <> ({howOften(c.motorwayChargesPerWeek).toLowerCase()})</> : null}</> : null}.</>
+                    : "Enter the official range in step 3 to see how often it needs a full charge."}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-6 sm:text-right">
+                <div><div className="text-[12px] text-slate-500">A week</div><div className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-900">{Math.round(c.weeklyMiles)} miles</div></div>
+                <div><div className="text-[12px] text-slate-500">Energy</div><div className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-900">{Math.round(c.weeklyKwh)} kWh</div></div>
+              </div>
+            </div>
+
+            <div className="mt-5 text-[13px] font-medium text-slate-700">Time to put back a week&apos;s driving</div>
+            <div className="mt-2 grid gap-3 md:grid-cols-3">
+              <ChargeWay colour={CHARGE_COLOUR.home_overnight} title="At home" spec={`${HOME_CHARGER_KW} kW home charger`} share={shares.home_overnight + shares.home_standard}
+                value={hoursText(c.homeHours)} unit="a week" note="Plugged in overnight, on the cheap rate." />
+              <ChargeWay colour={CHARGE_COLOUR.depot} title="At the depot" spec={`${DEPOT_CHARGER_KW} kW three-phase`} share={shares.depot}
+                value={hoursText(c.depotHours)} unit="a week" note="While it's parked during the working day." />
+              <ChargeWay colour={CHARGE_COLOUR.public_rapid} title="Public rapid" spec={c.rapid?.kw ? `Up to ${c.rapid.kw} kW` : "Rapid charger"} share={shares.public_rapid}
+                value={c.rapid ? `${c.rapid.minutes} min` : "Not published"} unit={c.rapid ? "10 to 80%" : ""}
+                note={c.rapid
+                  ? `Adds about ${Math.round(c.rapid.milesAdded)} miles. ${howOften(c.rapid.stopsPerWeek)} if it were the only way to charge.`
+                  : ev.rangeMiles ? "Ford's price list gives no rapid charging time for this vehicle." : "Needs the official range and charging time."} />
+            </div>
+            <p className="mt-4 text-[12.5px] leading-5 text-slate-500">
+              Official ranges are tested at 23°C. Expect fewer miles in cold weather and at motorway speeds, so a little more charging in winter.
+            </p>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ChargeWay({ colour, title, spec, share, value, unit, note }: { colour: string; title: string; spec: string; share: number; value: string; unit: string; note: string }) {
+  const used = share > 0.0001;
+  return (
+    <div className={`flex flex-col rounded-xl p-4 ring-1 ring-inset ${used ? "bg-white ring-slate-200" : "bg-slate-50/70 ring-slate-200/70"}`}>
+      <div className="flex items-center gap-2 whitespace-nowrap text-[14px] font-medium text-slate-900">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />{title}
+      </div>
+      <div className="mt-0.5 text-[12.5px] text-slate-500">{spec}</div>
+      <div className="mt-3 flex flex-wrap items-baseline gap-x-1.5">
+        <span className="whitespace-nowrap text-[22px] font-semibold leading-7 tracking-tight tabular-nums text-slate-900">{value}</span>
+        {unit && <span className="whitespace-nowrap text-[13px] text-slate-500">{unit}</span>}
+      </div>
+      <p className="mt-1.5 text-[12.5px] leading-5 text-slate-500">{note}</p>
+      <div className="mt-auto pt-3">
+        <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-medium ${used ? "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200" : "bg-slate-100 text-slate-500"}`}>
+          {used ? `${Math.round(share * 100)}% of charging` : "Not in the mix"}
+        </span>
+      </div>
     </div>
   );
 }

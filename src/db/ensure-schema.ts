@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "./index";
 import { fuelVehicleId } from "../lib/fuel-vehicle-id";
-import { SEED_SOURCE, SEED_VEHICLES } from "../lib/fuel-vehicles-seed";
+import { RETIRED_EV_SEED, SEED_VEHICLES } from "../lib/fuel-vehicles-seed";
 
 type TableInfoRow = {
   name: string;
@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 59;
+const SCHEMA_VERSION = 60;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1151,15 +1151,30 @@ async function ensureFuelCalculatorTables() {
       PRIMARY KEY (key, as_of)
     )
   `));
-  // The vehicles the old calculator held, and today's figures from each
-  // source so the page works before the first daily refresh. INSERT OR
-  // IGNORE: an admin's edit, or a refreshed price, is never put back.
+  // Electric vehicles' battery, range and rapid charging, from the price
+  // lists (2026-10-14), for the charging picture.
+  await ensureColumns("fuel_vehicles", [
+    { name: "battery_kwh", sqlType: "REAL" },
+    { name: "range_miles", sqlType: "REAL" },
+    { name: "range_motorway_miles", sqlType: "REAL" },
+    { name: "dc_kw", sqlType: "REAL" },
+    { name: "dc_minutes", sqlType: "REAL" },
+  ]);
+  // The vehicles it starts with, and today's figures from each source so
+  // the page works before the first daily refresh. INSERT OR IGNORE: an
+  // admin's edit, or a refreshed price, is never put back.
   const now = Math.floor(Date.now() / 1000);
-  for (let i = 0; i < SEED_VEHICLES.length; i += 50) {
-    const values = SEED_VEHICLES.slice(i, i + 50).map((v) => sql`(
-      ${fuelVehicleId(v)}, ${v.powertrain}, ${v.segment}, ${v.make}, ${v.model}, ${v.derivative}, ${v.fuel}, ${v.efficiency}, ${SEED_SOURCE}, ${now}
+  for (let i = 0; i < SEED_VEHICLES.length; i += 40) {
+    const values = SEED_VEHICLES.slice(i, i + 40).map((v) => sql`(
+      ${fuelVehicleId(v)}, ${v.powertrain}, ${v.segment}, ${v.make}, ${v.model}, ${v.derivative}, ${v.fuel}, ${v.efficiency}, ${v.source},
+      ${v.batteryKwh ?? null}, ${v.rangeMiles ?? null}, ${v.motorwayMiles ?? null}, ${v.dcKw ?? null}, ${v.dcMinutes ?? null}, ${now}
     )`);
-    await db.run(sql`INSERT OR IGNORE INTO fuel_vehicles (id, powertrain, segment, make, model, derivative, fuel, efficiency, source, updated_at) VALUES ${sql.join(values, sql`, `)}`);
+    await db.run(sql`INSERT OR IGNORE INTO fuel_vehicles (id, powertrain, segment, make, model, derivative, fuel, efficiency, source, battery_kwh, range_miles, range_motorway_miles, dc_kw, dc_minutes, updated_at) VALUES ${sql.join(values, sql`, `)}`);
+  }
+  // The earlier model year's electric vans, replaced by the price lists.
+  // Only rows still exactly as seeded go: one an admin changed stays.
+  for (const v of RETIRED_EV_SEED) {
+    await db.run(sql`DELETE FROM fuel_vehicles WHERE id = ${fuelVehicleId(v)} AND efficiency = ${v.efficiency} AND source = 'Ford WLTP combined'`);
   }
   await db.run(sql`
     INSERT OR IGNORE INTO fuel_prices (key, value, as_of, period, source, source_url, fetched_at, checked_at) VALUES

@@ -191,27 +191,53 @@ export interface FuelVehicle {
   fuel: "petrol" | "diesel" | "electric";
   efficiency: number;
   source: string | null;
+  /** Electric only, and only where the maker publishes them. */
+  batteryKwh: number | null;
+  rangeMiles: number | null;
+  motorwayMiles: number | null;
+  dcKw: number | null;
+  dcMinutes: number | null;
 }
 
+const numOrNull = (v: unknown) => (v == null || v === "" ? null : Number(v));
+
+// Within a model, in the order they were added: the seed follows the price
+// lists, which start each model at its entry trim.
 export async function loadFuelVehicles(): Promise<FuelVehicle[]> {
-  const rows = await db.all<{ id: string; powertrain: string; segment: string; make: string; model: string; derivative: string; fuel: string; efficiency: number; source: string | null }>(
-    sql`SELECT id, powertrain, segment, make, model, derivative, fuel, efficiency, source FROM fuel_vehicles ORDER BY segment, make, model, derivative`,
-  );
-  return rows.map((r) => ({ ...r, efficiency: Number(r.efficiency) }) as FuelVehicle);
+  const rows = await db.all<{
+    id: string; powertrain: string; segment: string; make: string; model: string; derivative: string; fuel: string; efficiency: number; source: string | null;
+    battery_kwh: number | null; range_miles: number | null; range_motorway_miles: number | null; dc_kw: number | null; dc_minutes: number | null;
+  }>(sql`
+    SELECT id, powertrain, segment, make, model, derivative, fuel, efficiency, source, battery_kwh, range_miles, range_motorway_miles, dc_kw, dc_minutes
+    FROM fuel_vehicles ORDER BY segment, make, model, rowid
+  `);
+  return rows.map((r) => ({
+    id: r.id, powertrain: r.powertrain, segment: r.segment, make: r.make, model: r.model, derivative: r.derivative, fuel: r.fuel,
+    efficiency: Number(r.efficiency), source: r.source,
+    batteryKwh: numOrNull(r.battery_kwh), rangeMiles: numOrNull(r.range_miles), motorwayMiles: numOrNull(r.range_motorway_miles),
+    dcKw: numOrNull(r.dc_kw), dcMinutes: numOrNull(r.dc_minutes),
+  }) as FuelVehicle);
 }
 
 /** Add or update vehicles. The same vehicle pasted twice updates its row. */
-export async function upsertFuelVehicles(rows: Omit<FuelVehicle, "id">[]): Promise<{ added: number; updated: number }> {
+export async function upsertFuelVehicles(rows: (Omit<FuelVehicle, "id" | "batteryKwh" | "rangeMiles" | "motorwayMiles" | "dcKw" | "dcMinutes"> & Partial<FuelVehicle>)[]): Promise<{ added: number; updated: number }> {
   const now = Math.floor(Date.now() / 1000);
   let added = 0, updated = 0;
   for (const v of rows) {
     const id = fuelVehicleId(v);
     const [cur] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM fuel_vehicles WHERE id = ${id}`);
     if (Number(cur?.n ?? 0) > 0) updated++; else added++;
+    // A re-paste without the optional electric columns keeps what was there.
     await db.run(sql`
-      INSERT INTO fuel_vehicles (id, powertrain, segment, make, model, derivative, fuel, efficiency, source, updated_at)
-      VALUES (${id}, ${v.powertrain}, ${v.segment}, ${v.make}, ${v.model}, ${v.derivative}, ${v.fuel}, ${v.efficiency}, ${v.source}, ${now})
-      ON CONFLICT(id) DO UPDATE SET efficiency = excluded.efficiency, source = excluded.source, updated_at = excluded.updated_at
+      INSERT INTO fuel_vehicles (id, powertrain, segment, make, model, derivative, fuel, efficiency, source, battery_kwh, range_miles, range_motorway_miles, dc_kw, dc_minutes, updated_at)
+      VALUES (${id}, ${v.powertrain}, ${v.segment}, ${v.make}, ${v.model}, ${v.derivative}, ${v.fuel}, ${v.efficiency}, ${v.source},
+        ${v.batteryKwh ?? null}, ${v.rangeMiles ?? null}, ${v.motorwayMiles ?? null}, ${v.dcKw ?? null}, ${v.dcMinutes ?? null}, ${now})
+      ON CONFLICT(id) DO UPDATE SET efficiency = excluded.efficiency, source = excluded.source, updated_at = excluded.updated_at,
+        battery_kwh = COALESCE(excluded.battery_kwh, fuel_vehicles.battery_kwh),
+        range_miles = COALESCE(excluded.range_miles, fuel_vehicles.range_miles),
+        range_motorway_miles = COALESCE(excluded.range_motorway_miles, fuel_vehicles.range_motorway_miles),
+        dc_kw = COALESCE(excluded.dc_kw, fuel_vehicles.dc_kw),
+        dc_minutes = COALESCE(excluded.dc_minutes, fuel_vehicles.dc_minutes)
     `);
   }
   return { added, updated };

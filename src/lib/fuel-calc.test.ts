@@ -125,3 +125,63 @@ describe("workings", () => {
     expect(text).not.toMatch(/[—–]/);
   });
 });
+
+describe("charging, a week at a time", () => {
+  it("turns the annual mileage into charges, hours and rapid stops from the official figures", async () => {
+    const { chargingInsight } = await import("./fuel-calc");
+    // Puma Gen-E Select: 13.0 kWh/100km = 4.78 miles per kWh, 259-mile range, 192 on the motorway, 10 to 80% in 26 minutes at 100 kW.
+    const c = chargingInsight(12000, 4.78, { batteryKwh: 46.8, rangeMiles: 259, motorwayMiles: 192, dcKw: 100, dcMinutes: 26 })!;
+    expect(c.weeklyMiles).toBeCloseTo(230.77, 2);
+    expect(c.weeklyKwh).toBeCloseTo(48.28, 2);
+    expect(c.chargesPerWeek).toBeCloseTo(0.891, 3);
+    expect(c.motorwayChargesPerWeek).toBeCloseTo(1.202, 3);
+    expect(c.homeHours).toBeCloseTo(6.52, 2);   // 48.28 kWh ÷ 7.4 kW
+    expect(c.depotHours).toBeCloseTo(4.39, 2);  // ÷ 11 kW
+    expect(c.rapid).toMatchObject({ minutes: 26, kw: 100 });
+    expect(c.rapid!.milesAdded).toBeCloseTo(181.3, 1);
+    expect(c.rapid!.stopsPerWeek).toBeCloseTo(1.273, 3);
+  });
+  it("leaves out what the vehicle's figures don't support", async () => {
+    const { chargingInsight } = await import("./fuel-calc");
+    const c = chargingInsight(12000, 3.51, { batteryKwh: null, rangeMiles: null, motorwayMiles: null, dcKw: null, dcMinutes: null })!;
+    expect(c.chargesPerWeek).toBeNull();
+    expect(c.rapid).toBeNull();
+    expect(c.homeHours).toBeGreaterThan(0);
+    expect(chargingInsight(0, 3.5, { batteryKwh: null, rangeMiles: 200, motorwayMiles: null, dcKw: null, dcMinutes: null })).toBeNull();
+  });
+  it("says it the way a person would", async () => {
+    const { howOften, hoursText } = await import("./fuel-calc");
+    expect(howOften(0.89)).toBe("About once a week");
+    expect(howOften(1.6)).toBe("About twice a week");
+    expect(howOften(3.4)).toBe("About 3 times a week");
+    expect(howOften(0.6)).toBe("Every week or two");
+    expect(howOften(0.3)).toBe("About once every 3 weeks");
+    expect(hoursText(6.52)).toBe("6h 30m");
+    expect(hoursText(4.39)).toBe("4h 25m");
+    expect(hoursText(0.4)).toBe("25m");
+    expect(hoursText(2)).toBe("2h");
+  });
+
+  it("shows its workings", async () => {
+    const { chargingInsight, chargingWorkings } = await import("./fuel-calc");
+    const ev = { batteryKwh: 46.8, rangeMiles: 259, motorwayMiles: 192, dcKw: 100, dcMinutes: 26 };
+    const lines = chargingWorkings(12000, 4.78, ev, chargingInsight(12000, 4.78, ev)!);
+    expect(lines).toEqual([
+      "12,000 miles a year ÷ 52 = 230.8 miles a week",
+      "230.8 miles ÷ 4.78 miles per kWh = 48.3 kWh a week, at the plug",
+      "Home: 48.3 kWh ÷ 7.4 kW = 6.52 hours a week",
+      "Depot: 48.3 kWh ÷ 11 kW = 4.39 hours a week",
+      "Full charges: 230.8 miles ÷ 259-mile range = 0.89 a week",
+      "Rapid, 10 to 80%: 70% of 259 miles = 181.3 miles a stop, 1.27 stops a week",
+    ]);
+    expect(lines.join("\n")).not.toMatch(/[—–]/);
+  });
+
+  it("prints miles per kWh with the places it was published to", async () => {
+    const { fmtMilesPerKwh } = await import("./fuel-calc");
+    expect(fmtMilesPerKwh(2.9)).toBe("2.9");
+    expect(fmtMilesPerKwh(4.78)).toBe("4.78");
+    expect(fmtMilesPerKwh(4.1)).toBe("4.1");
+    expect(fmtMilesPerKwh(3)).toBe("3.0");
+  });
+});

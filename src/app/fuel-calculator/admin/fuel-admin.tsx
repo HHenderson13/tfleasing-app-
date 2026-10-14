@@ -142,7 +142,7 @@ function VehiclesSection({ vehicles }: { vehicles: FuelVehicle[] }) {
     <section>
       <h2 className="text-sm font-semibold text-slate-900">Vehicles</h2>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {([["ev", "Electric"], ["ice", "Petrol & diesel"]] as const).map(([k, label]) => (
+        {([["ev", "Electric"], ["ice", "Petrol and diesel"]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === k ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"}`}>
             {label} <span className={`text-xs ${tab === k ? "text-slate-300" : "text-slate-400"}`}>{counts(k)}</span>
           </button>
@@ -153,19 +153,21 @@ function VehiclesSection({ vehicles }: { vehicles: FuelVehicle[] }) {
       </div>
       <AddVehicles powertrain={tab} />
       <div className="mt-3 max-h-[480px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Vehicle</th>
               <th className="px-3 py-2 text-left font-semibold">Type</th>
               <th className="px-3 py-2 text-right font-semibold">{tab === "ev" ? "Miles / kWh" : "MPG"}</th>
+              {tab === "ev" && <th className="px-3 py-2 text-right font-semibold">Battery · range</th>}
+              {tab === "ev" && <th className="px-3 py-2 text-right font-semibold">Rapid 10 to 80%</th>}
               <th className="px-3 py-2 text-left font-semibold">Source</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {list.map((v) => <VehicleRow key={v.id} v={v} />)}
-            {list.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">None yet. Paste them in above.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={tab === "ev" ? 7 : 5} className="px-4 py-6 text-center text-sm text-slate-500">None yet. Paste them in above.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -181,6 +183,14 @@ function VehicleRow({ v }: { v: FuelVehicle }) {
       <td className="px-4 py-1.5"><span className="font-medium text-slate-900">{v.make} {v.model}</span> <span className="text-slate-600">{v.derivative}</span></td>
       <td className="whitespace-nowrap px-3 py-1.5 text-xs capitalize text-slate-600">{v.segment}{v.fuel !== "electric" ? ` · ${v.fuel}` : ""}</td>
       <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{v.efficiency}</td>
+      {v.powertrain === "ev" && (
+        <td className="whitespace-nowrap px-3 py-1.5 text-right text-xs tabular-nums text-slate-600">
+          {v.batteryKwh || v.rangeMiles ? `${v.batteryKwh ? `${v.batteryKwh} kWh` : "Battery not given"} · ${v.rangeMiles ? `${v.rangeMiles} mi${v.motorwayMiles ? ` (${v.motorwayMiles} motorway)` : ""}` : "range not given"}` : "Not given"}
+        </td>
+      )}
+      {v.powertrain === "ev" && (
+        <td className="whitespace-nowrap px-3 py-1.5 text-right text-xs tabular-nums text-slate-600">{v.dcMinutes ? `${v.dcMinutes} min${v.dcKw ? `, ${v.dcKw} kW` : ""}` : "Not published"}</td>
+      )}
       <td className="max-w-[220px] truncate px-3 py-1.5 text-[11px] text-slate-500" title={v.source ?? ""}>{v.source}</td>
       <td className="px-3 py-1.5 text-right">
         <button disabled={pending} onClick={() => { if (confirm(`Remove ${v.make} ${v.model} ${v.derivative}?`)) start(async () => { await deleteFuelVehicleAction(v.id); router.refresh(); }); }}
@@ -197,13 +207,14 @@ function AddVehicles({ powertrain }: { powertrain: "ev" | "ice" }) {
   const [source, setSource] = useState("");
   const [result, setResult] = useState<Awaited<ReturnType<typeof importFuelVehiclesAction>> | null>(null);
   const columns = powertrain === "ev" ? "Car or Van · Make · Model · Derivative · Miles per kWh" : "Car or Van · Make · Model · Derivative · Petrol or Diesel · MPG";
-  const example = powertrain === "ev" ? "Car\tFord\tExplorer\tExtended Range RWD 77kWh Select\t3.9" : "Van\tFord\tTransit Connect\tL2 Trend 2.0 EcoBlue 122PS\tDiesel\t47.9";
+  const example = powertrain === "ev" ? "Car\tFord\tPuma Gen-E\tSelect 46.8kWh 168PS FWD\t4.78\t46.8\t259\t192\t100\t26" : "Van\tFord\tTransit Connect\tL2 Trend 2.0 EcoBlue 122PS\tDiesel\t47.9";
   return (
     <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-sm font-semibold text-slate-900">Add or update {powertrain === "ev" ? "electric" : "petrol and diesel"} vehicles</div>
       <p className="mt-0.5 text-xs text-slate-500">
         Paste rows from Excel with the columns <b>{columns}</b>. A header row is fine. A vehicle already in the list is updated, not doubled.
         Use the official WLTP {powertrain === "ev" ? "miles per kWh (not kWh per 100 miles)" : "combined MPG"} so every comparison is like for like.
+        {powertrain === "ev" && <> For the charging picture, five more columns can follow: <b>usable battery kWh · range miles · motorway range miles · rapid kW · rapid 10 to 80% minutes</b>. Leave any blank that isn&apos;t published.</>}
       </p>
       <textarea value={text} onChange={(e) => { setText(e.target.value); setResult(null); }} rows={5} placeholder={example}
         className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs focus:border-slate-500 focus:outline-none" />

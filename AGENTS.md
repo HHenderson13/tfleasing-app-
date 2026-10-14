@@ -1085,9 +1085,45 @@ cadence and is flagged "may be out of date" past it.
 ### Vehicles
 
 `fuel_vehicles` — petrol/diesel with MPG, electric with miles per kWh, car
-or van. Seeded from the old calculator (Ford Transit Custom, Transit Courier,
-E-Transit Custom, E-Transit Courier). The old tool filed the Courier 1.0
-EcoBoost under diesel; it is petrol, and is seeded as such. More are added
+or van. Petrol and diesel are seeded from the old calculator (Transit
+Custom, Transit Courier); the old tool filed the Courier 1.0 EcoBoost under
+diesel, it is petrol, and is seeded as such.
+
+**Electric: every Ford EV, from the dealer price lists** (user, 2026-10-14,
+`EV_SEED` in `lib/fuel-vehicles-seed.ts`): Puma Gen-E, Capri, Explorer,
+Mustang Mach-E, Explorer Van, Transit City, E-Transit Courier and
+E-Transit Custom, 50 versions, each with usable battery, WLTP range, WLTP
+motorway range where listed, and rapid charging (max DC kW, 10 to 80%
+minutes). The source string names the list and its date.
+
+- Efficiency is always the official consumption **at the plug**, converted
+  only for units (lists use kWh/100km, kWh/100 miles, or miles per kWh).
+  `fuel-vehicles-seed.test.ts` pins that it is below range ÷ battery for
+  every version, which is what charging losses make it.
+- **The E-Transit Courier list's "4.4 miles per kWh" is range ÷ battery**,
+  not consumption; its official 17.7 kWh/100km is 3.51 and that is used.
+  4.4 would understate the electric cost by a fifth.
+- **The Mach-E list heads its column kWh/100miles; the figures are per
+  100 km.** Per 100 miles, a 73kWh Select would beat its own 292-mile range
+  at the plug.
+- Not on the lists, so not invented: E-Transit Courier rapid charging, the
+  Transit City chassis cab ("TBC"), and AC on-board charger speeds.
+- The earlier model year's EV seeds (65kWh E-Transit Custom, 43kWh
+  E-Transit Courier) are deleted by `RETIRED_EV_SEED`, only where still
+  exactly as seeded. Petrol/diesel price-list figures were NOT taken: the
+  user asked for the electric data only.
+- Library vehicles load in insertion order within a model (`rowid`), so
+  each model starts at the price list's entry trim.
+
+**Charging it** (`chargingInsight`, `chargingWorkings` in `lib/fuel-calc.ts`,
+tested): a week is annual miles ÷ 52; energy is that ÷ miles per kWh (at
+the plug, so nothing is added); hours are energy ÷ 7.4 kW at home (the most
+a single-phase supply gives) or ÷ 11 kW three-phase at a depot; full
+charges are a week's miles ÷ the WLTP range, phrased by `howOften`; rapid
+stops use 70% of the range (10 to 80%). The 23°C test caveat is printed
+wherever the range is. Shown as its own card on the page and as the first
+section of PDF page 2, with its own workings step. A typed-in EV can be
+given a battery and range so it gets the same picture. More are added
 by pasting rows on the admin page (`parseVehiclePaste`): a plausible-range
 check catches kWh per 100 miles pasted as miles per kWh, and nothing saves
 if any row is wrong. The id is what the vehicle is, so a re-paste updates.
@@ -1140,8 +1176,10 @@ fuel, engine size and official CO2, through a free SQL API.
   `fuel-calc.test.ts` pins the workings, verdict and price labels; ranges
   read "2019 to 2021".
 - **The PDF is set in Geist** from `public/fonts` (SIL OFL), registered
-  with `Font.register`; it carries £, −, ×, ÷ and ₂. Page 1 is the answer,
-  page 2 how it's worked out. **Never set `lineHeight` on the `<Page>`
+  with `Font.register`; it carries £, −, ×, ÷ and ₂. Two pages, both full:
+  page 1 is the answer (with the disclaimer pinned above the footer), page
+  2 is charging, the workings and the notes. Anything added must come out
+  of something else, or it spills to a third page. **Never set `lineHeight` on the `<Page>`
   style**: it silently drops the `fixed` footer from every page. Set it on
   the text that needs it.
 

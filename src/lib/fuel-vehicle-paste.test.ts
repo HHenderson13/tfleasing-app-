@@ -41,4 +41,18 @@ describe("pasting vehicles", () => {
     expect(r.rows).toEqual([]);
     expect(r.errors[0].message).toMatch(/kWh per 100 miles/);
   });
+
+  it("takes battery, range and rapid charging after the miles per kWh", () => {
+    const r = parseVehiclePaste(
+      "Car\tFord\tPuma Gen-E\tSelect\t4.78\t46.8\t259\t192\t100\t26\n"
+      + "Car\tFord\tCapri\tStyle\t4.17\t58\t286\n"
+      + "Car\tFord\tCapri\tPremium\t4.0\t58\t2860\n"
+      + "Car\tFord\tCapri\tSelect\t4.5\t79\t389\t400\n",
+      "ev",
+    );
+    expect(r.rows[0]).toMatchObject({ batteryKwh: 46.8, rangeMiles: 259, motorwayMiles: 192, dcKw: 100, dcMinutes: 26 });
+    expect(r.rows[1]).toMatchObject({ batteryKwh: 58, rangeMiles: 286 });
+    expect(r.rows[1].dcKw).toBeUndefined();
+    expect(r.errors.map((e) => e.line)).toEqual([3, 4]);
+  });
 });

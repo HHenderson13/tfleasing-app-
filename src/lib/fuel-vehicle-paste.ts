@@ -4,6 +4,8 @@
 //
 //   Petrol / diesel:  Car or Van | Make | Model | Derivative | Petrol or Diesel | MPG
 //   Electric:         Car or Van | Make | Model | Derivative | Miles per kWh
+//                     then, optionally: Battery kWh | Range miles |
+//                     Motorway range miles | Rapid kW | Rapid 10 to 80% minutes
 //
 // A header row is skipped (its efficiency isn't a number).
 
@@ -15,7 +17,21 @@ export interface PastedVehicle {
   derivative: string;
   fuel: "petrol" | "diesel" | "electric";
   efficiency: number;
+  batteryKwh?: number;
+  rangeMiles?: number;
+  motorwayMiles?: number;
+  dcKw?: number;
+  dcMinutes?: number;
 }
+
+/** The electric columns that may follow miles per kWh, with plausible bounds. */
+const EV_EXTRAS = [
+  { key: "batteryKwh", label: "Battery", unit: "kWh", lo: 10, hi: 200 },
+  { key: "rangeMiles", label: "Range", unit: "miles", lo: 50, hi: 700 },
+  { key: "motorwayMiles", label: "Motorway range", unit: "miles", lo: 30, hi: 700 },
+  { key: "dcKw", label: "Rapid charging", unit: "kW", lo: 20, hi: 400 },
+  { key: "dcMinutes", label: "Rapid 10 to 80%", unit: "minutes", lo: 10, hi: 120 },
+] as const;
 
 export interface PasteResult { rows: PastedVehicle[]; errors: { line: number; text: string; message: string }[] }
 
@@ -56,7 +72,18 @@ export function parseVehiclePaste(text: string, powertrain: "ice" | "ev"): Paste
         ? `${effCell} MPG is outside ${lo} to ${hi}. Check it's miles per gallon.`
         : `${effCell} is outside ${lo} to ${hi} miles per kWh. Check it isn't kWh per 100 miles.`);
     }
-    out.rows.push({ powertrain, segment, make, model, derivative, fuel, efficiency: eff });
+    const row: PastedVehicle = { powertrain, segment, make, model, derivative, fuel, efficiency: eff };
+    if (powertrain === "ev") {
+      for (const [i, x] of EV_EXTRAS.entries()) {
+        const cell = cells[want + i];
+        if (!cell) continue;
+        const n = Number(cell.replace(/[^\d.]/g, ""));
+        if (!(n >= x.lo && n <= x.hi)) return fail(`${x.label} "${cell}" should be ${x.lo} to ${x.hi} ${x.unit}.`);
+        row[x.key] = n;
+      }
+      if (row.motorwayMiles && row.rangeMiles && row.motorwayMiles > row.rangeMiles) return fail("The motorway range can't be more than the overall range.");
+    }
+    out.rows.push(row);
   });
   return out;
 }

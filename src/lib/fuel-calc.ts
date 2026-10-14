@@ -188,6 +188,8 @@ export interface WorkingsLabels { iceFuel: FuelType; chargeLabels: Record<Charge
 const n2 = (n: number, dp = 2) => n.toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 // Enough places that each line multiplies out to the next by hand.
 const miles = (n: number) => n2(n, Number.isInteger(Math.round(n * 100) / 100) ? 0 : 2);
+/** Miles per kWh as published: "2.9", or "4.78" where the figure has two places. */
+export const fmtMilesPerKwh = (n: number) => n2(n, Math.abs(n * 10 - Math.round(n * 10)) < 1e-9 ? 1 : 2);
 
 export function workings(input: ComparisonInput, r: ComparisonResult, labels: WorkingsLabels): { title: string; lines: string[] }[] {
   if (!r.valid) return [];
@@ -218,7 +220,7 @@ export function workings(input: ComparisonInput, r: ComparisonResult, labels: Wo
         `Blended price: ${used.map((k) => `${Math.round(r.ev.shares[k] * 100)}% × ${n2(r.ev.effectivePrices[k])}p`).join(" + ")} = ${n2(r.ev.blendedPence, 3)}p a kWh`,
         ...used.map((k) => `  ${labels.chargeLabels[k]}: ${n2(r.ev.effectivePrices[k])}p a kWh${vatNote(k)}`),
         ...(r.ev.mixTotal > 0 && Math.abs(r.ev.mixTotal - 100) > 0.01 ? [`  The charging shares added to ${n2(r.ev.mixTotal, 0)}%, so they were scaled to 100%`] : []),
-        `${n2(r.ev.blendedPence, 3)}p ÷ ${n2(input.ev.milesPerKwh, 1)} miles per kWh = ${n2(r.ev.pencePerMile, 3)}p a mile`,
+        `${n2(r.ev.blendedPence, 3)}p ÷ ${fmtMilesPerKwh(input.ev.milesPerKwh)} miles per kWh = ${n2(r.ev.pencePerMile, 3)}p a mile`,
       ],
     },
     {
@@ -230,4 +232,90 @@ export function workings(input: ComparisonInput, r: ComparisonResult, labels: Wo
       ],
     },
   ];
+}
+
+// ─── Living with it: charging ──────────────────────────────────────────────
+//
+// What a week of the customer's mileage means in charging, from the
+// official figures alone. Energy is at the plug (the WLTP consumption), so
+// hours on a charger are energy ÷ the charger's power with nothing added.
+
+/** The most a single-phase UK home charger delivers. */
+export const HOME_CHARGER_KW = 7.4;
+/** Three-phase AC at a depot or workplace: the most these vehicles take on AC. */
+export const DEPOT_CHARGER_KW = 11;
+export const WEEKS_PER_YEAR = 52;
+/** Rapid charging is quoted 10 to 80%: 70% of the battery, so 70% of the range. */
+export const RAPID_SHARE = 0.7;
+
+export interface EvRange {
+  batteryKwh: number | null;
+  rangeMiles: number | null;
+  motorwayMiles: number | null;
+  dcKw: number | null;
+  dcMinutes: number | null;
+}
+
+export interface ChargingInsight {
+  weeklyMiles: number;
+  /** At the plug. */
+  weeklyKwh: number;
+  /** A week's miles over the official range: full charges' worth. */
+  chargesPerWeek: number | null;
+  motorwayChargesPerWeek: number | null;
+  homeHours: number;
+  depotHours: number;
+  rapid: { stopsPerWeek: number; minutes: number; kw: number | null; milesAdded: number } | null;
+}
+
+export function chargingInsight(annualMiles: number, milesPerKwh: number, ev: EvRange): ChargingInsight | null {
+  if (!(annualMiles > 0) || !(milesPerKwh > 0)) return null;
+  const weeklyMiles = annualMiles / WEEKS_PER_YEAR;
+  const weeklyKwh = weeklyMiles / milesPerKwh;
+  const range = ev.rangeMiles != null && ev.rangeMiles > 0 ? ev.rangeMiles : null;
+  const motorway = ev.motorwayMiles != null && ev.motorwayMiles > 0 ? ev.motorwayMiles : null;
+  return {
+    weeklyMiles,
+    weeklyKwh,
+    chargesPerWeek: range ? weeklyMiles / range : null,
+    motorwayChargesPerWeek: motorway ? weeklyMiles / motorway : null,
+    homeHours: weeklyKwh / HOME_CHARGER_KW,
+    depotHours: weeklyKwh / DEPOT_CHARGER_KW,
+    rapid: range && ev.dcMinutes
+      ? { stopsPerWeek: weeklyMiles / (range * RAPID_SHARE), minutes: ev.dcMinutes, kw: ev.dcKw, milesAdded: range * RAPID_SHARE }
+      : null,
+  };
+}
+
+/** "About once a week", "About twice a week", "Every week or two", "About once every 3 weeks". */
+export function howOften(perWeek: number): string {
+  if (!(perWeek > 0)) return "";
+  if (perWeek >= 0.75) {
+    const n = Math.round(perWeek);
+    return n === 1 ? "About once a week" : n === 2 ? "About twice a week" : `About ${n} times a week`;
+  }
+  if (perWeek >= 0.55) return "Every week or two";
+  return `About once every ${Math.round(1 / perWeek)} weeks`;
+}
+
+/** Hours as "6h 30m", to the nearest 5 minutes; "45m" under an hour. */
+export function hoursText(h: number): string {
+  const mins = Math.max(5, Math.round((h * 60) / 5) * 5);
+  const hh = Math.floor(mins / 60);
+  const mm = mins % 60;
+  return hh ? `${hh}h${mm ? ` ${mm}m` : ""}` : `${mm}m`;
+}
+
+/** The charging figures' own workings, step by step, like the cost's. */
+export function chargingWorkings(annualMiles: number, milesPerKwh: number, ev: EvRange, c: ChargingInsight): string[] {
+  const d1 = (n: number) => n2(n, 1);
+  const lines = [
+    `${annualMiles.toLocaleString("en-GB")} miles a year ÷ ${WEEKS_PER_YEAR} = ${d1(c.weeklyMiles)} miles a week`,
+    `${d1(c.weeklyMiles)} miles ÷ ${fmtMilesPerKwh(milesPerKwh)} miles per kWh = ${d1(c.weeklyKwh)} kWh a week, at the plug`,
+    `Home: ${d1(c.weeklyKwh)} kWh ÷ ${HOME_CHARGER_KW} kW = ${n2(c.homeHours)} hours a week`,
+    `Depot: ${d1(c.weeklyKwh)} kWh ÷ ${DEPOT_CHARGER_KW} kW = ${n2(c.depotHours)} hours a week`,
+  ];
+  if (c.chargesPerWeek != null && ev.rangeMiles) lines.push(`Full charges: ${d1(c.weeklyMiles)} miles ÷ ${n2(ev.rangeMiles, 0)}-mile range = ${n2(c.chargesPerWeek)} a week`);
+  if (c.rapid && ev.rangeMiles) lines.push(`Rapid, 10 to 80%: ${Math.round(RAPID_SHARE * 100)}% of ${n2(ev.rangeMiles, 0)} miles = ${d1(c.rapid.milesAdded)} miles a stop, ${n2(c.rapid.stopsPerWeek)} stops a week`);
+  return lines;
 }

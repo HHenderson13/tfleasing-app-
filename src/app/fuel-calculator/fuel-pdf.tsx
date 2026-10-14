@@ -9,7 +9,10 @@
 
 import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
-import type { ComparisonResult, CustomerType, FuelType, PriceKey, Segment } from "@/lib/fuel-calc";
+import {
+  DEPOT_CHARGER_KW, HOME_CHARGER_KW, fmtMilesPerKwh, hoursText, howOften,
+  type ChargingInsight, type ComparisonResult, type CustomerType, type EvRange, type FuelType, type PriceKey, type Segment,
+} from "@/lib/fuel-calc";
 
 const origin = typeof window !== "undefined" ? window.location.origin : "";
 Font.register({
@@ -32,7 +35,8 @@ export interface FuelPdfInput {
   termMonths: number;
   annualMiles: number;
   ice: { name: string; detail: string | null; fuel: FuelType; mpg: number; basis: string; nedc: boolean };
-  ev: { name: string; detail: string | null; milesPerKwh: number; basis: string };
+  ev: { name: string; detail: string | null; milesPerKwh: number; basis: string } & EvRange;
+  charging: ChargingInsight | null;
   result: ComparisonResult;
   tone: "saving" | "cost" | "level";
   headline: string;
@@ -96,6 +100,76 @@ function VehicleCard({ kicker, colour, name, detail, figure, unit, rows, note }:
       </View>
       <View style={{ marginTop: 7, paddingTop: 3, borderTopWidth: 0.5, borderTopColor: C.line }}>{rows}</View>
       {note}
+    </View>
+  );
+}
+
+const sharePct = (n: number) => Math.round(n * 100);
+
+function ChargeWay({ colour, title, spec, value, unit, note, share }: { colour: string; title: string; spec: string; value: string; unit: string; note: string; share: number }) {
+  const used = share > 0.0001;
+  return (
+    <View style={[s.card, { flex: 1, padding: 10 }, used ? {} : { backgroundColor: C.wash }]}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Dot colour={colour} size={5} />
+          <Text style={{ fontSize: 8.5, fontWeight: 600, color: C.ink }}>{title}</Text>
+        </View>
+        <Text style={{ fontSize: 6.5, fontWeight: 500, color: used ? C.electricText : C.faint }}>{used ? `${sharePct(share)}% OF CHARGING` : "NOT IN THE MIX"}</Text>
+      </View>
+      <Text style={{ fontSize: 7.2, color: C.muted, marginTop: 2 }}>{spec}</Text>
+      <View style={{ flexDirection: "row", alignItems: "baseline", marginTop: 7 }}>
+        <Text style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{value}</Text>
+        {unit ? <Text style={{ fontSize: 7.5, color: C.muted, marginLeft: 4 }}>{unit}</Text> : null}
+      </View>
+      <Text style={{ fontSize: 7.2, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>{note}</Text>
+    </View>
+  );
+}
+
+function ChargingSection({ d, c }: { d: FuelPdfInput; c: ChargingInsight }) {
+  const sh = d.result.ev.shares;
+  const ev = d.ev;
+  return (
+    <View style={{ marginTop: 16 }} wrap={false}>
+      <Text style={s.h2}>Charging it</Text>
+      <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8 }}>
+        What {d.annualMiles.toLocaleString("en-GB")} miles a year means each week, from the official figures.
+      </Text>
+      <View style={{ backgroundColor: "#ecfdf5", borderRadius: 8, borderWidth: 0.75, borderColor: "#a7f3d0", paddingVertical: 11, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 6.8, fontWeight: 600, color: C.electricText, letterSpacing: 0.9 }}>FULL CHARGES</Text>
+          <Text style={{ fontSize: 15, fontWeight: 600, color: C.ink, marginTop: 3 }}>{c.chargesPerWeek != null ? howOften(c.chargesPerWeek) : "Official range not given"}</Text>
+          {ev.rangeMiles ? (
+            <Text style={{ fontSize: 7.8, color: C.body, marginTop: 3, lineHeight: 1.45 }}>
+              {Math.round(c.weeklyMiles)} miles a week on a {ev.rangeMiles}-mile official range{ev.motorwayMiles ? `, or ${ev.motorwayMiles} miles at motorway speeds` : ""}.
+            </Text>
+          ) : null}
+        </View>
+        <View style={{ flexDirection: "row", gap: 16 }}>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ fontSize: 7, color: C.muted }}>A week</Text>
+            <Text style={{ fontSize: 11, fontWeight: 600, color: C.ink, marginTop: 2 }}>{Math.round(c.weeklyMiles)} miles</Text>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ fontSize: 7, color: C.muted }}>Energy</Text>
+            <Text style={{ fontSize: 11, fontWeight: 600, color: C.ink, marginTop: 2 }}>{Math.round(c.weeklyKwh)} kWh</Text>
+          </View>
+        </View>
+      </View>
+      <Text style={{ fontSize: 7.8, fontWeight: 500, color: C.body, marginTop: 10, marginBottom: 5 }}>{"Time to put back a week’s driving"}</Text>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <ChargeWay colour={CHARGE_COLOUR.home_overnight} title="At home" spec={`${HOME_CHARGER_KW} kW home charger`} share={sh.home_overnight + sh.home_standard}
+          value={hoursText(c.homeHours)} unit="a week" note="Plugged in overnight, on the cheap rate." />
+        <ChargeWay colour={CHARGE_COLOUR.depot} title="At the depot" spec={`${DEPOT_CHARGER_KW} kW three-phase`} share={sh.depot}
+          value={hoursText(c.depotHours)} unit="a week" note="While it's parked during the working day." />
+        <ChargeWay colour={CHARGE_COLOUR.public_rapid} title="Public rapid" spec={c.rapid?.kw ? `Up to ${c.rapid.kw} kW` : "Rapid charger"} share={sh.public_rapid}
+          value={c.rapid ? `${c.rapid.minutes} min` : "Not published"} unit={c.rapid ? "10 to 80%" : ""}
+          note={c.rapid ? `Adds about ${Math.round(c.rapid.milesAdded)} miles. ${howOften(c.rapid.stopsPerWeek)} if it were the only way to charge.` : "No rapid charging time on the price list for this vehicle."} />
+      </View>
+      <Text style={{ fontSize: 7.2, color: C.muted, marginTop: 7 }}>
+        Official ranges are tested at 23°C. Expect fewer miles in cold weather and at motorway speeds, so a little more charging in winter.
+      </Text>
     </View>
   );
 }
@@ -165,7 +239,7 @@ export function FuelComparisonPdf(d: FuelPdfInput) {
               <Text style={{ fontWeight: 600, color: "#ffffff" }}>{money(Math.abs(r.saving.overTerm))}</Text> over {d.termMonths} months
             </Text>
             <Text style={{ fontSize: 7.5, color: C.onInkMuted, marginTop: 4 }}>
-              {d.annualMiles.toLocaleString("en-GB")} miles a year · {vat}
+              {d.annualMiles.toLocaleString("en-GB")} miles a year{d.charging?.chargesPerWeek != null ? ` · charging ${howOften(d.charging.chargesPerWeek).toLowerCase()}` : ""} · {vat}
             </Text>
           </View>
           <View style={{ flex: 1, justifyContent: "center" }}>
@@ -192,9 +266,15 @@ export function FuelComparisonPdf(d: FuelPdfInput) {
               </View>
             ) : undefined} />
           <VehicleCard kicker={`ELECTRIC ${d.segment.toUpperCase()}`} colour={C.electric} name={d.ev.name} detail={d.ev.detail}
-            figure={d.ev.milesPerKwh.toFixed(1)} unit="miles per kWh"
+            figure={fmtMilesPerKwh(d.ev.milesPerKwh)} unit="miles per kWh"
             rows={<>
               <KeyValue k="Efficiency">{co2(d.ev.basis)}</KeyValue>
+              {d.ev.batteryKwh || d.ev.rangeMiles ? (
+                <KeyValue k="Battery">
+                  {[d.ev.batteryKwh ? `${d.ev.batteryKwh} kWh usable` : null,
+                    d.ev.rangeMiles ? `${d.ev.rangeMiles}-mile range${d.ev.motorwayMiles ? ` (${d.ev.motorwayMiles} on the motorway)` : ""}` : null].filter(Boolean).join(", ")}
+                </KeyValue>
+              ) : null}
               <KeyValue k="Charging">
                 <View style={{ flexDirection: "row", height: 4, borderRadius: 2, overflow: "hidden", marginTop: 2.5, marginBottom: 3 }}>
                   {charging.map((p, i) => (
@@ -259,15 +339,20 @@ export function FuelComparisonPdf(d: FuelPdfInput) {
           </View>
         </View>
 
+        <Text style={{ position: "absolute", bottom: 36, left: 42, right: 42, fontSize: 6.8, color: C.muted, lineHeight: 1.5 }}>
+          For comparison only, and not a formal quotation. Figures are estimates from official efficiency figures and UK average prices on the
+          date shown, and real results will differ. Running costs change with fuel and electricity prices, driving style, journey type and load.
+          Electric range and efficiency also vary with temperature, maintenance and battery age.
+        </Text>
         <Footer d={d} />
       </Page>
 
-      {/* Page 2: how it was worked out */}
+      {/* Page 2: charging, and how it was worked out */}
       <Page size="A4" style={s.page}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingBottom: 10, borderBottomWidth: 0.75, borderBottomColor: C.line }}>
           <View style={{ flex: 1, paddingRight: 16 }}>
             <Text style={s.kicker}>FUEL COST COMPARISON</Text>
-            <Text style={{ fontSize: 16, fontWeight: 600, color: C.ink, marginTop: 4, letterSpacing: -0.2 }}>{"How it’s worked out"}</Text>
+            <Text style={{ fontSize: 16, fontWeight: 600, color: C.ink, marginTop: 4, letterSpacing: -0.2 }}>{d.charging ? "Charging it, and the workings" : "How it’s worked out"}</Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
             {d.customerName ? <Text style={{ fontSize: 8.5, fontWeight: 600, color: C.ink }}>{d.customerName}</Text> : null}
@@ -275,12 +360,14 @@ export function FuelComparisonPdf(d: FuelPdfInput) {
           </View>
         </View>
 
+        {d.charging && <ChargingSection d={d} c={d.charging} />}
+
         <View style={{ marginTop: 16 }}>
           <Text style={s.h2}>The workings</Text>
-          <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8 }}>Every step from the figures on page 1 to the answer, so it can be checked by hand.</Text>
-          <View style={{ backgroundColor: C.wash, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 14 }}>
+          <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8 }}>Every step from the figures to the answer, so it can be checked by hand.</Text>
+          <View style={{ backgroundColor: C.wash, borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14 }}>
             {d.workings.map((w, i) => (
-              <View key={w.title} style={{ flexDirection: "row", marginTop: i ? 9 : 0, paddingTop: i ? 9 : 0, borderTopWidth: i ? 0.5 : 0, borderTopColor: C.line }}>
+              <View key={w.title} style={{ flexDirection: "row", marginTop: i ? 6 : 0, paddingTop: i ? 6 : 0, borderTopWidth: i ? 0.5 : 0, borderTopColor: C.line }}>
                 <View style={{ width: 86, flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
                   <View style={{ width: 13, height: 13, borderRadius: 6.5, backgroundColor: "#e2e8f0", alignItems: "center", justifyContent: "center" }}>
                     <Text style={{ fontSize: 7, fontWeight: 600, color: C.body, lineHeight: 1 }}>{i + 1}</Text>
@@ -288,8 +375,9 @@ export function FuelComparisonPdf(d: FuelPdfInput) {
                   <Text style={{ fontSize: 8.5, fontWeight: 600, color: C.ink }}>{w.title}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  {w.lines.map((l, j) => (
-                    <Text key={j} style={{ fontSize: 8.3, color: l.startsWith("  ") ? C.muted : C.body, marginLeft: l.startsWith("  ") ? 12 : 0, lineHeight: 1.55 }}>{l.trim()}</Text>
+                  {/* Each source's price and VAT is in page 1's table, so only the scaling note stays indented here. */}
+                  {w.lines.filter((l) => !/^ {2}.*p a kWh/.test(l)).map((l, j) => (
+                    <Text key={j} style={{ fontSize: 8, color: l.startsWith("  ") ? C.muted : C.body, marginLeft: l.startsWith("  ") ? 12 : 0, lineHeight: 1.45 }}>{l.trim()}</Text>
                   ))}
                 </View>
               </View>
@@ -297,27 +385,23 @@ export function FuelComparisonPdf(d: FuelPdfInput) {
           </View>
         </View>
 
-        <View style={{ marginTop: 18 }}>
+        <View style={{ marginTop: 16 }} wrap={false}>
           <Text style={s.h2}>About these figures</Text>
-          {[
-            ["Efficiency", "Both vehicles are judged on official figures: WLTP where the vehicle has one. Older vehicles were tested on NEDC, which flatters economy, so a saving against one is if anything understated. An electric vehicle's official miles per kWh is measured at the plug, so charging losses are already in it."],
-            ["Prices", "UK averages, checked every day: petrol and diesel from the government's weekly road fuel prices, home electricity from the Ofgem price cap and the Octopus Go overnight rate, depot electricity from government non-domestic prices, and public rapid charging from the Zapmap Price Index."],
-            ["VAT", d.customer === "business"
-              ? "Business prices leave out the VAT a VAT-registered business reclaims on fuel, depot and public charging. Home electricity keeps its 5% VAT, as it isn't reclaimable on a domestic bill."
-              : "Every price includes VAT, as a private customer pays it."],
-          ].map(([k, v]) => (
-            <View key={k} style={{ flexDirection: "row", marginTop: 7 }}>
-              <Text style={{ width: 86, fontSize: 8.5, fontWeight: 600, color: C.ink }}>{k}</Text>
-              <Text style={{ flex: 1, fontSize: 8.3, color: C.body, lineHeight: 1.55 }}>{v}</Text>
-            </View>
-          ))}
+          <View style={{ flexDirection: "row", gap: 14, marginTop: 2 }}>
+            {[
+              ["Efficiency", "Official figures on both sides: WLTP where the vehicle has one. NEDC, the older test, flatters economy, so a saving against it is if anything understated. Electric figures are measured at the plug, so charging losses are in them."],
+              ["Prices", "UK averages, checked every day. Each one's source and date is on page 1: government fuel and business electricity figures, the Ofgem price cap, Octopus Go overnight and the Zapmap Price Index."],
+              ["VAT", d.customer === "business"
+                ? "Business prices leave out the VAT a VAT-registered business reclaims on fuel, depot and public charging. Home electricity keeps its 5% VAT, as it isn't reclaimable on a domestic bill."
+                : "Every price includes VAT, as a private customer pays it."],
+            ].map(([k, v]) => (
+              <View key={k} style={{ flex: 1, borderTopWidth: 1.5, borderTopColor: C.line, paddingTop: 6 }}>
+                <Text style={{ fontSize: 8, fontWeight: 600, color: C.ink }}>{k}</Text>
+                <Text style={{ fontSize: 7.4, color: C.body, lineHeight: 1.5, marginTop: 3 }}>{v}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-
-        <Text style={{ marginTop: 18, paddingTop: 10, borderTopWidth: 0.5, borderTopColor: C.line, fontSize: 7.2, color: C.muted, lineHeight: 1.55 }}>
-          For comparison only, and not a formal quotation. Figures are estimates from official efficiency figures and UK average prices on the
-          date shown, and real results will differ. Running costs change with fuel and electricity prices, driving style, journey type and load.
-          Electric range and efficiency also vary with temperature, maintenance and battery age.
-        </Text>
         <Footer d={d} />
       </Page>
     </Document>
