@@ -32,9 +32,9 @@ explicitly — see `daily-summary/route.ts`.
 |------------------------------------|--------------------------------|
 | `/`                                | `requireUser`                  |
 | `/quote`                           | `requireQuoteAccess`           |
-| `/fuel-calculator`                 | `requireQuoteAccess` (admin, exec, quote) |
+| `/fuel-calculator`                 | `requireUser` (everyone signed in, user 2026-10-15; tile keyed `everyone`) |
 | `/fuel-calculator/admin`           | `requireAdmin` (vehicle library + price overrides) |
-| `/fuel-calculator/exports`, `/fuel-calculator/exports/[id]` | `requireQuoteAccess` (every exported PDF, searchable; the route serves the stored PDF) |
+| `/fuel-calculator/exports`, `/fuel-calculator/exports/[id]` | `requireUser` (every exported PDF, searchable; the route serves the stored PDF) |
 | `/api/cron/fuel-prices`            | `CRON_SECRET` only — no bypass header |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |

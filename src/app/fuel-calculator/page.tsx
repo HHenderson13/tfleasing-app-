@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { isAdmin } from "@/lib/auth";
-import { requireQuoteAccess } from "@/lib/auth-guard";
+import { requireUser } from "@/lib/auth-guard";
 import { loadFuelPrices, loadFuelVehicles } from "@/lib/fuel-prices";
 import { FuelCalculator } from "./calculator";
 
 export const dynamic = "force-dynamic";
 
 export default async function FuelCalculatorPage() {
-  // Anyone who quotes: it's a tool for the conversation with the customer.
-  const user = await requireQuoteAccess();
+  // Every signed-in user (user, 2026-10-15): it's a tool for the conversation with the customer.
+  const user = await requireUser();
   const [prices, vehicles] = await Promise.all([loadFuelPrices(), loadFuelVehicles()]);
   const lastChecked = prices.reduce<string | null>((a, p) => (!a || p.checkedAt > a ? p.checkedAt : a), null);
   const checked = lastChecked

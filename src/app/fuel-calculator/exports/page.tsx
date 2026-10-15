@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireQuoteAccess } from "@/lib/auth-guard";
+import { requireUser } from "@/lib/auth-guard";
 import { listFuelExports } from "@/lib/fuel-exports";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // Every exported comparison, newest first; the search narrows by customer,
 // exec or vehicle.
 export default async function FuelExportsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  await requireQuoteAccess();
+  await requireUser();
   const q = String((await searchParams).q ?? "").slice(0, 100);
   const rows = await listFuelExports(q);
   const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });

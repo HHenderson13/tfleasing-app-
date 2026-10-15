@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAdmin, requireQuoteAccess } from "@/lib/auth-guard";
+import { requireAdmin, requireUser } from "@/lib/auth-guard";
 import { saveFuelExport } from "@/lib/fuel-exports";
 import { logError } from "@/lib/logger";
 import { deleteFuelVehicle, refreshFuelPrices, setPriceOverride, upsertFuelVehicles, type RefreshReport } from "@/lib/fuel-prices";
@@ -65,11 +65,11 @@ export async function deleteFuelVehicleAction(id: string): Promise<{ ok: boolean
   return { ok: true };
 }
 
-/** Keep a copy of an exported PDF. Anyone who can use the calculator. */
+/** Keep a copy of an exported PDF. Any signed-in user. */
 export async function saveFuelExportAction(input: {
   filename: string; customerName: string; segment: string; iceName: string; evName: string; savingMonthly: number; pdfBase64: string;
 }): Promise<{ ok: boolean }> {
-  const user = await requireQuoteAccess();
+  const user = await requireUser();
   if (typeof input.pdfBase64 !== "string" || !input.pdfBase64.startsWith("JVBER") || input.pdfBase64.length > 4_000_000) return { ok: false };
   const t = (v: unknown, n = 200) => String(v ?? "").trim().slice(0, n);
   try {

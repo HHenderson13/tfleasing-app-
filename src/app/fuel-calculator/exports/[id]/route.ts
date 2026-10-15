@@ -1,8 +1,8 @@
-import { requireQuoteAccess } from "@/lib/auth-guard";
+import { requireUser } from "@/lib/auth-guard";
 import { loadFuelExportPdf } from "@/lib/fuel-exports";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireQuoteAccess();
+  await requireUser();
   const { id } = await params;
   const found = /^[0-9a-f-]{36}$/.test(id) ? await loadFuelExportPdf(id) : null;
   if (!found) return new Response("Not found", { status: 404 });
