@@ -34,6 +34,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/quote`                           | `requireQuoteAccess`           |
 | `/fuel-calculator`                 | `requireQuoteAccess` (admin, exec, quote) |
 | `/fuel-calculator/admin`           | `requireAdmin` (vehicle library + price overrides) |
+| `/fuel-calculator/exports`, `/fuel-calculator/exports/[id]` | `requireQuoteAccess` (every exported PDF, searchable; the route serves the stored PDF) |
 | `/api/cron/fuel-prices`            | `CRON_SECRET` only — no bypass header |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |
@@ -1161,6 +1162,14 @@ fuel, engine size and official CO2, through a free SQL API.
   full derivative). For those, "From the V5C" (CO2 box V.7 plus first
   registration date) gives the official MPG exactly, and "Enter MPG" is
   always there.
+
+### Saved comparisons (user, 2026-10-15)
+
+Every Export PDF also posts the PDF (base64, ~35KB) to `saveFuelExportAction`
+with the customer, the exec (the signed-in user), both vehicles and the
+monthly saving, into `fuel_exports`. The download never waits on the save.
+`/fuel-calculator/exports` lists them newest first; the search matches every
+word against customer, exec and vehicles.
 
 ### Look (user, 2026-10-14: "world class", no em dashes, mobile)
 

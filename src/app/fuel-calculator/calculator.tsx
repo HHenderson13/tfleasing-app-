@@ -16,6 +16,7 @@ import {
   BigFigure, CHARGE_COLOUR, Chip, ELECTRIC, FOSSIL, Field, LinkButton, Note, Segmented, Select, Step, Tag, TextInput, UnitInput,
 } from "./ui";
 import type { FuelPdfInput } from "./fuel-pdf";
+import { saveFuelExportAction } from "./actions";
 
 // The Fuel Cost Calculator. Everything recalculates as it's typed; the maths
 // is lib/fuel-calc.ts, the same code the PDF prints its workings from.
@@ -205,10 +206,16 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
       };
       const [{ pdf }, { FuelComparisonPdf }] = await Promise.all([import("@react-pdf/renderer"), import("./fuel-pdf")]);
       const blob = await pdf(<FuelComparisonPdf {...data} />).toBlob();
+      const filename = `Fuel comparison${data.customerName ? ` - ${data.customerName.replace(/[\\/:*?"<>|]/g, "")}` : ""} - ${data.date}.pdf`;
+      // Keep a copy for Saved comparisons; the download never waits on it.
+      blobToBase64(blob).then((pdfBase64) => saveFuelExportAction({
+        filename, customerName: data.customerName, segment, iceName: [ice.name, ice.detail].filter(Boolean).join(", "),
+        evName: [ev.name, ev.detail].filter(Boolean).join(", "), savingMonthly: r.saving.monthly, pdfBase64,
+      })).catch((e) => console.error("Saving the export failed", e));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Fuel comparison${data.customerName ? ` - ${data.customerName.replace(/[\\/:*?"<>|]/g, "")}` : ""} - ${data.date}.pdf`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -534,6 +541,15 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
       )}
     </div>
   );
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ─── Pieces ────────────────────────────────────────────────────────────────

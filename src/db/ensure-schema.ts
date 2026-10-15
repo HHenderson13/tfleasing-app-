@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 60;
+const SCHEMA_VERSION = 61;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1112,6 +1112,23 @@ async function ensureTenAtTenTables() {
 // diesel with MPG, electric with miles per kWh) and the prices, stored as
 // their source publishes them, refreshed daily by /api/cron/fuel-prices.
 async function ensureFuelCalculatorTables() {
+  // Every exported comparison, PDF and all (~35KB), so it can be found again
+  // (user, 2026-10-15).
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS fuel_exports (
+      id TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      customer_name TEXT NOT NULL,
+      exec_name TEXT NOT NULL,
+      segment TEXT,
+      ice_name TEXT,
+      ev_name TEXT,
+      saving_monthly REAL,
+      filename TEXT NOT NULL,
+      pdf_base64 TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS fuel_exports_created ON fuel_exports (created_at)`));
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS fuel_vehicles (
       id TEXT PRIMARY KEY,

@@ -24,11 +24,16 @@ export default async function FuelCalculatorPage() {
             </svg>
             Home
           </Link>
+          <div className="flex items-center gap-2">
+          <Link href="/fuel-calculator/exports" className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 hover:text-slate-900">
+            Saved comparisons
+          </Link>
           {isAdmin(user) && (
             <Link href="/fuel-calculator/admin" className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 hover:text-slate-900">
               Vehicles and prices
             </Link>
           )}
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 sm:pt-10">

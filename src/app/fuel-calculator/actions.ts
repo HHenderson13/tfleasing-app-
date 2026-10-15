@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth-guard";
+import { requireAdmin, requireQuoteAccess } from "@/lib/auth-guard";
+import { saveFuelExport } from "@/lib/fuel-exports";
 import { logError } from "@/lib/logger";
 import { deleteFuelVehicle, refreshFuelPrices, setPriceOverride, upsertFuelVehicles, type RefreshReport } from "@/lib/fuel-prices";
 import { parseVehiclePaste, type PasteResult } from "@/lib/fuel-vehicle-paste";
@@ -62,4 +63,25 @@ export async function deleteFuelVehicleAction(id: string): Promise<{ ok: boolean
   await deleteFuelVehicle(id);
   revalidate();
   return { ok: true };
+}
+
+/** Keep a copy of an exported PDF. Anyone who can use the calculator. */
+export async function saveFuelExportAction(input: {
+  filename: string; customerName: string; segment: string; iceName: string; evName: string; savingMonthly: number; pdfBase64: string;
+}): Promise<{ ok: boolean }> {
+  const user = await requireQuoteAccess();
+  if (typeof input.pdfBase64 !== "string" || !input.pdfBase64.startsWith("JVBER") || input.pdfBase64.length > 4_000_000) return { ok: false };
+  const t = (v: unknown, n = 200) => String(v ?? "").trim().slice(0, n);
+  try {
+    await saveFuelExport({
+      filename: t(input.filename), customerName: t(input.customerName), execName: user.name || user.email,
+      segment: t(input.segment, 10) || null, iceName: t(input.iceName) || null, evName: t(input.evName) || null,
+      savingMonthly: Number.isFinite(input.savingMonthly) ? input.savingMonthly : null, pdfBase64: input.pdfBase64,
+    });
+    revalidatePath("/fuel-calculator/exports");
+    return { ok: true };
+  } catch (e) {
+    logError("fuel-calculator/save-export", e);
+    return { ok: false };
+  }
 }
