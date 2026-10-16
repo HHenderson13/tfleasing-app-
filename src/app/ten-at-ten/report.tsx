@@ -39,7 +39,9 @@ import {
   orderDimLabel,
   orderStatsOf,
   rangeFor,
+  rewritesAcross,
   statsOf,
+  type CreditedReOrder,
   type DimKey,
   type Nested,
   type OrderDimKey,
@@ -61,7 +63,7 @@ import { saveCancellationNoteAction, setCancellationStatusAction } from "./actio
 import type { PdfReportInput } from "./pdf-report";
 import {
   MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, dayLabel, firstName, gapText, gbp, int,
-  isProper, marketTotals, needsReason, pct, scrapeWhen, share, shortDate, timeTone,
+  isProper, marketTotals, needsReason, ordersAdjusted, pct, scrapeWhen, share, shortDate, timeTone,
 } from "./shared";
 
 const MODES: { key: PeriodMode; label: string; current: string }[] = [
@@ -92,13 +94,15 @@ function UploadHint({ file }: { file: string }) {
     : <> It appears once {file} has been uploaded.</>;
 }
 
-export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, market, canManage = false }: {
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, rewriteMoves, market, canManage = false }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
   /** Every cancellation, already classified on the server. */
   cancellations: CancellationView[];
   /** Order days of held orders that were later cancelled — left out of Orders. */
   cancelledOrderDays: string[];
+  /** Re-Writes whose re-order Orders counts on the original order day. */
+  rewriteMoves: CreditedReOrder[];
   /** The latest scrape, summarised; null before the first one. */
   market: MarketOverview | null;
   /** Admin: uploads, cancellation notes, Re-Write overrides. */
@@ -149,7 +153,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         <ExportPdfButton label={range.label} input={() => ({
           range, today, exportedAt: new Date().toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
           enquiries: enquiryRows, responses, reportHorizon, orders: orderRows, deliveries: deliveryRows, budgets,
-          cancellations, cancelledOrderDays, market,
+          cancellations, cancelledOrderDays, rewriteMoves, market,
         })} />
       </div>
 
@@ -191,13 +195,13 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
       {section === "summary" && (
         <SummarySection range={range} today={today} enquiries={enquiryRows} responses={responses} reportHorizon={reportHorizon}
           orders={orderRows} deliveries={deliveryRows} budgets={budgets} cancellations={cancellations}
-          cancelledOrderDays={cancelledOrderDays} market={market} open={setSection} />
+          cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} open={setSection} />
       )}
 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
       {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range}
-        cancelledDays={cancelledOrderDays} onShowCancellations={() => setSection("cancellations")} />}
+        cancelledDays={cancelledOrderDays} rewriteMoves={rewriteMoves} onShowCancellations={() => setSection("cancellations")} />}
       {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
       {section === "market" && <MarketSection market={market} />}
@@ -641,9 +645,9 @@ type StatusName = (typeof STATUSES)[number];
 // Orders and Deliveries are the same Dealbook report counted two ways —
 // by order date, or by delivery date with a status — so one section serves
 // both. Deliveries adds the status filter and the department budget panel.
-function DealbookSection({ all, range, variant, budgets, today, cancelledDays, onShowCancellations }: {
+function DealbookSection({ all, range, variant, budgets, today, cancelledDays, rewriteMoves, onShowCancellations }: {
   all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets; today?: string;
-  cancelledDays?: string[]; onShowCancellations?: () => void;
+  cancelledDays?: string[]; rewriteMoves?: CreditedReOrder[]; onShowCancellations?: () => void;
 }) {
   const isDel = variant === "deliveries";
   const [segments, setSegments] = useState<Set<SegmentName>>(new Set());
@@ -677,6 +681,7 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, o
 
   const delivered = rows.filter((r) => r.delivery === "Delivered").length;
   const cancelledHere = (cancelledDays ?? []).filter((d) => d >= range.startDay && d <= range.endDay).length;
+  const rewrites = rewritesAcross(rewriteMoves ?? [], range);
   const tiles = isDel
     ? [
       { label: "Going", value: int(rows.length), sub: "delivered + arrived + due" },
@@ -709,6 +714,22 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, o
             {cancelledHere} {cancelledHere === 1 ? "order" : "orders"} in {range.label} {cancelledHere === 1 ? "was" : "were"} cancelled afterwards
           </span>{" "}
           and {cancelledHere === 1 ? "is" : "are"} left out here, as Dealerweb&apos;s own order list now leaves {cancelledHere === 1 ? "it" : "them"} out.{" "}
+          {onShowCancellations && <button onClick={onShowCancellations} className="font-semibold text-indigo-600 hover:text-indigo-800">See Cancellations</button>}
+        </div>
+      )}
+      {(rewrites.out > 0 || rewrites.in > 0) && (
+        <div className="rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
+          A Re-Write is admin putting a deal right, not a new sale, so it counts once, on the date of the original order.{" "}
+          {rewrites.out > 0 && (
+            <span className="font-semibold text-slate-900">
+              {rewrites.out} {rewrites.out === 1 ? "Re-Write" : "Re-Writes"} keyed again in {range.label} {rewrites.out === 1 ? "counts" : "count"} in the month of the original order, not here.{" "}
+            </span>
+          )}
+          {rewrites.in > 0 && (
+            <span className="font-semibold text-slate-900">
+              {rewrites.in} {rewrites.in === 1 ? "order" : "orders"} here {rewrites.in === 1 ? "was" : "were"} re-keyed later and still {rewrites.in === 1 ? "counts" : "count"} here.{" "}
+            </span>
+          )}
           {onShowCancellations && <button onClick={onShowCancellations} className="font-semibold text-indigo-600 hover:text-indigo-800">See Cancellations</button>}
         </div>
       )}
@@ -1484,9 +1505,10 @@ function MiniBar({ value, of, colour }: { value: number; of: number; colour: str
 }
 
 
-function SummarySection({ range, today, enquiries, responses, reportHorizon, orders, deliveries, budgets, cancellations, cancelledOrderDays, market, open }: {
+function SummarySection({ range, today, enquiries, responses, reportHorizon, orders, deliveries, budgets, cancellations, cancelledOrderDays, rewriteMoves, market, open }: {
   range: Range; today: string; enquiries: ReportRow[]; responses: EnquiryRow[]; reportHorizon: number | null;
   orders: OrderRow[]; deliveries: OrderRow[]; budgets: Budgets; cancellations: CancellationView[]; cancelledOrderDays: string[];
+  rewriteMoves: CreditedReOrder[];
   market: MarketOverview | null; open: (s: Section) => void;
 }) {
   const eRows = useMemo(() => inRange(enquiries, range), [enquiries, range]);
@@ -1511,6 +1533,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
   const d = useMemo(() => inRange(deliveries, range), [deliveries, range]);
   const c = useMemo(() => inRange(cancellations, range), [cancellations, range]);
   const cancelledHere = cancelledOrderDays.filter((x) => x >= range.startDay && x <= range.endDay).length;
+  const rewritesOut = rewritesAcross(rewriteMoves, range).out;
 
   // Deliveries: against budget when the period is whole months.
   const months = budgetMonths(range);
@@ -1593,7 +1616,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
       </SummaryCard>
 
       <SummaryCard title="Orders" onOpen={() => open("orders")} stats={[
-        { label: "Orders", value: int(o.orders), sub: cancelledHere ? `${int(cancelledHere)} cancelled since, left out` : undefined },
+        { label: "Orders", value: int(o.orders), sub: ordersAdjusted(cancelledHere, rewritesOut) },
         { label: "Total profit", value: gbp(o.priced ? o.profit : null) },
         { label: "Avg per unit", value: gbp(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined },
       ]}>

@@ -9,7 +9,8 @@
 //   • Enquiry log  → enquiries with an enquiry date in the month
 //   • Order list   → orders with an order date in the month, less any we
 //                    hold that were later cancelled (Dealerweb's own order
-//                    list leaves those out too)
+//                    list leaves those out too), and a Re-Write counted in
+//                    the month of the original order, not the re-order's
 //   • Delivered list → lines whose delivery date is in the month — every
 //                    line, delivered or due, as the delivered list counted
 //   • Response Time → the MotorComplete leads 10 at 10 has judged (a full

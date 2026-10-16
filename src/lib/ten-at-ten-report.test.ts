@@ -9,6 +9,7 @@ import {
   inboundPct,
   previousRange,
   rangeFor,
+  rewritesAcross,
   statsOf,
   timeBuckets,
   type StoredRow,
@@ -125,5 +126,16 @@ describe("cancellations", () => {
   it("counts calendar days from order to cancellation", () => {
     expect(daysToCancel({ orderDay: "2026-09-29", day: "2026-10-09" })).toBe(10);
     expect(daysToCancel({ orderDay: "2026-10-09", day: "2026-10-09" })).toBe(0);
+  });
+
+  it("counts Re-Writes across the period's edge for the Orders note", () => {
+    const moved = [
+      { reorderDay: "2026-10-09", creditDay: "2026-09-29" }, // keyed in October, a September order
+      { reorderDay: "2026-10-09", creditDay: "2026-09-29" },
+      { reorderDay: "2026-10-05", creditDay: "2026-10-02" }, // both in October
+      { reorderDay: "2026-11-03", creditDay: "2026-10-20" }, // keyed later, an October order
+    ];
+    expect(rewritesAcross(moved, { startDay: "2026-10-01", endDay: "2026-10-31" })).toEqual({ out: 2, in: 1 });
+    expect(rewritesAcross(moved, { startDay: "2026-09-01", endDay: "2026-09-30" })).toEqual({ out: 0, in: 2 });
   });
 });

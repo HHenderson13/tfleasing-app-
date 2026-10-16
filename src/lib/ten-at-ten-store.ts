@@ -7,8 +7,8 @@ import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads }
 import { wallClockFromInstant } from "./business-hours";
 import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
 import {
-  execCodeFromName, matchCancellations, mergeDealbookLines,
-  type CancellationParse, type DealbookLine, type TenAtTenCancellation,
+  execCodeFromName, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf,
+  type CancellationParse, type CancellationStatus, type DealbookLine, type TenAtTenCancellation,
 } from "./ten-at-ten-cancellations";
 import type { OrderParse, TenAtTenOrder } from "./ten-at-ten-orders";
 import type { Budgets, CancellationView, OrderStoredRow, StoredRow } from "./ten-at-ten-report";
@@ -571,9 +571,13 @@ const fmtStamp = (sec: number) =>
 
 /**
  * Every cancellation, classified against the Dealbook, with its notes —
- * and the held order lines that were cancelled, which Orders leaves out.
+ * the held order lines that were cancelled, which Orders leaves out, and
+ * each Re-Write's re-order with the original order day it is credited to
+ * (`creditOrders`).
  */
-export async function loadCancellationsReport(names: Map<string, string>): Promise<{ views: CancellationView[]; originalIds: Set<string> }> {
+export async function loadCancellationsReport(names: Map<string, string>): Promise<{
+  views: CancellationView[]; originalIds: Set<string>; rewriteOrderDays: Map<string, string>;
+}> {
   const [cancels, notes, orders, deliveries] = await Promise.all([
     db.all<{
       id: string; ordered_at: number; order_day: string; cancelled_at: number; cancelled_day: string; exec: string; customer: string;
@@ -586,7 +590,7 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
     loadDealbookLines("orders"),
     loadDealbookLines("deliveries"),
   ]);
-  if (cancels.length === 0) return { views: [], originalIds: new Set() };
+  if (cancels.length === 0) return { views: [], originalIds: new Set(), rewriteOrderDays: new Map() };
 
   // The export names execs in full; the Dealbook uses codes. A name's codes
   // are whatever the Pole Position map gives it, plus Dealerweb's own
@@ -604,11 +608,14 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
   }));
   const { matches, originalIds } = matchCancellations(rows, mergeDealbookLines(orders, deliveries), execCodesOf);
   const noteOf = new Map(notes.map((n) => [n.cancellation_id, n]));
+  // A manager's call on Re-Write vs cancellation, where one was made.
+  const calls = new Map<string, CancellationStatus>();
+  for (const n of notes) if (n.classification === "rewrite" || n.classification === "proper") calls.set(n.cancellation_id, n.classification);
 
   const views = cancels.map((c): CancellationView => {
     const m = matches.get(c.id)!;
     const n = noteOf.get(c.id);
-    const manual = n?.classification === "rewrite" || n?.classification === "proper" ? n.classification : null;
+    const manual = calls.get(c.id) ?? null;
     return {
       id: c.id,
       day: c.cancelled_day,
@@ -629,7 +636,7 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
       noteAt: n ? fmtStamp(Number(n.updated_at)) : null,
     };
   });
-  return { views, originalIds };
+  return { views, originalIds, rewriteOrderDays: rewriteOrderDaysOf(rows, matches, calls) };
 }
 
 async function cancellationExists(id: string): Promise<boolean> {

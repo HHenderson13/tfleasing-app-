@@ -21,7 +21,7 @@ import { isExcludedExec, vehicleOf } from "./ten-at-ten";
 
 export { execCodeFromName };
 import { cancelledHeaderFound, cleanVehicle, exportedAtOf, isCancelledOrdersHeader, plateOf, segmentOf } from "./ten-at-ten-orders";
-import type { Segment } from "./ten-at-ten-report";
+import type { CreditedReOrder, Segment } from "./ten-at-ten-report";
 
 const COL = { exec: 0, orderDate: 1, customer: 2, type: 3, model: 4, registration: 5, cancelledDate: 6 } as const;
 
@@ -225,6 +225,8 @@ export interface CancellationMatch {
   originalId: string | null;
   originalProfit: number | null;
   reorder: ReOrder | null;
+  /** The Dealbook line that is the re-order. */
+  reorderId: string | null;
 }
 
 type CancelLike = Pick<TenAtTenCancellation, "id" | "exec" | "orderDay" | "cancelledAt" | "cancelledDay" | "customer" | "model" | "registration">;
@@ -270,7 +272,7 @@ export function matchCancellations(
   const used = new Set<string>();
   const matches = new Map<string, CancellationMatch>();
   const order = [...cancels].sort((a, b) => a.cancelledAt - b.cancelledAt || a.id.localeCompare(b.id));
-  for (const c of order) matches.set(c.id, { status: "proper", originalId: null, originalProfit: null, reorder: null });
+  for (const c of order) matches.set(c.id, { status: "proper", originalId: null, originalProfit: null, reorder: null, reorderId: null });
 
   const ck = new Map(order.map((c) => [c.id, customerKey(c.customer)]));
   const codes = new Map(order.map((c) => [c.id, new Set(execCodesOf(c.exec).map((x) => x.toLowerCase()).filter(Boolean))]));
@@ -309,10 +311,68 @@ export function matchCancellations(
       if (!hit) continue;
       used.add(hit.id);
       m.status = "rewrite";
+      m.reorderId = hit.id;
       m.reorder = { orderDay: hit.orderDay, customer: hit.customer, vehicle: hit.vehicleRaw, registration: hit.registration, exec: hit.exec, on };
     }
   }
 
   const originalIds = new Set([...matches.values()].map((m) => m.originalId).filter((x): x is string => !!x));
   return { matches, originalIds };
+}
+
+// ─── Order Take ────────────────────────────────────────────────────────────
+//
+// A Re-Write is admin putting a deal right, not a new sale (user,
+// 2026-10-16): it is credited once, in the month the deal was first ordered,
+// never again in the month it was keyed again — or an exec whose deals keep
+// needing re-keying would show an inflated Order Take. Braine's three vans,
+// ordered 29 Sep and re-ordered under DEA Gate Automation on 9 Oct, are
+// three September orders, not three October ones too.
+
+/**
+ * Each Re-Write's re-order line, with the original order day it is credited
+ * to. A manager's call outranks the matching's: "Not a Re-Write" leaves the
+ * re-order a new sale on its own day, and "It's a Re-Write" where no
+ * re-order was found leaves nothing to move.
+ */
+export function rewriteOrderDaysOf(
+  cancels: readonly Pick<CancelLike, "id" | "orderDay">[],
+  matches: ReadonlyMap<string, CancellationMatch>,
+  manual: ReadonlyMap<string, CancellationStatus>,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const c of cancels) {
+    const m = matches.get(c.id);
+    if (m?.reorderId && (manual.get(c.id) ?? m.status) === "rewrite") out.set(m.reorderId, c.orderDay);
+  }
+  return out;
+}
+
+/**
+ * The held order lines as Order Take counts them: each cancelled original
+ * left out (Dealerweb's own order list drops it), and each Re-Write's
+ * re-order counted on the original order day. The re-order is the line kept
+ * — it has the corrected customer, spec and profit — but on the original's
+ * day, whether or not the original itself was ever held.
+ *
+ * `rewriteOrderDays` maps a re-order's line id to the original order day,
+ * for cancellations that count as Re-Writes (a manager's call over the
+ * matching's). Days only ever move earlier: a re-order follows its original.
+ */
+export function creditOrders<T extends { id: string; orderDay: string }>(
+  lines: readonly T[],
+  originalIds: ReadonlySet<string>,
+  rewriteOrderDays: ReadonlyMap<string, string>,
+): { lines: T[]; moved: CreditedReOrder[] } {
+  const moved: CreditedReOrder[] = [];
+  const out: T[] = [];
+  for (const l of lines) {
+    if (originalIds.has(l.id)) continue;
+    const day = rewriteOrderDays.get(l.id);
+    if (day && day < l.orderDay) {
+      moved.push({ reorderDay: l.orderDay, creditDay: day });
+      out.push({ ...l, orderDay: day });
+    } else out.push(l);
+  }
+  return { lines: out, moved };
 }

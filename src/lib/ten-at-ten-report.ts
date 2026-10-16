@@ -616,6 +616,22 @@ export interface CancellationView {
   noteAt: string | null;
 }
 
+/** A Re-Write's re-order, moved from the day it was keyed to the day of the order it replaced. */
+export interface CreditedReOrder { reorderDay: string; creditDay: string }
+
+/**
+ * Re-Writes across the period's edge, for the note on Orders: keyed again
+ * in the period but credited to an earlier one (`out`), and keyed again
+ * later but credited here (`in`).
+ */
+export function rewritesAcross(moved: readonly CreditedReOrder[], range: { startDay: string; endDay: string }): { out: number; in: number } {
+  const inside = (d: string) => d >= range.startDay && d <= range.endDay;
+  return {
+    out: moved.filter((m) => inside(m.reorderDay) && !inside(m.creditDay)).length,
+    in: moved.filter((m) => inside(m.creditDay) && !inside(m.reorderDay)).length,
+  };
+}
+
 /** Calendar days from order to cancellation. */
 export function daysToCancel(c: Pick<CancellationView, "orderDay" | "day">): number {
   return dayNumber(c.day) - dayNumber(c.orderDay);

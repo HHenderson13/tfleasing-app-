@@ -24,6 +24,7 @@ import {
   type ResponseParseRow,
 } from "./sales-leaderboard";
 import { LEADERBOARD_CACHE_TAG } from "./sales-leaderboard-data";
+import { creditOrders } from "./ten-at-ten-cancellations";
 import { loadCancellationsReport, loadExecNames } from "./ten-at-ten-store";
 
 export type ParsedRows = OrderListParseRow[] | DeliveredParseRow[] | EnquiryParseRow[] | ResponseParseRow[];
@@ -152,8 +153,20 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
   const responseMonths = [...new Set(judged.map((r) => r.enquiryDay.slice(0, 7)))].sort();
   if (enquiryMonths.length + orderMonths.length + deliveryMonths.length + responseMonths.length === 0) return [];
 
-  // Held orders that were later cancelled are left out, as on 10 at 10's Orders.
-  const { originalIds } = orderMonths.length ? await loadCancellationsReport(await loadExecNames()) : { originalIds: new Set<string>() };
+  // Order Take is 10 at 10's Orders: held orders later cancelled left out,
+  // and a Re-Write credited to the month of the original order, never the
+  // month it was keyed again (creditOrders). A re-order only moves earlier,
+  // so one credited before FEED_FROM_MONTH leaves the fed months altogether.
+  let credited: { id: string; orderDay: string; exec: string; ordered_at: number; vehicle_raw: string | null }[] = [];
+  if (orderMonths.length) {
+    const [{ originalIds, rewriteOrderDays }, held] = await Promise.all([
+      loadExecNames().then(loadCancellationsReport),
+      db.all<{ id: string; order_day: string; exec: string; ordered_at: number; vehicle_raw: string | null }>(
+        sql`SELECT id, order_day, exec, ordered_at, vehicle_raw FROM ten_at_ten_orders WHERE order_day >= ${from}`,
+      ),
+    ]);
+    credited = creditOrders(held.map((l) => ({ ...l, orderDay: l.order_day })), originalIds, rewriteOrderDays).lines;
+  }
 
   const slots: { yearMonth: string; reportType: LeaderboardReportType; rows: ParsedRows | null; lines: number }[] = [];
   for (const m of enquiryMonths) {
@@ -163,9 +176,7 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
     slots.push({ yearMonth: m, reportType: "enquiry", lines: lines.length, rows: enquiryRowsFrom(lines.map((l) => ({ exec: l.exec, status: l.status, sourceRaw: l.source_raw }))) });
   }
   for (const m of orderMonths) {
-    const lines = (await db.all<{ id: string; exec: string; ordered_at: number; vehicle_raw: string | null }>(
-      sql`SELECT id, exec, ordered_at, vehicle_raw FROM ten_at_ten_orders WHERE substr(order_day, 1, 7) = ${m}`,
-    )).filter((l) => !originalIds.has(l.id));
+    const lines = credited.filter((l) => l.orderDay.startsWith(m));
     slots.push({ yearMonth: m, reportType: "orders", lines: lines.length, rows: orderRowsFrom(lines.map((l) => ({ exec: l.exec, orderedAt: Number(l.ordered_at), vehicle: l.vehicle_raw }))) });
   }
   for (const m of deliveryMonths) {

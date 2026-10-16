@@ -946,6 +946,21 @@ files; `detectTenAtTenFile` tells them apart by header.
   its stored line — line merging can't see an absence — so Orders leaves out
   any held order the Cancellations matching identifies as cancelled, and
   says how many in the period.
+- **A Re-Write counts once, on the ORIGINAL order date** (user, 2026-10-16:
+  Re-Writes are an admin task, and an exec doing a lot of them mustn't show
+  an inflated Order Take). `creditOrders` keeps the re-order line — it has
+  the corrected customer, spec and profit — but moves it to the order day
+  of the cancelled order it replaced, whether or not that original is held.
+  So Braine's three vans (ordered 29 Sep, re-ordered under DEA Gate on
+  9 Oct) are September orders only; before this they counted in September
+  (Pole Position's own upload) and again in October. On the 12 Oct data,
+  October's Re-Writes left only ENAFLO's two (re-keyed within October) and
+  Omnia (same day) in October. The Orders tab notes how many were keyed in
+  the period but credited earlier (`rewritesAcross`), and Summary / PDF add
+  it under the Orders figure. Follows the manager's call: "Not a Re-Write"
+  keeps the re-order on its own day; "It's a Re-Write" with no re-order
+  found has nothing to move (`rewriteOrderDaysOf`). Deliveries are not
+  touched — a re-order's delivery is a real delivery.
 - The **delivered list has identical columns** and can't be told apart. That
   is harmless: its rows are the same orders under the same keys, so it adds
   or refreshes real orders (on the Sep 2026 files: 38 identical, 16 with a
@@ -1222,9 +1237,13 @@ diagnostics carry on unchanged.
   Orders included — it takes cancelled orders out of Order Take); the
   upload result says which months moved. A slot is only stored again when
   its rows changed (`rowsFingerprint`).
-- **What each metric now counts:** Order Take — orders by order date, less
-  held orders the Cancellations matching found cancelled (Dealerweb's own
-  order list drops them too). Deliveries — every line in the month by
+- **What each metric now counts:** Order Take — 10 at 10's Orders exactly:
+  orders by order date, less held orders the Cancellations matching found
+  cancelled (Dealerweb's own order list drops them too), with each Re-Write
+  credited to the month of the original order (`creditOrders`), never the
+  month it was keyed again. A re-order credited before `FEED_FROM_MONTH`
+  leaves the fed months altogether. A manager's Re-Write call re-feeds the
+  board, as an upload does. Deliveries — every line in the month by
   delivery date (delivered, arrived and due, as the delivered list always
   counted). Insurance — non-zero W:AC cells, read by 10 at 10's Dealbook
   parser through the shared `countInsuranceProducts`. Inbound Conversion —

@@ -189,6 +189,13 @@ export async function setCancellationStatusAction(input: { id: string; classific
     const ok = await setCancellationClassification(parsed.data.id, parsed.data.classification, user.name || user.email);
     if (!ok) return { ok: false, error: "That cancellation is no longer held — reload the page." };
     revalidatePath("/ten-at-ten");
+    // A Re-Write's re-order is credited to the original order month, so the
+    // call moves Order Take. The call itself has saved either way.
+    try {
+      if ((await feedPolePositionFromTenAtTen(user.id)).length) invalidateLeaderboard();
+    } catch (e) {
+      logError("ten-at-ten/feed-pole-position", e, { id: parsed.data.id });
+    }
     return { ok: true };
   } catch (e) {
     logError("ten-at-ten/cancellation-status", e, { id: parsed.data.id });

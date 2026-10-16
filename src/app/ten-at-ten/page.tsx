@@ -5,6 +5,7 @@ import { reportingHorizonFromInstant } from "@/lib/business-hours";
 import { loadEnquiries, loadLatestEnquiryUploadAt } from "@/lib/enquiries";
 import { logError } from "@/lib/logger";
 import { loadMarketOverview, type MarketOverview } from "@/lib/market-overview";
+import { creditOrders } from "@/lib/ten-at-ten-cancellations";
 import { encodeOrders, encodeReport } from "@/lib/ten-at-ten-report";
 import {
   listTenAtTenUploads, loadBudgets, loadCancellationsReport, loadExecNames, loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows,
@@ -30,9 +31,10 @@ export default async function TenAtTenPage() {
   const reportHorizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
   // Cancellations are matched against the Dealbook. An order we still hold
   // that was later cancelled is left out of Orders, as Dealerweb's own
-  // order list drops it; the Orders tab says how many.
-  const { views: cancellations, originalIds } = await loadCancellationsReport(names);
-  const liveOrders = orders.filter((o) => !originalIds.has(o.id));
+  // order list drops it, and a Re-Write's re-order counts on the original
+  // order day, not the day it was keyed again; the Orders tab says how many.
+  const { views: cancellations, originalIds, rewriteOrderDays } = await loadCancellationsReport(names);
+  const { lines: liveOrders, moved: rewriteMoves } = creditOrders(orders, originalIds, rewriteOrderDays);
   const cancelledOrderDays = orders.filter((o) => originalIds.has(o.id)).map((o) => o.orderDay);
   const payload = encodeReport(rows, names);
   const ordersPayload = encodeOrders(liveOrders, names);
@@ -66,7 +68,7 @@ export default async function TenAtTenPage() {
         </div>
         <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
           responses={responses} reportHorizon={reportHorizon} today={today}
-          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} market={market} canManage={canManage} />
+          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} canManage={canManage} />
       </main>
     </div>
   );

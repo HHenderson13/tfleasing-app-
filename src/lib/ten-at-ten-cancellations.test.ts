@@ -4,11 +4,13 @@ import {
   NotACancelledOrdersError,
   cancelledVehicle,
   cleanCustomer,
+  creditOrders,
   customerKey,
   execCodeFromName,
   matchCancellations,
   mergeDealbookLines,
   parseCancellationsWorkbook,
+  rewriteOrderDaysOf,
   type DealbookLine,
 } from "./ten-at-ten-cancellations";
 import { detectTenAtTenFile, plateOf } from "./ten-at-ten-orders";
@@ -155,6 +157,36 @@ describe("Re-Write or cancellation", () => {
     // replacement, listed after the cancellation.
     expect(originalIds).toEqual(new Set(["hallett", "griffin-old", "braine-MP26VYN", "braine-MP26VYF", "braine-MP26VYC"]));
     expect(matches.get("hallett")!.originalProfit).toBe(450);
+
+    // Order Take: every Re-Write counts once, on the original order day.
+    const days = rewriteOrderDaysOf(cancels, matches, new Map());
+    const { lines: credited, moved } = creditOrders(lines, originalIds, days);
+    const dayOf = Object.fromEntries(credited.map((l) => [l.id, l.orderDay]));
+    // Braine's vans: September orders, not October ones as well.
+    expect(["dea-MP26VYN", "dea-MP26VYF", "dea-MP26VYC"].map((id) => dayOf[id])).toEqual(["2026-09-29", "2026-09-29", "2026-09-29"]);
+    expect(dayOf["griffin-new"]).toBe("2026-09-30");
+    expect(dayOf.blacklab).toBe("2026-07-31");
+    expect(dayOf.hfs).toBe("2026-07-08");
+    expect([dayOf["enaflo-1"], dayOf["enaflo-2"]]).toEqual(["2026-10-02", "2026-10-02"]);
+    expect(dayOf.omnia).toBe("2026-10-09"); // same day: nothing moves
+    expect(dayOf.cawaters).toBe("2026-09-28"); // not a re-order: untouched
+    expect(credited.some((l) => originalIds.has(l.id))).toBe(false);
+    expect(moved).toHaveLength(8);
+    // Ordered in October by Order Take: what's left once the Re-Writes go back.
+    expect(credited.filter((l) => l.orderDay >= "2026-10-01").map((l) => l.id).sort()).toEqual(["enaflo-1", "enaflo-2", "omnia"]);
+  });
+
+  it("follows a manager's call over the matching when crediting Re-Writes", () => {
+    const c = cancel("c", { exec: "Lou Bailey", orderDay: "2026-09-20", cancelledAt: "2026-10-03T10:00", customer: "Fleet Co", model: "Transit Custom" });
+    const reorder = line({ id: "re", orderDay: "2026-10-04", customer: "Fleet Co" });
+    const { matches, originalIds } = matchCancellations([c], [reorder]);
+    expect(rewriteOrderDaysOf([c], matches, new Map())).toEqual(new Map([["re", "2026-09-20"]]));
+    // "Not a Re-Write": the re-order is a new sale on its own day.
+    const notRewrite = rewriteOrderDaysOf([c], matches, new Map([["c", "proper"]]));
+    expect(creditOrders([reorder], originalIds, notRewrite).lines[0].orderDay).toBe("2026-10-04");
+    // "It's a Re-Write" with no re-order found: nothing to move.
+    const { matches: none } = matchCancellations([c], []);
+    expect(rewriteOrderDaysOf([c], none, new Map([["c", "rewrite"]])).size).toBe(0);
   });
 
   it("treats a plate that moved to another exec's customer as reallocated stock, not a Re-Write", () => {

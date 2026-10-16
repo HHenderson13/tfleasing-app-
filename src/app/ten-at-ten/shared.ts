@@ -46,6 +46,17 @@ export const dayLabel = (day: string) =>
 export const timeTone = (avg: number | null, target: number): "good" | "bad" | undefined =>
   avg == null ? undefined : avg <= target ? "good" : "bad";
 
+/**
+ * Under the Orders figure: held orders cancelled since, and Re-Writes keyed
+ * again in the period but counted in the month of the original order.
+ */
+export function ordersAdjusted(cancelled: number, rewritesOut: number): string | undefined {
+  return [
+    cancelled ? `${int(cancelled)} cancelled since, left out` : "",
+    rewritesOut ? `${int(rewritesOut)} Re-Write${rewritesOut === 1 ? "" : "s"} counted in the original month` : "",
+  ].filter(Boolean).join(" · ") || undefined;
+}
+
 export const isProper = (c: CancellationView) => c.status === "proper";
 export const needsReason = (c: CancellationView) => isProper(c) && !c.note.trim();
 

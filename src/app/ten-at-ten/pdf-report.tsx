@@ -23,12 +23,12 @@ import {
 import type { MarketOverview, MarketSegmentView } from "@/lib/market-overview";
 import {
   SEGMENTS, avgProfit, brokerPct, budgetLines, budgetMonths, conversionPct, daysToCancel, groupOrders, groupRows, inRange, inboundPct,
-  orderStatsOf, periodProgress, statsOf,
-  type BudgetLine, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
+  orderStatsOf, periodProgress, rewritesAcross, statsOf,
+  type BudgetLine, type CreditedReOrder, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
 } from "@/lib/ten-at-ten-report";
 import {
   DEPARTMENT_COLOURS, MARKET_META, SEGMENT_META, SOURCE_COLOURS, firstName, gapText, gbp, int, isProper, marketTotals, needsReason,
-  pct, scrapeWhen, share, shortDate,
+  ordersAdjusted, pct, scrapeWhen, share, shortDate,
 } from "./shared";
 
 export interface PdfReportInput {
@@ -44,6 +44,7 @@ export interface PdfReportInput {
   budgets: Budgets;
   cancellations: CancellationView[];
   cancelledOrderDays: string[];
+  rewriteMoves: CreditedReOrder[];
   market: MarketOverview | null;
 }
 
@@ -376,6 +377,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
   const oSeg = new Map(groupOrders(oRows, ["segment"]).map((g) => [g.label, g]));
   const oTop = groupOrders(oRows, ["exec"], "orders").slice(0, 3);
   const cancelledHere = input.cancelledOrderDays.filter((x) => x >= range.startDay && x <= range.endDay).length;
+  const rewritesOut = rewritesAcross(input.rewriteMoves, range).out;
   const dv = deliveriesFor(input);
   const line = dv.lines?.combined ?? null;
   const gap = line?.budget != null ? line.going - line.budget : null;
@@ -437,7 +439,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
             {r.held.length > 0 && <Line size={SUMMARY_TEXT} label="Not judged yet">{int(r.held.length)} — they need a full working day first</Line>}
           </SummaryCard>
           <SummaryCard title="Orders" kpis={[
-            { label: "Orders", value: int(o.orders), sub: cancelledHere ? `${int(cancelledHere)} cancelled since, left out` : undefined },
+            { label: "Orders", value: int(o.orders), sub: ordersAdjusted(cancelledHere, rewritesOut) },
             { label: "Total profit", value: money(o.priced ? o.profit : null), tone: o.profit < 0 ? "bad" : undefined },
             { label: "Avg per unit", value: money(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined },
           ]}>
@@ -675,6 +677,7 @@ function OrdersPage({ input }: { input: PdfReportInput }) {
   const rows = inRange(input.orders, input.range);
   const o = orderStatsOf(rows);
   const cancelledHere = input.cancelledOrderDays.filter((x) => x >= input.range.startDay && x <= input.range.endDay).length;
+  const rewritesOut = rewritesAcross(input.rewriteMoves, input.range).out;
   const execs = groupOrders(rows, ["exec"]);
   const models = groupOrders(rows, ["model"]);
   const funders = groupOrders(rows, ["funder"]);
@@ -683,7 +686,7 @@ function OrdersPage({ input }: { input: PdfReportInput }) {
     <ReportPage title="Orders" input={input} note="Dealbook – Orders · profit is Total Gross">
       <View style={s.stack}>
         <View style={s.row}>
-          <Kpi label="Orders" value={int(o.orders)} sub={[o.orders > o.priced ? `${int(o.orders - o.priced)} without a profit yet` : "", cancelledHere ? `${int(cancelledHere)} cancelled since, left out` : ""].filter(Boolean).join(" · ") || undefined} />
+          <Kpi label="Orders" value={int(o.orders)} sub={[o.orders > o.priced ? `${int(o.orders - o.priced)} without a profit yet` : "", ordersAdjusted(cancelledHere, rewritesOut) ?? ""].filter(Boolean).join(" · ") || undefined} />
           <Kpi label="Total profit" value={money(o.priced ? o.profit : null)} tone={o.profit < 0 ? "bad" : undefined} sub={`${int(o.loss)} loss-making`} />
           <Kpi label="Avg profit per unit" value={money(avgProfit(o))} hero />
           <SegmentKpis rows={rows} noun="units" />
