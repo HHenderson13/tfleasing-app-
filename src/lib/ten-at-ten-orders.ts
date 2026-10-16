@@ -67,7 +67,10 @@ export function segmentOf(model: string, text: string): Segment {
  * A registration as the two reports can be matched on. Dealerweb decorates
  * stock plates — "TACTICALMP26VWA", "MP26VYNTACTICAL" — so the current-style
  * plate is lifted out of whatever surrounds it; anything else (a private
- * plate, an old format) is kept as its letters and digits.
+ * plate, an old format) is kept as its letters and digits. Words standing
+ * in for a plate — "FACTORYORDER", "CANCEL", "SEPTEMBER" — are no plate:
+ * every UK plate has a digit, and a shared placeholder would tie unrelated
+ * orders together (Birkett's cancelled Puma to Ficep's Explorer, Oct 2026).
  */
 export function plateOf(raw: unknown): string | null {
   const s = norm(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -75,7 +78,7 @@ export function plateOf(raw: unknown): string | null {
   const m = s.match(/[A-Z]{2}\d{2}[A-Z]{3}/);
   if (m) return m[0];
   const rest = s.replace(/TACTICAL/g, "");
-  return rest.length >= 2 ? rest : null;
+  return rest.length >= 2 && /\d/.test(rest) && /[A-Z]/.test(rest) ? rest : null;
 }
 
 /**

@@ -7,10 +7,10 @@ import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads }
 import { wallClockFromInstant } from "./business-hours";
 import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
 import {
-  execCodeFromName, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf,
+  execCodeFromName, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf, staleOrderIds,
   type CancellationParse, type CancellationStatus, type DealbookLine, type TenAtTenCancellation,
 } from "./ten-at-ten-cancellations";
-import type { OrderParse, TenAtTenOrder } from "./ten-at-ten-orders";
+import { plateOf, type OrderParse, type TenAtTenOrder } from "./ten-at-ten-orders";
 import type { Budgets, CancellationView, OrderStoredRow, StoredRow } from "./ten-at-ten-report";
 
 export type { Budgets };
@@ -558,7 +558,8 @@ async function loadDealbookLines(source: keyof typeof DEALBOOK_LINES): Promise<D
   }>(DEALBOOK_LINES[source]);
   return rows.map((r) => ({
     id: r.id, source, orderDay: r.order_day, exec: r.exec, customer: r.customer, model: r.model,
-    vehicleRaw: r.vehicle_raw ?? "", registration: r.registration,
+    // Re-read, so a placeholder stored before plateOf knew better is no plate.
+    vehicleRaw: r.vehicle_raw ?? "", registration: plateOf(r.registration),
     // Lines uploaded before exports were time-stamped fall back to when they
     // were first uploaded — never earlier than the export itself.
     seenAt: r.last_seen_at != null ? Number(r.last_seen_at) : wallClockFromInstant(Number(r.first_uploaded_at) * 1000),
@@ -570,13 +571,14 @@ const fmtStamp = (sec: number) =>
   new Date(sec * 1000).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 /**
- * Every cancellation, classified against the Dealbook, with its notes —
- * the held order lines that were cancelled, which Orders leaves out, and
- * each Re-Write's re-order with the original order day it is credited to
- * (`creditOrders`).
+ * Every cancellation, classified against the Dealbook, with its notes; the
+ * held order lines that were cancelled (`originalIds`); every held order
+ * line Orders leaves out (`leftOutIds`: those, and any old copy Dealerweb's
+ * order list no longer carries — `staleOrderIds`); and each Re-Write's
+ * re-order with the original order day it is credited to (`creditOrders`).
  */
 export async function loadCancellationsReport(names: Map<string, string>): Promise<{
-  views: CancellationView[]; originalIds: Set<string>; rewriteOrderDays: Map<string, string>;
+  views: CancellationView[]; originalIds: Set<string>; leftOutIds: Set<string>; rewriteOrderDays: Map<string, string>;
 }> {
   const [cancels, notes, orders, deliveries] = await Promise.all([
     db.all<{
@@ -590,7 +592,8 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
     loadDealbookLines("orders"),
     loadDealbookLines("deliveries"),
   ]);
-  if (cancels.length === 0) return { views: [], originalIds: new Set(), rewriteOrderDays: new Map() };
+  const stale = staleOrderIds(orders);
+  if (cancels.length === 0) return { views: [], originalIds: new Set(), leftOutIds: stale, rewriteOrderDays: new Map() };
 
   // The export names execs in full; the Dealbook uses codes. A name's codes
   // are whatever the Pole Position map gives it, plus Dealerweb's own
@@ -604,7 +607,7 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
 
   const rows = cancels.map((c) => ({
     id: c.id, exec: c.exec, orderDay: c.order_day, cancelledAt: Number(c.cancelled_at), cancelledDay: c.cancelled_day,
-    customer: c.customer, model: c.model, registration: c.registration,
+    customer: c.customer, model: c.model, registration: plateOf(c.registration),
   }));
   const { matches, originalIds } = matchCancellations(rows, mergeDealbookLines(orders, deliveries), execCodesOf);
   const noteOf = new Map(notes.map((n) => [n.cancellation_id, n]));
@@ -636,7 +639,7 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
       noteAt: n ? fmtStamp(Number(n.updated_at)) : null,
     };
   });
-  return { views, originalIds, rewriteOrderDays: rewriteOrderDaysOf(rows, matches, calls) };
+  return { views, originalIds, leftOutIds: new Set([...originalIds, ...stale]), rewriteOrderDays: rewriteOrderDaysOf(rows, matches, calls) };
 }
 
 async function cancellationExists(id: string): Promise<boolean> {

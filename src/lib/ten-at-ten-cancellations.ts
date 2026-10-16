@@ -245,6 +245,27 @@ const dayGap = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) -
  * this month whose order month was never uploaded is still found, and an
  * order held twice can't answer for two cancellations.
  */
+/**
+ * Held order-list lines that the latest order list for their month no
+ * longer carries. Dealerweb's order list is the whole month to date, and
+ * every line of one export carries its time, so a line last seen before the
+ * month's latest export has gone from Dealerweb: cancelled, or the same
+ * order under a description Dealerweb has since changed. The order key
+ * includes the description, so a change stores the deal again — DEA Gate's
+ * three vans gained a trailing "10" on 14 Oct 2026 and Martin Dowey's Capri
+ * its registration on 16 Oct, and each was held, and counted, twice.
+ * Delivered-list lines are left alone: each deliveries upload syncs its month.
+ */
+export function staleOrderIds(lines: readonly Pick<DealbookLine, "id" | "source" | "orderDay" | "seenAt">[]): Set<string> {
+  const latest = new Map<string, number>();
+  for (const l of lines) {
+    if (l.source !== "orders") continue;
+    const m = l.orderDay.slice(0, 7);
+    latest.set(m, Math.max(latest.get(m) ?? -Infinity, l.seenAt));
+  }
+  return new Set(lines.filter((l) => l.source === "orders" && l.seenAt < latest.get(l.orderDay.slice(0, 7))!).map((l) => l.id));
+}
+
 export function mergeDealbookLines(orders: DealbookLine[], deliveries: DealbookLine[]): DealbookLine[] {
   const keyOf = (l: DealbookLine) => `${l.orderDay}|${customerKey(l.customer)}|${l.vehicleRaw.toLowerCase()}|${l.registration ?? ""}`;
   const held = new Map<string, number>();
@@ -298,14 +319,16 @@ export function matchCancellations(
     }
   }
 
-  // The re-orders, nearest the cancellation first.
+  // The re-orders, nearest the cancellation first — only from what Dealerweb
+  // still lists, so an old copy of an order never stands in for the live one.
+  const stale = staleOrderIds(lines);
   const latest = (c: CancelLike) => addDays(c.cancelledDay, REWRITE_WINDOW_DAYS);
   for (const [on, test] of tests) {
     for (const c of order) {
       const m = matches.get(c.id)!;
       if (m.reorder) continue;
       const hit = lines
-        .filter((l) => !used.has(l.id) && l.orderDay <= latest(c)
+        .filter((l) => !used.has(l.id) && !stale.has(l.id) && l.orderDay <= latest(c)
           && (l.orderDay > c.orderDay || (l.orderDay === c.orderDay && l.seenAt >= c.cancelledAt)) && test(c, l))
         .sort((a, b) => dayGap(a.orderDay, c.cancelledDay) - dayGap(b.orderDay, c.cancelledDay) || a.id.localeCompare(b.id))[0];
       if (!hit) continue;
@@ -349,11 +372,12 @@ export function rewriteOrderDaysOf(
 }
 
 /**
- * The held order lines as Order Take counts them: each cancelled original
- * left out (Dealerweb's own order list drops it), and each Re-Write's
- * re-order counted on the original order day. The re-order is the line kept
- * — it has the corrected customer, spec and profit — but on the original's
- * day, whether or not the original itself was ever held.
+ * The held order lines as Order Take counts them: whatever Dealerweb's
+ * order list no longer carries left out — cancelled originals and old
+ * copies (`leftOut`) — and each Re-Write's re-order counted on the original
+ * order day. The re-order is the line kept — it has the corrected customer,
+ * spec and profit — but on the original's day, whether or not the original
+ * itself was ever held.
  *
  * `rewriteOrderDays` maps a re-order's line id to the original order day,
  * for cancellations that count as Re-Writes (a manager's call over the
@@ -361,13 +385,13 @@ export function rewriteOrderDaysOf(
  */
 export function creditOrders<T extends { id: string; orderDay: string }>(
   lines: readonly T[],
-  originalIds: ReadonlySet<string>,
+  leftOut: ReadonlySet<string>,
   rewriteOrderDays: ReadonlyMap<string, string>,
 ): { lines: T[]; moved: CreditedReOrder[] } {
   const moved: CreditedReOrder[] = [];
   const out: T[] = [];
   for (const l of lines) {
-    if (originalIds.has(l.id)) continue;
+    if (leftOut.has(l.id)) continue;
     const day = rewriteOrderDays.get(l.id);
     if (day && day < l.orderDay) {
       moved.push({ reorderDay: l.orderDay, creditDay: day });

@@ -29,12 +29,13 @@ export default async function TenAtTenPage() {
   // Response times only judges an enquiry once it has had a full working
   // day, measured from the latest MotorComplete upload (business-hours.ts).
   const reportHorizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
-  // Cancellations are matched against the Dealbook. An order we still hold
-  // that was later cancelled is left out of Orders, as Dealerweb's own
-  // order list drops it, and a Re-Write's re-order counts on the original
-  // order day, not the day it was keyed again; the Orders tab says how many.
-  const { views: cancellations, originalIds, rewriteOrderDays } = await loadCancellationsReport(names);
-  const { lines: liveOrders, moved: rewriteMoves } = creditOrders(orders, originalIds, rewriteOrderDays);
+  // Cancellations are matched against the Dealbook. Orders counts what
+  // Dealerweb's latest order list carries — an order we still hold that was
+  // later cancelled, or an old copy of one, is left out — and a Re-Write's
+  // re-order counts on the original order day, not the day it was keyed
+  // again; the Orders tab says how many.
+  const { views: cancellations, originalIds, leftOutIds, rewriteOrderDays } = await loadCancellationsReport(names);
+  const { lines: liveOrders, moved: rewriteMoves } = creditOrders(orders, leftOutIds, rewriteOrderDays);
   const cancelledOrderDays = orders.filter((o) => originalIds.has(o.id)).map((o) => o.orderDay);
   const payload = encodeReport(rows, names);
   const ordersPayload = encodeOrders(liveOrders, names);

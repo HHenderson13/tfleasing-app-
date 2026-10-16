@@ -153,19 +153,20 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
   const responseMonths = [...new Set(judged.map((r) => r.enquiryDay.slice(0, 7)))].sort();
   if (enquiryMonths.length + orderMonths.length + deliveryMonths.length + responseMonths.length === 0) return [];
 
-  // Order Take is 10 at 10's Orders: held orders later cancelled left out,
-  // and a Re-Write credited to the month of the original order, never the
-  // month it was keyed again (creditOrders). A re-order only moves earlier,
+  // Order Take is 10 at 10's Orders: what Dealerweb's latest order list
+  // carries (held orders later cancelled, and old copies, left out), with a
+  // Re-Write credited to the month of the original order, never the month
+  // it was keyed again (creditOrders). A re-order only moves earlier,
   // so one credited before FEED_FROM_MONTH leaves the fed months altogether.
   let credited: { id: string; orderDay: string; exec: string; ordered_at: number; vehicle_raw: string | null }[] = [];
   if (orderMonths.length) {
-    const [{ originalIds, rewriteOrderDays }, held] = await Promise.all([
+    const [{ leftOutIds, rewriteOrderDays }, held] = await Promise.all([
       loadExecNames().then(loadCancellationsReport),
       db.all<{ id: string; order_day: string; exec: string; ordered_at: number; vehicle_raw: string | null }>(
         sql`SELECT id, order_day, exec, ordered_at, vehicle_raw FROM ten_at_ten_orders WHERE order_day >= ${from}`,
       ),
     ]);
-    credited = creditOrders(held.map((l) => ({ ...l, orderDay: l.order_day })), originalIds, rewriteOrderDays).lines;
+    credited = creditOrders(held.map((l) => ({ ...l, orderDay: l.order_day })), leftOutIds, rewriteOrderDays).lines;
   }
 
   const slots: { yearMonth: string; reportType: LeaderboardReportType; rows: ParsedRows | null; lines: number }[] = [];

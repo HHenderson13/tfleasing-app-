@@ -942,10 +942,23 @@ files; `detectTenAtTenFile` tells them apart by header.
 - **Key: order date + customer + vehicle + occurrence in the file.** One
   customer's three identical vans on one day (DEA Gate, 9 Oct 2026) are
   three orders and must line up with the same three next upload. Exec is
-  not in the key. A cancelled order that drops out of a later export keeps
-  its stored line — line merging can't see an absence — so Orders leaves out
-  any held order the Cancellations matching identifies as cancelled, and
-  says how many in the period.
+  not in the key. Line merging can't see an absence, so a line a later
+  export drops keeps its stored copy.
+- **Orders counts what Dealerweb's latest order list carries**
+  (`staleOrderIds`, user's live data 2026-10-16). The order list is the
+  whole month to date and every line of one export carries its time
+  (`last_seen_at`), so a held line last seen before its month's latest
+  export has gone from Dealerweb and is left out — cancelled, or **the same
+  order under a description Dealerweb has since changed**. Column F gains
+  text after the fact (DEA Gate's vans a trailing "10" on 14 Oct, Martin
+  Dowey's Capri its registration on 16 Oct), the key includes it, and each
+  was stored and counted twice until this. Don't "fix" it by changing
+  `cleanVehicle`: cancellation ids hang off it, and with them every
+  manager's note. Cancelled originals are still told apart (`originalIds`)
+  for the "cancelled since, left out" note. **Upload the whole month's order
+  list, never a filtered one** — a filtered export hides what it leaves out
+  (lines are only hidden, never deleted, so the next full upload restores
+  them). Deliveries lines are unaffected; their uploads sync the month.
 - **A Re-Write counts once, on the ORIGINAL order date** (user, 2026-10-16:
   Re-Writes are an admin task, and an exec doing a lot of them mustn't show
   an inflated Order Take). `creditOrders` keeps the re-order line — it has
@@ -957,7 +970,8 @@ files; `detectTenAtTenFile` tells them apart by header.
   October's Re-Writes left only ENAFLO's two (re-keyed within October) and
   Omnia (same day) in October. The Orders tab notes how many were keyed in
   the period but credited earlier (`rewritesAcross`), and Summary / PDF add
-  it under the Orders figure. Follows the manager's call: "Not a Re-Write"
+  it under the Orders figure. On 16 Oct 2026 live: 46 on the order list,
+  less Black Lab, Griffin, QPATH and DEA Gate ×3 credited earlier = 40. Follows the manager's call: "Not a Re-Write"
   keeps the re-order on its own day; "It's a Re-Write" with no re-order
   found has nothing to move (`rewriteOrderDaysOf`). Deliveries are not
   touched — a re-order's delivery is a real delivery.
@@ -1036,7 +1050,15 @@ matching in `lib/ten-at-ten-cancellations.ts` (pure, tested on the real
   stock (CA Waters → Griffin Joinery's plate) — or the same customer and
   model (ENAFLO re-ordered on new plates; HFS with the spec corrected). The
   re-order must fall within 30 days of the cancellation; one order answers
-  for one cancellation.
+  for one cancellation; and it must still be on Dealerweb's list — an old
+  copy of an order (`staleOrderIds`) is never taken as the re-order, or the
+  live one stays counted where it was keyed.
+- **A plate has a digit** (`plateOf`). Dealerweb puts words in the
+  registration column — FACTORYORDER, CANCEL, SEPTEMBER — and as "plates"
+  they tied unrelated orders together: Birkett's cancelled Puma read as a
+  Re-Write of Ficep's Explorer, both FACTORYORDER under Helen Mort. Stored
+  registrations are re-read through `plateOf` at match time, so old uploads
+  need nothing doing.
 - **Dealerweb's order list drops a cancelled order, our store doesn't.**
   So every Dealbook line carries `last_seen_at` — the wall-clock time of the
   latest export listing it, from AG Grid's workbook `CreatedDate`

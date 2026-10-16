@@ -11,6 +11,7 @@ import {
   mergeDealbookLines,
   parseCancellationsWorkbook,
   rewriteOrderDaysOf,
+  staleOrderIds,
   type DealbookLine,
 } from "./ten-at-ten-cancellations";
 import { detectTenAtTenFile, plateOf } from "./ten-at-ten-orders";
@@ -57,6 +58,11 @@ describe("fields", () => {
     expect(plateOf("MP26VYNTACTICAL")).toBe("MP26VYN");
     expect(plateOf("mp26 vwh")).toBe("MP26VWH");
     expect(plateOf("TACTICAL")).toBeNull();
+    // Words standing in for a plate tie nothing together.
+    expect(plateOf("FACTORYORDER")).toBeNull();
+    expect(plateOf("CANCEL")).toBeNull();
+    expect(plateOf("SEPTEMBER")).toBeNull();
+    expect(plateOf("K1 NGS")).toBe("K1NGS"); // a private plate is still a plate
     expect(plateOf(null)).toBeNull();
   });
 });
@@ -174,6 +180,40 @@ describe("Re-Write or cancellation", () => {
     expect(moved).toHaveLength(8);
     // Ordered in October by Order Take: what's left once the Re-Writes go back.
     expect(credited.filter((l) => l.orderDay >= "2026-10-01").map((l) => l.id).sort()).toEqual(["enaflo-1", "enaflo-2", "omnia"]);
+  });
+
+  it("counts what Dealerweb's latest order list carries, never an old copy of an order", () => {
+    // Live data, 16 Oct 2026: DEA Gate's vans gained a trailing "10" on
+    // 14 Oct and Martin Dowey's Capri its registration on 16 Oct, so each
+    // was stored again under a new key beside its old copy.
+    const OCT_14 = wall("2026-10-14T08:59");
+    const OCT_16 = wall("2026-10-16T17:42");
+    const van = "Transit Custom Double Cab In 320L2 2.0TDCi 136 EcoBlue Limited 2 Door 3 Seat";
+    const lines = [
+      line({ id: "braine", orderDay: "2026-09-29", exec: "DeDu", customer: "Steven Braine", registration: "MP26VYN", seenAt: SEPT_LIST }),
+      line({ id: "dea-old", orderDay: "2026-10-09", exec: "DeDu", customer: "DEA GATE AUTOMATION LTD", vehicleRaw: van, registration: "MP26VYN", seenAt: OCT_14 }),
+      line({ id: "dea", orderDay: "2026-10-09", exec: "DeDu", customer: "DEA GATE AUTOMATION LTD", vehicleRaw: `${van} 10`, registration: "MP26VYN", seenAt: OCT_16 }),
+      line({ id: "dowey-old", orderDay: "2026-10-05", exec: "MiHo", customer: "Martin Dowey", model: "Capri", seenAt: wall("2026-10-16T10:22") }),
+      line({ id: "dowey", orderDay: "2026-10-05", exec: "MiHo", customer: "Martin Dowey", model: "Capri", registration: "MW76EBF", seenAt: OCT_16 }),
+    ];
+    expect(staleOrderIds(lines)).toEqual(new Set(["dea-old", "dowey-old"]));
+    const c = cancel("braine", { exec: "Deniz Durmaz", orderDay: "2026-09-29", cancelledAt: "2026-10-09T16:45", customer: "Mr Steven Braine", model: "Transit Custom", registration: "MP26VYN" });
+    const { matches, originalIds } = matchCancellations([c], lines);
+    // The live line is the re-order, not the old copy.
+    expect(matches.get("braine")!.reorderId).toBe("dea");
+    const leftOut = new Set([...originalIds, ...staleOrderIds(lines)]);
+    const { lines: credited } = creditOrders(lines, leftOut, rewriteOrderDaysOf([c], matches, new Map()));
+    expect(credited.filter((l) => l.orderDay >= "2026-10-01").map((l) => l.id)).toEqual(["dowey"]);
+    expect(credited.find((l) => l.id === "dea")!.orderDay).toBe("2026-09-29");
+  });
+
+  it("keeps each month's own latest list: September's lines aren't old because October's list is newer", () => {
+    const lines = [
+      line({ id: "sep", orderDay: "2026-09-30", seenAt: SEPT_LIST }),
+      line({ id: "oct", orderDay: "2026-10-01", seenAt: OCT_LIST }),
+      line({ id: "del", source: "deliveries", orderDay: "2026-10-01", seenAt: SEPT_LIST }),
+    ];
+    expect(staleOrderIds(lines).size).toBe(0);
   });
 
   it("follows a manager's call over the matching when crediting Re-Writes", () => {
