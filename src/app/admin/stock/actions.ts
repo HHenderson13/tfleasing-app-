@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { proposalEtaSnapshots, proposals, stockAvailabilityRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { proposalEtaSnapshots, proposals, stockColumnHRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
 import { parseStockWorkbook } from "@/lib/stock-parser";
 import { eq, inArray } from "drizzle-orm";
 import { matchProposalAgainstStock } from "@/lib/stock-match";
@@ -165,36 +165,42 @@ async function captureEtaSnapshots(uploadId: string, capturedAt: Date) {
 
 // ─── Availability rules ────────────────────────────────────────────────────
 //
-// Column H is normally the customer/fleet-assigned marker, so any value in it
-// hides a vehicle. These rules name the values that mean "ours to sell
-// anyway" and pull those rows back into /stock and /broker/stock.
+// A blank column H is available; any code in it hides the vehicle unless a
+// rule names that code — optionally with the column E value it needs (CO;
+// CH + 66170). See lib/stock-availability.ts.
 //
 // Editable rather than hardcoded because the codes come from Ford's export
 // and change without notice — and because getting one wrong is visible
 // immediately (stock appears or disappears), so it needs to be reversible
 // without a deploy.
 export async function saveStockAvailabilityRuleAction(input: {
-  columnLetter: string;
-  matchValue: string;
+  id: number | null;
+  hCode: string;
+  eValue: string;
   enabled: boolean;
 }) {
   await requireAdmin();
-  const letter = input.columnLetter.trim().toUpperCase();
-  if (letter !== "E" && letter !== "H") {
-    return { ok: false as const, error: "Only columns E and H are stored for matching." };
-  }
-  const value = input.matchValue.trim();
-  // A blank value with the rule left on would match every empty cell and drag
-  // the whole excluded set — most of an upload — into the stock list.
-  if (input.enabled && !value) {
-    return { ok: false as const, error: "Give the rule a value, or switch it off." };
-  }
-  await db
-    .update(stockAvailabilityRules)
-    .set({ matchValue: value, enabled: input.enabled, updatedAt: new Date() })
-    .where(eq(stockAvailabilityRules.columnLetter, letter));
+  if (input.id != null && !Number.isInteger(input.id)) return { ok: false as const, error: "Invalid rule." };
+  const hCode = input.hCode.trim().toUpperCase();
+  const eValue = input.eValue.trim() || null;
+  // A rule needs a code: a blank one would stand for every blank cell, and
+  // a blank column H is already available.
+  if (!hCode) return { ok: false as const, error: "Give the rule a column H code." };
+  if (hCode.length > 20 || (eValue?.length ?? 0) > 20) return { ok: false as const, error: "That's longer than any code in the stock report." };
+  const values = { hCode, eValue, enabled: input.enabled, updatedAt: new Date() };
+  if (input.id == null) await db.insert(stockColumnHRules).values(values);
+  else await db.update(stockColumnHRules).set(values).where(eq(stockColumnHRules.id, input.id));
   // Stock is cached for 5 minutes and keyed on these tags; without this the
   // change looks like it did nothing.
+  updateTag(STOCK_VEHICLES_TAG);
+  revalidatePath("/admin/stock");
+  return { ok: true as const };
+}
+
+export async function deleteStockAvailabilityRuleAction(id: number) {
+  await requireAdmin();
+  if (!Number.isInteger(id)) return { ok: false as const, error: "Invalid rule." };
+  await db.delete(stockColumnHRules).where(eq(stockColumnHRules.id, id));
   updateTag(STOCK_VEHICLES_TAG);
   revalidatePath("/admin/stock");
   return { ok: true as const };

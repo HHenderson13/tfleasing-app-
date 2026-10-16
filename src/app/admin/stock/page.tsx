@@ -1,5 +1,6 @@
 import { db } from "@/db";
-import { stockAvailabilityRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { stockColumnHRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { inRangeSql, ruleMatchSql } from "@/lib/stock-list";
 import { desc, eq, sql } from "drizzle-orm";
 import { StockUploadView } from "./view";
 import { AvailabilityRules, type RuleRow } from "./availability-rules";
@@ -18,59 +19,59 @@ export default async function StockUploadPage() {
       .from(stockVehicles)
       .groupBy(stockVehicles.sourceSheet),
     db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1),
-    db.select().from(stockAvailabilityRules),
+    db.select().from(stockColumnHRules),
   ]);
   const [latest] = latestRows;
   const [settings] = settingsRows;
 
-  // What each rule catches, broken into the three groups a match can fall
-  // into. A single "N vehicles match" number was actively misleading: it
-  // counted every matching row, while the stock list's "Included by:
-  // Availability rule" filter shows only the rows the rule RESCUED. The two
-  // numbers disagreed (66 vs 32) and looked like lost stock.
-  //
-  //   pulledIn       — hidden without the rule. What the filter shows.
-  //   alreadyVisible — in the list regardless; the rule changes nothing.
-  //   noVin          — never reaches the list: /stock has always required a
-  //                    VIN, because the TF-xxxx reference is derived from it.
+  // What each rule catches, split by what happens to it — one "N match"
+  // figure disagreed with the stock list's own filter and read as lost stock.
+  //   pulledIn    — on the list because of this rule. What the
+  //                 "Included by → Availability rule" filter shows.
+  //   outOfRange  — a model we don't sell, or an excluded branch; no rule
+  //                 overrides those.
+  //   notSellable — no VIN and no ETA, which the list has always required.
+  const inRange = inRangeSql();
+  const sellable = sql`(${stockVehicles.vin} is not null or ${stockVehicles.etaAt} is not null)`;
   const ruleRows: RuleRow[] = await Promise.all(
     availabilityRules
       .slice()
-      .sort((a, b) => a.columnLetter.localeCompare(b.columnLetter))
+      .sort((a, b) => a.id - b.id)
       .map(async (r) => {
-        const letter = r.columnLetter.trim().toUpperCase();
-        const column =
-          letter === "E" ? stockVehicles.rawColE :
-          letter === "H" ? stockVehicles.rawColH :
-          null;
-        let pulledIn = 0;
-        let alreadyVisible = 0;
-        let noVin = 0;
-        if (column && r.matchValue.trim()) {
-          const value = r.matchValue.trim().toUpperCase();
-          const matches = sql`upper(trim(${column})) = ${value}`;
-          const [row] = await db
+        const matches = ruleMatchSql([{ hCode: r.hCode, eValue: r.eValue, enabled: true }]);
+        const [row] = matches
+          ? await db
             .select({
-              pulledIn: sql<number>`sum(case when ${stockVehicles.vin} is not null and ${stockVehicles.customerAssigned} = 1 then 1 else 0 end)`,
-              alreadyVisible: sql<number>`sum(case when ${stockVehicles.vin} is not null and ${stockVehicles.customerAssigned} = 0 then 1 else 0 end)`,
-              noVin: sql<number>`sum(case when ${stockVehicles.vin} is null then 1 else 0 end)`,
+              pulledIn: sql<number>`sum(case when ${inRange} and ${sellable} then 1 else 0 end)`,
+              outOfRange: sql<number>`sum(case when not ${inRange} then 1 else 0 end)`,
+              notSellable: sql<number>`sum(case when ${inRange} and not ${sellable} then 1 else 0 end)`,
             })
             .from(stockVehicles)
-            .where(matches);
-          pulledIn = Number(row?.pulledIn ?? 0);
-          alreadyVisible = Number(row?.alreadyVisible ?? 0);
-          noVin = Number(row?.noVin ?? 0);
-        }
+            .where(matches)
+          : [];
         return {
-          columnLetter: r.columnLetter,
-          matchValue: r.matchValue,
+          id: r.id,
+          hCode: r.hCode,
+          eValue: r.eValue ?? "",
           enabled: !!r.enabled,
-          pulledIn,
-          alreadyVisible,
-          noVin,
+          pulledIn: Number(row?.pulledIn ?? 0),
+          outOfRange: Number(row?.outOfRange ?? 0),
+          notSellable: Number(row?.notSellable ?? 0),
         };
       }),
   );
+
+  // What column H keeps off the list: in range and sellable, with a code no
+  // enabled rule names. A new Ford code shows up here first.
+  const rules = availabilityRules.map((r) => ({ hCode: r.hCode, eValue: r.eValue, enabled: !!r.enabled }));
+  const byRule = ruleMatchSql(rules);
+  const hidden = await db
+    .select({ code: sql<string>`upper(trim(${stockVehicles.rawColH}))`, n: sql<number>`count(*)` })
+    .from(stockVehicles)
+    .where(sql`${inRange} and ${sellable} and trim(coalesce(${stockVehicles.rawColH}, '')) <> ''${byRule ? sql` and not ${byRule}` : sql``}`)
+    .groupBy(sql`upper(trim(${stockVehicles.rawColH}))`)
+    .orderBy(sql`count(*) desc`);
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">Stock upload</h1>
@@ -84,7 +85,7 @@ export default async function StockUploadPage() {
         perSheet={bySheet.map((r) => ({ sheet: r.sheet ?? "—", count: Number(r.n) }))}
         password={settings?.workbookPassword ?? "Ftru"}
       />
-      <AvailabilityRules rules={ruleRows} />
+      <AvailabilityRules rules={ruleRows} hidden={hidden.map((h) => ({ code: h.code, count: Number(h.n) }))} />
     </div>
   );
 }

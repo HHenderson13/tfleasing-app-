@@ -2,9 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
-import { preRegVehicles, stockAvailabilityRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
-import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
-import { availableByRule, type AvailabilityRule } from "./stock-availability";
+import { preRegVehicles, stockColumnHRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
+import { and, desc, eq, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import { EXCLUDED_BRANCH_CODES, availableByRule, type AvailabilityRule } from "./stock-availability";
 import { matchModelDealerRule, parseDealerCodes, type ModelDealerRule } from "./stock-model-rules";
 import { getStockReferenceSecret, vehicleIdentityKey, vehicleReferenceFromIdentity, vehicleReferenceFromVin } from "./stock-reference-mint";
 
@@ -107,38 +107,54 @@ type KindKey = "dealer" | "model" | "colour" | "engine" | "destination" | "optio
 //     each pay the cache lookup overhead.
 const cachedMappedStock = unstable_cache(
   _loadMappedStock,
-  ["mapped-stock-v1"],
+  ["mapped-stock-v2"],
   { tags: [STOCK_VEHICLES_TAG, STOCK_MAPPINGS_TAG], revalidate: 300 },
 );
 export const loadMappedStock = cache(cachedMappedStock);
 
+/** The column H rules from Stock settings — read each time, so a change applies on the next cache miss. */
+export async function loadAvailabilityRules(): Promise<AvailabilityRule[]> {
+  return (await db.select().from(stockColumnHRules)).map((r) => ({ hCode: r.hCode, eValue: r.eValue, enabled: !!r.enabled }));
+}
+
+const cellOf = (column: typeof stockVehicles.rawColH | typeof stockVehicles.rawColE) => sql`upper(trim(coalesce(${column}, '')))`;
+
+/** A model we sell, on a branch whose stock we can sell — `inRange`, in SQL. */
+export function inRangeSql(): SQL {
+  const dealer = sql`trim(coalesce(${stockVehicles.dealerRaw}, ''))`;
+  // The leading code: "86492 (Spellbound)" is branch 86492.
+  const code = sql`case when instr(${dealer}, ' ') > 0 then substr(${dealer}, 1, instr(${dealer}, ' ') - 1) else ${dealer} end`;
+  return sql`(${stockVehicles.sourceSheet} is not null and ${code} not in (${sql.join([...EXCLUDED_BRANCH_CODES].map((c) => sql`${c}`), sql`, `)}))`;
+}
+
+/** Rows an enabled column H rule makes available. Null when no rule is on. */
+export function ruleMatchSql(rules: readonly AvailabilityRule[]): SQL | null {
+  const clauses = rules
+    .filter((r) => r.enabled && r.hCode.trim())
+    .map((r) => {
+      const h = sql`${cellOf(stockVehicles.rawColH)} = ${r.hCode.trim().toUpperCase()}`;
+      const e = r.eValue?.trim() ? sql`${cellOf(stockVehicles.rawColE)} = ${r.eValue.trim().toUpperCase()}` : null;
+      return e ? sql`(${h} and ${e})` : h;
+    });
+  return clauses.length ? sql`(${sql.join(clauses, sql` or `)})` : null;
+}
+
+/**
+ * `inStockScope` (lib/stock-availability.ts) in SQL, so the 25k rows of an
+ * upload are filtered in the database: in range, and either a blank column
+ * H with no customer or fleet named, or a column H code a rule makes
+ * available.
+ */
+export function stockScopeSql(rules: readonly AvailabilityRule[]): SQL {
+  const blankH = sql`(${cellOf(stockVehicles.rawColH)} = '' and ${stockVehicles.customerAssigned} = 0)`;
+  const byRule = ruleMatchSql(rules);
+  return sql`(${inRangeSql()} and ${byRule ? sql`(${blankH} or ${byRule})` : blankH})`;
+}
+
 async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploadedAt: Date | null }> {
-  // Availability rules first — they widen which rows we ask for. Fetched
-  // rather than hardcoded so toggling one in admin takes effect on the next
-  // cache miss, with no re-upload.
-  const rules: AvailabilityRule[] = (await db.select().from(stockAvailabilityRules)).map((r) => ({
-    columnLetter: r.columnLetter,
-    matchValue: r.matchValue,
-    enabled: !!r.enabled,
-  }));
-  const enabled = rules.filter((r) => r.enabled && r.matchValue.trim() !== "");
-
-  // Normally "not customer-assigned". An enabled rule pulls its matches back
-  // in — done in SQL rather than by loading all 25k rows and filtering in JS.
-  // Compared case-insensitively because the cell may be padded or lower-cased.
-  const ruleClauses = enabled.flatMap((r) => {
-    const letter = r.columnLetter.trim().toUpperCase();
-    const column =
-      letter === "E" ? stockVehicles.rawColE :
-      letter === "H" ? stockVehicles.rawColH :
-      null;
-    if (!column) return [];
-    return [sql`upper(trim(${column})) = ${r.matchValue.trim().toUpperCase()}`];
-  });
-
-  const inScope = ruleClauses.length
-    ? or(eq(stockVehicles.customerAssigned, false), ...ruleClauses)
-    : eq(stockVehicles.customerAssigned, false);
+  // The column H rules first — they decide which rows we ask for.
+  const rules = await loadAvailabilityRules();
+  const inScope = stockScopeSql(rules);
 
   // A vehicle needs either a VIN (it exists) or an ETA (it is coming). With
   // neither it is an orderbank line with no arrival date — nothing anyone
@@ -272,9 +288,9 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       adopted: v.adoptedAt ? v.adoptedAt.toISOString() : null,
       dealer: dm.hidden ? "—" : (dm.value ?? "—"),
       destination: zm.hidden ? null : zm.value,
-      // Only flagged when the row would otherwise have been excluded —
-      // a rule matching a normal in-scope vehicle changes nothing.
-      includedByRule: v.customerAssigned && availableByRule(rules, v),
+      // A rule needs a code in column H, and a code with no rule is hidden,
+      // so a row a rule matches is here only because of it.
+      includedByRule: availableByRule(rules, v),
       preRegistered: false,
       regNumber: null,
       registeredAt: null,

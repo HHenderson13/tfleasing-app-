@@ -282,18 +282,19 @@ export const stockSettings = sqliteTable("stock_settings", {
 // Vehicles that column H or column E says are available, whatever the rest of
 // the row implies.
 //
-// Column H is normally the customer/fleet-assigned marker: ANY value in it
-// hides the vehicle from /stock. Certain codes in it ("CO") and certain
-// values of column E ("66170") mark stock that is genuinely ours to sell, so
-// a matching row is pulled back into the list. It keeps its normal status —
-// the rule decides whether a vehicle APPEARS, not whether it reads as
-// in-stock or as an ETA.
+// The column H codes that mean a vehicle is ours to sell, each optionally
+// needing a column E value too — "CO"; "CH" with 66170 (user, 2026-10-16).
+// A blank column H is available without a rule; any other code is not. See
+// lib/stock-availability.ts. Seeded once, then edited by admin in Stock
+// settings, so a code can be added or switched off without a deploy.
 //
-// One row per column letter, seeded and then edited by admin, so a rule can
-// be switched off or re-valued from the UI rather than in code.
-export const stockAvailabilityRules = sqliteTable("stock_availability_rules", {
-  columnLetter: text("column_letter").primaryKey(), // "E" | "H"
-  matchValue: text("match_value").notNull(),
+// It replaced stock_availability_rules (one value per column, any one of
+// which pulled a row in — so E = 66170 alone did, whatever H said). That
+// table is left in the database, unread.
+export const stockColumnHRules = sqliteTable("stock_column_h_rules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  hCode: text("h_code").notNull(),
+  eValue: text("e_value"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });

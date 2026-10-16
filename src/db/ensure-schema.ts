@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 61;
+const SCHEMA_VERSION = 62;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -711,30 +711,31 @@ async function ensureStockReferenceSecret() {
   `));
 }
 
+// The column H codes that make a vehicle available (lib/stock-availability.ts).
+// The old one-value-per-column stock_availability_rules is left in place,
+// unread. Seeded only when the table is first made, so a rule an admin
+// deletes stays deleted through later schema bumps.
 async function ensureStockAvailabilityRules() {
-  await db.run(sql.raw(`
-    CREATE TABLE IF NOT EXISTS stock_availability_rules (
-      column_letter TEXT PRIMARY KEY,
-      match_value TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      updated_at INTEGER NOT NULL
-    )
-  `));
   // Raw spreadsheet values the rules match against. Nullable: rows uploaded
   // before this existed simply do not match, and the next upload fills them.
   await ensureColumns("stock_vehicles", [
     { name: "raw_col_e", sqlType: "TEXT" },
     { name: "raw_col_h", sqlType: "TEXT" },
   ]);
+  const existed = await db.all(sql`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'stock_column_h_rules'`);
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS stock_column_h_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      h_code TEXT NOT NULL,
+      e_value TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  if (existed.length > 0) return;
   const now = Math.floor(Date.now() / 1000);
-  for (const r of [
-    { col: "H", value: "CO" },
-    { col: "E", value: "66170" },
-  ]) {
-    await db.run(sql`
-      INSERT OR IGNORE INTO stock_availability_rules (column_letter, match_value, enabled, updated_at)
-      VALUES (${r.col}, ${r.value}, 1, ${now})
-    `);
+  for (const r of [{ h: "CO", e: null }, { h: "CH", e: "66170" }]) {
+    await db.run(sql`INSERT INTO stock_column_h_rules (h_code, e_value, enabled, updated_at) VALUES (${r.h}, ${r.e}, 1, ${now})`);
   }
 }
 

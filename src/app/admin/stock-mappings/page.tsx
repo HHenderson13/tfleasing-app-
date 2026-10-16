@@ -1,16 +1,19 @@
 import { db } from "@/db";
 import { stockMappings, stockModelDealerRules, stockVehicles } from "@/db/schema";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, isNotNull, sql } from "drizzle-orm";
 import { StockMappingsView } from "./view";
 import type { MappingKind } from "./actions";
 import { ModelDealerRules, type ModelDealerRuleRow } from "./model-dealer-rules";
 import { dealerCode, parseDealerCodes } from "@/lib/stock-model-rules";
+import { loadAvailabilityRules, stockScopeSql } from "@/lib/stock-list";
 
 export const dynamic = "force-dynamic";
 
 export type RawCount = { raw: string; count: number; buckets: string[] };
 
 export default async function StockMappingsPage() {
+  // The values on the stock list — the same column H rules decide it.
+  const scope = stockScopeSql(await loadAvailabilityRules());
   const [mappings, modelRules, rows] = await Promise.all([
     db.select().from(stockMappings),
     db.select().from(stockModelDealerRules),
@@ -32,7 +35,7 @@ export default async function StockMappingsPage() {
         n: sql<number>`count(*)`,
       })
       .from(stockVehicles)
-      .where(and(eq(stockVehicles.customerAssigned, false), isNotNull(stockVehicles.vin)))
+      .where(and(scope, isNotNull(stockVehicles.vin)))
       .groupBy(
         stockVehicles.sourceSheet,
         stockVehicles.dealerRaw,

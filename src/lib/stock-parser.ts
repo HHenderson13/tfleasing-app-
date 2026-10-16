@@ -1,6 +1,7 @@
 import "server-only";
 import * as XLSX from "xlsx";
 import officecrypto from "officecrypto-tool";
+import { isExcludedBranch } from "./stock-availability";
 
 export interface ParsedStockVehicle {
   vin: string | null; // may be missing — order-number match still works for awaiting-delivery
@@ -133,8 +134,8 @@ function sheetForModel(modelUpper: string): string | null {
   }
 }
 
-// Branch codes to exclude entirely (macro deletes these rows).
-const EXCLUDED_BRANCH_CODES = new Set(["93662", "81827", "86630", "81828", "97718", "97717", "93383", "86492"]);
+// Branch codes to exclude entirely (the macro deleted these rows) live in
+// stock-availability.ts, which the stock list's query reads too.
 
 // Partial (substring) replacements, case-insensitive — applied to specific fields per model bucket.
 // Ported from the Tidy_Up_* macros.
@@ -443,7 +444,7 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     // a model we don't sell. Row still persisted so awaiting-delivery can match by VIN/order.
     const customerAssigned =
       !!(toStr(pick(row, "CUST1_SURNAME")) || toStr(pick(row, "FLEET_ID_NUMBER"))) ||
-      (!!branchRaw && EXCLUDED_BRANCH_CODES.has(branchRaw)) ||
+      isExcludedBranch(branchRaw) ||
       !bucket;
 
     const statusRaw = toStr(pick(row, "LOCATION", "STATUS_TEXT"));
@@ -549,7 +550,7 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     // Row still persisted so awaiting-delivery can match by VIN/order.
     const customerAssigned =
       !!toStr(row[C.colH]) ||
-      (!!branchRaw && EXCLUDED_BRANCH_CODES.has(branchRaw)) ||
+      isExcludedBranch(branchRaw) ||
       !bucket;
 
     const statusRaw = toStr(row[C.locationStatus]);

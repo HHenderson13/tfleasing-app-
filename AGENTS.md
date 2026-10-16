@@ -233,47 +233,49 @@ Explorer on 97706 / 97709 / 97714 / 97726.
 
 ## Stock availability rules
 
-Column H of the stock export is the customer / fleet-assigned marker, and
-**any** value in it hides a vehicle from `/stock` — which is why ~86% of an
-upload (21,504 of 25,066 rows at the time of writing) is excluded. Some
-values in it, and some values of column E, mark stock that is genuinely ours
-to sell.
+**Column H decides** (user, 2026-10-16), in `lib/stock-availability.ts`:
+blank → available; `CO` → available; `CH` with column E `66170` →
+available; **any other code → not available**. Every other stock rule still
+applies on top and no availability rule overrides it: a model we sell
+(`source_sheet`), not an excluded branch, and a VIN or an ETA. On the 15 Oct
+2026 Trust Report that is 4,898 blank + 53 CO + 11 CH/66170 = 4,962.
 
-- `stock_availability_rules` holds one row per column letter, seeded `H = CO`
-  and `E = 66170`, both enabled. Admin edits the value or toggles it at
-  `/admin/stock` → **Availability rules**.
-- **A rule decides whether a vehicle APPEARS, not what its badge says.** A
-  matched vehicle keeps its normal status: `DELIVERED` still reads "in
-  stock", `CRAIOVA` still reads as an ETA. A rule asserts ownership, not
-  location. (User's explicit choice, 2026-09-03.)
+- **Why it changed:** the Trust Report ("Stock" tab, `parseByHeaders`) never
+  hid on column H — it hid on CUST1_SURNAME / FLEET_ID_NUMBER — so 74
+  vehicles with a code in H (1B, FM, BP, 1W, 1N, RU, 1F, …) and no named
+  customer showed as available when they weren't. And the old rules were one
+  value per column OR'd together, so E = 66170 alone pulled a row in
+  whatever H said, and a rule match also overrode the branch and model
+  exclusions.
+- **A blank H with a customer surname or fleet ID stays hidden** (user's
+  call): a named customer means it's taken. A rule's code stands even so —
+  the CO and CH rows all carry fleet details. `inStockScope` is the
+  statement; `stockScopeSql` in `stock-list.ts` is the same test in SQL
+  (row inclusion stays in the database, never 25k rows filtered in JS), and
+  the mappings page uses it too.
+- **Rules are editable** in Stock settings → Availability rules:
+  `stock_column_h_rules`, each a column H code plus an optional column E
+  value (blank = any). Seeded CO and CH + 66170 **only when the table is
+  first made**, so a deleted rule stays deleted through later schema bumps.
+  The old `stock_availability_rules` table is left in the database, unread.
 - Matching is **positional** — `rawColE` / `rawColH` are captured by index
-  (4 and 7) in *both* parser paths. The header sheet and the fixed-column
-  sheet disagree about what those columns are called, but an operator
-  reading their own file just sees "column H". Raw values are stored so a
-  rule can be re-valued or switched off **without re-uploading stock**.
-- Comparison is trimmed and case-insensitive, and **exact, never a prefix**:
-  `CO` must not catch `CORP`. An empty value never matches — otherwise
-  blanking the field with the rule left on would match every empty cell and
-  drag the whole excluded set into the list. `stock-availability.test.ts`
-  pins all of that.
-- Row inclusion is done in **SQL** (`stock-list.ts` builds the OR clauses
-  from the enabled rules), not by loading 25k rows and filtering in JS.
-- `includedByRule` marks rows that only appear because a rule matched. It is
-  **TF-only** — redacted for brokers, who have no business knowing how we
-  classify our own stock — and drives a `Rule` tag plus an "Included by"
-  facet so whoever set a rule up can see what it caught. A typo that matches
-  nothing otherwise looks identical to a correct rule, which is why the
-  settings screen counts what each rule catches.
-- **That count is split three ways, and must stay split.** A single "N
-  vehicles match" figure disagreed with the stock list's own filter and read
-  as lost stock: the filter only shows rows the rule RESCUED, so a rule
-  matching 66 rows could show 32 and look broken. The groups are
-  `pulledIn` (hidden without the rule — what the filter shows),
-  `alreadyVisible` (in the list regardless; the rule changes nothing), and
-  `noVin` (never reaches the list at all — `/stock` has always required a
-  VIN, because the `TF-xxxx` reference is a hash of it). If a rule's numbers
-  ever look wrong again, check which group is being counted before assuming
-  rows are being dropped.
+  (4 and 7) in *both* parser paths, because the operator reads "column H".
+  Comparison is trimmed, case-insensitive and **exact, never a prefix**:
+  `CO` must not catch `CORP`. A blank code is refused at save.
+- **Excluded branches match on the leading code** (`branchCodeOf`): DEALER
+  can read "86492 (Spellbound)", which an exact comparison never matched.
+  The list lives in `stock-availability.ts`, shared by parser and query.
+- A rule decides whether a vehicle **appears**, not its badge: a matched
+  vehicle keeps its normal status (`DELIVERED` still reads in stock,
+  `CRAIOVA` still an ETA).
+- `includedByRule` marks rows a rule made available — any rule match, since
+  a code no rule names is hidden. **TF-only**, redacted for brokers; it
+  drives the `Rule` tag and the "Included by" facet.
+- **The settings counts are split, and must stay split:** `pulledIn` (on the
+  list because of the rule — what the filter shows), `outOfRange` (a model
+  we don't sell or an excluded branch), `notSellable` (no VIN and no ETA).
+  The page also lists the codes column H keeps off the list with no rule
+  naming them, so a new Ford code is visible the day it appears.
 
 ## Broker portal
 
