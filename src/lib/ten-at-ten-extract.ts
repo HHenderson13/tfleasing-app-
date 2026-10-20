@@ -243,7 +243,7 @@ export function applyBonuses(input: {
     return {
       orderDay: day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative, derivativeKey: r.derivativeKey,
       segment: r.segment, product: r.product, termMonths: r.termMonths, funder: r.funder, delivery: r.delivery, profit: r.profit,
-      bonus, bonusFlag: flag, bonusType, bonusDay,
+      bonus, bonusFlag: flag, bonusType, bonusDay, basic,
     };
   };
 

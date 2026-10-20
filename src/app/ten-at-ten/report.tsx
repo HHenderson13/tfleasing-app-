@@ -960,11 +960,12 @@ function OrderBreakdown({ title, note, rows, dims, defaultSort = "orders", custo
   );
 }
 
-// A deal's bonus, and why it is what it is when it isn't the whole story.
+// A deal's bonus, and why it is what it is when it isn't the whole story —
+// "no scheme" is said in words, so it never reads as a deal that didn't map.
 function BonusCell({ r }: { r: OrderRow }) {
   const month = r.bonusDay ? monthsText([r.bonusDay.slice(0, 7)]) : null;
-  if (r.bonusFlag === "noScheme") return <span className="text-slate-400" title={`No bonus scheme set for ${month}`}>—</span>;
-  if (r.bonusFlag === "noDate") return <span className="text-slate-400" title="No delivery date in Dealerweb">—</span>;
+  if (r.bonusFlag === "noScheme") return <span className="text-[11px] text-slate-400" title={`No bonus scheme set for ${month}`}>no scheme · {month}</span>;
+  if (r.bonusFlag === "noDate") return <span className="text-[11px] text-slate-400" title="No delivery date in Dealerweb">no delivery date</span>;
   return (
     <span title={`${r.bonusType}, delivering ${month}`}>
       <BonusMoney n={r.bonus} />
@@ -990,6 +991,7 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
           <th className="px-2 py-1 text-left font-semibold">{dateLabel}</th>
           <th className="px-2 py-1 text-left font-semibold">Funder</th>
           <th className="px-2 py-1 text-left font-semibold">{statusLabel}</th>
+          <th className="px-2 py-1 text-right font-semibold" title="Basic price from the deal's Dealbook Extract line — what a percentage bonus is paid on">Basic</th>
           <th className="px-2 py-1 text-right font-semibold">Invoice</th>
           <th className="px-2 py-1 text-right font-semibold">Bonus</th>
           <th className="px-2 py-1 text-right font-semibold">Total</th>
@@ -1004,6 +1006,9 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(r.day)}</td>
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.funder}</td>
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.delivery}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-500">
+              {r.basic != null ? gbp(r.basic) : <span className="text-[11px] text-slate-400" title="No Dealbook Extract line found for this deal">not found</span>}
+            </td>
             <td className="px-2 py-1 text-right tabular-nums text-slate-600"><Money n={r.profit} /></td>
             <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-600"><BonusCell r={r} /></td>
             <td className="px-2 py-1 text-right font-semibold tabular-nums"><Money n={r.total} /></td>

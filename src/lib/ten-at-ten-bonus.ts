@@ -107,12 +107,22 @@ export function ratesText(type: BonusType, months: readonly string[], rates: Bon
 // then derivative ("Explorer Explorer 210kW 79kWh Style"). Delivery dates
 // and profit move between downloads, so neither can be the key.
 //
-// A deal and an extract line are the same vehicle when they were ordered on
-// the same day, their descriptions agree, and at least one of the exec,
-// the registration or the customer agrees too. Every pairing is scored and
-// the best taken first, one to one, so two Explorers ordered the same day
-// by the same exec each find their own line. On the 19 and 20 Oct 2026
-// files every line matched that was in both.
+// Businesses make it worse: the order list has the business ("Atlantic Fish
+// (Wholesale Ltd)", "City Sign & Graphics Ltd"), the extract the person who
+// placed the order (Jack Taylor, Carl Cox) — the enquiry log names both,
+// "City Sign & Graphics Ltd (Cox)". And Dealerweb can move the extract's
+// order date: City Sign's van is 1 Oct on the order list and 19 Oct on the
+// extract, the same exec, vehicle and registration (MW76EJO).
+//
+// So, first, a deal and an extract line are the same vehicle when their
+// descriptions agree and they were ordered the same day with the exec, the
+// registration or the customer agreeing too — or, on any day, they carry
+// the same registration. Every pairing is scored and the best taken first,
+// one to one, so two Explorers ordered the same day by the same exec each
+// find their own line. Then, for whatever is still unpaired (user,
+// 2026-10-20): the same order day and a close match on the vehicle alone
+// — stricter on the description, since nothing else agrees, and only ever
+// between lines nothing better has claimed.
 
 export interface ExtractMatchLine {
   id: string;
@@ -167,6 +177,31 @@ function sameCustomer(a: string, b: string): boolean {
 }
 
 const MIN_SIMILARITY = 0.5;
+/** The vehicle alone has to say more when nothing else agrees. */
+const FALLBACK_SIMILARITY = 0.8;
+
+type Pair = { deal: string; line: string; score: number };
+
+/** Best-first, one to one, never touching what's already paired. */
+function takeBest(pairs: Pair[], out: Map<string, string>, taken: Set<string>): void {
+  pairs.sort((a, b) => b.score - a.score || a.deal.localeCompare(b.deal) || a.line.localeCompare(b.line));
+  for (const p of pairs) {
+    if (out.has(p.deal) || taken.has(p.line)) continue;
+    out.set(p.deal, p.line);
+    taken.add(p.line);
+  }
+}
+
+function groupBy<T>(xs: readonly T[], keyOf: (x: T) => string | null): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const x of xs) {
+    const k = keyOf(x);
+    if (k == null) continue;
+    const list = m.get(k);
+    if (list) list.push(x); else m.set(k, [x]);
+  }
+  return m;
+}
 
 /**
  * Pair each deal with its extract line, one to one. `execCodesOf` turns
@@ -174,38 +209,47 @@ const MIN_SIMILARITY = 0.5;
  * Returns deal id → extract line id.
  */
 export function matchExtract(deals: readonly DealMatchLine[], extract: readonly ExtractMatchLine[], execCodesOf: (name: string) => string[]): Map<string, string> {
-  const byDay = new Map<string, ExtractMatchLine[]>();
-  for (const e of extract) {
-    const list = byDay.get(e.orderDay);
-    if (list) list.push(e); else byDay.set(e.orderDay, [e]);
-  }
+  const byDay = groupBy(extract, (e) => e.orderDay);
+  const byPlate = groupBy(extract, (e) => e.registration);
   const codes = new Map<string, Set<string>>();
   const codesOf = (name: string) => {
     let c = codes.get(name);
     if (!c) { c = new Set(execCodesOf(name).map((x) => x.toLowerCase())); codes.set(name, c); }
     return c;
   };
-
-  const pairs: { deal: string; line: string; score: number }[] = [];
-  for (const d of deals) {
-    for (const e of byDay.get(d.orderDay) ?? []) {
-      const sim = vehicleSimilarity(d.vehicle, e.vehicle);
-      if (sim < MIN_SIMILARITY) continue;
-      const exec = codesOf(e.execName).has(d.exec.toLowerCase());
-      const plate = d.registration != null && d.registration === e.registration;
-      const customer = sameCustomer(d.customer, e.customer);
-      if (!exec && !plate && !customer) continue;
-      const profit = d.profit != null && e.profit != null && Math.abs(d.profit - e.profit) < 0.01;
-      pairs.push({ deal: d.id, line: e.id, score: (plate ? 2 : 0) + (exec ? 1 : 0) + (customer ? 1 : 0) + (profit ? 0.5 : 0) + sim });
-    }
-  }
-  pairs.sort((a, b) => b.score - a.score || a.deal.localeCompare(b.deal) || a.line.localeCompare(b.line));
   const out = new Map<string, string>();
   const taken = new Set<string>();
-  for (const p of pairs) {
-    if (out.has(p.deal) || taken.has(p.line)) continue;
-    out.set(p.deal, p.line);
-    taken.add(p.line);
+
+  // Something besides the vehicle agrees: the exec, plate or customer on
+  // the same order day, or the plate on any day.
+  const pairs: Pair[] = [];
+  for (const d of deals) {
+    const candidates = new Set([...(byDay.get(d.orderDay) ?? []), ...(d.registration ? byPlate.get(d.registration) ?? [] : [])]);
+    for (const e of candidates) {
+      const sim = vehicleSimilarity(d.vehicle, e.vehicle);
+      if (sim < MIN_SIMILARITY) continue;
+      const sameDay = e.orderDay === d.orderDay;
+      const plate = d.registration != null && d.registration === e.registration;
+      const exec = codesOf(e.execName).has(d.exec.toLowerCase());
+      const customer = sameCustomer(d.customer, e.customer);
+      if (!sameDay && !plate) continue;
+      if (!exec && !plate && !customer) continue;
+      const profit = d.profit != null && e.profit != null && Math.abs(d.profit - e.profit) < 0.01;
+      pairs.push({ deal: d.id, line: e.id, score: (plate ? 2 : 0) + (sameDay ? 1 : 0) + (exec ? 1 : 0) + (customer ? 1 : 0) + (profit ? 0.5 : 0) + sim });
+    }
   }
+  takeBest(pairs, out, taken);
+
+  // What's left: the same order day and a close match on the vehicle.
+  const fallback: Pair[] = [];
+  for (const d of deals) {
+    if (out.has(d.id)) continue;
+    for (const e of byDay.get(d.orderDay) ?? []) {
+      if (taken.has(e.id)) continue;
+      const sim = vehicleSimilarity(d.vehicle, e.vehicle);
+      if (sim >= FALLBACK_SIMILARITY) fallback.push({ deal: d.id, line: e.id, score: sim });
+    }
+  }
+  takeBest(fallback, out, taken);
   return out;
 }

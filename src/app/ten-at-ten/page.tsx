@@ -31,18 +31,22 @@ export default async function TenAtTenPage() {
   // Response times only judges an enquiry once it has had a full working
   // day, measured from the latest MotorComplete upload (business-hours.ts).
   const reportHorizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
-  // Ford's quarterly bonus on each deal, by its delivery month, on the Basic
-  // from its Dealbook Extract line — matched on the real order day, so
-  // before a Re-Write is moved to its original's day below.
-  const { orders, deliveries } = applyBonuses({ orders: heldOrders, deliveries: heldDeliveries, extract, rates: bonusRates, names });
   // Cancellations are matched against the Dealbook. Orders counts what
   // Dealerweb's latest order list carries — an order we still hold that was
   // later cancelled, or an old copy of one, is left out — and a Re-Write's
   // re-order counts on the original order day, not the day it was keyed
   // again; the Orders tab says how many.
   const { views: cancellations, originalIds, leftOutIds, rewriteOrderDays } = await loadCancellationsReport(names);
+  // Ford's quarterly bonus on each deal, by its delivery month, on the Basic
+  // from its Dealbook Extract line. Only the orders the tab shows are
+  // matched: an old copy of an order (DEA Gate's vans before their
+  // description changed) would otherwise take the live copy's extract line.
+  // Matched on the real order day, so before a Re-Write is moved below.
+  const { orders, deliveries } = applyBonuses({
+    orders: heldOrders.filter((o) => !leftOutIds.has(o.id)), deliveries: heldDeliveries, extract, rates: bonusRates, names,
+  });
   const { lines: liveOrders, moved: rewriteMoves } = creditOrders(orders, leftOutIds, rewriteOrderDays);
-  const cancelledOrderDays = orders.filter((o) => originalIds.has(o.id)).map((o) => o.orderDay);
+  const cancelledOrderDays = heldOrders.filter((o) => originalIds.has(o.id)).map((o) => o.orderDay);
   const payload = encodeReport(rows, names);
   const ordersPayload = encodeOrders(liveOrders, names);
   const deliveriesPayload = encodeOrders(deliveries, names);

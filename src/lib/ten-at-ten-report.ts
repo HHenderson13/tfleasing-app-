@@ -347,6 +347,8 @@ export interface OrderStoredRow {
   bonusType: BonusType;
   /** The delivery day the bonus was worked out on — what its month is. */
   bonusDay: string | null;
+  /** Basic (column BQ) from the deal's Dealbook Extract line; null when no line was found. */
+  basic: number | null;
 }
 
 export interface OrderRow {
@@ -368,6 +370,8 @@ export interface OrderRow {
   bonusFlag: BonusFlag;
   bonusType: BonusType;
   bonusDay: string | null;
+  /** Basic from the deal's Dealbook Extract line — null shows the deal found none. */
+  basic: number | null;
   /** Invoice Profit + Bonuses; null without an invoice figure. */
   total: number | null;
 }
@@ -376,7 +380,7 @@ export interface OrdersPayload {
   strings: string[];
   /**
    * [dayNumber, exec, customer, model, derivative, segment, product, term, funder, delivery, profit|null,
-   *  bonus, bonusFlag index, bonusType index, bonusDay dayNumber|null]
+   *  bonus, bonusFlag index, bonusType index, bonusDay dayNumber|null, basic|null]
    */
   rows: (number | null)[][];
 }
@@ -402,6 +406,7 @@ export function encodeOrders(rows: OrderStoredRow[], execNames: Map<string, stri
       Math.max(0, BONUS_FLAGS.indexOf(r.bonusFlag)),
       Math.max(0, BONUS_TYPES.indexOf(r.bonusType)),
       r.bonusDay ? dayNumber(r.bonusDay) : null,
+      r.basic,
     ]),
   };
 }
@@ -429,6 +434,7 @@ export function decodeOrders(p: OrdersPayload): OrderRow[] {
       bonusFlag: BONUS_FLAGS[r[12] ?? 0] ?? "ok",
       bonusType: BONUS_TYPES[r[13] ?? 0] ?? "ICE Car",
       bonusDay: r[14] == null ? null : dayFromNumber(r[14]),
+      basic: r[15] ?? null,
       total,
     };
   });

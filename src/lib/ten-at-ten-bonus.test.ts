@@ -109,13 +109,43 @@ describe("matching a deal to its Dealbook Extract line", () => {
     expect(m.get("hill")).toBe("byrne");
   });
 
-  it("needs more than the vehicle: a different exec, plate and customer is a different deal", () => {
+  it("ties a registration across a moved order date", () => {
+    // City Sign & Graphics' van: 1 Oct on the order list, 19 Oct on the
+    // extract under the person (Carl Cox), same exec and plate.
     const m = matchExtract(
-      [deal({ id: "a", exec: "OlMa", customer: "Someone Else Ltd", vehicle: "Explorer 210kW 79kWh Style" })],
-      [line({ id: "b", customer: "Mr Gary Blackburn", vehicle: "Explorer Explorer 210kW 79kWh Style" })],
+      [deal({ id: "citysign", orderDay: "2026-10-01", exec: "LoBa", customer: "City Sign & Graphics Ltd", vehicle: "Transit Custom 320L1 2.0TDCi 136 EcoBlue Limited 4 Door 3 Seat", registration: "MW76EJO" })],
+      [line({ id: "cox", orderDay: "2026-10-19", execName: "Lou Bailey", customer: "Mr Carl Cox", vehicle: "Transit Custom Transit Custom 320L1 2.0TDCi 136 EcoBlue Limited", registration: "MW76EJO" })],
       codes,
     );
-    expect(m.size).toBe(0);
+    expect(m.get("citysign")).toBe("cox");
+    // Without the plate, a moved date is a different deal.
+    expect(matchExtract([deal({ id: "a", orderDay: "2026-10-01", exec: "LoBa", vehicle: "Transit Custom 320L1 2.0TDCi 136 EcoBlue Limited" })],
+      [line({ id: "b", orderDay: "2026-10-19", execName: "Lou Bailey", vehicle: "Transit Custom Transit Custom 320L1 2.0TDCi 136 EcoBlue Limited" })], codes).size).toBe(0);
+  });
+
+  it("falls back to the order date and vehicle when nothing else agrees", () => {
+    // The business on the order list, the person on the extract, and a
+    // different exec name: same day, same vehicle — very likely the deal.
+    const m = matchExtract(
+      [deal({ id: "atlantic", orderDay: "2026-10-16", exec: "DoJa", customer: "Atlantic Fish (Wholesale Ltd)", vehicle: "Transit Custom Double Cab In 320L1 2.0TDCi EcoBlue Sport Auto 2 Door 3 Seat" })],
+      [line({ id: "taylor", orderDay: "2026-10-16", execName: "Someone Else", customer: "Mr Jack Taylor", vehicle: "Transit Custom Double Cab In Transit Custom 320L1 Doublecab Van 2.0TDCi EcoBlue Sport Auto" })],
+      codes,
+    );
+    expect(m.get("atlantic")).toBe("taylor");
+    // But only with lines nothing better claimed: the deal the exec ties to the line keeps it.
+    const two = matchExtract(
+      [
+        deal({ id: "fallback", exec: "OlMa", customer: "Someone Else Ltd", vehicle: "Explorer 210kW 79kWh Style" }),
+        deal({ id: "real", customer: "ORION SCREEN PROCESS LIMITED", vehicle: "Explorer 210kW 79kWh Style" }),
+      ],
+      [line({ id: "blackburn", customer: "Mr Gary Blackburn", vehicle: "Explorer Explorer 210kW 79kWh Style" })],
+      codes,
+    );
+    expect(two.get("real")).toBe("blackburn");
+    expect(two.has("fallback")).toBe(false);
+    // And the vehicle must really agree: a loose likeness isn't enough on its own.
+    expect(matchExtract([deal({ id: "a", exec: "OlMa", vehicle: "Explorer 210kW 79kWh Style 5 Door 5 Seat" })],
+      [line({ id: "b", execName: "Someone Else", vehicle: "Explorer Explorer 210kW 79kWh Select Driver Assist Pack" })], codes).size).toBe(0);
     // Nor a different vehicle on the same day by the same exec.
     expect(matchExtract([deal({ id: "a", vehicle: "Transit Custom 320L1 2.0TDCi 136 EcoBlue Limited" })],
       [line({ id: "b", vehicle: "Capri Capri 210kW 79kWh Premium" })], codes).size).toBe(0);

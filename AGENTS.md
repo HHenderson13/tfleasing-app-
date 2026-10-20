@@ -1076,14 +1076,30 @@ rates and the extract held by `lib/ten-at-ten-store.ts`.
   isn't headed Basic. Other columns are read by header. Dates are UK,
   day first, so the CSV is read as text — never let it be type-guessed.
 - **Matching is at read time** (`matchExtract`), never stored. The extract
-  names the exec in full and the contact, not the account ("Mr Pedro
-  Condez" vs "Pedro Condez T/A P D Carpentry"), and delivery date and profit
-  move between downloads, so: same order day, vehicle text alike (Dice ≥
-  0.5 over words), and at least one of exec / plate / customer; scored and
-  taken best-first, one to one. On the 19–20 Oct 2026 files: Oct deliveries
-  80 of 82, Nov 51/51, Dec 26/26 — the two misses aren't in the 20 Oct
-  extract at all. A deal due a % with no Basic shows only its £ part, flagged
+  names the exec in full and the person who placed the order, not the
+  business ("Mr Jack Taylor" for Atlantic Fish (Wholesale Ltd); the enquiry
+  log shows both, "City Sign & Graphics Ltd (Cox)"), and delivery date,
+  profit — even the order date — move between downloads. So, first: vehicle
+  text alike (Dice ≥ 0.5 over words) and the same order day with one of
+  exec / plate / customer agreeing, or the same plate on any day. Then the
+  user's fallback (2026-10-20) for what's left: same order day and vehicle
+  alike at ≥ 0.8, only between lines nothing better claimed. Best-first,
+  one to one, each pass.
+- **Only the orders the tab shows are matched** (page.tsx runs
+  `applyBonuses` after `loadCancellationsReport`, on held orders less
+  `leftOutIds`). An old copy of an order — DEA Gate's vans before Dealerweb
+  changed their description — otherwise took the live copy's extract line,
+  leaving the shown order with no Basic. Live data, 20 Oct 2026: 50 of 53
+  shown orders and all 165 delivery lines found their Basic; the three that
+  didn't deliver in Apr/May 2027, which no extract covers yet.
+- **Mapping is visible:** each customer list has a Basic column ("not
+  found" when no extract line matched), and the bonus reads "no scheme ·
+  Mar 2027" in words, so a month without rates never looks like a deal that
+  didn't map. A deal due a % with no Basic shows only its £ part, flagged
   `noBasic` and called out under the tiles.
+- **Checking live data:** `turso db tokens create tfleasing --read-only
+  --expiration 1d` (the CLI is signed in; `.env.production.local` holds
+  blanks), then `@libsql/client` — read-only, never print the token.
 - Real figures, Oct 2026 deliveries: invoice −£21,598 (= the delivered
   list's NEW TOTALS), bonuses £101,787, total £80,189, £978 a unit. The PDF
   stays seven pages; its tables show Invoice / Bonus / Total / Avg (no Loss
