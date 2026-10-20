@@ -1181,9 +1181,53 @@ export const tenAtTenBudgets = sqliteTable(
   }),
 );
 
+// Ford's quarterly bonus by delivery month, per ICE Car | BEV Car | ICE Van |
+// BEV Van: a percentage of Basic and/or £ per unit (lib/ten-at-ten-bonus.ts).
+// A month with no rows has no scheme set. Edited on the upload page.
+export const tenAtTenBonusRates = sqliteTable(
+  "ten_at_ten_bonus_rates",
+  {
+    yearMonth: text("year_month").notNull(),          // "2026-10"
+    vehicle: text("vehicle").notNull(),               // ICE Car | BEV Car | ICE Van | BEV Van
+    pct: real("pct").notNull().default(0),            // % of Basic
+    amount: real("amount").notNull().default(0),      // £ per unit
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.yearMonth, t.vehicle] }),
+  }),
+);
+
+// The Dealbook Extract (CSV): the delivered list with every column, held for
+// Basic (column BQ), which a percentage bonus is paid on. Matched to the
+// order and delivered lists when the report is read, never stored.
+export const tenAtTenExtract = sqliteTable(
+  "ten_at_ten_extract",
+  {
+    id: text("id").primaryKey(),
+    orderDay: text("order_day").notNull(),
+    deliveryDay: text("delivery_day").notNull(),
+    deliveryStatus: text("delivery_status"),          // Delivered | Arrived | Due
+    execName: text("exec_name").notNull(),            // SE, full name
+    customer: text("customer").notNull(),
+    vehicleRaw: text("vehicle_raw"),                  // Model: range then derivative
+    vehicleType: text("vehicle_type"),                // Car | LCV
+    registration: text("registration"),               // normalised plate
+    vin: text("vin"),
+    basic: real("basic"),                             // BQ
+    options: real("options"),
+    profit: real("profit"),                           // ACT Total Gross Profit
+    addBonus: real("add_bonus"),                      // ACT Add. Bonus (inside profit)
+    firstUploadedAt: integer("first_uploaded_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => ({
+    byDeliveryDay: index("idx_ten_at_ten_extract_day").on(t.deliveryDay),
+  }),
+);
+
 export const tenAtTenUploads = sqliteTable("ten_at_ten_uploads", {
   id: text("id").primaryKey(),
-  kind: text("kind").notNull().default("enquiries"), // enquiries | orders | deliveries | response | cancellations
+  kind: text("kind").notNull().default("enquiries"), // enquiries | orders | deliveries | response | cancellations | extract
   filename: text("filename").notNull(),
   rowsInFile: integer("rows_in_file").notNull(),
   inserted: integer("inserted").notNull(),

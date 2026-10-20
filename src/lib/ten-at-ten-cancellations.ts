@@ -20,6 +20,20 @@ import { execCodeFromName } from "./sales-leaderboard";
 import { isExcludedExec, vehicleOf } from "./ten-at-ten";
 
 export { execCodeFromName };
+
+/**
+ * Cancelled Orders and the Dealbook Extract name execs in full; the Dealbook
+ * uses codes. A name's codes are whatever the Pole Position map gives it,
+ * plus Dealerweb's own convention (first two letters of first and last name).
+ */
+export function execCodeLookup(names: Map<string, string>): (name: string) => string[] {
+  const codesByName = new Map<string, string[]>();
+  for (const [code, name] of names) {
+    const k = name.toLowerCase();
+    codesByName.set(k, [...(codesByName.get(k) ?? []), code]);
+  }
+  return (name: string) => [...(codesByName.get(name.toLowerCase()) ?? []), execCodeFromName(name)];
+}
 import { cancelledHeaderFound, cleanVehicle, exportedAtOf, isCancelledOrdersHeader, plateOf, segmentOf } from "./ten-at-ten-orders";
 import type { CreditedReOrder, Segment } from "./ten-at-ten-report";
 

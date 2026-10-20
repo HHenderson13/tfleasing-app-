@@ -36,12 +36,14 @@ import {
   groupRows,
   inRange,
   inboundPct,
+  invoiceProfit,
   orderDimLabel,
   orderStatsOf,
   rangeFor,
   rewritesAcross,
   statsOf,
   topInboundExecs,
+  totalProfit,
   type CreditedReOrder,
   type DimKey,
   type Nested,
@@ -60,10 +62,11 @@ import {
   type Budgets,
   type CancellationView,
 } from "@/lib/ten-at-ten-report";
+import { BONUS_TYPES, ratesText, type BonusRates, type BonusType } from "@/lib/ten-at-ten-bonus";
 import { saveCancellationNoteAction, setCancellationStatusAction } from "./actions";
 import type { PdfReportInput } from "./pdf-report";
 import {
-  MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, dayLabel, fastestFirst, firstName, gapText, gbp, int,
+  BONUS_TYPE_COLOURS, MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, bonusGaps, dayLabel, fastestFirst, firstName, gapText, gbp, int, monthsText,
   isProper, marketTotals, needsReason, ordersAdjusted, pct, scrapeWhen, share, shortDate, timeTone,
 } from "./shared";
 
@@ -95,8 +98,10 @@ function UploadHint({ file }: { file: string }) {
     : <> It appears once {file} has been uploaded.</>;
 }
 
-export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, rewriteMoves, market, canManage = false }: {
+export function ReportClient({ payload, orders, deliveries, budgets, bonusRates, responses, reportHorizon, today, cancellations, cancelledOrderDays, rewriteMoves, market, canManage = false }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
+  /** Ford's quarterly bonus by delivery month — the rates each deal's bonus was worked out on. */
+  bonusRates: BonusRates;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
   /** Every cancellation, already classified on the server. */
   cancellations: CancellationView[];
@@ -201,9 +206,9 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
-      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range}
+      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range} bonusRates={bonusRates}
         cancelledDays={cancelledOrderDays} rewriteMoves={rewriteMoves} onShowCancellations={() => setSection("cancellations")} />}
-      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
+      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} bonusRates={bonusRates} budgets={budgets} today={today} />}
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
       {section === "market" && <MarketSection market={market} />}
     </div>
@@ -628,12 +633,21 @@ function Money({ n }: { n: number | null }) {
   return <span className={`whitespace-nowrap ${n != null && n < 0 ? "text-rose-700" : ""}`}>{gbp(n)}</span>;
 }
 
-// The count column reads "Orders" or "Deliveries" to match the tab.
+// A bonus of nothing reads £0, quietly.
+function BonusMoney({ n }: { n: number }) {
+  return n === 0 ? <span className="text-slate-400">£0</span> : <Money n={n} />;
+}
+
+// The count column reads "Orders" or "Deliveries" to match the tab. Profit
+// three ways (user, 2026-10-20): Invoice (Total Gross), Bonuses, and the
+// two together, which the average and loss-making run on.
 const orderCols = (unit: string): Col<OrderStats>[] => [
   { key: "orders", label: unit, render: (g) => int(g.stats.orders) },
   { key: "share", label: "Share", left: true, render: (g) => <ShareCell share={g.share} /> },
-  { key: "profit", label: "Total profit", render: (g) => <Money n={g.stats.priced ? g.stats.profit : null} /> },
-  { key: "avg", label: "Avg profit", strong: true, render: (g) => <Money n={avgProfit(g.stats)} /> },
+  { key: "invoice", label: "Invoice profit", render: (g) => <Money n={invoiceProfit(g.stats)} /> },
+  { key: "bonus", label: "Bonuses", render: (g) => <BonusMoney n={g.stats.bonus} /> },
+  { key: "total", label: "Total profit", render: (g) => <Money n={totalProfit(g.stats)} /> },
+  { key: "avg", label: "Avg per unit", strong: true, render: (g) => <Money n={avgProfit(g.stats)} /> },
   { key: "loss", label: "Loss-making", render: (g) => <span className={g.stats.loss ? "text-rose-700" : "text-slate-400"}>{int(g.stats.loss)}</span> },
 ];
 const ORDER_COLS = orderCols("Orders");
@@ -648,8 +662,8 @@ type StatusName = (typeof STATUSES)[number];
 // Orders and Deliveries are the same Dealbook report counted two ways —
 // by order date, or by delivery date with a status — so one section serves
 // both. Deliveries adds the status filter and the department budget panel.
-function DealbookSection({ all, range, variant, budgets, today, cancelledDays, rewriteMoves, onShowCancellations }: {
-  all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets; today?: string;
+function DealbookSection({ all, range, variant, bonusRates, budgets, today, cancelledDays, rewriteMoves, onShowCancellations }: {
+  all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; bonusRates: BonusRates; budgets?: Budgets; today?: string;
   cancelledDays?: string[]; rewriteMoves?: CreditedReOrder[]; onShowCancellations?: () => void;
 }) {
   const isDel = variant === "deliveries";
@@ -685,19 +699,20 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, r
   const delivered = rows.filter((r) => r.delivery === "Delivered").length;
   const cancelledHere = (cancelledDays ?? []).filter((d) => d >= range.startDay && d <= range.endDay).length;
   const rewrites = rewritesAcross(rewriteMoves ?? [], range);
+  // Invoice Profit, Bonuses and the two together; the highlighted average is on total.
+  const profitTiles = [
+    { label: "Invoice profit", value: gbp(invoiceProfit(s)), sub: s.orders > s.priced ? `Total Gross · ${int(s.orders - s.priced)} without a figure yet` : "Total Gross" },
+    { label: "Bonuses", value: gbp(s.bonus), sub: "Ford quarterly, by delivery date" },
+    { label: "Total profit", value: gbp(totalProfit(s)), tone: (totalProfit(s) ?? 0) < 0 ? "bad" as const : undefined },
+    { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true, sub: "invoice + bonus" },
+  ];
   const tiles = isDel
     ? [
       { label: "Going", value: int(rows.length), sub: "delivered + arrived + due" },
       { label: "Delivered", value: int(delivered), sub: rows.length ? `${Math.round((delivered / rows.length) * 100)}% of what's going` : undefined },
       { label: "Still to deliver", value: int(rows.length - delivered), sub: `${int(rows.filter((r) => r.delivery === "Arrived").length)} arrived · ${int(rows.filter((r) => r.delivery !== "Delivered" && r.delivery !== "Arrived").length)} due` },
-      { label: "Total profit", value: gbp(s.priced ? s.profit : null) },
-      { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true },
     ]
-    : [
-      { label: "Orders", value: int(s.orders), sub: s.orders > s.priced ? `${int(s.orders - s.priced)} without a profit figure yet` : undefined },
-      { label: "Total profit", value: gbp(s.priced ? s.profit : null) },
-      { label: "Avg profit per unit", value: gbp(avgProfit(s)), hero: true },
-    ];
+    : [{ label: "Orders", value: int(s.orders) }, ...profitTiles];
 
   return (
     <div className="space-y-5">
@@ -737,18 +752,20 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, r
         </div>
       )}
       <Tiles tiles={tiles} />
+      {isDel && <Tiles tiles={profitTiles} />}
       {rows.length === 0 ? (
         <Empty>No {noun} in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
       ) : (
         <>
           <SegmentCards rows={rows} noun={isDel ? "deliveries" : "orders"} />
+          <BonusCard rows={rows} rates={bonusRates} noun={noun} />
           {/* The two tables that open into customer lists get the full width. */}
           <OrderBreakdown title="By exec" note="Click an exec for their customers" rows={rows} dims={O_EXEC} customers="date" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
           <div className="grid gap-5 lg:grid-cols-2">
             <OrderBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={O_MODEL} cols={cols} />
             <OrderBreakdown title="By funder" note="Click a funder for its models" rows={rows} dims={O_FUNDER} cols={cols} />
           </div>
-          <OrderBreakdown title="Profit bands" note="Click a band for its customers" rows={rows} dims={O_BAND} defaultSort="label" customers="profit" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
+          <OrderBreakdown title="Profit bands" note="By total profit · click a band for its customers" rows={rows} dims={O_BAND} defaultSort="label" customers="profit" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
           <BestWorst rows={rows} title={isDel ? "Most and least profitable deliveries" : "Most and least profitable orders"} />
           <OrderBuilder rows={rows} cols={cols} />
         </>
@@ -861,14 +878,69 @@ function SegmentCards({ rows, noun = "orders" }: { rows: OrderRow[]; noun?: stri
             </div>
             <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Avg profit per unit</div>
             <div className={`text-3xl font-bold tabular-nums ${avg != null && avg < 0 ? "text-rose-700" : "text-slate-900"}`}>{gbp(avg)}</div>
-            <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
-              <span>Total <b className="tabular-nums">{st ? gbp(st.priced ? st.profit : null) : "—"}</b></span>
+            <div className="mt-2 flex flex-wrap justify-between gap-x-3 border-t border-slate-100 pt-2 text-xs text-slate-600">
+              <span>Invoice <b className="tabular-nums">{st ? gbp(invoiceProfit(st)) : "—"}</b> · bonuses <b className="tabular-nums">{st ? gbp(st.bonus) : "—"}</b></span>
               <span>Loss-making <b className={`tabular-nums ${st?.loss ? "text-rose-700" : ""}`}>{st ? int(st.loss) : "—"}</b></span>
             </div>
           </div>
         );
       })}
     </div>
+  );
+}
+
+// Ford's quarterly bonus by type: each type's rate in the months these deals
+// deliver, how many there are and what they earn. Underneath, anything the
+// bonus is short of — a percentage due with no Basic held, or a delivery
+// month with no scheme set — so a low figure is never mistaken for a final one.
+function BonusCard({ rows, rates, noun }: { rows: OrderRow[]; rates: BonusRates; noun: string }) {
+  const canManage = useContext(CanManage);
+  const byType = useMemo(() => {
+    const m = new Map<BonusType, { units: number; bonus: number; months: Set<string> }>(BONUS_TYPES.map((t) => [t, { units: 0, bonus: 0, months: new Set() }]));
+    for (const r of rows) {
+      const t = m.get(r.bonusType)!;
+      t.units++;
+      t.bonus += r.bonus;
+      if (r.bonusDay) t.months.add(r.bonusDay.slice(0, 7));
+    }
+    return m;
+  }, [rows]);
+  const gaps = useMemo(() => bonusGaps(rows), [rows]);
+  const total = rows.reduce((n, r) => n + r.bonus, 0);
+  const where = canManage
+    ? <>Rates are set under <a href="/ten-at-ten/admin#bonuses" className="font-medium text-indigo-600">Upload data</a>.</>
+    : null;
+  return (
+    <Card title="Bonuses by type" note={`Ford's quarterly bonus · by delivery month · ${gbp(total)} on these ${noun}`}>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {BONUS_TYPES.map((t) => {
+          const x = byType.get(t)!;
+          return (
+            <div key={t} className="rounded-xl bg-slate-50 px-3 py-2" style={{ borderLeft: `3px solid ${BONUS_TYPE_COLOURS[t]}` }}>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{t}</div>
+              <div className="text-xl font-bold tabular-nums text-slate-900">{gbp(x.bonus)}</div>
+              <div className="text-xs text-slate-600">{int(x.units)} {x.units === 1 ? "unit" : "units"}{x.units ? ` · ${gbp(x.bonus / x.units)} each` : ""}</div>
+              {x.units > 0 && <div className="mt-0.5 text-[11px] leading-snug text-slate-500">{ratesText(t, [...x.months], rates)}</div>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 space-y-1 text-xs text-slate-600">
+        <p>Paid on delivery, so each deal earns its type&apos;s rate in the month it delivers — Arrived and Due at the date Dealerweb gives it now. On top of Dealerweb&apos;s own Additional Bonus, which is already in Invoice profit. {where}</p>
+        {gaps.noBasic > 0 && (
+          <p className="font-medium text-amber-700">
+            {int(gaps.noBasic)} {gaps.noBasic === 1 ? "deal is" : "deals are"} due a percentage with no Basic price held, so only {gaps.noBasic === 1 ? "its" : "their"} £ bonus is counted.
+            {canManage ? " Upload the Dealbook Extract for their delivery month." : " It fills in once the Dealbook Extract for their delivery month is uploaded."}
+          </p>
+        )}
+        {gaps.noScheme > 0 && (
+          <p className="font-medium text-amber-700">
+            {int(gaps.noScheme)} {gaps.noScheme === 1 ? "deal delivers" : "deals deliver"} in {gaps.noSchemeMonths.length === 1 ? "a month" : "months"} with no bonus scheme set{gaps.noSchemeMonths.length ? ` (${monthsText(gaps.noSchemeMonths)})` : ""}, so {gaps.noScheme === 1 ? "it shows" : "they show"} no bonus yet.
+          </p>
+        )}
+        {gaps.noDate > 0 && <p className="text-slate-500">{int(gaps.noDate)} without a delivery date in Dealerweb, so no bonus.</p>}
+      </div>
+    </Card>
   );
 }
 
@@ -888,12 +960,25 @@ function OrderBreakdown({ title, note, rows, dims, defaultSort = "orders", custo
   );
 }
 
+// A deal's bonus, and why it is what it is when it isn't the whole story.
+function BonusCell({ r }: { r: OrderRow }) {
+  const month = r.bonusDay ? monthsText([r.bonusDay.slice(0, 7)]) : null;
+  if (r.bonusFlag === "noScheme") return <span className="text-slate-400" title={`No bonus scheme set for ${month}`}>—</span>;
+  if (r.bonusFlag === "noDate") return <span className="text-slate-400" title="No delivery date in Dealerweb">—</span>;
+  return (
+    <span title={`${r.bonusType}, delivering ${month}`}>
+      <BonusMoney n={r.bonus} />
+      {r.bonusFlag === "noBasic" && <span className="ml-1 text-[10px] font-semibold text-amber-700" title="A percentage is due but no Basic price is held — upload the Dealbook Extract">no Basic</span>}
+    </span>
+  );
+}
+
 // One line per order: who bought what, when, how it was funded, and what it made.
 function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLabel = "Delivery" }: {
   rows: OrderRow[]; by: "date" | "profit"; showExec?: boolean; dateLabel?: string; statusLabel?: string;
 }) {
   const sorted = useMemo(() => [...rows].sort((a, b) =>
-    by === "date" ? b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer) : (a.profit ?? Infinity) - (b.profit ?? Infinity),
+    by === "date" ? b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer) : (a.total ?? Infinity) - (b.total ?? Infinity),
   ), [rows, by]);
   return (
     <table className="w-full text-xs">
@@ -905,7 +990,9 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
           <th className="px-2 py-1 text-left font-semibold">{dateLabel}</th>
           <th className="px-2 py-1 text-left font-semibold">Funder</th>
           <th className="px-2 py-1 text-left font-semibold">{statusLabel}</th>
-          <th className="px-2 py-1 text-right font-semibold">Profit</th>
+          <th className="px-2 py-1 text-right font-semibold">Invoice</th>
+          <th className="px-2 py-1 text-right font-semibold">Bonus</th>
+          <th className="px-2 py-1 text-right font-semibold">Total</th>
         </tr>
       </thead>
       <tbody>
@@ -917,7 +1004,9 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(r.day)}</td>
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.funder}</td>
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.delivery}</td>
-            <td className="px-2 py-1 text-right font-semibold tabular-nums"><Money n={r.profit} /></td>
+            <td className="px-2 py-1 text-right tabular-nums text-slate-600"><Money n={r.profit} /></td>
+            <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-600"><BonusCell r={r} /></td>
+            <td className="px-2 py-1 text-right font-semibold tabular-nums"><Money n={r.total} /></td>
           </tr>
         ))}
       </tbody>
@@ -925,8 +1014,9 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
   );
 }
 
+// On total profit — invoice plus bonus — with the split under each.
 function BestWorst({ rows, title = "Most and least profitable orders" }: { rows: OrderRow[]; title?: string }) {
-  const priced = useMemo(() => rows.filter((r) => r.profit != null).sort((a, b) => (b.profit as number) - (a.profit as number)), [rows]);
+  const priced = useMemo(() => rows.filter((r) => r.total != null).sort((a, b) => (b.total as number) - (a.total as number)), [rows]);
   if (priced.length < 2) return null;
   const n = Math.min(5, Math.floor(priced.length / 2));
   const list = (title: string, items: OrderRow[]) => (
@@ -942,7 +1032,10 @@ function BestWorst({ rows, title = "Most and least profitable orders" }: { rows:
                   {r.derivative.replace(" (model only)", "")} · {r.exec} · {shortDate(r.day)}
                 </div>
               </td>
-              <td className="py-1.5 text-right font-semibold tabular-nums"><Money n={r.profit} /></td>
+              <td className="py-1.5 text-right tabular-nums">
+                <div className="font-semibold"><Money n={r.total} /></div>
+                <div className="whitespace-nowrap text-[11px] text-slate-500">{gbp(r.profit)} + {gbp(r.bonus)} bonus</div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -1624,8 +1717,8 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
 
       <SummaryCard title="Orders" onOpen={() => open("orders")} stats={[
         { label: "Orders", value: int(o.orders), sub: ordersAdjusted(cancelledHere, rewritesOut) },
-        { label: "Total profit", value: gbp(o.priced ? o.profit : null) },
-        { label: "Avg per unit", value: gbp(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined },
+        { label: "Total profit", value: gbp(totalProfit(o)), sub: `${gbp(invoiceProfit(o))} invoice + ${gbp(o.bonus)} bonuses` },
+        { label: "Avg per unit", value: gbp(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined, sub: "invoice + bonus" },
       ]}>
         {o.orders > 0 && (
           <>

@@ -7,13 +7,15 @@ import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads }
 import { wallClockFromInstant } from "./business-hours";
 import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
 import {
-  execCodeFromName, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf, staleOrderIds,
+  execCodeLookup, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf, staleOrderIds,
   type CancellationParse, type CancellationStatus, type DealbookLine, type TenAtTenCancellation,
 } from "./ten-at-ten-cancellations";
+import { BONUS_TYPES, type BonusRate, type BonusRates, type BonusType, type ExtractMatchLine } from "./ten-at-ten-bonus";
+import type { DealbookStored, ExtractLine, ExtractParse } from "./ten-at-ten-extract";
 import { plateOf, type OrderParse, type TenAtTenOrder } from "./ten-at-ten-orders";
-import type { Budgets, CancellationView, OrderStoredRow, StoredRow } from "./ten-at-ten-report";
+import type { Budgets, CancellationView, StoredRow } from "./ten-at-ten-report";
 
-export type { Budgets };
+export type { Budgets, BonusRates };
 
 export interface TenAtTenIngest {
   rowsInFile: number;
@@ -309,17 +311,28 @@ export async function ingestDealbook(
   return result;
 }
 
-export async function loadTenAtTenOrders(): Promise<(OrderStoredRow & { id: string })[]> {
-  const rows = await db.all<{
-    id: string; order_day: string; exec: string; customer: string; model: string; derivative: string | null; derivative_key: string | null;
-    segment: string; product: string | null; term_months: number | null; funder: string | null; delivery: string | null; profit: number | null;
-  }>(sql`SELECT id, order_day, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder, delivery, profit
-         FROM ten_at_ten_orders ORDER BY ordered_at`);
-  return rows.map((r) => ({
-    id: r.id, orderDay: r.order_day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative,
-    derivativeKey: r.derivative_key, segment: r.segment, product: r.product ?? "", termMonths: r.term_months,
-    funder: r.funder ?? "", delivery: r.delivery ?? "", profit: r.profit == null ? null : Number(r.profit),
-  }));
+type DealbookDbRow = {
+  id: string; order_day: string; exec: string; customer: string; model: string; derivative: string | null; derivative_key: string | null;
+  segment: string; product: string | null; term_months: number | null; funder: string | null; delivery: string | null;
+  delivery_day: string | null; vehicle_raw: string | null; registration: string | null; profit: number | null;
+  last_seen_at: number | null; first_uploaded_at: number;
+};
+
+const dealbookStored = (r: DealbookDbRow): DealbookStored => ({
+  id: r.id, orderDay: r.order_day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative,
+  derivativeKey: r.derivative_key, segment: r.segment, product: r.product ?? "", termMonths: r.term_months,
+  funder: r.funder ?? "", delivery: r.delivery ?? "", deliveryDay: r.delivery_day, vehicleRaw: r.vehicle_raw ?? "",
+  // Re-read, so a placeholder stored before plateOf knew better is no plate.
+  registration: plateOf(r.registration), profit: r.profit == null ? null : Number(r.profit),
+  seenAt: r.last_seen_at != null ? Number(r.last_seen_at) : wallClockFromInstant(Number(r.first_uploaded_at) * 1000),
+});
+
+export async function loadTenAtTenOrders(): Promise<DealbookStored[]> {
+  const rows = await db.all<DealbookDbRow>(sql`
+    SELECT id, order_day, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder, delivery,
+           delivery_day, vehicle_raw, registration, profit, last_seen_at, first_uploaded_at
+    FROM ten_at_ten_orders ORDER BY ordered_at`);
+  return rows.map(dealbookStored);
 }
 
 export async function loadTenAtTenRows(): Promise<StoredRow[]> {
@@ -378,22 +391,177 @@ export async function recordResponseUpload(result: TenAtTenIngest, meta: { filen
   });
 }
 
-/**
- * Deliveries for the report, shaped as order rows so the Orders views can be
- * reused: `orderDay` carries the DELIVERY day (the month a vehicle counts
- * in) and `delivery` its status — Delivered, Arrived or Due.
- */
-export async function loadTenAtTenDeliveries(): Promise<OrderStoredRow[]> {
+/** Deliveries as held; `delivery` is the status — Delivered, Arrived or Due. */
+export async function loadTenAtTenDeliveries(): Promise<DealbookStored[]> {
+  const rows = await db.all<DealbookDbRow>(sql`
+    SELECT id, order_day, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder,
+           delivery_status AS delivery, delivery_day, vehicle_raw, registration, profit, last_seen_at, first_uploaded_at
+    FROM ten_at_ten_deliveries WHERE delivery_day IS NOT NULL ORDER BY delivery_day`);
+  return rows.map(dealbookStored);
+}
+
+// ─── Bonuses ───────────────────────────────────────────────────────────────
+
+/** The Dealbook Extract as held, for matching and Basic. */
+export async function loadExtractLines(): Promise<(ExtractMatchLine & { basic: number | null; deliveryDay: string })[]> {
   const rows = await db.all<{
-    delivery_day: string; delivery_status: string | null; exec: string; customer: string; model: string; derivative: string | null;
-    derivative_key: string | null; segment: string; product: string | null; term_months: number | null; funder: string | null; profit: number | null;
-  }>(sql`SELECT delivery_day, delivery_status, exec, customer, model, derivative, derivative_key, segment, product, term_months, funder, profit
-         FROM ten_at_ten_deliveries WHERE delivery_day IS NOT NULL ORDER BY delivery_day`);
+    id: string; order_day: string; delivery_day: string; exec_name: string; customer: string; vehicle_raw: string | null;
+    registration: string | null; basic: number | null; profit: number | null;
+  }>(sql`SELECT id, order_day, delivery_day, exec_name, customer, vehicle_raw, registration, basic, profit FROM ten_at_ten_extract`);
   return rows.map((r) => ({
-    orderDay: r.delivery_day, exec: r.exec, customer: r.customer, model: r.model, derivative: r.derivative,
-    derivativeKey: r.derivative_key, segment: r.segment, product: r.product ?? "", termMonths: r.term_months,
-    funder: r.funder ?? "", delivery: r.delivery_status ?? "", profit: r.profit == null ? null : Number(r.profit),
+    id: r.id, orderDay: r.order_day, deliveryDay: r.delivery_day, execName: r.exec_name, customer: r.customer,
+    vehicle: r.vehicle_raw ?? "", registration: plateOf(r.registration),
+    basic: r.basic == null ? null : Number(r.basic), profit: r.profit == null ? null : Number(r.profit),
   }));
+}
+
+export async function loadBonusRates(): Promise<BonusRates> {
+  const rows = await db.all<{ year_month: string; vehicle: string; pct: number; amount: number }>(
+    sql`SELECT year_month, vehicle, pct, amount FROM ten_at_ten_bonus_rates`,
+  );
+  const out: BonusRates = {};
+  for (const r of rows) {
+    if (!(BONUS_TYPES as readonly string[]).includes(r.vehicle)) continue;
+    (out[r.year_month] ??= {})[r.vehicle as BonusType] = { pct: Number(r.pct), amount: Number(r.amount) };
+  }
+  return out;
+}
+
+/**
+ * Save bonus rates a month at a time: every type is written (a blank is
+ * nothing for that type), and `rates: null` clears the month — no scheme set.
+ */
+export async function saveBonusRates(months: { yearMonth: string; rates: Record<BonusType, BonusRate> | null }[]): Promise<void> {
+  for (const m of months) {
+    if (!m.rates) {
+      await db.run(sql`DELETE FROM ten_at_ten_bonus_rates WHERE year_month = ${m.yearMonth}`);
+      continue;
+    }
+    for (const type of BONUS_TYPES) {
+      const r = m.rates[type];
+      await db.run(sql`
+        INSERT INTO ten_at_ten_bonus_rates (year_month, vehicle, pct, amount) VALUES (${m.yearMonth}, ${type}, ${r.pct}, ${r.amount})
+        ON CONFLICT(year_month, vehicle) DO UPDATE SET pct = excluded.pct, amount = excluded.amount
+      `);
+    }
+  }
+}
+
+// ─── Dealbook Extract ──────────────────────────────────────────────────────
+
+type ExtractComparable = Omit<ExtractLine, "id" | "orderDay" | "customer" | "vehicleRaw">;
+const EXTRACT_FIELDS = ["deliveryDay", "deliveryStatus", "execName", "vehicleType", "registration", "vin", "basic", "options", "profit", "addBonus"] as const;
+const sameExtract = (a: ExtractComparable, b: ExtractComparable) => EXTRACT_FIELDS.every((f) => a[f] === b[f]);
+
+/**
+ * Merge a Dealbook Extract, line by line, like every other upload. It is
+ * the complete list for its delivery month(s), as Dealbook – Deliveries is,
+ * so lines held for those months that it no longer carries are removed.
+ */
+export async function ingestExtract(parsed: ExtractParse, meta: { filename: string; userId: string }): Promise<TenAtTenIngest> {
+  const now = new Date();
+  const nowSec = Math.floor(now.getTime() / 1000);
+  let removed = 0;
+
+  for (let i = 0; i < parsed.excludedIds.length; i += 400) {
+    const slice = parsed.excludedIds.slice(i, i + 400);
+    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ten_at_ten_extract WHERE id IN (${inList(slice)})`);
+    if (Number(c?.n ?? 0) > 0) {
+      await db.run(sql`DELETE FROM ten_at_ten_extract WHERE id IN (${inList(slice)})`);
+      removed += Number(c.n);
+    }
+  }
+
+  const existing = new Map<string, ExtractComparable>();
+  const ids = parsed.rows.map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 400) {
+    const found = await db.all<{
+      id: string; delivery_day: string; delivery_status: string | null; exec_name: string; vehicle_type: string | null; registration: string | null;
+      vin: string | null; basic: number | null; options: number | null; profit: number | null; add_bonus: number | null;
+    }>(sql`SELECT id, delivery_day, delivery_status, exec_name, vehicle_type, registration, vin, basic, options, profit, add_bonus
+           FROM ten_at_ten_extract WHERE id IN (${inList(ids.slice(i, i + 400))})`);
+    for (const f of found) {
+      const num = (x: number | null) => (x == null ? null : Number(x));
+      existing.set(f.id, {
+        deliveryDay: f.delivery_day, deliveryStatus: (f.delivery_status ?? "Not stated") as ExtractLine["deliveryStatus"], execName: f.exec_name,
+        vehicleType: f.vehicle_type ?? "", registration: f.registration, vin: f.vin, basic: num(f.basic), options: num(f.options),
+        profit: num(f.profit), addBonus: num(f.add_bonus),
+      });
+    }
+  }
+
+  let inserted = 0, updated = 0, unchanged = 0;
+  const writes: ExtractLine[] = [];
+  for (const r of parsed.rows) {
+    const prev = existing.get(r.id);
+    if (!prev) { inserted++; writes.push(r); }
+    else if (sameExtract(prev, r)) unchanged++;
+    else { updated++; writes.push(r); }
+  }
+
+  for (let i = 0; i < writes.length; i += 50) {
+    const values = writes.slice(i, i + 50).map((r) => sql`(
+      ${r.id}, ${r.orderDay}, ${r.deliveryDay}, ${r.deliveryStatus}, ${r.execName}, ${r.customer}, ${r.vehicleRaw}, ${r.vehicleType},
+      ${r.registration}, ${r.vin}, ${r.basic}, ${r.options}, ${r.profit}, ${r.addBonus}, ${nowSec}, ${nowSec}
+    )`);
+    await db.run(sql`
+      INSERT INTO ten_at_ten_extract (
+        id, order_day, delivery_day, delivery_status, exec_name, customer, vehicle_raw, vehicle_type,
+        registration, vin, basic, options, profit, add_bonus, first_uploaded_at, updated_at
+      ) VALUES ${sql.join(values, sql`, `)}
+      ON CONFLICT(id) DO UPDATE SET
+        delivery_day = excluded.delivery_day,
+        delivery_status = excluded.delivery_status,
+        exec_name = excluded.exec_name,
+        customer = excluded.customer,
+        vehicle_raw = excluded.vehicle_raw,
+        vehicle_type = excluded.vehicle_type,
+        registration = excluded.registration,
+        vin = excluded.vin,
+        basic = excluded.basic,
+        options = excluded.options,
+        profit = excluded.profit,
+        add_bonus = excluded.add_bonus,
+        updated_at = excluded.updated_at
+    `);
+  }
+
+  const syncMonths = [...new Set(parsed.rows.map((r) => r.deliveryDay.slice(0, 7)))];
+  if (syncMonths.length > 0) {
+    const gone = sql`substr(delivery_day, 1, 7) IN (${inList(syncMonths)}) AND id NOT IN (${inList(ids)})`;
+    const [c] = await db.all<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ten_at_ten_extract WHERE ${gone}`);
+    if (Number(c?.n ?? 0) > 0) {
+      await db.run(sql`DELETE FROM ten_at_ten_extract WHERE ${gone}`);
+      removed += Number(c.n);
+    }
+  }
+
+  const days = parsed.rows.map((r) => r.deliveryDay).sort();
+  const result: TenAtTenIngest = {
+    rowsInFile: parsed.rowsInFile,
+    inserted, updated, unchanged,
+    excluded: parsed.skippedExcluded,
+    removed,
+    duplicatesCollapsed: 0,
+    unreadable: parsed.skippedUnreadable,
+    firstDay: days[0] ?? null,
+    lastDay: days[days.length - 1] ?? null,
+  };
+
+  await db.insert(tenAtTenUploads).values({
+    id: createHash("sha1").update(`${meta.filename}|${now.toISOString()}|extract`).digest("hex").slice(0, 16),
+    filename: meta.filename,
+    rowsInFile: result.rowsInFile,
+    inserted, updated, unchanged,
+    excluded: result.excluded,
+    removed,
+    firstDay: result.firstDay,
+    lastDay: result.lastDay,
+    uploadedAt: now,
+    uploadedByUserId: meta.userId,
+    kind: "extract",
+  });
+  return result;
 }
 
 
@@ -421,7 +589,7 @@ export async function saveBudgets(rows: { yearMonth: string; car: number; cv: nu
 
 export interface HeldSummary { rows: number; firstDay: string | null; lastDay: string | null }
 
-export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; deliveries: HeldSummary; response: HeldSummary; cancellations: HeldSummary }> {
+export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; orders: HeldSummary; deliveries: HeldSummary; response: HeldSummary; cancellations: HeldSummary; extract: HeldSummary }> {
   const [e] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(enquiry_day) AS lo, MAX(enquiry_day) AS hi FROM ten_at_ten_enquiries`,
   );
@@ -437,9 +605,12 @@ export async function tenAtTenSummary(): Promise<{ enquiries: HeldSummary; order
   const [c] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
     sql`SELECT COUNT(*) AS n, MIN(cancelled_day) AS lo, MAX(cancelled_day) AS hi FROM ten_at_ten_cancellations`,
   );
+  const [b] = await db.all<{ n: number; lo: string | null; hi: string | null }>(
+    sql`SELECT COUNT(*) AS n, MIN(delivery_day) AS lo, MAX(delivery_day) AS hi FROM ten_at_ten_extract`,
+  );
   const held = (r: { n: number; lo: string | null; hi: string | null } | undefined): HeldSummary =>
     ({ rows: Number(r?.n ?? 0), firstDay: r?.lo ?? null, lastDay: r?.hi ?? null });
-  return { enquiries: held(e), orders: held(o), deliveries: held(d), response: held(x), cancellations: held(c) };
+  return { enquiries: held(e), orders: held(o), deliveries: held(d), response: held(x), cancellations: held(c), extract: held(b) };
 }
 
 // ─── Cancellations ─────────────────────────────────────────────────────────
@@ -595,15 +766,7 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
   const stale = staleOrderIds(orders);
   if (cancels.length === 0) return { views: [], originalIds: new Set(), leftOutIds: stale, rewriteOrderDays: new Map() };
 
-  // The export names execs in full; the Dealbook uses codes. A name's codes
-  // are whatever the Pole Position map gives it, plus Dealerweb's own
-  // convention (first two letters of first and last name).
-  const codesByName = new Map<string, string[]>();
-  for (const [code, name] of names) {
-    const k = name.toLowerCase();
-    codesByName.set(k, [...(codesByName.get(k) ?? []), code]);
-  }
-  const execCodesOf = (name: string) => [...(codesByName.get(name.toLowerCase()) ?? []), execCodeFromName(name)];
+  const execCodesOf = execCodeLookup(names);
 
   const rows = cancels.map((c) => ({
     id: c.id, exec: c.exec, orderDay: c.order_day, cancelledAt: Number(c.cancelled_at), cancelledDay: c.cancelled_day,

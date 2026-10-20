@@ -23,7 +23,7 @@ import {
 import type { MarketOverview, MarketSegmentView } from "@/lib/market-overview";
 import {
   SEGMENTS, avgProfit, brokerPct, budgetLines, budgetMonths, conversionPct, daysToCancel, groupOrders, groupRows, inRange, inboundPct,
-  orderStatsOf, periodProgress, rewritesAcross, statsOf, topInboundExecs,
+  invoiceProfit, orderStatsOf, periodProgress, rewritesAcross, statsOf, topInboundExecs, totalProfit,
   type BudgetLine, type CreditedReOrder, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
 } from "@/lib/ten-at-ten-report";
 import {
@@ -277,25 +277,31 @@ function deliveriesFor(input: PdfReportInput) {
   return { d, lines, delivered, arrived, due: d.length - delivered - arrived, pace: periodProgress(input.range, input.today) };
 }
 
+// Profit as on the tabs: Invoice (Total Gross), Bonuses and the two
+// together, the average on total. Loss-making is in the segment figures
+// above — a third of a landscape page has no room for it as well.
 const ORDER_EXEC_COLS = (unit: string): PCol<{ label: string; stats: OrderStats }>[] => [
   { label: "Exec", text: (g) => g.label },
-  { label: unit, w: 34, text: (g) => int(g.stats.orders) },
-  { label: "Total profit", w: 50, text: (g) => money(g.stats.priced ? g.stats.profit : null), tone: (g) => (g.stats.profit < 0 ? "bad" : undefined) },
-  { label: "Avg", w: 42, strong: true, text: (g) => money(avgProfit(g.stats)), tone: (g) => ((avgProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
-  { label: "Loss", w: 24, text: (g) => int(g.stats.loss), tone: (g) => (g.stats.loss ? "bad" : undefined) },
+  { label: unit, w: 26, text: (g) => int(g.stats.orders) },
+  { label: "Invoice", w: 38, text: (g) => money(invoiceProfit(g.stats)), tone: (g) => ((invoiceProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
+  { label: "Bonus", w: 36, text: (g) => money(g.stats.bonus) },
+  { label: "Total", w: 40, text: (g) => money(totalProfit(g.stats)), tone: (g) => ((totalProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
+  { label: "Avg", w: 36, strong: true, text: (g) => money(avgProfit(g.stats)), tone: (g) => ((avgProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
 ];
 
+// On total profit, as on the tabs.
 function profitLists(rows: OrderRow[]) {
-  const priced = rows.filter((r) => r.profit != null).sort((a, b) => (b.profit as number) - (a.profit as number));
+  const priced = rows.filter((r) => r.total != null).sort((a, b) => (b.total as number) - (a.total as number));
   const n = Math.min(5, Math.floor(priced.length / 2));
   return { best: priced.slice(0, n), worst: priced.slice(-n).reverse() };
 }
 
 const PROFIT_ROW_COLS: PCol<OrderRow>[] = [
   { label: "Customer", text: (r) => r.customer },
-  { label: "Model", w: 62, align: "left", text: (r) => r.model },
-  { label: "Exec", w: 30, align: "left", text: (r) => r.exec },
-  { label: "Profit", w: 42, strong: true, text: (r) => money(r.profit), tone: (r) => ((r.profit ?? 0) < 0 ? "bad" : undefined) },
+  { label: "Model", w: 58, align: "left", text: (r) => r.model },
+  { label: "Exec", w: 28, align: "left", text: (r) => r.exec },
+  { label: "Bonus", w: 34, text: (r) => money(r.bonus) },
+  { label: "Total", w: 40, strong: true, text: (r) => money(r.total), tone: (r) => ((r.total ?? 0) < 0 ? "bad" : undefined) },
 ];
 
 function SegmentKpis({ rows, noun }: { rows: OrderRow[]; noun: string }) {
@@ -320,12 +326,12 @@ function ProfitColumn({ rows, noun }: { rows: OrderRow[]; noun: string }) {
   const { best, worst } = profitLists(rows);
   return (
     <View style={[s.stack, { flex: 1 }]}>
-      <Panel title="Profit bands" note={`share of ${noun}`}>
+      <Panel title="Profit bands" note={`by total profit · share of ${noun}`}>
         <Table cols={[
           { label: "Band", text: (g) => g.label, tone: (g) => (g.label.startsWith("−") ? "bad" : undefined) },
           { label: noun, w: 44, text: (g) => int(g.stats.orders) },
           { label: "Share", w: 58, text: (g) => `${g.share.toFixed(0)}%`, bar: (g) => ({ value: g.stats.orders, of: total, colour: g.label.startsWith("−") ? C.bad : C.faint }) },
-          { label: "Total", w: 46, text: (g) => money(g.stats.priced ? g.stats.profit : null) },
+          { label: "Total", w: 46, text: (g) => money(totalProfit(g.stats)) },
         ]} rows={bands} keyOf={(g) => g.key} />
       </Panel>
       {best.length > 0 && (
@@ -437,8 +443,8 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
           </SummaryCard>
           <SummaryCard title="Orders" kpis={[
             { label: "Orders", value: int(o.orders), sub: ordersAdjusted(cancelledHere, rewritesOut) },
-            { label: "Total profit", value: money(o.priced ? o.profit : null), tone: o.profit < 0 ? "bad" : undefined },
-            { label: "Avg per unit", value: money(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined },
+            { label: "Total profit", value: money(totalProfit(o)), tone: (totalProfit(o) ?? 0) < 0 ? "bad" : undefined, sub: `${money(invoiceProfit(o))} invoice + ${money(o.bonus)} bonuses` },
+            { label: "Avg per unit", value: money(avgProfit(o)), tone: (avgProfit(o) ?? 0) < 0 ? "bad" : undefined, sub: "invoice + bonus" },
           ]}>
             <Line size={SUMMARY_TEXT} label="By segment">{join(SEGMENTS.map((seg) => { const g = oSeg.get(seg); return <Text key={seg}>{SEGMENT_META[seg].title} <B>{int(g?.stats.orders ?? 0)}</B> ({money(g ? avgProfit(g.stats) : null)} avg)</Text>; }))}</Line>
             <Line size={SUMMARY_TEXT} label="Most orders">{oTop.length ? join(oTop.map((g) => <Text key={g.key}><B>{g.label}</B> {int(g.stats.orders)}</Text>)) : "None yet"}</Line>
@@ -682,12 +688,13 @@ function OrdersPage({ input }: { input: PdfReportInput }) {
   const funders = groupOrders(rows, ["funder"]);
   const MODELS = 14;
   return (
-    <ReportPage title="Orders" input={input} note="Dealbook – Orders · profit is Total Gross">
+    <ReportPage title="Orders" input={input} note="Dealbook – Orders · invoice profit is Total Gross · bonuses by delivery month">
       <View style={s.stack}>
         <View style={s.row}>
           <Kpi label="Orders" value={int(o.orders)} sub={[o.orders > o.priced ? `${int(o.orders - o.priced)} without a profit yet` : "", ordersAdjusted(cancelledHere, rewritesOut) ?? ""].filter(Boolean).join(" · ") || undefined} />
-          <Kpi label="Total profit" value={money(o.priced ? o.profit : null)} tone={o.profit < 0 ? "bad" : undefined} sub={`${int(o.loss)} loss-making`} />
-          <Kpi label="Avg profit per unit" value={money(avgProfit(o))} hero />
+          <Kpi label="Total profit" value={money(totalProfit(o))} tone={(totalProfit(o) ?? 0) < 0 ? "bad" : undefined}
+            sub={`${money(invoiceProfit(o))} invoice + ${money(o.bonus)} bonuses · ${int(o.loss)} loss-making`} />
+          <Kpi label="Avg profit per unit" value={money(avgProfit(o))} hero sub="invoice + bonus" />
           <SegmentKpis rows={rows} noun="units" />
         </View>
         {rows.length === 0 ? <Text style={s.note}>No orders in {input.range.label}.</Text> : (
@@ -756,7 +763,7 @@ function DeliveriesPage({ input }: { input: PdfReportInput }) {
   const MODELS = 10;
   const deliveredPct = rows.length ? Math.round((dv.delivered / rows.length) * 100) : null;
   return (
-    <ReportPage title="Deliveries" input={input} note="Dealbook – Deliveries · counted in the month of the delivery date">
+    <ReportPage title="Deliveries" input={input} note="Dealbook – Deliveries · counted in the month of the delivery date · bonuses by that month">
       <View style={s.stack}>
         {dv.lines ? (
           <View style={s.row}>
@@ -769,7 +776,8 @@ function DeliveriesPage({ input }: { input: PdfReportInput }) {
           <Kpi label="Going" value={int(rows.length)} sub="delivered + arrived + due" />
           <Kpi label="Delivered" value={int(dv.delivered)} sub={deliveredPct == null ? undefined : `${deliveredPct}% of what's going`} />
           <Kpi label="Still to deliver" value={int(rows.length - dv.delivered)} sub={`${int(dv.arrived)} arrived · ${int(dv.due)} due`} />
-          <Kpi label="Avg profit per unit" value={money(avgProfit(st))} hero sub={`${money(st.priced ? st.profit : null)} total`} />
+          <Kpi label="Avg profit per unit" value={money(avgProfit(st))} hero
+            sub={`${money(totalProfit(st))} total · ${money(invoiceProfit(st))} invoice + ${money(st.bonus)} bonuses`} />
           <SegmentKpis rows={rows} noun="units" />
         </View>
         {rows.length === 0 ? <Text style={s.note}>No deliveries in {input.range.label}.</Text> : (
@@ -778,10 +786,11 @@ function DeliveriesPage({ input }: { input: PdfReportInput }) {
               <Panel title="By exec">
                 <Table cols={[
                   { label: "Exec", text: (g) => g.label },
-                  { label: "Going", w: 30, text: (g) => int(g.stats.orders) },
-                  { label: "Delivered", w: 44, text: (g) => int(g.rows.filter((r) => r.delivery === "Delivered").length) },
-                  { label: "Total profit", w: 50, text: (g) => money(g.stats.priced ? g.stats.profit : null), tone: (g) => (g.stats.profit < 0 ? "bad" : undefined) },
-                  { label: "Avg", w: 42, strong: true, text: (g) => money(avgProfit(g.stats)), tone: (g) => ((avgProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
+                  { label: "Going", w: 26, text: (g) => int(g.stats.orders) },
+                  { label: "Dlv", w: 22, text: (g) => int(g.rows.filter((r) => r.delivery === "Delivered").length) },
+                  { label: "Bonus", w: 36, text: (g) => money(g.stats.bonus) },
+                  { label: "Total", w: 42, text: (g) => money(totalProfit(g.stats)), tone: (g) => ((totalProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
+                  { label: "Avg", w: 36, strong: true, text: (g) => money(avgProfit(g.stats)), tone: (g) => ((avgProfit(g.stats) ?? 0) < 0 ? "bad" : undefined) },
                 ]} rows={execs} keyOf={(g) => g.key} />
               </Panel>
               <Panel title="By funder">

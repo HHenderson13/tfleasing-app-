@@ -821,7 +821,7 @@ best inbound conversions ("Best inbound", `topInboundExecs` — the top of
 the Enquiries By exec table, execs with an inbound order only; user,
 2026-10-20, Most orders stays on the Orders card); allocation and who
 missed same-day contact; ICE / BEV / Van
-units and average profit, loss-making count; Car and CV against budget;
+units and average profit (total, invoice + bonus), loss-making count; Car and CV against budget;
 the latest cancellations with their reason or "Reason needed"; the
 strongest and weakest ranges (40+ deals) and the rival who undercuts us
 most. Keep it to that weight.
@@ -903,7 +903,7 @@ reads its header check from too.
 - **The team's names for the uploads:** Enquiry Tracker (MotorComplete
   export → Response times), Enquiry Log (Dealerweb → Enquiries), Dealbook –
   Orders (Dealerweb order list → Orders), Dealbook – Deliveries, Cancelled
-  Orders. The upload page and results use these; keep KIND_LABEL in the page
+  Orders, Dealbook Extract (the .csv — Basic, for bonuses). The upload page and results use these; keep KIND_LABEL in the page
   and upload client in step.
 - **Access narrowed:** the tracker was open to every signed-in user; 10 at 10
   is admin-only, so non-admins no longer see response times.
@@ -993,8 +993,9 @@ files; `detectTenAtTenFile` tells them apart by header.
   or refreshes real orders (on the Sep 2026 files: 38 identical, 16 with a
   settled profit or delivery overwritten).
 - HaHe / JoRu are stripped from orders too ("all data").
-- Headline tiles: orders, total profit, average profit — no loss-making
-  tile (user, 2026-10-12). Profit bands split losses three ways (−£1,000 and
+- Headline tiles: orders, invoice profit, bonuses, total profit, average
+  profit (on total) — no loss-making tile (user, 2026-10-12; bonuses
+  2026-10-20, see Bonuses below). Profit bands split losses three ways (−£1,000 and
   below, −£999 to −£500, −£499 to −£1). By exec and profit bands open into
   the individual orders; groups carry their `rows` for exactly this.
 
@@ -1038,6 +1039,56 @@ real file follows that. When both sit in one month the uploader is asked
   (`periodProgress`, calendar days, today counted in) — "34% delivered vs
   39% through the month, 5 pts behind pace". Don't lead with delivered vs
   budget: early in a month it always reads as failure.
+
+### Bonuses (Dealbook Extract + quarterly rates)
+
+Ford's quarterly bonus mapped onto every order and delivery (user,
+2026-10-20). Rules in `lib/ten-at-ten-bonus.ts` (pure, client-safe);
+the extract's parse and `applyBonuses` in `lib/ten-at-ten-extract.ts`;
+rates and the extract held by `lib/ten-at-ten-store.ts`.
+
+- **Profit three ways, on Orders and Deliveries:** Invoice profit (Total
+  Gross, as before), Bonuses, and Total profit. The highlighted average,
+  profit bands, loss-making and most / least profitable all run on **total**
+  (user's call). Avg is over units with an invoice figure; a unit without
+  one still has its bonus in Bonuses.
+- **By delivery date, never order date.** A deal earns its type's rate in
+  the month it delivers; Arrived and Due show the bonus at the date
+  Dealerweb gives them now, and move with it (user's call). An order's
+  bonus month comes from its line on a delivered list (key
+  `makeDeliveryKey(orderId, month)`, latest seen), else its extract line,
+  else its own column AK.
+- **Types:** ICE Car, BEV Car, ICE Van, BEV Van (`bonusTypeOf`). Cars follow
+  the report segment; a van is BEV when it's E-Transit / E-Transit Custom /
+  Courier / Explorer Van or says kWh / Electric — plug-in hybrid vans
+  (Ranger, Transit Custom, Connect PHEV) are ICE Vans (user, 2026-10-20).
+- **Rates** (`ten_at_ten_bonus_rates`, month × type: % of Basic and/or £ per
+  unit) are edited under the budgets on the upload page, a quarter at a time.
+  A month with no rows has no scheme, shown as such, never as £0 final.
+  Seeded with Q4 2026 **only when the table is first made**: ICE Car nothing,
+  BEV Car 4.5%, ICE Van 2.5%, BEV Van 2.5% + £1,500 in October only.
+- **On top of Dealerweb's Additional Bonus** (2.3% of Basic on vans, 1.5% on
+  ICE cars, 0 on BEV cars on the Oct 2026 files), which is already inside
+  Invoice profit. The user confirmed the quarterly scheme isn't in Dealerweb.
+- **Basic is column BQ of the Dealbook Extract** — a CSV of the delivered
+  list with every column, uploaded a delivery month at a time like
+  Dealbook – Deliveries (and synced the same way). The upload stops if BQ
+  isn't headed Basic. Other columns are read by header. Dates are UK,
+  day first, so the CSV is read as text — never let it be type-guessed.
+- **Matching is at read time** (`matchExtract`), never stored. The extract
+  names the exec in full and the contact, not the account ("Mr Pedro
+  Condez" vs "Pedro Condez T/A P D Carpentry"), and delivery date and profit
+  move between downloads, so: same order day, vehicle text alike (Dice ≥
+  0.5 over words), and at least one of exec / plate / customer; scored and
+  taken best-first, one to one. On the 19–20 Oct 2026 files: Oct deliveries
+  80 of 82, Nov 51/51, Dec 26/26 — the two misses aren't in the 20 Oct
+  extract at all. A deal due a % with no Basic shows only its £ part, flagged
+  `noBasic` and called out under the tiles.
+- Real figures, Oct 2026 deliveries: invoice −£21,598 (= the delivered
+  list's NEW TOTALS), bonuses £101,787, total £80,189, £978 a unit. The PDF
+  stays seven pages; its tables show Invoice / Bonus / Total / Avg (no Loss
+  column — no room; loss-making is in the KPI subs).
+- The extract doesn't feed Pole Position, so its upload doesn't re-feed it.
 
 ### Cancellations section (Cancelled Orders)
 

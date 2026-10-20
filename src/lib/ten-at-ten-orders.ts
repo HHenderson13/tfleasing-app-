@@ -230,7 +230,7 @@ export function isOrderListHeader(header: readonly unknown[]): boolean {
   return REQUIRED_HEADERS.every(([i, want]) => letters(header[i]) === want);
 }
 
-export type TenAtTenFileKind = "enquiries" | "orders" | "deliveries" | "response" | "cancellations";
+export type TenAtTenFileKind = "enquiries" | "orders" | "deliveries" | "response" | "cancellations" | "extract";
 
 // Dealerweb's Cancelled Orders export: A Sales Executive · B Order Date ·
 // C Customer · D Type · E Model · F Registration Number · G Cancelled Date.

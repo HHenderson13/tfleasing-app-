@@ -8,8 +8,10 @@ import { NotAnEnquiryExportError, ingestEnquiries, parseEnquiryWorkbook } from "
 import { NotAnEnquiryLogError, parseTenAtTenWorkbook } from "@/lib/ten-at-ten";
 import { NotACancelledOrdersError, parseCancellationsWorkbook } from "@/lib/ten-at-ten-cancellations";
 import { NotAnOrderListError, classifyDealbook, detectTenAtTenFile, makeDeliveryKey, parseOrderWorkbook, type TenAtTenFileKind } from "@/lib/ten-at-ten-orders";
+import { BONUS_TYPES, type BonusRate, type BonusType } from "@/lib/ten-at-ten-bonus";
+import { NotADealbookExtractError, parseExtractCsv } from "@/lib/ten-at-ten-extract";
 import {
-  ingestCancellations, ingestDealbook, ingestTenAtTen, recordResponseUpload, saveBudgets, saveCancellationNote,
+  ingestCancellations, ingestDealbook, ingestExtract, ingestTenAtTen, recordResponseUpload, saveBonusRates, saveBudgets, saveCancellationNote,
   setCancellationClassification, type TenAtTenIngest,
 } from "@/lib/ten-at-ten-store";
 import { feedPolePositionFromTenAtTen, invalidateLeaderboard, type FedSlot } from "@/lib/sales-leaderboard-store";
@@ -41,11 +43,22 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
   const user = await requireAdmin();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a .xlsx export to upload." };
-  if (!/\.xlsx?$/i.test(file.name)) return { ok: false, error: `${file.name}: not an Excel file (.xlsx expected).` };
+  const csv = /\.csv$/i.test(file.name);
+  if (!csv && !/\.xlsx?$/i.test(file.name)) return { ok: false, error: `${file.name}: not an Excel export (.xlsx) or the Dealbook Extract (.csv).` };
   if (file.size > 20 * 1024 * 1024) return { ok: false, error: `${file.name}: over 20 MB, which is not one of these exports.` };
 
   try {
     const buf = Buffer.from(await file.arrayBuffer());
+    // The Dealbook Extract is the one CSV — Basic, for bonuses. It moves
+    // nothing on Pole Position, so the board isn't re-fed for it.
+    if (csv) {
+      const parsed = parseExtractCsv(buf);
+      if (parsed.rows.length === 0 && parsed.skippedExcluded === 0) return { ok: false, error: `${file.name}: no usable rows found.` };
+      const result = await ingestExtract(parsed, { filename: file.name, userId: user.id });
+      revalidatePath("/ten-at-ten");
+      revalidatePath("/ten-at-ten/admin");
+      return { ok: true, filename: file.name, kind: "extract", result };
+    }
     const detected = detectTenAtTenFile(buf);
     if (!detected) {
       return { ok: false, error: `${file.name}: not an Enquiry Tracker, Enquiry Log, Dealbook or Cancelled Orders export — the columns don't match any of them.` };
@@ -125,7 +138,8 @@ export async function uploadTenAtTenAction(formData: FormData): Promise<TenAtTen
     }
     return { ok: true, filename: file.name, kind, result, polePosition, polePositionError };
   } catch (e) {
-    if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError || e instanceof NotAnEnquiryExportError || e instanceof NotACancelledOrdersError) {
+    if (e instanceof NotAnEnquiryLogError || e instanceof NotAnOrderListError || e instanceof NotAnEnquiryExportError || e instanceof NotACancelledOrdersError
+      || e instanceof NotADealbookExtractError) {
       return { ok: false, error: `${file.name}: ${e.message}` };
     }
     logError("ten-at-ten/upload", e, { filename: file.name });
@@ -154,6 +168,33 @@ export async function saveBudgetsAction(input: { rows: { yearMonth: string; car:
   } catch (e) {
     logError("ten-at-ten/budgets", e);
     return { ok: false, error: e instanceof Error ? e.message : "Couldn't save budgets." };
+  }
+}
+
+const rateSchema = z.object({ pct: z.number().min(0).max(100), amount: z.number().min(0).max(100000) });
+const bonusSchema = z.object({
+  months: z.array(z.object({
+    yearMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    rates: z.object(Object.fromEntries(BONUS_TYPES.map((t) => [t, rateSchema])) as Record<BonusType, typeof rateSchema>).nullable(),
+  })).max(36),
+});
+
+/**
+ * Save quarterly bonus rates, a month at a time: each type's % of Basic and
+ * £ per unit; `rates: null` clears the month (no scheme set). Admin only.
+ */
+export async function saveBonusRatesAction(input: { months: { yearMonth: string; rates: Record<BonusType, BonusRate> | null }[] }): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const parsed = bonusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "A percentage must be 0 to 100 and an amount £0 to £100,000." };
+  try {
+    await saveBonusRates(parsed.data.months);
+    revalidatePath("/ten-at-ten");
+    revalidatePath("/ten-at-ten/admin");
+    return { ok: true };
+  } catch (e) {
+    logError("ten-at-ten/bonus-rates", e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save the bonuses." };
   }
 }
 

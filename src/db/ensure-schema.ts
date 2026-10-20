@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 62;
+const SCHEMA_VERSION = 63;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -1101,8 +1101,53 @@ async function ensureTenAtTenTables() {
       ('2026-11', 'car', 78),  ('2026-11', 'cv', 32),
       ('2026-12', 'car', 61),  ('2026-12', 'cv', 20)
   `));
+  // The Dealbook Extract, held for Basic (column BQ) — what a percentage
+  // bonus is paid on (lib/ten-at-ten-bonus.ts).
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_extract (
+      id TEXT PRIMARY KEY,
+      order_day TEXT NOT NULL,
+      delivery_day TEXT NOT NULL,
+      delivery_status TEXT,
+      exec_name TEXT NOT NULL,
+      customer TEXT NOT NULL,
+      vehicle_raw TEXT,
+      vehicle_type TEXT,
+      registration TEXT,
+      vin TEXT,
+      basic REAL,
+      options REAL,
+      profit REAL,
+      add_bonus REAL,
+      first_uploaded_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS idx_ten_at_ten_extract_day ON ten_at_ten_extract(delivery_day)`));
+  // Ford's quarterly bonus by delivery month. Seeded with the user's Q4 2026
+  // (2026-10-20) only when the table is first made, so a month cleared on
+  // the upload page stays cleared through later schema bumps.
+  const bonusesExisted = await db.all(sql`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ten_at_ten_bonus_rates'`);
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ten_at_ten_bonus_rates (
+      year_month TEXT NOT NULL,
+      vehicle TEXT NOT NULL,
+      pct REAL NOT NULL DEFAULT 0,
+      amount REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (year_month, vehicle)
+    )
+  `));
+  if (bonusesExisted.length === 0) {
+    await db.run(sql.raw(`
+      INSERT OR IGNORE INTO ten_at_ten_bonus_rates (year_month, vehicle, pct, amount) VALUES
+        ('2026-10', 'ICE Car', 0, 0), ('2026-10', 'BEV Car', 4.5, 0), ('2026-10', 'ICE Van', 2.5, 0), ('2026-10', 'BEV Van', 2.5, 1500),
+        ('2026-11', 'ICE Car', 0, 0), ('2026-11', 'BEV Car', 4.5, 0), ('2026-11', 'ICE Van', 2.5, 0), ('2026-11', 'BEV Van', 2.5, 0),
+        ('2026-12', 'ICE Car', 0, 0), ('2026-12', 'BEV Car', 4.5, 0), ('2026-12', 'ICE Van', 2.5, 0), ('2026-12', 'BEV Van', 2.5, 0)
+    `));
+  }
   // HaHe and JoRu are stripped from all 10 at 10 data. Ingest never stores
   // them; this sweep is the backstop. Idempotent.
+  await db.run(sql.raw(`DELETE FROM ten_at_ten_extract WHERE lower(exec_name) IN ('harry henderson', 'joseph rustigini')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_enquiries WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_orders WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_deliveries WHERE lower(exec) IN ('hahe', 'joru')`));

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
-import { listTenAtTenUploads, loadBudgets, tenAtTenSummary, type HeldSummary } from "@/lib/ten-at-ten-store";
+import { listTenAtTenUploads, loadBonusRates, loadBudgets, tenAtTenSummary, type HeldSummary } from "@/lib/ten-at-ten-store";
+import { BonusEditor } from "./bonus-editor";
 import { BudgetEditor } from "./budget-editor";
 import { UploadClient } from "./upload-client";
 
@@ -8,13 +9,13 @@ export const dynamic = "force-dynamic";
 
 // The names the team uses for the files. Keep in step with the upload
 // client's KIND_LABEL.
-const KIND_LABEL: Record<string, string> = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries", cancellations: "Cancelled Orders" };
+const KIND_LABEL: Record<string, string> = { response: "Enquiry Tracker", enquiries: "Enquiry Log", orders: "Dealbook – Orders", deliveries: "Dealbook – Deliveries", cancellations: "Cancelled Orders", extract: "Dealbook Extract" };
 
 const fmtDay = (d: string | null) =>
   d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "—";
 
 interface FileGuide {
-  kind: "response" | "enquiries" | "orders" | "deliveries" | "cancellations";
+  kind: "response" | "enquiries" | "orders" | "deliveries" | "cancellations" | "extract";
   from: string;
   columns: string;
   feeds: string;
@@ -81,12 +82,25 @@ const FILES: FileGuide[] = [
     ],
     matched: "order time, customer and vehicle",
   },
+  {
+    kind: "extract",
+    from: "Dealerweb Dealbook Extract (.csv), a delivery month at a time",
+    columns: "Customer · Model · Order Date · SE · Deliv Date · Deliv Status · Basic (column BQ)",
+    feeds: "Bonuses on Orders and Deliveries",
+    rules: [
+      "Held for Basic in column BQ — the price a percentage bonus is paid on. The upload stops if BQ isn't Basic.",
+      "Each line is tied to its deal on Dealbook – Orders and Deliveries by order date and vehicle, plus the exec, registration or customer. A deal with no line yet shows only its £ bonus, and says so.",
+      "Upload the full month, as for Dealbook – Deliveries: a line no longer on it is removed from that month. Harry Henderson and Joseph Rustigini are stripped.",
+    ],
+    matched: "order date, customer, vehicle and delivery month",
+  },
 ];
 
 export default async function TenAtTenAdminPage() {
   await requireAdmin();
-  const [uploads, summary, budgets] = await Promise.all([listTenAtTenUploads(25), tenAtTenSummary(), loadBudgets()]);
+  const [uploads, summary, budgets, bonusRates] = await Promise.all([listTenAtTenUploads(25), tenAtTenSummary(), loadBudgets(), loadBonusRates()]);
   const thisYear = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric" }).format(new Date()));
+  const thisQuarter = Math.ceil(Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", month: "numeric" }).format(new Date())) / 3);
   const held: Record<FileGuide["kind"], HeldSummary> = summary;
 
   return (
@@ -101,8 +115,8 @@ export default async function TenAtTenAdminPage() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Upload data</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Five files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
-          each is recognised for you. Delivery budgets are set at the bottom of the page.
+          Six files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
+          each is recognised for you. Delivery budgets and quarterly bonuses are set at the bottom of the page.
         </p>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -147,6 +161,8 @@ export default async function TenAtTenAdminPage() {
         <UploadClient />
 
         <BudgetEditor budgets={budgets} initialYear={thisYear} />
+
+        <BonusEditor rates={bonusRates} initialYear={thisYear} initialQuarter={thisQuarter} />
 
         <section className="mt-10">
           <h2 className="text-sm font-semibold text-slate-900">Recent uploads</h2>

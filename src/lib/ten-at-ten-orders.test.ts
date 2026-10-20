@@ -11,7 +11,9 @@ import {
   parseOrderWorkbook,
   segmentOf,
 } from "./ten-at-ten-orders";
-import { avgProfit, budgetLines, budgetMonths, decodeOrders, encodeOrders, groupOrders, orderStatsOf, periodProgress, profitBand, rangeFor } from "./ten-at-ten-report";
+import {
+  avgProfit, budgetLines, budgetMonths, decodeOrders, encodeOrders, groupOrders, invoiceProfit, orderStatsOf, periodProgress, profitBand, rangeFor, totalProfit,
+} from "./ten-at-ten-report";
 
 const HEADER = ["Status", "SE", "Sales Type", "Customer", "Order Date", "Vehicle Details", ...new Array(11).fill("x"), "Finance Type",
   ...new Array(15).fill("x"), "Total Gross", "DMS Total Gross", "Difference", "Delivery Date"];
@@ -111,18 +113,38 @@ describe("parseOrderWorkbook", () => {
   });
 });
 
+const NO_BONUS = { bonus: 0, bonusFlag: "ok" as const, bonusType: "ICE Car" as const, bonusDay: null };
+
 describe("order stats", () => {
   const rows = decodeOrders(encodeOrders([
-    { orderDay: "2026-10-01", exec: "DeDu", customer: "A", model: "Transit Custom", derivative: null, derivativeKey: null, segment: "Van", product: "HP", termMonths: 60, funder: "Novuna", delivery: "Delivered", profit: -1000 },
-    { orderDay: "2026-10-02", exec: "DeDu", customer: "B", model: "Capri", derivative: null, derivativeKey: null, segment: "BEV Car", product: "HP", termMonths: 60, funder: "Lex", delivery: "Delivered", profit: 3000 },
-    { orderDay: "2026-10-03", exec: "OlMa", customer: "C", model: "Capri", derivative: null, derivativeKey: null, segment: "BEV Car", product: "Cash", termMonths: null, funder: "Cash", delivery: "Awaiting delivery", profit: null },
+    { orderDay: "2026-10-01", exec: "DeDu", customer: "A", model: "Transit Custom", derivative: null, derivativeKey: null, segment: "Van", product: "HP", termMonths: 60, funder: "Novuna", delivery: "Delivered", profit: -1000, ...NO_BONUS },
+    { orderDay: "2026-10-02", exec: "DeDu", customer: "B", model: "Capri", derivative: null, derivativeKey: null, segment: "BEV Car", product: "HP", termMonths: 60, funder: "Lex", delivery: "Delivered", profit: 3000, ...NO_BONUS },
+    { orderDay: "2026-10-03", exec: "OlMa", customer: "C", model: "Capri", derivative: null, derivativeKey: null, segment: "BEV Car", product: "Cash", termMonths: null, funder: "Cash", delivery: "Awaiting delivery", profit: null, ...NO_BONUS },
   ], new Map([["DeDu", "Declan Dunn"]])));
 
   it("averages profit over the units that carry a figure", () => {
     const s = orderStatsOf(rows);
-    expect(s).toEqual({ orders: 3, profit: 2000, priced: 2, loss: 1 });
+    expect(s).toEqual({ orders: 3, invoice: 2000, priced: 2, bonus: 0, pricedBonus: 0, loss: 1 });
     expect(avgProfit(s)).toBe(1000);
     expect(avgProfit(orderStatsOf([]))).toBeNull();
+  });
+
+  it("adds bonuses: total, average and loss-making run on invoice + bonus", () => {
+    const withBonus = decodeOrders(encodeOrders([
+      // −£1,000 invoice, £1,200 bonus: £200 total — no longer loss-making.
+      { orderDay: "2026-10-01", exec: "DeDu", customer: "A", model: "Transit Custom", derivative: null, derivativeKey: null, segment: "Van", product: "HP", termMonths: 60, funder: "Novuna", delivery: "Delivered", profit: -1000, bonus: 1200, bonusFlag: "ok", bonusType: "ICE Van", bonusDay: "2026-10-30" },
+      { orderDay: "2026-10-02", exec: "DeDu", customer: "B", model: "Capri", derivative: null, derivativeKey: null, segment: "BEV Car", product: "HP", termMonths: 60, funder: "Lex", delivery: "Delivered", profit: 3000, bonus: 1800, bonusFlag: "ok", bonusType: "BEV Car", bonusDay: "2026-10-15" },
+      // No invoice figure yet: its bonus counts in Bonuses, not the average.
+      { orderDay: "2026-10-03", exec: "OlMa", customer: "C", model: "Capri", derivative: null, derivativeKey: null, segment: "BEV Car", product: "Cash", termMonths: null, funder: "Cash", delivery: "Awaiting delivery", profit: null, bonus: 1500, bonusFlag: "noBasic", bonusType: "BEV Car", bonusDay: "2027-01-29" },
+    ]));
+    expect(withBonus[0]).toMatchObject({ total: 200, profitBand: "£0 to £499", bonusType: "ICE Van", bonusDay: "2026-10-30", bonusFlag: "ok" });
+    expect(withBonus[2]).toMatchObject({ total: null, bonus: 1500, bonusFlag: "noBasic", profitBand: "No profit figure" });
+    const s = orderStatsOf(withBonus);
+    expect(s).toEqual({ orders: 3, invoice: 2000, priced: 2, bonus: 4500, pricedBonus: 3000, loss: 0 });
+    expect(invoiceProfit(s)).toBe(2000);
+    expect(totalProfit(s)).toBe(6500);
+    expect(avgProfit(s)).toBe(2500);
+    expect(groupOrders(withBonus, ["exec"], "bonus").map((g) => [g.label, g.stats.bonus])).toEqual([["DeDu", 3000], ["OlMa", 1500]]);
   });
 
   it("groups by segment in fixed order and bands profit", () => {
@@ -175,7 +197,7 @@ describe("deliveries vs budget", () => {
     { status: "Due", segment: "Van" },
   ].map((x, i) => ({
     orderDay: "2026-10-05", exec: "DoJa", customer: `C${i}`, model: "M", derivative: null, derivativeKey: null,
-    segment: x.segment, product: "HP", termMonths: 60, funder: "Lex", delivery: x.status, profit: 100,
+    segment: x.segment, product: "HP", termMonths: 60, funder: "Lex", delivery: x.status, profit: 100, ...NO_BONUS,
   }))));
 
   it("only compares whole months — budgets are monthly", () => {

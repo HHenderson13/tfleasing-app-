@@ -9,6 +9,7 @@
 // else), and overall, which the two make up.
 
 import { buildPeriod, fromDayKey, shiftAnchor, toDayKey, type Granularity } from "./period";
+import { BONUS_FLAGS, BONUS_TYPES, type BonusFlag, type BonusType } from "./ten-at-ten-bonus";
 
 export const SOURCES = ["TF Lead", "Leasing.com", "LeaseLoco", "CarWow", "Broker / Prospect"] as const;
 export type SourceName = (typeof SOURCES)[number];
@@ -320,6 +321,12 @@ export function topInboundExecs(rows: readonly ReportRow[], n = 3): Group[] {
 }
 
 // ─── Orders ────────────────────────────────────────────────────────────────
+//
+// Profit comes three ways (user, 2026-10-20): Invoice Profit is Dealerweb's
+// Total Gross; Bonuses are Ford's quarterly bonus on the deal, by its
+// delivery month (lib/ten-at-ten-bonus.ts); Total Profit is the two
+// together. Averages, profit bands, loss-making and most / least profitable
+// all run on total.
 
 export interface OrderStoredRow {
   orderDay: string;
@@ -333,7 +340,13 @@ export interface OrderStoredRow {
   termMonths: number | null;
   funder: string;
   delivery: string;
+  /** Invoice Profit — Total Gross. */
   profit: number | null;
+  bonus: number;
+  bonusFlag: BonusFlag;
+  bonusType: BonusType;
+  /** The delivery day the bonus was worked out on — what its month is. */
+  bonusDay: string | null;
 }
 
 export interface OrderRow {
@@ -347,13 +360,24 @@ export interface OrderRow {
   term: string;
   funder: string;
   delivery: string;
+  /** Band of total profit. */
   profitBand: string;
+  /** Invoice Profit (Total Gross); null when Dealerweb has no figure yet. */
   profit: number | null;
+  bonus: number;
+  bonusFlag: BonusFlag;
+  bonusType: BonusType;
+  bonusDay: string | null;
+  /** Invoice Profit + Bonuses; null without an invoice figure. */
+  total: number | null;
 }
 
 export interface OrdersPayload {
   strings: string[];
-  /** [dayNumber, exec, customer, model, derivative, segment, product, term, funder, delivery, profit|null] */
+  /**
+   * [dayNumber, exec, customer, model, derivative, segment, product, term, funder, delivery, profit|null,
+   *  bonus, bonusFlag index, bonusType index, bonusDay dayNumber|null]
+   */
   rows: (number | null)[][];
 }
 
@@ -374,6 +398,10 @@ export function encodeOrders(rows: OrderStoredRow[], execNames: Map<string, stri
       intern(r.funder || NOT_STATED),
       intern(r.delivery || NOT_STATED),
       r.profit,
+      r.bonus,
+      Math.max(0, BONUS_FLAGS.indexOf(r.bonusFlag)),
+      Math.max(0, BONUS_TYPES.indexOf(r.bonusType)),
+      r.bonusDay ? dayNumber(r.bonusDay) : null,
     ]),
   };
 }
@@ -382,6 +410,8 @@ export function decodeOrders(p: OrdersPayload): OrderRow[] {
   const s = p.strings;
   return p.rows.map((r) => {
     const profit = r[10] ?? null;
+    const bonus = r[11] ?? 0;
+    const total = profit == null ? null : Math.round((profit + bonus) * 100) / 100;
     return {
       day: dayFromNumber(r[0] as number),
       exec: s[r[1] as number],
@@ -393,30 +423,47 @@ export function decodeOrders(p: OrdersPayload): OrderRow[] {
       term: s[r[7] as number],
       funder: s[r[8] as number],
       delivery: s[r[9] as number],
-      profitBand: profitBand(profit),
+      profitBand: profitBand(total),
       profit,
+      bonus,
+      bonusFlag: BONUS_FLAGS[r[12] ?? 0] ?? "ok",
+      bonusType: BONUS_TYPES[r[13] ?? 0] ?? "ICE Car",
+      bonusDay: r[14] == null ? null : dayFromNumber(r[14]),
+      total,
     };
   });
 }
 
-/** Units, total profit over the units that have a figure, how many have one, and how many lost money. */
-export interface OrderStats { orders: number; profit: number; priced: number; loss: number }
+/**
+ * Units; Invoice Profit over the units that have a figure (`priced`);
+ * Bonuses on every unit, and on the priced ones alone, for the average;
+ * and how many lost money once the bonus is in.
+ */
+export interface OrderStats { orders: number; invoice: number; priced: number; bonus: number; pricedBonus: number; loss: number }
 
 export function orderStatsOf(rows: readonly OrderRow[]): OrderStats {
-  const s: OrderStats = { orders: 0, profit: 0, priced: 0, loss: 0 };
+  const s: OrderStats = { orders: 0, invoice: 0, priced: 0, bonus: 0, pricedBonus: 0, loss: 0 };
   for (const r of rows) {
     s.orders++;
+    s.bonus += r.bonus;
     if (r.profit == null) continue;
     s.priced++;
-    s.profit += r.profit;
-    if (r.profit < 0) s.loss++;
+    s.invoice += r.profit;
+    s.pricedBonus += r.bonus;
+    if ((r.total ?? r.profit) < 0) s.loss++;
   }
   return s;
 }
 
-/** Average profit per unit, over the units that carry a profit figure. */
+/** Invoice Profit, or null when no unit has a figure yet. */
+export const invoiceProfit = (s: OrderStats): number | null => (s.priced > 0 ? s.invoice : null);
+
+/** Invoice Profit + Bonuses; null with neither. */
+export const totalProfit = (s: OrderStats): number | null => (s.priced > 0 || s.bonus !== 0 ? s.invoice + s.bonus : null);
+
+/** Average total profit (invoice + bonus) per unit, over the units that carry an invoice figure. */
 export function avgProfit(s: OrderStats): number | null {
-  return s.priced > 0 ? s.profit / s.priced : null;
+  return s.priced > 0 ? (s.invoice + s.pricedBonus) / s.priced : null;
 }
 
 export type OrderDimKey = "segment" | "exec" | "model" | "derivative" | "funder" | "product" | "term" | "delivery" | "profitBand";
@@ -435,12 +482,14 @@ export const ORDER_DIMENSIONS: { key: OrderDimKey; label: string }[] = [
 
 export const orderDimLabel = (k: OrderDimKey) => ORDER_DIMENSIONS.find((d) => d.key === k)?.label ?? k;
 
-export type OrderSortKey = "orders" | "profit" | "avg" | "loss" | "label";
+export type OrderSortKey = "orders" | "invoice" | "bonus" | "total" | "avg" | "loss" | "label";
 
 export type OrderGroup = Nested<OrderStats, OrderRow>;
 
 function orderSortValue(s: OrderStats, sort: OrderSortKey): number {
   if (sort === "avg") return avgProfit(s) ?? -Infinity;
+  if (sort === "total") return totalProfit(s) ?? -Infinity;
+  if (sort === "invoice") return invoiceProfit(s) ?? -Infinity;
   return sort === "label" ? 0 : s[sort];
 }
 

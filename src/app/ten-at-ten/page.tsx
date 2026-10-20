@@ -7,8 +7,10 @@ import { logError } from "@/lib/logger";
 import { loadMarketOverview, type MarketOverview } from "@/lib/market-overview";
 import { creditOrders } from "@/lib/ten-at-ten-cancellations";
 import { encodeOrders, encodeReport } from "@/lib/ten-at-ten-report";
+import { applyBonuses } from "@/lib/ten-at-ten-extract";
 import {
-  listTenAtTenUploads, loadBudgets, loadCancellationsReport, loadExecNames, loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows,
+  listTenAtTenUploads, loadBonusRates, loadBudgets, loadCancellationsReport, loadExecNames, loadExtractLines,
+  loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows,
 } from "@/lib/ten-at-ten-store";
 import { ReportClient } from "./report";
 
@@ -19,9 +21,9 @@ export default async function TenAtTenPage() {
   // cancellation notes stay admin-only (the actions re-check).
   const user = await requireTenAtTenAccess();
   const canManage = isAdmin(user);
-  const [rows, orders, deliveries, budgets, names, uploads, responses, latestResponseUpload, market] = await Promise.all([
+  const [rows, heldOrders, heldDeliveries, budgets, names, uploads, responses, latestResponseUpload, extract, bonusRates, market] = await Promise.all([
     loadTenAtTenRows(), loadTenAtTenOrders(), loadTenAtTenDeliveries(), loadBudgets(), loadExecNames(), listTenAtTenUploads(1),
-    loadEnquiries(), loadLatestEnquiryUploadAt(),
+    loadEnquiries(), loadLatestEnquiryUploadAt(), loadExtractLines(), loadBonusRates(),
     // The latest scrape's digest. A problem there mustn't take the rest of
     // the report down with it.
     loadMarketOverview().catch((e): MarketOverview | null => { logError("ten-at-ten/market", e); return null; }),
@@ -29,6 +31,10 @@ export default async function TenAtTenPage() {
   // Response times only judges an enquiry once it has had a full working
   // day, measured from the latest MotorComplete upload (business-hours.ts).
   const reportHorizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
+  // Ford's quarterly bonus on each deal, by its delivery month, on the Basic
+  // from its Dealbook Extract line — matched on the real order day, so
+  // before a Re-Write is moved to its original's day below.
+  const { orders, deliveries } = applyBonuses({ orders: heldOrders, deliveries: heldDeliveries, extract, rates: bonusRates, names });
   // Cancellations are matched against the Dealbook. Orders counts what
   // Dealerweb's latest order list carries — an order we still hold that was
   // later cancelled, or an old copy of one, is left out — and a Re-Write's
@@ -67,7 +73,7 @@ export default async function TenAtTenPage() {
           </div>
           {lastUpload && <p className="text-xs text-slate-400">Last upload {lastUpload}</p>}
         </div>
-        <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
+        <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets} bonusRates={bonusRates}
           responses={responses} reportHorizon={reportHorizon} today={today}
           cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} canManage={canManage} />
       </main>
