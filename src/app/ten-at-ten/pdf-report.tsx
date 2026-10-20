@@ -23,11 +23,11 @@ import {
 import type { MarketOverview, MarketSegmentView } from "@/lib/market-overview";
 import {
   SEGMENTS, avgProfit, brokerPct, budgetLines, budgetMonths, conversionPct, daysToCancel, groupOrders, groupRows, inRange, inboundPct,
-  orderStatsOf, periodProgress, rewritesAcross, statsOf,
+  orderStatsOf, periodProgress, rewritesAcross, statsOf, topInboundExecs,
   type BudgetLine, type CreditedReOrder, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
 } from "@/lib/ten-at-ten-report";
 import {
-  DEPARTMENT_COLOURS, MARKET_META, SEGMENT_META, SOURCE_COLOURS, firstName, gapText, gbp, int, isProper, marketTotals, needsReason,
+  DEPARTMENT_COLOURS, MARKET_META, SEGMENT_META, SOURCE_COLOURS, fastestFirst, firstName, gapText, gbp, int, isProper, marketTotals, needsReason,
   ordersAdjusted, pct, scrapeWhen, share, shortDate,
 } from "./shared";
 
@@ -366,7 +366,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
   const { range } = input;
   const eRows = inRange(input.enquiries, range);
   const e = statsOf(eRows);
-  const eTop = groupRows(eRows, ["exec"], "orders").filter((g) => g.stats.orders > 0).slice(0, 3);
+  const eTop = topInboundExecs(eRows);
   const r = responseFor(input);
   const rs = r.s;
   const misses = new Map<string, number>();
@@ -395,8 +395,6 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
   const join = (xs: ReactNode[]) => xs.flatMap((x, i) => (i ? [" · ", x] : [x]));
 
   // A line or two more per card: who stands out, and the mix behind a total.
-  const bestInbound = groupRows(eRows, ["exec"]).filter((g) => g.stats.inboundEnquiries >= 5)
-    .sort((a, b) => (inboundPct(b.stats) ?? 0) - (inboundPct(a.stats) ?? 0)).slice(0, 2);
   const byExecResponse = [...r.reportable.reduce((acc, x) => acc.set(x.salesExec, [...(acc.get(x.salesExec) ?? []), x]), new Map<string, EnquiryRow[]>())]
     .map(([name, xs]) => ({ name, n: xs.length, avg: summariseResponse(xs).contactAvg }))
     .filter((x) => x.avg != null && x.n >= 3)
@@ -418,9 +416,8 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
             { label: "Broker", value: pct(brokerPct(e)), sub: "conversion" },
             { label: "Overall", value: pct(conversionPct(e)), sub: `conversion · ${int(e.orders)} orders` },
           ]}>
-            {e.enquiries > 0 && <View style={{ marginBottom: 3 }}><SourceStrip size={7.5} groups={groupRows(eRows, ["source"], "label")} /></View>}
-            <Line size={SUMMARY_TEXT} label="Most orders">{eTop.length ? join(eTop.map((g) => <Text key={g.key}><B>{g.label}</B> {int(g.stats.orders)}</Text>)) : "None yet"}</Line>
-            {bestInbound.length > 0 && <Line size={SUMMARY_TEXT} label="Best inbound">{join(bestInbound.map((g) => <Text key={g.key}><B tone="good">{g.label}</B> {pct(inboundPct(g.stats))}</Text>))}</Line>}
+            {e.enquiries > 0 && <View style={{ marginBottom: 3 }}><SourceStrip size={7.5} groups={groupRows(eRows, ["source"], "enquiries")} /></View>}
+            <Line size={SUMMARY_TEXT} label="Best inbound">{eTop.length ? join(eTop.map((g) => <Text key={g.key}><B tone="good">{g.label}</B> {pct(inboundPct(g.stats), 0)} ({int(g.stats.inboundOrders)} of {int(g.stats.inboundEnquiries)})</Text>)) : "No inbound orders yet"}</Line>
             <Line size={SUMMARY_TEXT} label="Still open">{int(e.live)} live · {int(e.lost)} lost</Line>
           </SummaryCard>
           <SummaryCard title="Response times" kpis={[
@@ -529,9 +526,10 @@ const ENQ_EXEC_COLS: PCol<{ label: string; share: number; stats: Stats }>[] = [
 function EnquiriesPage({ input }: { input: PdfReportInput }) {
   const rows = inRange(input.enquiries, input.range);
   const e = statsOf(rows);
-  const sources = groupRows(rows, ["source"], "label");
-  const execs = groupRows(rows, ["exec"], "enquiries");
-  const models = groupRows(rows, ["model"], "enquiries");
+  // Performance order, as on the tab: sources by enquiries, execs and models by inbound conversion.
+  const sources = groupRows(rows, ["source"], "enquiries");
+  const execs = groupRows(rows, ["exec"], "inbound");
+  const models = groupRows(rows, ["model"], "inbound");
   const MODELS = 14;
   return (
     <ReportPage title="Enquiries" input={input} note="Conversion is orders ÷ enquiries raised in the period">
@@ -548,7 +546,7 @@ function EnquiriesPage({ input }: { input: PdfReportInput }) {
         {rows.length === 0 ? <Text style={s.note}>No enquiries in {input.range.label}.</Text> : (
           <View style={s.row}>
             <View style={[s.stack, { flex: 1.25 }]}>
-              <Panel title="By exec" note="sorted by enquiries">
+              <Panel title="By exec" note="sorted by inbound conversion">
                 <Table cols={ENQ_EXEC_COLS} rows={execs} keyOf={(g) => g.key} />
               </Panel>
               <Panel title="By source">
@@ -565,13 +563,14 @@ function EnquiriesPage({ input }: { input: PdfReportInput }) {
               </Panel>
             </View>
             <View style={[s.stack, { flex: 1 }]}>
-              <Panel title="By model" note="derivatives on the tab">
+              <Panel title="By model" note="sorted by inbound conversion · derivatives on the tab">
                 <Table cols={[
                   { label: "Model", text: (g) => g.label },
                   { label: "Enquiries", w: 40, text: (g) => int(g.stats.enquiries) },
                   { label: "Share", w: 52, text: (g) => `${g.share.toFixed(0)}%`, bar: (g) => ({ value: g.share, of: 100 }) },
                   { label: "Orders", w: 32, text: (g) => int(g.stats.orders) },
-                  { label: "Conv.", w: 38, strong: true, text: (g) => pct(conversionPct(g.stats)) },
+                  { label: "Inbound", w: 38, strong: true, text: (g) => pct(inboundPct(g.stats)) },
+                  { label: "Overall", w: 38, text: (g) => pct(conversionPct(g.stats)) },
                 ]} rows={models.slice(0, MODELS)} keyOf={(g) => g.key} more={moreNote(MODELS, models.length, "models")} />
               </Panel>
             </View>
@@ -610,7 +609,7 @@ function ResponsePage({ input }: { input: PdfReportInput }) {
   const byName = new Map<string, EnquiryRow[]>();
   for (const r of reportable) byName.set(r.salesExec, [...(byName.get(r.salesExec) ?? []), r]);
   const execs: RRow[] = [...byName].map(([label, rows]) => ({ label, s: summariseResponse(rows) }))
-    .sort((a, b) => b.s.sameDayMissedExec - a.s.sameDayMissedExec || (b.s.contactAvg ?? -1) - (a.s.contactAvg ?? -1));
+    .sort((a, b) => fastestFirst(a.s, b.s) || a.label.localeCompare(b.label));
   if (reportable.length) execs.push({ label: "Sales Support (allocation)", s: rs, support: true });
 
   // A day per line for up to a month; a long period goes by week so it fits.

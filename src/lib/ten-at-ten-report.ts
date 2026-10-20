@@ -298,9 +298,25 @@ function sortValue(s: Stats, sort: SortKey): number {
   return sort === "label" ? 0 : s[sort];
 }
 
+// Equal rates rank by the enquiries behind them, so 3 of 3 sits above 1 of 1.
+function sortBase(s: Stats, sort: SortKey): number {
+  if (sort === "inbound") return s.inboundEnquiries;
+  if (sort === "broker") return s.enquiries - s.inboundEnquiries;
+  return s.enquiries;
+}
+
 /** Enquiries grouped by one or two dimensions — e.g. source, then model. */
 export function groupRows(rows: readonly ReportRow[], dims: DimKey[], sort: SortKey = "enquiries"): Group[] {
-  return nest(rows, dims, (r, d) => r[d as DimKey], statsOf, sort === "label" ? null : (s) => sortValue(s, sort), (s) => s.enquiries);
+  return nest(rows, dims, (r, d) => r[d as DimKey], statsOf, sort === "label" ? null : (s) => sortValue(s, sort), (s) => sortBase(s, sort));
+}
+
+/**
+ * The execs with the best inbound conversion — the top of the Enquiries
+ * tab's By exec table, for Summary and the PDF (user, 2026-10-20). Only
+ * execs with an inbound order: a 0% is not a top performer.
+ */
+export function topInboundExecs(rows: readonly ReportRow[], n = 3): Group[] {
+  return groupRows(rows, ["exec"], "inbound").filter((g) => g.stats.inboundOrders > 0).slice(0, n);
 }
 
 // ─── Orders ────────────────────────────────────────────────────────────────

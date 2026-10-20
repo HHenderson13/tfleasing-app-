@@ -1,6 +1,7 @@
 // Formatters, colours and small rules shared by the 10 at 10 page and its
 // PDF export, so the two always show a figure the same way.
 
+import type { ResponseSummary } from "@/lib/enquiry-reporting";
 import type { MarketSegmentView } from "@/lib/market-overview";
 import type { CancellationView } from "@/lib/ten-at-ten-report";
 
@@ -45,6 +46,14 @@ export const dayLabel = (day: string) =>
 
 export const timeTone = (avg: number | null, target: number): "good" | "bad" | undefined =>
   avg == null ? undefined : avg <= target ? "good" : "bad";
+
+/**
+ * Response times By exec, fastest first (user, 2026-10-20): average first
+ * contact low to high, anyone never contacting a lead last, then fewest
+ * same-day misses of their own.
+ */
+export const fastestFirst = (a: ResponseSummary, b: ResponseSummary) =>
+  (a.contactAvg ?? Infinity) - (b.contactAvg ?? Infinity) || a.sameDayMissedExec - b.sameDayMissedExec;
 
 /**
  * Under the Orders figure: held orders cancelled since, and Re-Writes keyed

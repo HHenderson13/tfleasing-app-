@@ -787,6 +787,14 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
 - Exec codes show as names via the Pole Position name map where known.
 - No over-time chart, and "Build a breakdown" opens collapsed (user,
   2026-10-12: too much screen space). Every nested table starts collapsed.
+- **Every table opens in performance order** (user, 2026-10-20), on the
+  page and in the PDF alike: sources by enquiries (the source bar too);
+  Enquiries By exec and By model by inbound conversion, highest first, an
+  equal rate ranked by the inbound leads behind it (3 of 3 above 1 of 1);
+  Response times By exec fastest average first contact first
+  (`fastestFirst`), Sales Support still last; By day stays in date order;
+  Orders and Deliveries tables by units, highest first, but profit bands
+  keep their fixed order. A column header still re-sorts a table on screen.
 
 ### Who sees it
 
@@ -808,8 +816,11 @@ the tab does. Summary is cards, with no indigo hero of its own.
 
 Under each card's figures sits a short detail layer (user, 2026-10-12: "a
 little more detail, but not overwhelming") — a split or the names behind a
-number, a few lines at most, never a table: the source mix and top execs
-by orders; allocation and who missed same-day contact; ICE / BEV / Van
+number, a few lines at most, never a table: the source mix and the three
+best inbound conversions ("Best inbound", `topInboundExecs` — the top of
+the Enquiries By exec table, execs with an inbound order only; user,
+2026-10-20, Most orders stays on the Orders card); allocation and who
+missed same-day contact; ICE / BEV / Van
 units and average profit, loss-making count; Car and CV against budget;
 the latest cancellations with their reason or "Reason needed"; the
 strongest and weakest ranges (40+ deals) and the rival who undercuts us

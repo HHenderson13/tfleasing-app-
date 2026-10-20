@@ -12,6 +12,7 @@ import {
   rewritesAcross,
   statsOf,
   timeBuckets,
+  topInboundExecs,
   type StoredRow,
 } from "./ten-at-ten-report";
 
@@ -83,6 +84,21 @@ describe("stats and grouping", () => {
 
   it("sorts sources in their fixed order when sorted by name", () => {
     expect(groupRows(rows, ["source"], "label").map((x) => x.label)).toEqual(["TF Lead", "CarWow"]);
+  });
+
+  it("ranks execs by inbound conversion, equal rates by the inbound leads behind them", () => {
+    const execs = decodeReport(encodeReport([
+      stored({ exec: "One", outcome: "order" }),
+      stored({ exec: "Three", outcome: "order" }), stored({ exec: "Three", outcome: "order" }), stored({ exec: "Three", outcome: "order" }),
+      stored({ exec: "Half", outcome: "order" }), stored({ exec: "Half", outcome: "lost" }),
+      // Plenty of broker orders, no inbound one: 0% inbound.
+      stored({ exec: "Broker", source: "Broker / Prospect", outcome: "order" }), stored({ exec: "Broker", outcome: "lost" }),
+      // No inbound leads at all: no rate, so last.
+      stored({ exec: "None", source: "Broker / Prospect", outcome: "order" }),
+    ]));
+    expect(groupRows(execs, ["exec"], "inbound").map((g) => g.label)).toEqual(["Three", "One", "Half", "Broker", "None"]);
+    expect(topInboundExecs(execs).map((g) => g.label)).toEqual(["Three", "One", "Half"]);
+    expect(topInboundExecs(execs.filter((r) => r.exec === "Broker" || r.exec === "None"))).toEqual([]);
   });
 });
 

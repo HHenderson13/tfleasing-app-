@@ -41,6 +41,7 @@ import {
   rangeFor,
   rewritesAcross,
   statsOf,
+  topInboundExecs,
   type CreditedReOrder,
   type DimKey,
   type Nested,
@@ -62,7 +63,7 @@ import {
 import { saveCancellationNoteAction, setCancellationStatusAction } from "./actions";
 import type { PdfReportInput } from "./pdf-report";
 import {
-  MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, dayLabel, firstName, gapText, gbp, int,
+  MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, dayLabel, fastestFirst, firstName, gapText, gbp, int,
   isProper, marketTotals, needsReason, ordersAdjusted, pct, scrapeWhen, share, shortDate, timeTone,
 } from "./shared";
 
@@ -543,8 +544,10 @@ function ConversionPanel({ s }: { s: Stats }) {
 const EXEC_DIMS: DimKey[] = ["exec"];
 const MODEL_DIMS: DimKey[] = ["model", "derivative"];
 
+// Every table opens in performance order (user, 2026-10-20): sources by
+// enquiries, execs and models by inbound conversion, highest first.
 function SourceShare({ rows }: { rows: ReportRow[] }) {
-  const groups = useMemo(() => groupRows(rows, ["source"], "label"), [rows]);
+  const groups = useMemo(() => groupRows(rows, ["source"], "enquiries"), [rows]);
   return (
     <Card title="Enquiries by source">
       <div className="flex h-9 w-full overflow-hidden rounded-lg">
@@ -562,7 +565,7 @@ function SourceShare({ rows }: { rows: ReportRow[] }) {
 }
 
 function EnquiryBreakdown({ title, note, rows, dims, customers }: { title: string; note?: string; rows: ReportRow[]; dims: DimKey[]; customers?: boolean }) {
-  const [sort, setSort] = useState<SortKey>("enquiries");
+  const [sort, setSort] = useState<SortKey>("inbound");
   const groups = useMemo(() => groupRows(rows, dims, sort), [rows, dims, sort]);
   return (
     <Card title={title} note={note}>
@@ -1014,8 +1017,7 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
   }, [reportable]);
   const byExec = useMemo(() => {
     const execs = rGroups(reportable, (r) => r.salesExec)
-      // Worst first: most same-day misses of their own, then slowest response.
-      .sort((a, b) => b.stats.sameDayMissedExec - a.stats.sameDayMissedExec || (b.stats.contactAvg ?? -1) - (a.stats.contactAvg ?? -1));
+      .sort((a, b) => fastestFirst(a.stats, b.stats) || a.label.localeCompare(b.label));
     // Sales Support carries the misses an exec couldn't have prevented: leads
     // passed over too late to call that day, never passed over, or allocated
     // over target. Its figures are allocation figures (target 5 minutes).
@@ -1513,8 +1515,8 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
 }) {
   const eRows = useMemo(() => inRange(enquiries, range), [enquiries, range]);
   const e = useMemo(() => statsOf(eRows), [eRows]);
-  const eSources = useMemo(() => groupRows(eRows, ["source"], "label"), [eRows]);
-  const eTop = useMemo(() => groupRows(eRows, ["exec"], "orders").filter((g) => g.stats.orders > 0).slice(0, 3), [eRows]);
+  const eSources = useMemo(() => groupRows(eRows, ["source"], "enquiries"), [eRows]);
+  const eTop = useMemo(() => topInboundExecs(eRows), [eRows]);
 
   const r = useMemo(() => {
     const period = responses.filter((x) => x.enquiryDay >= range.startDay && x.enquiryDay <= range.endDay);
@@ -1589,8 +1591,13 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
                 </span>
               ))}
             </div>
-            <Line label="Most orders">
-              {eTop.length ? eTop.map((g, i) => <Fragment key={g.key}>{i > 0 && " · "}<b className="text-slate-800">{g.label}</b> {int(g.stats.orders)}</Fragment>) : "None yet"}
+            <Line label="Best inbound">
+              {eTop.length ? eTop.map((g, i) => (
+                <Fragment key={g.key}>
+                  {i > 0 && " · "}<b className="text-slate-800">{g.label}</b> {pct(inboundPct(g.stats), 0)}{" "}
+                  <span className="text-slate-400">({int(g.stats.inboundOrders)} of {int(g.stats.inboundEnquiries)})</span>
+                </Fragment>
+              )) : "No inbound orders yet"}
             </Line>
             <Line label="Still open">{int(e.live)} live · {int(e.lost)} lost</Line>
           </>
