@@ -142,10 +142,10 @@ export function ReportClient({ payload, orders, deliveries, budgets, bonusRates,
   return (
     <CanManage.Provider value={canManage}>
     <div className="mt-5 space-y-5">
-      {/* Seven tabs don't fit a phone: they scroll sideways in their own row,
-          and Export PDF stays put beside them. */}
+      {/* Seven tabs don't fit a phone: they wrap onto a second line rather
+          than scroll sideways (user, 2026-10-20), and Export PDF stays put. */}
       <div className="flex items-center gap-3 border-b border-slate-200">
-        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1">
           {SECTIONS.map(([key, label]) => (
             <button
               key={key}
@@ -165,12 +165,12 @@ export function ReportClient({ payload, orders, deliveries, budgets, bonusRates,
 
       {/* Period, shared by every section but the market, which is always the latest scrape */}
       {section !== "market" && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+        <div className="inline-flex flex-wrap rounded-lg bg-slate-100 p-0.5">
           {MODES.map((m) => (
             <button
               key={m.key}
               onClick={() => setMode(m.key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${mode === m.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition sm:px-3 sm:text-sm ${mode === m.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
             >
               {m.label}
             </button>
@@ -188,7 +188,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, bonusRates,
           <div className="flex items-center gap-2">
             <button onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))} disabled={range.startDay <= minDay}
               className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-30" aria-label="Previous period">‹</button>
-            <span className="min-w-[200px] text-center text-sm font-semibold text-slate-900">{range.label}</span>
+            <span className="min-w-[160px] text-center text-sm font-semibold text-slate-900 sm:min-w-[200px]">{range.label}</span>
             <button onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))} disabled={range.endDay >= today}
               className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-30" aria-label="Next period">›</button>
             {!atCurrent && (
@@ -263,7 +263,7 @@ function Empty({ children }: { children: ReactNode }) {
 function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     // min-w-0 lets a card in a grid shrink, so a wide table scrolls inside it rather than widening the page.
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {note && <span className="text-[11px] text-slate-400">{note}</span>}
@@ -273,16 +273,18 @@ function Card({ title, note, children }: { title: string; note?: string; childre
   );
 }
 
-const TILE_COLS: Record<number, string> = { 3: "sm:grid-cols-3", 4: "sm:grid-cols-4", 5: "sm:grid-cols-5" };
+// Four or five figures a row only once there's room for "£101,787" in each;
+// narrower, they wrap to fewer a row rather than spill sideways.
+const TILE_COLS: Record<number, string> = { 3: "sm:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4", 5: "sm:grid-cols-3 lg:grid-cols-5" };
 
 function Tiles({ tiles }: { tiles: { label: string; value: string; sub?: string; hero?: boolean; tone?: "good" | "bad" }[] }) {
   return (
-    <div className={`grid grid-cols-2 gap-3 ${TILE_COLS[tiles.length] ?? "sm:grid-cols-4"}`}>
+    <div className={`grid grid-cols-2 gap-3 ${TILE_COLS[tiles.length] ?? "sm:grid-cols-2 lg:grid-cols-4"}`}>
       {tiles.map((t) => (
-        <div key={t.label} className={`rounded-2xl border px-4 py-3 shadow-sm ${t.hero ? "border-indigo-900 bg-indigo-950 text-white" : "border-slate-200 bg-white"}`}>
+        <div key={t.label} className={`min-w-0 rounded-2xl border px-4 py-3 shadow-sm ${t.hero ? "border-indigo-900 bg-indigo-950 text-white" : "border-slate-200 bg-white"}`}>
           <div className={`text-[11px] font-semibold uppercase tracking-wider ${t.hero ? "text-indigo-200" : "text-slate-500"}`}>{t.label}</div>
-          <div className="mt-1 flex items-center gap-2">
-            <span className={`text-3xl font-bold tabular-nums ${t.hero ? "text-white" : t.tone === "good" ? "text-emerald-700" : t.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{t.value}</span>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={`text-xl font-bold tabular-nums min-[380px]:text-2xl sm:text-3xl ${t.hero ? "text-white" : t.tone === "good" ? "text-emerald-700" : t.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{t.value}</span>
             {/* The highlighted tile keeps its white figure; on/off target shows as a badge. */}
             {t.hero && t.tone && (
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${t.tone === "good" ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/25 text-rose-200"}`}>
@@ -328,9 +330,19 @@ function Select({ value, onChange, all, options }: { value: string; onChange: (v
   );
 }
 
+// Columns that give way on a narrow table, by the table's own width (a
+// container query) rather than the screen's, so no table needs a sideways
+// scroll at any size (user, 2026-10-20). Literal class names, for Tailwind.
+type ShowAt = "md" | "lg" | "xl" | "2xl" | "3xl";
+const SHOW_AT: Record<ShowAt, string> = {
+  md: "hidden @md:table-cell", lg: "hidden @lg:table-cell", xl: "hidden @xl:table-cell", "2xl": "hidden @2xl:table-cell", "3xl": "hidden @3xl:table-cell",
+};
+const showAt = (s?: ShowAt) => (s ? SHOW_AT[s] : "");
+
 // A table of nested groups. Columns are supplied by the section, so the
 // enquiry and order tables share the expanding, sorting and "show all".
-interface Col<S, R = unknown> { key: string; label: string; render: (g: Nested<S, R>) => ReactNode; strong?: boolean; left?: boolean }
+// `show` is the table width a column needs before it appears.
+interface Col<S, R = unknown> { key: string; label: string; render: (g: Nested<S, R>) => ReactNode; strong?: boolean; left?: boolean; show?: ShowAt }
 
 function ShareCell({ share }: { share: number }) {
   return (
@@ -361,8 +373,8 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
   const opens = (g: Nested<S, R>) => (detail ? g.rows.length > 0 : hasDetail(g));
   const anyExpandable = groups.some(opens);
   const toggle = (k: string) => setOpen((cur) => { const n = new Set(cur); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  const head = (k: string, label: string, left?: boolean) => (
-    <th key={k} className={`px-2 py-2 font-semibold ${left ? "text-left" : "text-right"}`}>
+  const head = (k: string, label: string, left?: boolean, show?: ShowAt) => (
+    <th key={k} className={`px-1.5 py-2 font-semibold @md:px-2 ${left ? "text-left" : "text-right"} ${showAt(show)}`}>
       {onSort && k !== "share" ? (
         <button onClick={() => onSort(k)} className={`hover:text-slate-900 ${sort === k ? "text-slate-900" : ""}`}>{label}{sort === k ? " ↓" : ""}</button>
       ) : label}
@@ -374,7 +386,7 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
       <tr key={parent ? `${parent}›${g.key}` : g.key}
         className={`border-b border-slate-100 ${depth > 0 ? "bg-slate-50/70 text-slate-600" : ""} ${expandable ? "cursor-pointer hover:bg-slate-50" : ""}`}
         onClick={expandable ? () => toggle(g.key) : undefined}>
-        <td className={`px-2 py-1.5 ${depth > 0 ? "pl-8 text-xs" : "font-medium text-slate-900"}`}>
+        <td className={`px-1.5 py-1.5 [overflow-wrap:anywhere] @md:px-2 ${depth > 0 ? "pl-8 text-xs" : "font-medium text-slate-900"}`}>
           <span className="inline-flex items-center gap-2">
             {expandable ? <span className="w-3 text-slate-400">{open.has(g.key) ? "▾" : "▸"}</span> : depth === 0 && anyExpandable && <span className="w-3" />}
             {depth === 0 && swatches?.[g.label] && <span className="h-2.5 w-2.5 rounded-sm" style={{ background: swatches[g.label] }} />}
@@ -382,18 +394,18 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
           </span>
         </td>
         {cols.map((c) => (
-          <td key={c.key} className={`px-2 py-1.5 tabular-nums ${c.left ? "" : "text-right"} ${c.strong ? "font-semibold text-slate-900" : ""}`}>{c.render(g)}</td>
+          <td key={c.key} className={`px-1.5 py-1.5 tabular-nums @md:px-2 ${c.left ? "" : "text-right"} ${c.strong ? "font-semibold text-slate-900" : ""} ${showAt(c.show)}`}>{c.render(g)}</td>
         ))}
       </tr>
     );
   };
   return (
-    <div className="overflow-x-auto">
+    <div className="@container overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-[10px] uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-200">
             {head("label", dimTitle, true)}
-            {cols.map((c) => head(c.key, c.label, c.left))}
+            {cols.map((c) => head(c.key, c.label, c.left, c.show))}
           </tr>
         </thead>
         <tbody>
@@ -403,6 +415,7 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
               {open.has(g.key) && (detail
                 ? opens(g) && (
                   <tr className="border-b border-slate-100 bg-slate-50/60">
+                    {/* Spans every column, shown or not — the extra span is harmless. */}
                     <td colSpan={cols.length + 1} className="px-2 py-2">{detail(g)}</td>
                   </tr>
                 )
@@ -640,15 +653,17 @@ function BonusMoney({ n }: { n: number }) {
 
 // The count column reads "Orders" or "Deliveries" to match the tab. Profit
 // three ways (user, 2026-10-20): Invoice (Total Gross), Bonuses, and the
-// two together, which the average and loss-making run on.
+// two together, which the average and loss-making run on. On a narrow
+// table Share goes first, then Loss-making, Invoice and Bonuses; units,
+// total and the average always stay.
 const orderCols = (unit: string): Col<OrderStats>[] => [
   { key: "orders", label: unit, render: (g) => int(g.stats.orders) },
-  { key: "share", label: "Share", left: true, render: (g) => <ShareCell share={g.share} /> },
-  { key: "invoice", label: "Invoice profit", render: (g) => <Money n={invoiceProfit(g.stats)} /> },
-  { key: "bonus", label: "Bonuses", render: (g) => <BonusMoney n={g.stats.bonus} /> },
+  { key: "share", label: "Share", left: true, show: "3xl", render: (g) => <ShareCell share={g.share} /> },
+  { key: "invoice", label: "Invoice profit", show: "xl", render: (g) => <Money n={invoiceProfit(g.stats)} /> },
+  { key: "bonus", label: "Bonuses", show: "lg", render: (g) => <BonusMoney n={g.stats.bonus} /> },
   { key: "total", label: "Total profit", render: (g) => <Money n={totalProfit(g.stats)} /> },
   { key: "avg", label: "Avg per unit", strong: true, render: (g) => <Money n={avgProfit(g.stats)} /> },
-  { key: "loss", label: "Loss-making", render: (g) => <span className={g.stats.loss ? "text-rose-700" : "text-slate-400"}>{int(g.stats.loss)}</span> },
+  { key: "loss", label: "Loss-making", show: "2xl", render: (g) => <span className={g.stats.loss ? "text-rose-700" : "text-slate-400"}>{int(g.stats.loss)}</span> },
 ];
 const ORDER_COLS = orderCols("Orders");
 const DELIVERY_COLS = orderCols("Deliveries");
@@ -759,12 +774,11 @@ function DealbookSection({ all, range, variant, bonusRates, budgets, today, canc
         <>
           <SegmentCards rows={rows} noun={isDel ? "deliveries" : "orders"} />
           <BonusCard rows={rows} rates={bonusRates} noun={noun} />
-          {/* The two tables that open into customer lists get the full width. */}
+          {/* Every table full width, so all its columns fit on a laptop
+              without a sideways scroll (user, 2026-10-20). */}
           <OrderBreakdown title="By exec" note="Click an exec for their customers" rows={rows} dims={O_EXEC} customers="date" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
-          <div className="grid gap-5 lg:grid-cols-2">
-            <OrderBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={O_MODEL} cols={cols} />
-            <OrderBreakdown title="By funder" note="Click a funder for its models" rows={rows} dims={O_FUNDER} cols={cols} />
-          </div>
+          <OrderBreakdown title="By model" note="Click a model for its derivatives" rows={rows} dims={O_MODEL} cols={cols} />
+          <OrderBreakdown title="By funder" note="Click a funder for its models" rows={rows} dims={O_FUNDER} cols={cols} />
           <OrderBreakdown title="Profit bands" note="By total profit · click a band for its customers" rows={rows} dims={O_BAND} defaultSort="label" customers="profit" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
           <BestWorst rows={rows} title={isDel ? "Most and least profitable deliveries" : "Most and least profitable orders"} />
           <OrderBuilder rows={rows} cols={cols} />
@@ -974,48 +988,56 @@ function BonusCell({ r }: { r: OrderRow }) {
   );
 }
 
-// One line per order: who bought what, when, how it was funded, and what it made.
+// One line per order: who bought what, when, how it was funded, and what it
+// made. The vehicle sits under the customer, and on a narrow list the
+// columns give way as the tables' do — funder first, then exec and Basic,
+// status, invoice and bonus — so it never needs a sideways scroll.
 function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLabel = "Delivery" }: {
   rows: OrderRow[]; by: "date" | "profit"; showExec?: boolean; dateLabel?: string; statusLabel?: string;
 }) {
   const sorted = useMemo(() => [...rows].sort((a, b) =>
     by === "date" ? b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer) : (a.total ?? Infinity) - (b.total ?? Infinity),
   ), [rows, by]);
+  const th = (label: string, right = false, show?: ShowAt, title?: string) =>
+    <th className={`px-1.5 py-1 font-semibold @md:px-2 ${right ? "text-right" : "text-left"} ${showAt(show)}`} title={title}>{label}</th>;
   return (
-    <table className="w-full text-xs">
-      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
-        <tr>
-          <th className="px-2 py-1 text-left font-semibold">Customer</th>
-          <th className="px-2 py-1 text-left font-semibold">Vehicle</th>
-          {showExec && <th className="px-2 py-1 text-left font-semibold">Exec</th>}
-          <th className="px-2 py-1 text-left font-semibold">{dateLabel}</th>
-          <th className="px-2 py-1 text-left font-semibold">Funder</th>
-          <th className="px-2 py-1 text-left font-semibold">{statusLabel}</th>
-          <th className="px-2 py-1 text-right font-semibold" title="Basic price from the deal's Dealbook Extract line — what a percentage bonus is paid on">Basic</th>
-          <th className="px-2 py-1 text-right font-semibold">Invoice</th>
-          <th className="px-2 py-1 text-right font-semibold">Bonus</th>
-          <th className="px-2 py-1 text-right font-semibold">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {sorted.map((r, i) => (
-          <tr key={i} className="border-t border-slate-100 align-top">
-            <td className="max-w-[260px] truncate px-2 py-1 font-medium text-slate-800" title={r.customer}>{r.customer}</td>
-            <td className="max-w-[420px] truncate px-2 py-1 text-slate-600" title={r.derivative}>{r.derivative.replace(" (model only)", "")}</td>
-            {showExec && <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.exec}</td>}
-            <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(r.day)}</td>
-            <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.funder}</td>
-            <td className="whitespace-nowrap px-2 py-1 text-slate-600">{r.delivery}</td>
-            <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-500">
-              {r.basic != null ? gbp(r.basic) : <span className="text-[11px] text-slate-400" title="No Dealbook Extract line found for this deal">not found</span>}
-            </td>
-            <td className="px-2 py-1 text-right tabular-nums text-slate-600"><Money n={r.profit} /></td>
-            <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-600"><BonusCell r={r} /></td>
-            <td className="px-2 py-1 text-right font-semibold tabular-nums"><Money n={r.total} /></td>
+    <div className="@container">
+      <table className="w-full text-xs">
+        <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+          <tr>
+            {th("Customer · vehicle")}
+            {showExec && th("Exec", false, "2xl")}
+            {th(dateLabel)}
+            {th("Funder", false, "3xl")}
+            {th(statusLabel, false, "xl")}
+            {th("Basic", true, "2xl", "Basic price from the deal's Dealbook Extract line — what a percentage bonus is paid on")}
+            {th("Invoice", true, "lg")}
+            {th("Bonus", true, "md")}
+            {th("Total", true)}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {sorted.map((r, i) => (
+            <tr key={i} className="border-t border-slate-100 align-top">
+              <td className="px-1.5 py-1 [overflow-wrap:anywhere] @md:px-2">
+                <div className="font-medium text-slate-800">{r.customer}</div>
+                <div className="text-[11px] text-slate-500">{r.derivative.replace(" (model only)", "")}</div>
+              </td>
+              {showExec && <td className={`whitespace-nowrap px-2 py-1 text-slate-600 ${showAt("2xl")}`}>{r.exec}</td>}
+              <td className="whitespace-nowrap px-1.5 py-1 text-slate-600 @md:px-2">{shortDate(r.day)}</td>
+              <td className={`whitespace-nowrap px-2 py-1 text-slate-600 ${showAt("3xl")}`}>{r.funder}</td>
+              <td className={`whitespace-nowrap px-2 py-1 text-slate-600 ${showAt("xl")}`}>{r.delivery}</td>
+              <td className={`whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-500 ${showAt("2xl")}`}>
+                {r.basic != null ? gbp(r.basic) : <span className="text-[11px] text-slate-400" title="No Dealbook Extract line found for this deal">not found</span>}
+              </td>
+              <td className={`px-2 py-1 text-right tabular-nums text-slate-600 ${showAt("lg")}`}><Money n={r.profit} /></td>
+              <td className={`whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-600 ${showAt("md")}`}><BonusCell r={r} /></td>
+              <td className="px-1.5 py-1 text-right font-semibold tabular-nums @md:px-2"><Money n={r.total} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

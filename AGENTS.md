@@ -826,9 +826,25 @@ the latest cancellations with their reason or "Reason needed"; the
 strongest and weakest ranges (40+ deals) and the rival who undercuts us
 most. Keep it to that weight.
 
-Seven tabs don't fit a phone, so the tab row scrolls sideways in place, and
-`Card` carries `min-w-0` so a wide table scrolls inside its card instead of
-widening the page. Check new views at 390px wide for horizontal scroll.
+**No sideways scrolling on Orders and Deliveries, at any width** (user,
+2026-10-20). The tab row wraps onto a second line on a phone (it used to
+scroll). Tables give way column by column by **their own width** — a
+container query (`@container` on GroupTable and OrderList, `show` on a
+column, `SHOW_AT` in report.tsx) — never by the screen's: on orders and
+deliveries Share goes first, then Loss-making, Invoice, Bonuses; units,
+total and the average always stay. Customer lists put the vehicle under the
+customer and drop funder, exec, Basic, status, invoice, bonus in turn. Names
+and labels wrap anywhere (`[overflow-wrap:anywhere]`) so no long word can
+force a table wide; By model and By funder are full width so a laptop shows
+every column. `overflow-x-auto` stays only as a safety net.
+
+To check a layout: render the tab to HTML from real files (react-dom/server
+in a scratch copy of `src`, every group opened), link the built CSS from
+`.next/static/chunks`, and measure `scrollWidth` vs `clientWidth` in headless
+Chrome. **Chrome won't lay a window out narrower than 500px**, so phone
+widths (320–430) must be measured inside an iframe of that width. Checked
+on the Oct 2026 files at 320, 360, 390, 414, 430, 768, 1024, 1280, 1440 and
+1920: nothing scrolls.
 
 **Market Analysis is an overview, not a second copy of `/scraper`.** It
 reads the latest finished scrape's digest — the same `summariseRun` digest
