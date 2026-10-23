@@ -2,7 +2,7 @@
 // PDF export, so the two always show a figure the same way.
 
 import type { ResponseSummary } from "@/lib/enquiry-reporting";
-import type { BonusFlag } from "@/lib/ten-at-ten-bonus";
+import type { BonusType } from "@/lib/ten-at-ten-bonus";
 import type { MarketSegmentView } from "@/lib/market-overview";
 import type { CancellationView } from "@/lib/ten-at-ten-report";
 
@@ -22,12 +22,16 @@ export const SEGMENT_META: Record<string, { title: string; colour: string }> = {
 
 export const STATUS_COLOURS: Record<string, string> = { Delivered: "#047857", Arrived: "#0891b2", Due: "#94a3b8" };
 
-/** Bonus types: cars keep the segment colours; vans the van blue, BEV vans a darker teal. */
-export const BONUS_TYPE_COLOURS: Record<string, string> = {
-  "ICE Car": SEGMENT_META["ICE Car"].colour,
-  "BEV Car": SEGMENT_META["BEV Car"].colour,
-  "ICE Van": SEGMENT_META.Van.colour,
-  "BEV Van": "#0e7490",
+/**
+ * The four types the avg-profit cards split by on Orders and Deliveries (user,
+ * 2026-10-23): cars keep the segment colours; ICE vans the van blue, BEV vans
+ * a darker teal.
+ */
+export const TYPE_META: Record<BonusType, { title: string; colour: string }> = {
+  "ICE Car": SEGMENT_META["ICE Car"],
+  "BEV Car": SEGMENT_META["BEV Car"],
+  "ICE Van": { title: "ICE Vans", colour: SEGMENT_META.Van.colour },
+  "BEV Van": { title: "BEV Vans", colour: "#0e7490" },
 };
 
 export const MARKET_META: Record<string, { title: string; colour: string }> = {
@@ -73,22 +77,6 @@ export function ordersAdjusted(cancelled: number, rewritesOut: number): string |
     cancelled ? `${int(cancelled)} cancelled since, left out` : "",
     rewritesOut ? `${int(rewritesOut)} Re-Write${rewritesOut === 1 ? "" : "s"} counted in the original month` : "",
   ].filter(Boolean).join(" · ") || undefined;
-}
-
-/**
- * What a set of deals' bonuses are short of, for the note under the tiles:
- * deals due a percentage with no Basic held, and deals delivering in months
- * with no scheme set (named, "Jan–Mar 2027").
- */
-export function bonusGaps(rows: readonly { bonusFlag: BonusFlag; bonusDay: string | null }[]): { noBasic: number; noScheme: number; noSchemeMonths: string[]; noDate: number } {
-  const months = new Set<string>();
-  let noBasic = 0, noScheme = 0, noDate = 0;
-  for (const r of rows) {
-    if (r.bonusFlag === "noBasic") noBasic++;
-    else if (r.bonusFlag === "noDate") noDate++;
-    else if (r.bonusFlag === "noScheme") { noScheme++; if (r.bonusDay) months.add(r.bonusDay.slice(0, 7)); }
-  }
-  return { noBasic, noScheme, noSchemeMonths: [...months].sort(), noDate };
 }
 
 /** "Jan–Mar 2027", "Oct 2026, Jan 2027" — months as a short run. */

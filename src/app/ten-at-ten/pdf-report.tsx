@@ -21,13 +21,14 @@ import {
   isTransferMissing, neverContactedOwner, partitionByReportability, sameDayMissOwner, summariseResponse, type ResponseSummary,
 } from "@/lib/enquiry-reporting";
 import type { MarketOverview, MarketSegmentView } from "@/lib/market-overview";
+import { BONUS_TYPES } from "@/lib/ten-at-ten-bonus";
 import {
   SEGMENTS, avgProfit, brokerPct, budgetLines, budgetMonths, conversionPct, daysToCancel, groupOrders, groupRows, inRange, inboundPct,
   invoiceProfit, orderStatsOf, periodProgress, rewritesAcross, statsOf, topInboundExecs, totalProfit,
   type BudgetLine, type CreditedReOrder, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
 } from "@/lib/ten-at-ten-report";
 import {
-  DEPARTMENT_COLOURS, MARKET_META, SEGMENT_META, SOURCE_COLOURS, fastestFirst, firstName, gapText, gbp, int, isProper, marketTotals, needsReason,
+  DEPARTMENT_COLOURS, MARKET_META, SEGMENT_META, SOURCE_COLOURS, TYPE_META, fastestFirst, firstName, gapText, gbp, int, isProper, marketTotals, needsReason,
   ordersAdjusted, pct, scrapeWhen, share, shortDate,
 } from "./shared";
 
@@ -304,15 +305,16 @@ const PROFIT_ROW_COLS: PCol<OrderRow>[] = [
   { label: "Total", w: 40, strong: true, text: (r) => money(r.total), tone: (r) => ((r.total ?? 0) < 0 ? "bad" : undefined) },
 ];
 
-function SegmentKpis({ rows, noun }: { rows: OrderRow[]; noun: string }) {
-  const groups = new Map(groupOrders(rows, ["segment"]).map((g) => [g.label, g]));
+// As on the tabs: ICE and BEV cars, ICE and BEV vans.
+function TypeKpis({ rows, noun }: { rows: OrderRow[]; noun: string }) {
+  const groups = new Map(groupOrders(rows, ["bonusType"]).map((g) => [g.label, g]));
   return (
     <>
-      {SEGMENTS.map((seg) => {
-        const g = groups.get(seg);
+      {BONUS_TYPES.map((t) => {
+        const g = groups.get(t);
         const avg = g ? avgProfit(g.stats) : null;
         return (
-          <Kpi key={seg} label={`${SEGMENT_META[seg].title} · avg`} value={money(avg)} tone={(avg ?? 0) < 0 ? "bad" : undefined} accent={SEGMENT_META[seg].colour}
+          <Kpi key={t} label={`${TYPE_META[t].title} · avg`} value={money(avg)} tone={(avg ?? 0) < 0 ? "bad" : undefined} accent={TYPE_META[t].colour}
             sub={g ? `${int(g.stats.orders)} ${noun} · ${g.share.toFixed(0)}% · ${int(g.stats.loss)} loss-making` : `No ${noun}`} />
         );
       })}
@@ -695,7 +697,7 @@ function OrdersPage({ input }: { input: PdfReportInput }) {
           <Kpi label="Total profit" value={money(totalProfit(o))} tone={(totalProfit(o) ?? 0) < 0 ? "bad" : undefined}
             sub={`${money(invoiceProfit(o))} invoice + ${money(o.bonus)} bonuses · ${int(o.loss)} loss-making`} />
           <Kpi label="Avg profit per unit" value={money(avgProfit(o))} hero sub="invoice + bonus" />
-          <SegmentKpis rows={rows} noun="units" />
+          <TypeKpis rows={rows} noun="units" />
         </View>
         {rows.length === 0 ? <Text style={s.note}>No orders in {input.range.label}.</Text> : (
           <View style={s.row}>
@@ -778,7 +780,7 @@ function DeliveriesPage({ input }: { input: PdfReportInput }) {
           <Kpi label="Still to deliver" value={int(rows.length - dv.delivered)} sub={`${int(dv.arrived)} arrived · ${int(dv.due)} due`} />
           <Kpi label="Avg profit per unit" value={money(avgProfit(st))} hero
             sub={`${money(totalProfit(st))} total · ${money(invoiceProfit(st))} invoice + ${money(st.bonus)} bonuses`} />
-          <SegmentKpis rows={rows} noun="units" />
+          <TypeKpis rows={rows} noun="units" />
         </View>
         {rows.length === 0 ? <Text style={s.note}>No deliveries in {input.range.label}.</Text> : (
           <View style={s.row}>

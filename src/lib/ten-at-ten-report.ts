@@ -230,7 +230,7 @@ export type SortKey = "enquiries" | "orders" | "conversion" | "inbound" | "broke
 // Label order for the "A–Z" sort: sources, segments and profit bands in
 // their fixed order, numbers numerically ("6,000 miles" before "10,000
 // miles"), "Not stated" and model-only buckets last.
-const FIXED_ORDER: Record<string, readonly string[]> = { source: SOURCES, segment: SEGMENTS, profitBand: PROFIT_BANDS };
+const FIXED_ORDER: Record<string, readonly string[]> = { source: SOURCES, segment: SEGMENTS, bonusType: BONUS_TYPES, profitBand: PROFIT_BANDS };
 
 function compareLabels(dim: string, a: string, b: string): number {
   if (a === b) return 0;
@@ -472,7 +472,8 @@ export function avgProfit(s: OrderStats): number | null {
   return s.priced > 0 ? (s.invoice + s.pricedBonus) / s.priced : null;
 }
 
-export type OrderDimKey = "segment" | "exec" | "model" | "derivative" | "funder" | "product" | "term" | "delivery" | "profitBand";
+/** `bonusType` (ICE / BEV car, ICE / BEV van) groups the avg-profit cards; it isn't offered in the builder. */
+export type OrderDimKey = "segment" | "bonusType" | "exec" | "model" | "derivative" | "funder" | "product" | "term" | "delivery" | "profitBand";
 
 export const ORDER_DIMENSIONS: { key: OrderDimKey; label: string }[] = [
   { key: "segment", label: "Segment" },

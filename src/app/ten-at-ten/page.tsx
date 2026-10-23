@@ -77,7 +77,7 @@ export default async function TenAtTenPage() {
           </div>
           {lastUpload && <p className="text-xs text-slate-400">Last upload {lastUpload}</p>}
         </div>
-        <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets} bonusRates={bonusRates}
+        <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
           responses={responses} reportHorizon={reportHorizon} today={today}
           cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} canManage={canManage} />
       </main>

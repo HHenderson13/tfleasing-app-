@@ -1011,7 +1011,8 @@ files; `detectTenAtTenFile` tells them apart by header.
 - HaHe / JoRu are stripped from orders too ("all data").
 - Headline tiles: orders, invoice profit, bonuses, total profit, average
   profit (on total) — no loss-making tile (user, 2026-10-12; bonuses
-  2026-10-20, see Bonuses below). Profit bands split losses three ways (−£1,000 and
+  2026-10-20, see Bonuses below). Under the tiles, avg profit per unit for
+  ICE / BEV cars and ICE / BEV vans (user, 2026-10-23). Profit bands split losses three ways (−£1,000 and
   below, −£999 to −£500, −£499 to −£1). By exec and profit bands open into
   the individual orders; groups carry their `rows` for exactly this.
 
@@ -1068,6 +1069,13 @@ rates and the extract held by `lib/ten-at-ten-store.ts`.
   profit bands, loss-making and most / least profitable all run on **total**
   (user's call). Avg is over units with an invoice figure; a unit without
   one still has its bonus in Bonuses.
+- **No "Bonuses by type" card** (removed, user 2026-10-23). Instead the
+  avg-profit cards under the tiles split four ways by `bonusType` — ICE
+  Cars, BEV Cars, ICE Vans, BEV Vans (`TYPE_META` in `shared.ts`), on the
+  tabs and the PDF's Orders / Deliveries KPI rows alike — so vans split
+  exactly as the bonus splits them. The filter chips, budgets and Summary
+  stay on the three segments (ICE Car, BEV Car, Van). Per-deal gaps
+  (no scheme, no Basic) still show in each customer list's Bonus column.
 - **By delivery date, never order date.** A deal earns its type's rate in
   the month it delivers; Arrived and Due show the bonus at the date
   Dealerweb gives them now, and move with it (user's call). An order's

@@ -62,11 +62,11 @@ import {
   type Budgets,
   type CancellationView,
 } from "@/lib/ten-at-ten-report";
-import { BONUS_TYPES, ratesText, type BonusRates, type BonusType } from "@/lib/ten-at-ten-bonus";
+import { BONUS_TYPES } from "@/lib/ten-at-ten-bonus";
 import { saveCancellationNoteAction, setCancellationStatusAction } from "./actions";
 import type { PdfReportInput } from "./pdf-report";
 import {
-  BONUS_TYPE_COLOURS, MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, bonusGaps, dayLabel, fastestFirst, firstName, gapText, gbp, int, monthsText,
+  MARKET_META, SALES_SUPPORT, SEGMENT_META, SOURCE_COLOURS, STATUS_COLOURS, TYPE_META, dayLabel, fastestFirst, firstName, gapText, gbp, int, monthsText,
   isProper, marketTotals, needsReason, ordersAdjusted, pct, scrapeWhen, share, shortDate, timeTone,
 } from "./shared";
 
@@ -98,10 +98,8 @@ function UploadHint({ file }: { file: string }) {
     : <> It appears once {file} has been uploaded.</>;
 }
 
-export function ReportClient({ payload, orders, deliveries, budgets, bonusRates, responses, reportHorizon, today, cancellations, cancelledOrderDays, rewriteMoves, market, canManage = false }: {
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, rewriteMoves, market, canManage = false }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
-  /** Ford's quarterly bonus by delivery month — the rates each deal's bonus was worked out on. */
-  bonusRates: BonusRates;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
   /** Every cancellation, already classified on the server. */
   cancellations: CancellationView[];
@@ -206,9 +204,9 @@ export function ReportClient({ payload, orders, deliveries, budgets, bonusRates,
 
       {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
-      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range} bonusRates={bonusRates}
+      {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range}
         cancelledDays={cancelledOrderDays} rewriteMoves={rewriteMoves} onShowCancellations={() => setSection("cancellations")} />}
-      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} bonusRates={bonusRates} budgets={budgets} today={today} />}
+      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
       {section === "market" && <MarketSection market={market} />}
     </div>
@@ -677,8 +675,8 @@ type StatusName = (typeof STATUSES)[number];
 // Orders and Deliveries are the same Dealbook report counted two ways —
 // by order date, or by delivery date with a status — so one section serves
 // both. Deliveries adds the status filter and the department budget panel.
-function DealbookSection({ all, range, variant, bonusRates, budgets, today, cancelledDays, rewriteMoves, onShowCancellations }: {
-  all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; bonusRates: BonusRates; budgets?: Budgets; today?: string;
+function DealbookSection({ all, range, variant, budgets, today, cancelledDays, rewriteMoves, onShowCancellations }: {
+  all: OrderRow[]; range: Range; variant: "orders" | "deliveries"; budgets?: Budgets; today?: string;
   cancelledDays?: string[]; rewriteMoves?: CreditedReOrder[]; onShowCancellations?: () => void;
 }) {
   const isDel = variant === "deliveries";
@@ -772,8 +770,7 @@ function DealbookSection({ all, range, variant, bonusRates, budgets, today, canc
         <Empty>No {noun} in {range.label}{filtersOn ? " with these filters" : ""}.</Empty>
       ) : (
         <>
-          <SegmentCards rows={rows} noun={isDel ? "deliveries" : "orders"} />
-          <BonusCard rows={rows} rates={bonusRates} noun={noun} />
+          <TypeCards rows={rows} noun={noun} />
           {/* Every table full width, so all its columns fit on a laptop
               without a sideways scroll (user, 2026-10-20). */}
           <OrderBreakdown title="By exec" note="Click an exec for their customers" rows={rows} dims={O_EXEC} customers="date" dateLabel={dateLabel} statusLabel={statusLabel} cols={cols} />
@@ -874,19 +871,20 @@ const O_MODEL: OrderDimKey[] = ["model", "derivative"];
 const O_FUNDER: OrderDimKey[] = ["funder", "model"];
 const O_BAND: OrderDimKey[] = ["profitBand"];
 
-// The headline averages: ICE cars, BEV cars and vans side by side.
-function SegmentCards({ rows, noun = "orders" }: { rows: OrderRow[]; noun?: string }) {
-  const groups = useMemo(() => new Map(groupOrders(rows, ["segment"]).map((g) => [g.label, g])), [rows]);
+// The headline averages: ICE and BEV cars, ICE and BEV vans side by side
+// (user, 2026-10-23: vans split as the bonus splits them).
+function TypeCards({ rows, noun }: { rows: OrderRow[]; noun: string }) {
+  const groups = useMemo(() => new Map(groupOrders(rows, ["bonusType"]).map((g) => [g.label, g])), [rows]);
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {SEGMENTS.map((seg) => {
-        const g = groups.get(seg);
-        const meta = SEGMENT_META[seg];
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {BONUS_TYPES.map((t) => {
+        const g = groups.get(t);
+        const meta = TYPE_META[t];
         const st = g?.stats;
         const avg = st ? avgProfit(st) : null;
         return (
-          <div key={seg} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${meta.colour}` }}>
-            <div className="flex items-baseline justify-between">
+          <div key={t} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${meta.colour}` }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
               <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
               <div className="text-xs text-slate-500">{g ? `${int(g.stats.orders)} units · ${g.share.toFixed(0)}% of ${noun}` : `No ${noun}`}</div>
             </div>
@@ -900,61 +898,6 @@ function SegmentCards({ rows, noun = "orders" }: { rows: OrderRow[]; noun?: stri
         );
       })}
     </div>
-  );
-}
-
-// Ford's quarterly bonus by type: each type's rate in the months these deals
-// deliver, how many there are and what they earn. Underneath, anything the
-// bonus is short of — a percentage due with no Basic held, or a delivery
-// month with no scheme set — so a low figure is never mistaken for a final one.
-function BonusCard({ rows, rates, noun }: { rows: OrderRow[]; rates: BonusRates; noun: string }) {
-  const canManage = useContext(CanManage);
-  const byType = useMemo(() => {
-    const m = new Map<BonusType, { units: number; bonus: number; months: Set<string> }>(BONUS_TYPES.map((t) => [t, { units: 0, bonus: 0, months: new Set() }]));
-    for (const r of rows) {
-      const t = m.get(r.bonusType)!;
-      t.units++;
-      t.bonus += r.bonus;
-      if (r.bonusDay) t.months.add(r.bonusDay.slice(0, 7));
-    }
-    return m;
-  }, [rows]);
-  const gaps = useMemo(() => bonusGaps(rows), [rows]);
-  const total = rows.reduce((n, r) => n + r.bonus, 0);
-  const where = canManage
-    ? <>Rates are set under <a href="/ten-at-ten/admin#bonuses" className="font-medium text-indigo-600">Upload data</a>.</>
-    : null;
-  return (
-    <Card title="Bonuses by type" note={`Ford's quarterly bonus · by delivery month · ${gbp(total)} on these ${noun}`}>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {BONUS_TYPES.map((t) => {
-          const x = byType.get(t)!;
-          return (
-            <div key={t} className="rounded-xl bg-slate-50 px-3 py-2" style={{ borderLeft: `3px solid ${BONUS_TYPE_COLOURS[t]}` }}>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{t}</div>
-              <div className="text-xl font-bold tabular-nums text-slate-900">{gbp(x.bonus)}</div>
-              <div className="text-xs text-slate-600">{int(x.units)} {x.units === 1 ? "unit" : "units"}{x.units ? ` · ${gbp(x.bonus / x.units)} each` : ""}</div>
-              {x.units > 0 && <div className="mt-0.5 text-[11px] leading-snug text-slate-500">{ratesText(t, [...x.months], rates)}</div>}
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 space-y-1 text-xs text-slate-600">
-        <p>Paid on delivery, so each deal earns its type&apos;s rate in the month it delivers — Arrived and Due at the date Dealerweb gives it now. On top of Dealerweb&apos;s own Additional Bonus, which is already in Invoice profit. {where}</p>
-        {gaps.noBasic > 0 && (
-          <p className="font-medium text-amber-700">
-            {int(gaps.noBasic)} {gaps.noBasic === 1 ? "deal is" : "deals are"} due a percentage with no Basic price held, so only {gaps.noBasic === 1 ? "its" : "their"} £ bonus is counted.
-            {canManage ? " Upload the Dealbook Extract for their delivery month." : " It fills in once the Dealbook Extract for their delivery month is uploaded."}
-          </p>
-        )}
-        {gaps.noScheme > 0 && (
-          <p className="font-medium text-amber-700">
-            {int(gaps.noScheme)} {gaps.noScheme === 1 ? "deal delivers" : "deals deliver"} in {gaps.noSchemeMonths.length === 1 ? "a month" : "months"} with no bonus scheme set{gaps.noSchemeMonths.length ? ` (${monthsText(gaps.noSchemeMonths)})` : ""}, so {gaps.noScheme === 1 ? "it shows" : "they show"} no bonus yet.
-          </p>
-        )}
-        {gaps.noDate > 0 && <p className="text-slate-500">{int(gaps.noDate)} without a delivery date in Dealerweb, so no bonus.</p>}
-      </div>
-    </Card>
   );
 }
 
