@@ -1347,10 +1347,13 @@ Calculator. The maths, the range and the rates are pure and tested in
 - **Why a Ranger is a car or a van** (HMRC EIM23151, CA23511): since 6 April
   2025 (1 April for corporation tax) a double cab pick-up is a car for BIK,
   capital allowances and the lease restriction, whatever its payload. The
-  **2-Seat** (XLT and Wildtrak, 3.0 diesel and 2.3 PHEV, user's information:
-  same list price and CO2 as the 5-seat, not on the Feb 2026 lists) has no
-  second row of seats, so it stays a van. **VAT and VED are unchanged** by the
-  2025 rule: a double cab with 1 tonne+ payload is still commercial for VAT.
+  **2-Seat** has no second row of seats, so it stays a van. It is on the Feb
+  2026 list as "Ranger 2 Seater" (page 17: a £0 conversion, marked optional on
+  all five trims but "only applicable to central stock", CO2 to be
+  confirmed); the user's rule is XLT and Wildtrak, 3.0 diesel and 2.3 PHEV,
+  which is what `twoSeat` holds. A van's CO2, P11D and options don't touch its
+  tax, so the page shows "Not used" for them. **VAT and VED are unchanged** by
+  the 2025 rule: a double cab with 1 tonne+ payload is still commercial for VAT.
 - **The Raptor is a car for VAT too**, its payload being under one tonne
   (user; the Raptor list gives no payload figure). Half the VAT on a car lease
   and all of it on a purchase can't be reclaimed (Notice 700/64).
@@ -1364,7 +1367,27 @@ Calculator. The maths, the range and the rates are pure and tested in
   `TAX_YEARS` each April**. `ratesFor(today)` uses the latest held year and
   the page header turns amber when today's year isn't there.
 - **P11D = list incl. VAT + £1,104 delivery + £25 plates + options** (ITEPA
-  s123: the list price includes delivery). Ford's own Raptor list prints BIK
+  s123: the list price includes delivery).
+- **Factory options are ticked, never typed** (user, 2026-11-04):
+  `RANGER_OPTIONS` holds every option on the two lists that carries a charge
+  (a £0 option can't move a P11D), at its incl. VAT list price, with the trims
+  and engines it's offered on (wheel packs and load-box packs differ by
+  engine; Wheel Pack 72 is £960 on an XLT PHEV, £360 on a Limited/Wildtrak
+  PHEV). Choose-one groups: colour, wheels, styling pack, load cover, load
+  box, driver-assistance upgrade. "Anything else" takes dealer accessories.
+  Read from the page images (the PDF text of those tables is jumbled), and a
+  test checks every ex VAT × 1.2 = incl. VAT. Dealer accessory pages (18+)
+  are deliberately not listed.
+- **Nothing is chosen at first** (user): the user picks model and engine;
+  a one-engine trim selects itself. Their choice (slot 1) must be picked
+  before anything is compared; each slot still shows its own figures.
+- **Who saves what**: the answer, phone bar, PDF and the table's "Saving
+  against their choice" split every saving into the driver and the business,
+  a year and a month. The business has its own monthly figure, and together
+  a month is driver + business months, so the split always adds up exactly.
+- **The answer card is sticky inside its own grid** with the steps; the
+  full picture sits below that grid. In one grid the sticky card slid over
+  the full-width table (user, 2026-11-04). Ford's own Raptor list prints BIK
   on £62,005, leaving delivery out; the tests show the maths matches Ford's
   £382.36 / £764.73 a month to the penny on that base.
 - **A van used only for commuting** (restricted private use condition) has

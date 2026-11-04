@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  OTR_ITEMS, RANGERS, RATES_2026_27 as R, bandText, breakdown, carPercentage, classify, compareRangers, listExVatOf, p11dOf,
+  OPTION_GROUPS, OTR_ITEMS, RANGERS, RANGER_OPTIONS, RATES_2026_27 as R, bandText, breakdown, carPercentage, classify, compareRangers, listExVatOf,
+  optionById, optionsFor, p11dOf,
   rangerById, ratesFor, rulesFor, showsVat, sourcesFor, workings, type Settings, type VehicleInput,
 } from "./ranger-tax";
 
 const get = (id: string) => rangerById(id)!;
 const car = (id: string, rental: number | null = null, extra: Partial<VehicleInput> = {}): VehicleInput =>
-  ({ version: get(id), seats: 5, optionsIncVat: 0, monthlyRental: rental, pricePaidExVat: null, ...extra });
+  ({ version: get(id), seats: 5, options: [], monthlyRental: rental, pricePaidExVat: null, ...extra });
+const opt = (id: string) => { const o = optionById(id)!; return { name: o.name, incVat: o.incVat }; };
 const twoSeat = (id: string, rental: number | null = null): VehicleInput => ({ ...car(id, rental), seats: 2 });
 
 const S: Settings = { incomeTaxPct: 40, fuelCard: true, privateUse: "full", funding: "hire", businessTaxPct: 25, vatRegistered: true, termMonths: 48 };
@@ -112,8 +114,9 @@ describe("the figures, worked by hand", () => {
     // Relief 4,796.81 × 25% = 1,199.20; business 4,796.81 + 0 + 292.50 − 1,199.20 = 3,890.11
     expect(diesel.business.relief).toBe(1199.2);
     expect(diesel.business.annual).toBe(3890.11);
-    // 16,681.60 ÷ 12 = 1,390.13 a month
-    expect(diesel.together).toEqual({ annual: 16681.6, monthly: 1390.13, overTerm: 66726.4 });
+    // A month: driver 1,065.96 + business 3,890.11 ÷ 12 = 324.18, so 1,390.14
+    expect(diesel.business.monthly).toBe(324.18);
+    expect(diesel.together).toEqual({ annual: 16681.6, monthly: 1390.14, overTerm: 66726.4 });
   });
 
   it("taxes the 2-Seat as a van", () => {
@@ -124,7 +127,8 @@ describe("the figures, worked by hand", () => {
     expect(van.business.lease!.restrictionTax).toBe(0);
     expect(van.business.annual).toBe(558.9);
     expect(van.together.annual).toBe(2546.1);
-    // 2,546.10 ÷ 12 = 212.175, to the penny 212.18
+    // 165.60 + 558.90 ÷ 12 = 46.575, to the penny 46.58: 212.18
+    expect(van.business.monthly).toBe(46.58);
     expect(van.together.monthly).toBe(212.18);
   });
 
@@ -142,8 +146,8 @@ describe("the figures, worked by hand", () => {
 
   it("finds the biggest saving against the first", () => {
     expect(c.savings).toEqual([0, 14135.5, 7348.61]);
-    // A month: 1,390.13 − 212.18 = 1,177.95; PHEV 9,332.99 ÷ 12 = 777.75, so 1,390.13 − 777.75 = 612.38
-    expect(c.savingsMonthly).toEqual([0, 1177.95, 612.38]);
+    // A month: 1,390.14 − 212.18 = 1,177.96; PHEV 589.46 + 188.29 = 777.75, so 1,390.14 − 777.75 = 612.39
+    expect(c.savingsMonthly).toEqual([0, 1177.96, 612.39]);
     expect(c.best).toBe(1);
     expect(c.headline).toBe("The Wildtrak 2-Seat 3.0 V6 diesel saves £14,136 a year in tax, £1,178 a month");
   });
@@ -183,7 +187,8 @@ describe("the figures, worked by hand", () => {
   });
 
   it("ignores options on a van and adds them to a car", () => {
-    const [c5, c2] = compareRangers([car("wildtrak-diesel", null, { optionsIncVat: 2700 }), { ...twoSeat("wildtrak-diesel"), optionsIncVat: 2700 }], S, R).vehicles;
+    const canopy = [{ name: "Hardtop canopy", incVat: 2700 }];
+    const [c5, c2] = compareRangers([car("wildtrak-diesel", null, { options: canopy }), { ...twoSeat("wildtrak-diesel"), options: canopy }], S, R).vehicles;
     expect(c5.benefit).toBe(22173.73); // 59,929 × 37%
     expect(c2.benefit).toBe(4170);
   });
@@ -237,6 +242,65 @@ describe("every tax bracket", () => {
   });
 });
 
+describe("who saves what", () => {
+  const c = compareRangers([car("wildtrak-diesel", 650), twoSeat("wildtrak-diesel", 650), car("wildtrak-phev", 600)], S, R);
+
+  it("splits the saving between the driver and the business", () => {
+    // Driver 12,791.49 − 1,987.20 = 10,804.29 a year, 1,065.96 − 165.60 = 900.36 a month
+    // Business 3,890.11 − 558.90 = 3,331.21 a year, 324.18 − 46.58 = 277.60 a month
+    expect(c.split[1]).toEqual({ driver: { annual: 10804.29, monthly: 900.36 }, business: { annual: 3331.21, monthly: 277.6 } });
+  });
+
+  it("adds up: driver plus business is the whole saving, a year and a month", () => {
+    for (let i = 1; i < c.vehicles.length; i++) {
+      expect(Math.round((c.split[i].driver.annual + c.split[i].business.annual) * 100) / 100).toBe(c.savings[i]);
+      expect(Math.round((c.split[i].driver.monthly + c.split[i].business.monthly) * 100) / 100).toBe(c.savingsMonthly[i]);
+    }
+  });
+
+  it("prints a row for each, against their choice", () => {
+    const sec = breakdown(c, S, R).find((x) => x.title === "Saving against their choice")!;
+    expect(sec.rows.map((r) => [r.label, r.values[1]])).toEqual([
+      ["The driver, a year", "Saves £10,804.29"], ["The driver, a month", "Saves £900.36"],
+      ["The business, a year", "Saves £3,331.21"], ["The business, a month", "Saves £277.60"],
+      ["Together, a year", "Saves £14,135.50"], ["Together, a month", "Saves £1,177.96"],
+    ]);
+    expect(sec.rows.every((r) => r.values[0] === "Their choice")).toBe(true);
+  });
+});
+
+describe("factory options, from the price lists", () => {
+  it("has every price as Ford lists it: ex VAT × 1.2 = incl. VAT", () => {
+    for (const o of RANGER_OPTIONS) expect(Math.round(o.exVat * 1.2 * 100) / 100, o.id).toBe(o.incVat);
+    expect(new Set(RANGER_OPTIONS.map((o) => o.id)).size).toBe(RANGER_OPTIONS.length);
+    for (const o of RANGER_OPTIONS) expect(OPTION_GROUPS.some((g) => g.key === o.group), o.id).toBe(true);
+  });
+
+  it("offers each Ranger only what its list offers it", () => {
+    const ids = (id: string) => optionsFor(get(id)).map((o) => o.id);
+    // Wheel Pack 72 is £960 on an XLT PHEV and £360 on a Limited or Wildtrak PHEV
+    expect(ids("xlt-phev")).toContain("J4YB4-XLT");
+    expect(ids("wildtrak-phev")).toContain("J4YB4");
+    expect(ids("wildtrak-diesel")).toEqual(expect.arrayContaining(["J4YBQ", "J4YAW", "ADQAN", "A9SAG"]));
+    expect(ids("wildtrak-diesel")).not.toContain("ADQAH"); // PHEV only
+    expect(ids("wildtrak-phev")).not.toContain("A9SAG"); // diesel only
+    expect(ids("limited-phev")).not.toContain("A9SAG"); // not on a Limited
+    expect(ids("msrt-diesel")).not.toContain("A9BAC"); // no canopy on an MS-RT
+    expect(ids("raptor-petrol").sort()).toEqual(["A5GC2", "AAXAH", "PMYH5-R", "PMYHR", "PN4E3-R", "PN4JP", "PNZAT"]);
+  });
+
+  it("puts the options into the P11D value of a car", () => {
+    // 57,229 + Agate Black 720 + canopy 2,700 = 60,649; × 37% = 22,440.13; × 40% = 8,976.05
+    const r = compareRangers([car("wildtrak-diesel", null, { options: [opt("PN4GM"), opt("A9BAC")] })], { ...S, fuelCard: false }, R).vehicles[0];
+    expect(r.optionsIncVat).toBe(3420);
+    expect(r.p11d).toBe(60649);
+    expect(r.benefit).toBe(22440.13);
+    expect(r.driver.annual).toBe(8976.05);
+    expect(workings(compareRangers([car("wildtrak-diesel", null, { options: [opt("PN4GM"), opt("A9BAC")] })], S, R), S, R)[0].lines[0])
+      .toBe("Options: Agate Black £720.00 + Hardtop canopy (black, white or grey) £2,700.00 = £3,420.00");
+  });
+});
+
 describe("buying it", () => {
   const buy: Settings = { ...S, funding: "buy" };
 
@@ -272,7 +336,7 @@ describe("VAT only where it matters", () => {
       expect(rows(c, s).join(" ").replace(/ex VAT/g, "")).not.toMatch(/VAT|reclaim/);
       // "ex VAT" stays: it's the basis the rental and price are given on, not talk about VAT.
       expect(lines(c, s).replace(/ex VAT/g, "")).not.toMatch(/VAT|reclaim/);
-      expect(sourcesFor(c, s, R).map((x) => x.label)).not.toContain("VAT");
+      expect(sourcesFor(c, s, R).map((x) => `${x.label} ${x.detail}`).join(" ")).not.toMatch(/VAT|reclaim/);
     }
   });
 
@@ -306,11 +370,14 @@ describe("what the customer reads", () => {
     expect(w[0].lines).toContain("269 g/km, 155 g/km and over: 37%, the maximum");
     expect(w[0].lines).toContain("Driver: (£21,174.73 + £10,804.00) × 40% = £12,791.49, £1,065.96 a month");
     expect(w[0].lines).toContain("Lease restriction: £7,800.00 × 15% = £1,170.00, × 25% = £292.50");
-    expect(w[0].lines).toContain("Business: £4,796.81 + £292.50 − £1,199.20 = £3,890.11");
-    expect(w[0].lines).toContain("Together: £12,791.49 + £3,890.11 = £16,681.60 a year, ÷ 12 = £1,390.13 a month");
+    expect(w[0].lines).toContain("Business: £4,796.81 + £292.50 − £1,199.20 = £3,890.11, £324.18 a month");
+    expect(w[0].lines).toContain("Together: £12,791.49 + £3,890.11 = £16,681.60 a year");
+    expect(w[0].lines).toContain("  a month: £1,065.96 + £324.18 = £1,390.14");
     expect(w[2].lines).toEqual([
       "Wildtrak 2-Seat 3.0 V6 diesel: £16,681.60 − £2,546.10 = £14,135.50 a year less, £56,542.00 over 48 months",
-      "  a month: £1,390.13 − £212.18 = £1,177.95 less",
+      "  a month: £1,390.14 − £212.18 = £1,177.96 a month less",
+      "  driver: £12,791.49 − £1,987.20 = £10,804.29 a year less; £1,065.96 − £165.60 = £900.36 a month less",
+      "  business: £3,890.11 − £558.90 = £3,331.21 a year less; £324.18 − £46.58 = £277.60 a month less",
     ]);
   });
 

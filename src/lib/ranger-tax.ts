@@ -90,6 +90,120 @@ export const versionsOfTrim = (trim: RangerTrim) => RANGERS.filter((r) => r.trim
 /** "Wildtrak 2-Seat 3.0 V6 diesel". */
 export const rangerName = (v: RangerVersion, seats: Seats) => `${v.trim}${seats === 2 ? " 2-Seat" : ""} ${v.engineShort}`;
 
+// ─── Factory options, from the same price lists ────────────────────────────
+//
+// Only the options with a charge: a £0 option can't move a P11D value. Each
+// is Ford's list price incl. VAT, which is what the P11D value takes, for the
+// trims (and engines) the list offers it on. A choose-one group holds at most
+// one: one colour, one wheel pack, one load cover and so on.
+
+export type OptionGroup = "paint" | "wheels" | "styling" | "cover" | "loadbox" | "towing" | "assist" | "other";
+
+export const OPTION_GROUPS: { key: OptionGroup; label: string; one: boolean }[] = [
+  { key: "paint", label: "Colour", one: true },
+  { key: "wheels", label: "Wheels and tyres", one: true },
+  { key: "styling", label: "Styling pack", one: true },
+  { key: "cover", label: "Load cover", one: true },
+  { key: "loadbox", label: "Load box", one: true },
+  { key: "towing", label: "Towing", one: false },
+  { key: "assist", label: "Driver assistance upgrade", one: true },
+  { key: "other", label: "Other options", one: false },
+];
+
+export interface RangerOption {
+  id: string;
+  /** Ford's WERS code. */
+  code: string;
+  name: string;
+  exVat: number;
+  incVat: number;
+  group: OptionGroup;
+  trims: RangerTrim[];
+  /** Only on these engines; every engine when absent. */
+  fuels?: RangerFuel[];
+  note?: string;
+}
+
+const ALL5: RangerTrim[] = ["XLT", "Limited", "Wildtrak", "Platinum", "MS-RT"];
+const NOT_MSRT: RangerTrim[] = ["XLT", "Limited", "Wildtrak", "Platinum"];
+const TOW_PREP = "An upgrade with the trailer tow prep pack";
+
+export const RANGER_OPTIONS: RangerOption[] = [
+  // Colour & trim (Ranger list page 16, SVO page 17; Raptor list page 11)
+  { id: "PN4GM", code: "PN4GM", name: "Agate Black", exVat: 600, incVat: 720, group: "paint", trims: ALL5 },
+  { id: "PN4HJ", code: "PN4HJ", name: "Iconic Silver", exVat: 600, incVat: 720, group: "paint", trims: ALL5 },
+  { id: "PN4JA", code: "PN4JA", name: "Carbonised Grey", exVat: 600, incVat: 720, group: "paint", trims: ALL5 },
+  { id: "PN4E3", code: "PN4E3", name: "Blue Lightning", exVat: 600, incVat: 720, group: "paint", trims: ["XLT", "Limited"] },
+  { id: "PMYH5", code: "PMYH5", name: "Command Grey", exVat: 600, incVat: 720, group: "paint", trims: ["Limited", "MS-RT"] },
+  { id: "PN4HQ", code: "PN4HQ", name: "Lucid Red", exVat: 600, incVat: 720, group: "paint", trims: ["XLT", "Limited", "Platinum"] },
+  { id: "PN3MC", code: "PN3MC", name: "Ignite Orange", exVat: 600, incVat: 720, group: "paint", trims: ["Wildtrak"] },
+  { id: "PASC9", code: "PASC9", name: "Acacia Green", exVat: 600, incVat: 720, group: "paint", trims: ["Platinum"] },
+  { id: "PSTDQ", code: "PSTDQ", name: "Fast Blue", exVat: 625, incVat: 750, group: "paint", trims: ["MS-RT"] },
+  { id: "PSTRP", code: "PSTRP", name: "Yellow Green", exVat: 625, incVat: 750, group: "paint", trims: ["MS-RT"] },
+  { id: "PSVGF", code: "PSVGF", name: "Turini Purple", exVat: 625, incVat: 750, group: "paint", trims: ["MS-RT"] },
+  { id: "AB7AB", code: "AB7AB", name: "Special order paint (50 vehicle minimum)", exVat: 1000, incVat: 1200, group: "paint", trims: ["XLT", "Limited"] },
+  { id: "PNZAT", code: "PNZAT", name: "Absolute Black", exVat: 600, incVat: 720, group: "paint", trims: ["Raptor"] },
+  { id: "PN4E3-R", code: "PN4E3", name: "Blue Lightning", exVat: 600, incVat: 720, group: "paint", trims: ["Raptor"] },
+  { id: "PMYHR", code: "PMYHR", name: "Meteor Grey", exVat: 600, incVat: 720, group: "paint", trims: ["Raptor"] },
+  { id: "PMYH5-R", code: "PMYH5", name: "Command Grey", exVat: 600, incVat: 720, group: "paint", trims: ["Raptor"] },
+  { id: "PN4JP", code: "PN4JP", name: "Code Orange", exVat: 600, incVat: 720, group: "paint", trims: ["Raptor"] },
+
+  // Wheel packs (page 11): by trim and engine
+  { id: "J4YAS", code: "J4YAS", name: "All terrain tyres (Wheel Pack 17)", exVat: 300, incVat: 360, group: "wheels", trims: ["XLT"], fuels: ["diesel"] },
+  { id: "J4YB4-XLT", code: "J4YB4", name: "All terrain tyres and spare wheel (Wheel Pack 72)", exVat: 800, incVat: 960, group: "wheels", trims: ["XLT"], fuels: ["phev"] },
+  { id: "J4YB4", code: "J4YB4", name: "All terrain tyres and spare wheel (Wheel Pack 72)", exVat: 300, incVat: 360, group: "wheels", trims: ["Limited", "Wildtrak"], fuels: ["phev"] },
+  { id: "J4YBQ", code: "J4YBQ", name: "All terrain tyres (Wheel Pack 39)", exVat: 300, incVat: 360, group: "wheels", trims: ["Wildtrak"], fuels: ["diesel"] },
+  { id: "J4YAW", code: "J4YAW", name: "20 inch alloy wheels (Wheel Pack 21)", exVat: 750, incVat: 900, group: "wheels", trims: ["Wildtrak"], fuels: ["diesel"] },
+  { id: "J4YBS", code: "J4YBS", name: "All terrain tyres and spare wheel (Wheel Pack 41)", exVat: 300, incVat: 360, group: "wheels", trims: ["Platinum"], fuels: ["phev"] },
+
+  // Styling packs (page 10)
+  { id: "AACD7", code: "AACD7", name: "Adjustable sports bar styling pack", exVat: 1600, incVat: 1920, group: "styling", trims: ["Wildtrak"] },
+  { id: "AACE2", code: "AACE2", name: "Adjustable sports bar styling pack", exVat: 1600, incVat: 1920, group: "styling", trims: ["Platinum"] },
+
+  // Load covers (pages 12 and 13)
+  { id: "A9BAC", code: "A9BAC", name: "Hardtop canopy (black, white or grey)", exVat: 2250, incVat: 2700, group: "cover", trims: NOT_MSRT },
+  { id: "A9BAH", code: "A9BAH", name: "Hardtop canopy, Frozen White, gullwing doors", exVat: 2000, incVat: 2400, group: "cover", trims: NOT_MSRT },
+  { id: "A9BAF", code: "A9BAF", name: "Hardtop canopy, matt black, gullwing doors", exVat: 2000, incVat: 2400, group: "cover", trims: NOT_MSRT },
+  { id: "A5BAC", code: "A5BAC", name: "Load bars and manual roller shutter", exVat: 1750, incVat: 2100, group: "cover", trims: ALL5 },
+  { id: "CHBAN", code: "CHBAN", name: "Manual roller shutter", exVat: 1500, incVat: 1800, group: "cover", trims: ALL5 },
+  { id: "CHBAP", code: "CHBAP", name: "Power roller shutter", exVat: 2000, incVat: 2400, group: "cover", trims: ["Limited", "Wildtrak", "Platinum", "MS-RT"] },
+  { id: "CHBAM", code: "CHBAM", name: "Soft tonneau cover", exVat: 750, incVat: 900, group: "cover", trims: ["XLT", "Limited"], fuels: ["phev"] },
+
+  // Load box packs (page 12)
+  { id: "ADQAG", code: "ADQAG", name: "Cargo convenience pack", exVat: 150, incVat: 180, group: "loadbox", trims: NOT_MSRT },
+  { id: "ADQAH", code: "ADQAH", name: "Cargo pack with 2.3kW Pro Power Onboard", exVat: 1200, incVat: 1440, group: "loadbox", trims: NOT_MSRT, fuels: ["phev"] },
+  { id: "ADQAJ", code: "ADQAJ", name: "Cargo pack with 6.9kW Pro Power Onboard", exVat: 1750, incVat: 2100, group: "loadbox", trims: NOT_MSRT, fuels: ["phev"] },
+  { id: "ADQAN", code: "ADQAN", name: "Bed utility pack", exVat: 350, incVat: 420, group: "loadbox", trims: ALL5, fuels: ["diesel"] },
+  { id: "A9SAG", code: "A9SAG", name: "Spray-in load box bedliner", exVat: 500, incVat: 600, group: "loadbox", trims: ["XLT", "Wildtrak", "Platinum", "MS-RT"], fuels: ["diesel"] },
+
+  // Towing (page 14)
+  { id: "C1CAU", code: "C1CAU", name: "Towing pack 5 (wiring)", exVat: 550, incVat: 660, group: "towing", trims: ["XLT", "Limited"] },
+  { id: "C1CAH", code: "C1CAH", name: "Trailer tow prep pack", exVat: 400, incVat: 480, group: "towing", trims: ALL5 },
+
+  // Driver assistance upgrades (pages 14 and 15)
+  { id: "DBCAR-LTD", code: "DBCAR", name: "Driver assistance pack #13", exVat: 550, incVat: 660, group: "assist", trims: ["Limited"], note: TOW_PREP },
+  { id: "DBCBD-LTD", code: "DBCBD", name: "Driver assistance pack #9T, with BlueCruise", exVat: 650, incVat: 780, group: "assist", trims: ["Limited"], fuels: ["phev"], note: TOW_PREP },
+  { id: "DBCBD-WT", code: "DBCBD", name: "Driver assistance pack #9T, with BlueCruise", exVat: 100, incVat: 120, group: "assist", trims: ["Wildtrak"], fuels: ["phev"], note: TOW_PREP },
+
+  // Everything else (pages 9, 12 to 15; Raptor list page 10)
+  { id: "ICFEL", code: "ICFEL", name: "ICE feature pack 117, 8 speakers", exVat: 625, incVat: 750, group: "other", trims: ["Limited", "Wildtrak", "MS-RT"] },
+  { id: "A9IAE", code: "A9IAE", name: "Black tubular sports bar", exVat: 500, incVat: 600, group: "other", trims: ["XLT"] },
+  { id: "AALB0", code: "AALB0", name: "Body protection pack 1", exVat: 500, incVat: 600, group: "other", trims: ["XLT", "Limited", "Platinum"] },
+  { id: "A2YAC", code: "A2YAC", name: "Underbody wax protection", exVat: 250, incVat: 300, group: "other", trims: NOT_MSRT },
+  { id: "J4KAB", code: "J4KAB", name: "Winter pack 1", exVat: 500, incVat: 600, group: "other", trims: ["XLT"] },
+  { id: "AAXAH", code: "AAXAH", name: "Raptor pack: roll bar and power roll top cover", exVat: 2000, incVat: 2400, group: "other", trims: ["Raptor"] },
+  { id: "A5GC2", code: "A5GC2", name: "Raptor decal pack", exVat: 500, incVat: 600, group: "other", trims: ["Raptor"] },
+];
+
+/** The options Ford lists, with a charge, for this trim and engine. */
+export const optionsFor = (v: RangerVersion) => RANGER_OPTIONS.filter((o) => o.trims.includes(v.trim) && (!o.fuels || o.fuels.includes(v.fuel)));
+export const optionById = (id: string) => RANGER_OPTIONS.find((o) => o.id === id);
+/** The colour that costs nothing. */
+export const freeColour = (v: RangerVersion) => (v.trim === "Raptor" ? "Arctic White" : "Frozen White");
+
+/** One line of a P11D value's options: its name and list price incl. VAT. */
+export interface OptionLine { name: string; incVat: number }
+
 // ─── The tax year's rates ──────────────────────────────────────────────────
 
 export interface TaxYearRates {
@@ -216,8 +330,8 @@ export interface Settings {
 export interface VehicleInput {
   version: RangerVersion;
   seats: Seats;
-  /** Factory options at list price, incl. VAT: part of a car's P11D value. */
-  optionsIncVat: number;
+  /** Options at list price incl. VAT, each a line: part of a car's P11D value. */
+  options: OptionLine[];
   /** Contract hire: the monthly rental, ex VAT, without any maintenance charge shown separately. */
   monthlyRental: number | null;
   /** Bought: the price paid, ex VAT. Null uses the list price. */
@@ -230,6 +344,8 @@ export interface VehicleResult {
   taxClass: TaxClass;
   /** For VAT, the Raptor is a car; every other Ranger is a commercial vehicle. */
   vatClass: "car" | "commercial";
+  /** The options' total, incl. VAT. */
+  optionsIncVat: number;
   p11d: number;
   /** Car percentage, or null for a van. */
   pct: number | null;
@@ -242,7 +358,9 @@ export interface VehicleResult {
     lease: { rentals: number; vat: number; vatBlocked: number; disallowed: number; restrictionTax: number } | null;
     relief: number;
     annual: number;
+    monthly: number;
   };
+  /** Driver plus business; the month is the two months added, so the printed figures add up. */
   together: { annual: number; monthly: number; overTerm: number };
   purchase: { price: number; vat: number; vatReclaimed: boolean; base: number; allowancePct: number; yearOneAllowance: number; yearOneRelief: number } | null;
 }
@@ -266,7 +384,8 @@ export function assess(input: VehicleInput, s: Settings, rates: TaxYearRates, le
   const v = input.version;
   const seats: Seats = input.seats === 2 && v.twoSeat ? 2 : 5;
   const { taxClass, vatClass } = classify(v, seats);
-  const p11d = p11dOf(v, input.optionsIncVat);
+  const optionsIncVat = r2(input.options.reduce((n, o) => n + Math.max(0, o.incVat || 0), 0));
+  const p11d = p11dOf(v, optionsIncVat);
   const commuting = taxClass === "van" && s.privateUse === "commuting";
 
   const pct = taxClass === "car" ? carPercentage(v.co2, v.electricRangeMiles, rates, v.fuel === "diesel") : null;
@@ -294,7 +413,7 @@ export function assess(input: VehicleInput, s: Settings, rates: TaxYearRates, le
 
   let purchase: VehicleResult["purchase"] = null;
   if (s.funding === "buy") {
-    const price = r2(input.pricePaidExVat != null && input.pricePaidExVat > 0 ? input.pricePaidExVat : listExVatOf(v, input.optionsIncVat));
+    const price = r2(input.pricePaidExVat != null && input.pricePaidExVat > 0 ? input.pricePaidExVat : listExVatOf(v, optionsIncVat));
     const vat = pctOf(price, rates.vatPct);
     const vatReclaimed = s.vatRegistered && vatClass === "commercial";
     const base = vatReclaimed ? price : r2(price + vat);
@@ -303,14 +422,16 @@ export function assess(input: VehicleInput, s: Settings, rates: TaxYearRates, le
     purchase = { price, vat, vatReclaimed, base, allowancePct, yearOneAllowance, yearOneRelief: pctOf(yearOneAllowance, s.businessTaxPct) };
   }
 
+  const driverMonthly = r2(driverAnnual / 12);
+  const businessMonthly = r2(businessAnnual / 12);
   const togetherAnnual = r2(driverAnnual + businessAnnual);
   return {
     input: { ...input, seats },
     name: rangerName(v, seats),
-    taxClass, vatClass, p11d, pct, benefit, fuelBenefit,
-    driver: { benefitTax, fuelTax, annual: driverAnnual, monthly: r2(driverAnnual / 12) },
-    business: { nic, lease, relief, annual: businessAnnual },
-    together: { annual: togetherAnnual, monthly: r2(togetherAnnual / 12), overTerm: r2((togetherAnnual * s.termMonths) / 12) },
+    taxClass, vatClass, optionsIncVat, p11d, pct, benefit, fuelBenefit,
+    driver: { benefitTax, fuelTax, annual: driverAnnual, monthly: driverMonthly },
+    business: { nic, lease, relief, annual: businessAnnual, monthly: businessMonthly },
+    together: { annual: togetherAnnual, monthly: r2(driverMonthly + businessMonthly), overTerm: r2((togetherAnnual * s.termMonths) / 12) },
     purchase,
   };
 }
@@ -325,6 +446,8 @@ export interface Comparison {
   savings: number[];
   /** The same a month: the difference of the monthly figures, so the printed months add up. */
   savingsMonthly: number[];
+  /** Who saves what against the first: the driver and the business, a year and a month. */
+  split: { driver: { annual: number; monthly: number }; business: { annual: number; monthly: number } }[];
   /** The alternative saving the most against the first, or null if none saves. */
   best: number | null;
   tone: "saving" | "level";
@@ -336,11 +459,16 @@ export function compareRangers(inputs: VehicleInput[], s: Settings, rates: TaxYe
   const vehicles = inputs.map((i) => assess(i, s, rates, leaseComplete));
   const savings = vehicles.map((v) => r2(vehicles[0].together.annual - v.together.annual));
   const savingsMonthly = vehicles.map((v) => r2(vehicles[0].together.monthly - v.together.monthly));
+  const f = vehicles[0];
+  const split = vehicles.map((v) => ({
+    driver: { annual: r2(f.driver.annual - v.driver.annual), monthly: r2(f.driver.monthly - v.driver.monthly) },
+    business: { annual: r2(f.business.annual - v.business.annual), monthly: r2(f.business.monthly - v.business.monthly) },
+  }));
   let best: number | null = null;
   savings.forEach((x, i) => { if (i > 0 && x >= 0.5 && (best == null || x > savings[best])) best = i; });
   const b = best as number | null;
   return {
-    vehicles, leaseComplete, savings, savingsMonthly, best: b,
+    vehicles, leaseComplete, savings, savingsMonthly, split, best: b,
     tone: b != null ? "saving" : "level",
     headline: b != null
       ? `The ${vehicles[b].name} saves ${pounds(savings[b])} a year in tax, ${pounds(savingsMonthly[b])} a month`
@@ -358,7 +486,12 @@ export function compareRangers(inputs: VehicleInput[], s: Settings, rates: TaxYe
 export const showsVat = (c: Comparison, s: Settings) => !s.vatRegistered || c.vehicles.some((v) => v.vatClass === "car");
 
 /** The rates and their sources, without VAT where it doesn't come into it. */
-export const sourcesFor = (c: Comparison, s: Settings, rates: TaxYearRates) => rates.sources.filter((x) => x.label !== "VAT" || showsVat(c, s));
+export function sourcesFor(c: Comparison, s: Settings, rates: TaxYearRates) {
+  if (showsVat(c, s)) return rates.sources;
+  return rates.sources
+    .filter((x) => x.label !== "VAT")
+    .map((x) => (x.label === "Lease restriction" ? { ...x, detail: "HMRC BIM47714 and BIM47740: 15% of the rentals on a car over 50 g/km" } : x));
+}
 
 const n2 = (n: number, dp = 2) => Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 /** "£21,174.73", "−£1,394.20". */
@@ -383,8 +516,9 @@ export function breakdown(c: Comparison, s: Settings, rates: TaxYearRates): Brea
       title: "The Ranger",
       rows: [
         { label: "Taxed as", values: col((v) => (v.taxClass === "car" ? "A car" : "A van")) },
-        { label: "P11D value", values: col((v) => money(v.p11d)) },
-        { label: "CO₂", values: col((v) => `${v.input.version.co2} g/km`) },
+        { label: "Options at list price", values: col((v) => (v.optionsIncVat > 0 ? money(v.optionsIncVat) : v.taxClass === "van" ? "Not used" : "None")) },
+        { label: "P11D value", values: col((v) => (v.taxClass === "van" ? "Not used" : money(v.p11d))) },
+        { label: "CO₂", values: col((v) => (v.taxClass === "van" ? "Not used" : `${v.input.version.co2} g/km`)) },
         { label: "Benefit in kind", values: col((v) => (v.pct != null ? `${v.pct}% of P11D` : v.benefit > 0 ? "Flat van charge" : "None, commuting only")) },
         { label: "Taxable benefit, a year", values: col((v) => money(v.benefit)) },
       ],
@@ -406,6 +540,7 @@ export function breakdown(c: Comparison, s: Settings, rates: TaxYearRates): Brea
         ...(c.leaseComplete ? [{ label: "Tax lost to the lease restriction", values: col((v) => money(v.business.lease!.restrictionTax)) }] : []),
         { label: `Less tax relief at ${pc(s.businessTaxPct)}`, values: col((v) => money(-v.business.relief)) },
         { label: "Business tax, a year", values: col((v) => money(v.business.annual)), strong: true },
+        { label: "Business tax, a month", values: col((v) => money(v.business.monthly)) },
       ],
     },
     {
@@ -414,11 +549,23 @@ export function breakdown(c: Comparison, s: Settings, rates: TaxYearRates): Brea
         { label: "Tax a year", values: col((v) => money(v.together.annual)), strong: true },
         { label: "Tax a month", values: col((v) => money(v.together.monthly)) },
         { label: `Over ${s.termMonths} months`, values: col((v) => money(v.together.overTerm)), hint: `at ${rates.label} rates` },
-        { label: "Against their choice, a year", strong: true, values: col((_, i) => (i === 0 ? "Their choice" : against(c.savings[i]))) },
-        { label: "Against their choice, a month", strong: true, values: col((_, i) => (i === 0 ? "Their choice" : against(c.savingsMonthly[i]))) },
       ],
     },
   ];
+  if (vs.length > 1) {
+    const vsFirst = (f: (i: number) => number) => col((_, i) => (i === 0 ? "Their choice" : against(f(i))));
+    sections.push({
+      title: "Saving against their choice",
+      rows: [
+        { label: "The driver, a year", values: vsFirst((i) => c.split[i].driver.annual) },
+        { label: "The driver, a month", values: vsFirst((i) => c.split[i].driver.monthly) },
+        { label: "The business, a year", values: vsFirst((i) => c.split[i].business.annual) },
+        { label: "The business, a month", values: vsFirst((i) => c.split[i].business.monthly) },
+        { label: "Together, a year", values: vsFirst((i) => c.savings[i]), strong: true },
+        { label: "Together, a month", values: vsFirst((i) => c.savingsMonthly[i]), strong: true },
+      ],
+    });
+  }
   if (s.funding === "buy") {
     sections.push({
       title: "Buying it",
@@ -441,7 +588,7 @@ export function rulesFor(c: Comparison, rates: TaxYearRates): { title: string; t
     out.push({ title: "A 5-seat Ranger is a car", text: "Since 6 April 2025 HMRC treats a double cab pick-up as a car for benefit in kind, capital allowances and the lease restriction, whatever its payload. It is taxed on its P11D value and CO₂, like any company car." });
   }
   if (has((v) => v.taxClass === "van")) {
-    out.push({ title: "The 2-Seat is a van", text: `No second row of seats, so it stays a van: a flat ${pounds(rates.vanBenefit)} benefit whatever its price, options or CO₂, ${pounds(rates.vanFuelBenefit)} for private fuel, and nothing at all if private use is limited to commuting. Same list price and CO₂ as the 5-seat.` });
+    out.push({ title: "The 2-Seat is a van", text: `No second row of seats, so it stays a van: a flat ${pounds(rates.vanBenefit)} benefit whatever its price, options or CO₂, ${pounds(rates.vanFuelBenefit)} for private fuel, and nothing at all if private use is limited to commuting. The conversion is £0 on Ford's list, so the list price is the 5-seat's.` });
   }
   if (has((v) => v.input.version.payloadUnderTonne)) {
     out.push({ title: "The Raptor is a car for VAT too", text: "Its payload is under one tonne, so it is a car for VAT as well as for tax: half the VAT on a lease and all of the VAT on a purchase can't be reclaimed. A VAT-registered business reclaims the VAT on every other Ranger." });
@@ -455,14 +602,17 @@ export function rulesFor(c: Comparison, rates: TaxYearRates): { title: string; t
 export interface WorkingsStep { title: string; lines: string[] }
 
 /** Every step from the price list to the answer, so it can be checked by hand. */
-export function workings(c: Comparison, s: Settings, rates: TaxYearRates): WorkingsStep[] {
+export function workings(c: Comparison, s: Settings, rates: TaxYearRates, numbers?: number[]): WorkingsStep[] {
   const vat = showsVat(c, s);
   const steps: WorkingsStep[] = c.vehicles.map((r, i) => {
     const v = r.input.version;
     const lines: string[] = [];
-    const opts = Math.max(0, r.input.optionsIncVat);
-    lines.push(`P11D: ${money(v.basicIncVat)} list + ${money(OTR_ITEMS.deliveryIncVat)} delivery + ${money(OTR_ITEMS.platesIncVat)} plates${opts ? ` + ${money(opts)} options` : ""} = ${money(r.p11d)}`);
+    const opts = r.optionsIncVat;
+    const chosen = r.input.options.filter((o) => o.incVat > 0);
+    // A van's tax is flat, so its P11D value and options don't come into it.
     if (r.pct != null) {
+      if (chosen.length) lines.push(`Options: ${chosen.map((o) => `${o.name} ${money(o.incVat)}`).join(" + ")} = ${money(opts)}`);
+      lines.push(`P11D: ${money(v.basicIncVat)} list + ${money(OTR_ITEMS.deliveryIncVat)} delivery + ${money(OTR_ITEMS.platesIncVat)} plates${opts ? ` + ${money(opts)} options` : ""} = ${money(r.p11d)}`);
       lines.push(`${v.co2} g/km, ${bandText(v.co2, rates)}: ${r.pct}%${r.pct === rates.maxPct ? ", the maximum" : ""}`);
       lines.push(`Benefit: ${money(r.p11d)} × ${r.pct}% = ${money(r.benefit)}`);
       if (s.fuelCard) lines.push(`Fuel: ${money(rates.carFuelMultiplier)} × ${r.pct}% = ${money(r.fuelBenefit)}`);
@@ -495,8 +645,9 @@ export function workings(c: Comparison, s: Settings, rates: TaxYearRates): Worki
       ? `Relief: (${money(r.business.nic)} + ${money(vatBlocked)}) × ${pc(s.businessTaxPct)} = ${money(r.business.relief)}`
       : `Relief: ${money(r.business.nic)} × ${pc(s.businessTaxPct)} = ${money(r.business.relief)}`);
     const parts = [money(r.business.nic), ...(l && vat ? [money(l.vatBlocked)] : []), ...(l ? [money(l.restrictionTax)] : [])];
-    lines.push(`Business: ${parts.join(" + ")} − ${money(r.business.relief)} = ${money(r.business.annual)}`);
-    lines.push(`Together: ${money(r.driver.annual)} + ${money(r.business.annual)} = ${money(r.together.annual)} a year, ÷ 12 = ${money(r.together.monthly)} a month`);
+    lines.push(`Business: ${parts.join(" + ")} − ${money(r.business.relief)} = ${money(r.business.annual)}, ${money(r.business.monthly)} a month`);
+    lines.push(`Together: ${money(r.driver.annual)} + ${money(r.business.annual)} = ${money(r.together.annual)} a year`);
+    lines.push(`  a month: ${money(r.driver.monthly)} + ${money(r.business.monthly)} = ${money(r.together.monthly)}`);
     const p = r.purchase;
     if (p) {
       lines.push(p.vatReclaimed
@@ -504,18 +655,22 @@ export function workings(c: Comparison, s: Settings, rates: TaxYearRates): Worki
         : `Bought: ${money(p.price)} + ${money(p.vat)} VAT kept = ${money(p.base)}`);
       lines.push(`Allowances: ${money(p.base)} × ${p.allowancePct}% = ${money(p.yearOneAllowance)}, × ${pc(s.businessTaxPct)} = ${money(p.yearOneRelief)} in year one`);
     }
-    return { title: `${i + 1}. ${r.name}`, lines };
+    return { title: `${numbers?.[i] ?? i + 1}. ${r.name}`, lines };
   });
   if (c.vehicles.length > 1) {
     const first = c.vehicles[0];
     steps.push({
       title: "The difference",
       lines: c.vehicles.slice(1).flatMap((r, j) => {
-        const d = c.savings[j + 1];
-        const m = c.savingsMonthly[j + 1];
+        const i = j + 1;
+        const d = c.savings[i];
+        const sp = c.split[i];
+        const lm = (n: number, per: string) => `${money(Math.abs(n))} ${per} ${n >= 0 ? "less" : "more"}`;
         return [
-          `${r.name}: ${money(first.together.annual)} − ${money(r.together.annual)} = ${money(Math.abs(d))} a year ${d >= 0 ? "less" : "more"}, ${money(Math.abs(r2((d * s.termMonths) / 12)))} over ${s.termMonths} months`,
-          `  a month: ${money(first.together.monthly)} − ${money(r.together.monthly)} = ${money(Math.abs(m))} ${m >= 0 ? "less" : "more"}`,
+          `${r.name}: ${money(first.together.annual)} − ${money(r.together.annual)} = ${lm(d, "a year")}, ${money(Math.abs(r2((d * s.termMonths) / 12)))} over ${s.termMonths} months`,
+          `  a month: ${money(first.together.monthly)} − ${money(r.together.monthly)} = ${lm(c.savingsMonthly[i], "a month")}`,
+          `  driver: ${money(first.driver.annual)} − ${money(r.driver.annual)} = ${lm(sp.driver.annual, "a year")}; ${money(first.driver.monthly)} − ${money(r.driver.monthly)} = ${lm(sp.driver.monthly, "a month")}`,
+          `  business: ${money(first.business.annual)} − ${money(r.business.annual)} = ${lm(sp.business.annual, "a year")}; ${money(first.business.monthly)} − ${money(r.business.monthly)} = ${lm(sp.business.monthly, "a month")}`,
         ];
       }),
     });
