@@ -1,8 +1,8 @@
 // Customer Profiles (user, 2026-11-04): a sales exec's notes on every live
 // enquiry, filled in while they're on the phone, in whatever order the call
-// goes. The sections are the three TF Leasing opening call guides (personal,
-// business car, business van) with the scripts taken out: just what the exec
-// needs to capture.
+// goes. Built from the three TF Leasing opening call guides (personal,
+// business car, business van), cut to the questions that matter: no scripts,
+// no closing steps, nothing a sales call doesn't actually need.
 //
 // Pure and client-safe. The page, the CRM copy and the list's sorting all
 // read from here, and the tests pin the rules.
@@ -22,6 +22,9 @@ export const vehicleWord = (k: ProfileKind) => (k === "business_van" ? "van" : "
 /** A value per kind, or one value for all of them. */
 type PerKind<T> = T | Partial<Record<ProfileKind, T>>;
 
+/** What a field can look at to decide whether it's shown. */
+export interface Ctx { kind: ProfileKind; model: string; data: ProfileData }
+
 export type FieldType = "text" | "long" | "choice" | "multi" | "yesno" | "money" | "number" | "date" | "time";
 
 export interface FieldDef {
@@ -29,6 +32,8 @@ export interface FieldDef {
   type: FieldType;
   /** "{v}" reads as car or van. */
   label: PerKind<string>;
+  /** On the summary tile, where the full question is too long. */
+  short?: string;
   kinds?: ProfileKind[];
   options?: PerKind<string[]>;
   placeholder?: PerKind<string>;
@@ -36,8 +41,8 @@ export interface FieldDef {
   unit?: PerKind<string>;
   /** Quick picks for a number. */
   chips?: number[];
-  /** Only shown once another field holds this value. */
-  showIf?: { field: string; is: string };
+  /** Only shown when this holds: a Ranger, a plug-in, another answer. */
+  show?: (c: Ctx) => boolean;
   /** Takes the whole row. */
   wide?: boolean;
 }
@@ -47,9 +52,6 @@ export type Tone = "sky" | "indigo" | "violet" | "amber" | "emerald" | "ink" | "
 export interface SectionDef {
   id: string;
   title: PerKind<string>;
-  /** Shorter, for the side list, where the title doesn't fit. */
-  nav?: PerKind<string>;
-  hint?: PerKind<string>;
   kinds?: ProfileKind[];
   tone: Tone;
   fields: FieldDef[];
@@ -61,9 +63,28 @@ const BIZ: ProfileKind[] = ["business_car", "business_van"];
 const CARS: ProfileKind[] = ["personal", "business_car"];
 const VAN: ProfileKind[] = ["business_van"];
 
+export const isRanger = (model: string) => /\b(ranger|raptor)\b/i.test(model);
+/** A van whoever's buying it. The Ranger counts as one here (user, 2026-11-04), whatever the tax man says. */
+export const isVanModel = (model: string) => /\btransit\b|\bexplorer van\b|\bvan\b/i.test(model) || isRanger(model);
+/** Electric or plug-in hybrid: something they'll charge. From the model, or the derivative ("Kuga PHEV"). */
+export const isPlugIn = (text: string) =>
+  /gen-?e\b|\bcapri\b|mach-?e|e-transit|explorer van|transit city|\bexplorer\b|electric|\bev\b|phev|plug-?in|\bkwh\b/i.test(text);
+
+/**
+ * Personal, or business car or van. The exec only says personal or business:
+ * whether a business is on the car or the van questions follows the model, so
+ * nobody has to decide whether a Ranger is a van on a live call.
+ */
+export function kindFor(who: "personal" | "business", model: string): ProfileKind {
+  return who === "personal" ? "personal" : isVanModel(model) ? "business_van" : "business_car";
+}
+
+const plugIn = (c: Ctx) => isPlugIn(`${c.model} ${typeof c.data.derivative === "string" ? c.data.derivative : ""}`);
+const considering = (c: Ctx) => plugIn(c) || c.data.openToElectric === "Yes" || c.data.openToElectric === "Maybe";
+
 export const SECTIONS: SectionDef[] = [
   // What's been agreed for the next contact ("ring me back tomorrow at 10am").
-  // Shown at the top of the profile rather than as a card, and copied first.
+  // At the top of the profile rather than a tile, and copied first.
   {
     id: "next", tone: "orange", title: "Agreed next contact",
     fields: [
@@ -75,193 +96,153 @@ export const SECTIONS: SectionDef[] = [
   {
     id: "vehicle", tone: "sky", title: { personal: "The car", business_car: "The car", business_van: "The van" },
     fields: [
-      { id: "derivative", type: "text", wide: true, label: { personal: "Derivative they enquired on", business_car: "Derivative they enquired on", business_van: "Derivative and body style" },
-        placeholder: { personal: "e.g. Titanium 2.5 PHEV", business_car: "e.g. Wildtrak 3.0 V6", business_van: "e.g. 320 L2 Limited, double cab" } },
-      { id: "exact", type: "choice", label: "Exact {v}, or open to similar?", options: ["Exact", "Open to similar"] },
-      { id: "openIf", type: "multi", label: "Open to similar for", options: ["Better availability", "Better spec", "Lower rental"], showIf: { field: "exact", is: "Open to similar" } },
-      { id: "onlineTerms", type: "yesno", label: "Picked upfront, term and mileage online?" },
+      { id: "derivative", type: "text", wide: true, label: "Derivative", placeholder: { personal: "e.g. Titanium 2.5 PHEV", business_car: "e.g. ST-Line X 1.5", business_van: "e.g. 320 L2 Limited, or Wildtrak 3.0 V6" } },
+      { id: "rangerSeats", type: "choice", label: "5 seat or 2 seat?", short: "Seats", options: ["5 seat", "2 seat"], show: (c) => isRanger(c.model) },
+      { id: "exact", type: "choice", label: "Exact, or open to similar?", short: "Exact or similar", options: ["Exact", "Open to similar"] },
+      { id: "openIf", type: "multi", label: "Open to similar for", short: "Similar for", options: ["Availability", "Spec", "Lower rental"], show: (c) => c.data.exact === "Open to similar" },
+      { id: "colour", type: "text", kinds: CARS, label: "Colour" },
+      { id: "mustHave", type: "text", kinds: CARS, wide: true, label: "Must-haves" },
     ],
   },
   {
-    id: "why", tone: "indigo", title: "Why they enquired",
+    id: "why", tone: "indigo", title: "Why now",
     fields: [
-      { id: "interest", type: "text", wide: true, label: "What interested them about this {v}" },
-      { id: "trigger", type: "text", wide: true, label: "What made them enquire today" },
-      { id: "drivers", type: "multi", kinds: BIZ, label: "Mainly driven by", options: {
-        business_car: ["The car", "Rental", "Availability", "Company car requirement", "Tax position", "Replacing a vehicle"],
-        business_van: ["Payload", "Load space", "Rental", "Availability", "Replacing a van", "Adding to the fleet"],
+      { id: "why", type: "text", wide: true, label: "Why this, and why now", short: "Why" },
+      { id: "drivers", type: "multi", kinds: BIZ, wide: true, label: "Mainly about", options: {
+        business_car: ["The car", "Rental", "Availability", "Company car policy", "Tax"],
+        business_van: ["Payload", "Load space", "Rental", "Availability", "Adding to the fleet"],
       } },
     ],
   },
   {
-    id: "business", tone: "violet", kinds: BIZ, title: "The business and fleet", nav: "Business and fleet", hint: "The opportunity beyond one {v}",
+    id: "business", tone: "violet", kinds: BIZ, title: "The business",
     fields: [
-      { id: "bizWhat", type: "text", wide: true, label: "What the business does" },
-      { id: "bizType", type: "choice", wide: true, label: "Type of business", options: ["Sole trader", "Partnership", "LLP", "Ltd", "PLC", "Charity", "Other"] },
-      { id: "employees", type: "number", label: "Employees" },
-      { id: "fleetTotal", type: "number", label: "Vehicles in total" },
-      { id: "fleetCars", type: "number", label: "Cars" },
-      { id: "fleetVans", type: "number", label: "Vans" },
-      { id: "fleetHeld", type: "choice", label: "Fleet held as", options: ["Owned", "Financed", "Leased", "A mix"] },
-      { id: "oneSupplier", type: "choice", label: "One main supplier, or several?", options: ["One main supplier", "Different places"] },
-      { id: "suppliers", type: "text", label: "Current supplier or suppliers" },
-      { id: "renewalsBy", type: "text", label: "Who manages renewals" },
-      { id: "cycle", type: "yesno", label: { business_car: "Set replacement cycle?", business_van: "Set replacement cycle for vans?" } },
-      { id: "reviewed", type: "choice", label: "Vehicles reviewed", options: ["One at a time", "As a wider fleet plan"] },
-      { id: "renewalsDue", type: "text", wide: true, label: "Other vehicles due for renewal in 3, 6 or 12 months" },
-      { id: "problems", type: "text", wide: true, label: "Anything causing issues, costing too much or due back soon" },
-      { id: "policy", type: "yesno", label: { business_car: "Company car policy to work within?", business_van: "Company van policy to work within?" } },
-      { id: "policyNote", type: "text", label: "Policy details", showIf: { field: "policy", is: "Yes" } },
-      { id: "priorities", type: "multi", wide: true, label: "What matters most", options: {
-        business_car: ["Rental", "Upfront", "Availability", "Reliability", "Running costs", "Downtime", "Spec", "Driver preference", "Supplier support"],
-        business_van: ["Rental", "Upfront", "Availability", "Payload", "Load space", "Reliability", "Running costs", "Downtime", "Driver preference", "Supplier support"],
+      { id: "bizWhat", type: "text", wide: true, label: "What the business does", short: "Does" },
+      { id: "bizType", type: "choice", wide: true, label: "Type", options: ["Sole trader", "Partnership", "Ltd", "PLC", "Charity", "Other"] },
+      { id: "fleetCars", type: "number", label: "Cars on the fleet", short: "Cars" },
+      { id: "fleetVans", type: "number", label: "Vans on the fleet", short: "Vans" },
+      { id: "suppliers", type: "text", label: "Current supplier", short: "Supplier" },
+      { id: "renewalsDue", type: "text", label: "Others due in the next 12 months", short: "Renewals due" },
+      { id: "priorities", type: "multi", wide: true, label: "What matters most", short: "Matters most", options: {
+        business_car: ["Rental", "Availability", "Reliability", "Running costs", "Spec", "Driver choice"],
+        business_van: ["Rental", "Availability", "Payload", "Reliability", "Running costs", "Downtime"],
       } },
-      { id: "widerFleet", type: "yesno", label: "Open to us quoting the wider fleet as vehicles renew?" },
-      { id: "diarise", type: "yesno", label: "Diarise their upcoming renewals?" },
+      { id: "widerFleet", type: "yesno", label: "Can we quote the rest of the fleet?", short: "Rest of fleet" },
     ],
   },
   {
-    id: "needs", tone: "amber", title: { personal: "What they need", business_car: "Car needs", business_van: "What the van must do" }, nav: { business_van: "Van needs" },
+    id: "needs", tone: "amber", title: { personal: "How they'll use it", business_car: "How it's used", business_van: "What the van must do" },
     fields: [
-      { id: "usedFor", type: "text", label: "Mainly used for" },
-      { id: "driver", type: "text", label: "Who will drive it" },
-      { id: "forWhom", type: "choice", kinds: ["business_car"], label: "This is for a", options: ["Director", "Employee", "Pool car", "Other"] },
-      { id: "carrying", type: "text", kinds: VAN, label: "Usually carrying" },
-      { id: "payload", type: "text", kinds: VAN, label: "Payload needed" },
-      { id: "loadSize", type: "text", kinds: VAN, wide: true, label: "Load length, roof height or wheelbase" },
-      { id: "access", type: "multi", kinds: VAN, wide: true, label: "Access", options: ["Side loading door", "Twin side doors", "Tailgate", "Barn doors"] },
-      { id: "carryingType", type: "multi", kinds: VAN, wide: true, label: "Carrying", options: ["Tools", "Materials", "Parcels", "People", "Equipment", "Specialist"] },
-      { id: "towing", type: "yesno", kinds: VAN, label: "Towing?" },
-      { id: "caz", type: "yesno", kinds: VAN, label: "Used in clean air zones or city centres?" },
-      { id: "sites", type: "yesno", kinds: VAN, label: "Sites with height, weight or access limits?" },
-      { id: "sitesNote", type: "text", kinds: VAN, label: "Site limits", showIf: { field: "sites", is: "Yes" } },
-      { id: "drivers2", type: "yesno", kinds: VAN, label: "More than one driver?" },
-      { id: "fuel", type: "multi", kinds: VAN, label: "Fuel", options: ["Diesel", "Petrol", "Hybrid", "Electric"] },
-      { id: "charging", type: "multi", kinds: VAN, label: "If electric, charging at", options: ["Home", "Work", "Depot", "None yet"], showIf: { field: "fuel", is: "Electric" } },
-      { id: "trim", type: "text", kinds: CARS, label: "Preferred trim or derivative" },
-      { id: "colour", type: "text", kinds: CARS, label: "Preferred colour" },
-      { id: "mustHave", type: "text", kinds: CARS, wide: true, label: "Must-have features or options" },
-      { id: "niceToHave", type: "text", kinds: CARS, wide: true, label: "Nice to have, not essential" },
-      { id: "notColours", type: "text", kinds: CARS, label: "Colours they wouldn't consider" },
-      { id: "carRules", type: "text", kinds: ["business_car"], wide: true, label: "Fuel, EV, emissions, company car tax, image or driver policy needs" },
-      { id: "taxRate", type: "choice", kinds: BIZ, label: "Driver's income tax rate", options: ["20%", "40%", "45%"] },
-      { id: "fuelCard", type: "yesno", kinds: BIZ, label: "Business pays for private fuel?" },
-      { id: "waitOrSooner", type: "choice", wide: true, label: "If the exact {v} isn't available quickly", options: ["Wait for the perfect {v}", "Take something close, sooner"] },
+      { id: "usedFor", type: "text", wide: true, label: "Mainly used for", short: "Used for" },
+      { id: "driver", type: "text", label: "Who drives it", short: "Driver" },
+      { id: "forWhom", type: "choice", kinds: ["business_car"], label: "For a", options: ["Director", "Employee", "Pool car"] },
+      { id: "payload", type: "text", kinds: VAN, label: "Payload", placeholder: "e.g. 1 tonne" },
+      { id: "loadSize", type: "text", kinds: VAN, label: "Length, roof or wheelbase", short: "Load space" },
+      { id: "access", type: "multi", kinds: VAN, wide: true, label: "Access", options: ["Side door", "Twin side doors", "Tailgate", "Barn doors"] },
+      { id: "towing", type: "yesno", kinds: VAN, label: "Towing?", short: "Towing" },
+      { id: "caz", type: "yesno", kinds: VAN, label: "Into clean air zones?", short: "Clean air zones" },
+      { id: "taxRate", type: "choice", kinds: BIZ, label: "Driver's tax rate", short: "Tax rate", options: ["20%", "40%", "45%"] },
+      { id: "fuelCard", type: "yesno", kinds: BIZ, label: "Fuel card for private miles?", short: "Fuel card" },
     ],
   },
   {
-    id: "spec", tone: "indigo", kinds: VAN, title: "Accessories and conversion", nav: "Accessories", hint: "Affects the on the road cost and the lead time",
+    id: "spec", tone: "indigo", kinds: VAN, title: "Accessories",
     fields: [
-      { id: "accessories", type: "multi", wide: true, label: "Dealer-fit accessories needed", options: [
-        "Ply lining", "Racking", "Roof rack or bars", "Ladder storage or clamps", "Tow bar", "Beacons", "Chapter 8 markings", "Signwriting",
-        "Seat covers or mats", "Deadlocks or slam locks", "Extra security or tracker", "Bulkhead", "Load protection", "Internal lighting", "Power supply",
+      { id: "accessories", type: "multi", wide: true, label: "Dealer-fit accessories", short: "Fitted", options: [
+        "Ply lining", "Racking", "Roof rack", "Ladder clamps", "Tow bar", "Beacons", "Chapter 8", "Signwriting", "Seat covers", "Deadlocks", "Tracker", "Bulkhead", "Power supply",
       ] },
-      { id: "conversion", type: "text", wide: true, label: "Specialist conversion work" },
-      { id: "fitBefore", type: "yesno", label: "Anything to fit before delivery?" },
-      { id: "fitBeforeNote", type: "text", label: "What needs fitting", showIf: { field: "fitBefore", is: "Yes" } },
-      { id: "essential", type: "text", wide: true, label: "Essential before it can go into service" },
-      { id: "signwriting", type: "text", wide: true, label: "Signwriting or branding" },
+      { id: "conversion", type: "text", wide: true, label: "Conversion, or anything to fit before delivery", short: "Conversion" },
+    ],
+  },
+  // Charging (user, 2026-11-04): asked straight away for anything they'd plug
+  // in; otherwise one question first, and the rest only if the answer isn't no.
+  {
+    id: "charging", tone: "lime", title: "Charging",
+    fields: [
+      { id: "openToElectric", type: "choice", label: "Open to electric?", options: ["Yes", "Maybe", "No"], show: (c) => !plugIn(c) },
+      { id: "offStreet", type: "yesno", label: "Off-street parking?", short: "Off-street parking", show: considering },
+      { id: "homeCharger", type: "choice", label: "Home charger", options: ["Have one", "Could fit one", "Can't fit one"], show: considering },
+      { id: "workCharging", type: "choice", label: { personal: "Charging at work?", business_car: "Charging at work?", business_van: "Charging at the depot?" }, short: "At work or depot", options: ["Yes", "Could fit one", "No"], show: considering },
+      { id: "dailyMiles", type: "number", label: "A typical day", unit: "miles", show: considering },
     ],
   },
   {
-    id: "current", tone: "sky", title: "Current vehicle and timing", nav: "Current vehicle",
+    id: "current", tone: "sky", title: "Current vehicle",
     fields: [
-      { id: "currentVehicle", type: "text", label: "Current make and model", placeholder: "e.g. VW Golf 1.5 TSI, 2019" },
-      { id: "currentFunder", type: "text", label: "Finance or lease provider" },
-      { id: "currentHeld", type: "choice", label: "How is it held?", options: ["Owned", "Finance", "Lease"] },
-      { id: "agreementEnds", type: "text", label: "Agreement ends", placeholder: "e.g. March 2027" },
-      { id: "replacing", type: "choice", label: "Replacing or adding?", options: ["Replacing", "Adding another"] },
-      { id: "neededBy", type: "text", label: { personal: "Ideally wants the new car by", business_car: "Ideally needs the new car by", business_van: "Ideally needs the van by" }, placeholder: "e.g. end of January" },
-      { id: "prompted", type: "text", wide: true, label: "What's prompted the change now" },
-      { id: "hardDeadline", type: "yesno", kinds: BIZ, label: { business_car: "Hard deadline?", business_van: "Hard deadline to be on the road?" } },
+      { id: "currentVehicle", type: "text", wide: true, label: "Make and model", short: "Vehicle", placeholder: "e.g. VW Golf 1.5 TSI, 2019" },
+      { id: "currentHeld", type: "choice", label: "Owned, finance or lease?", short: "Held as", options: ["Owned", "Finance", "Lease"] },
+      { id: "agreementEnds", type: "text", label: "Agreement ends", short: "Ends", placeholder: "e.g. March 2027" },
+      { id: "neededBy", type: "text", label: "Needed by", placeholder: "e.g. end of January" },
+      { id: "replacing", type: "choice", kinds: BIZ, label: "Replacing or adding?", short: "Replacing", options: ["Replacing", "Adding"] },
+      // Ford's renewal discount on a van needs the V5 of one they have now (user, 2026-11-04).
+      { id: "v5", type: "yesno", kinds: VAN, label: "Have the V5 for a van they run now? It unlocks the renewal discount", short: "V5 for renewal" },
     ],
   },
   {
-    id: "terms", tone: "emerald", title: "Quote terms",
+    id: "terms", tone: "ink", title: "Quote and price",
     fields: [
-      { id: "upfront", type: "money", label: { personal: "Upfront they saw", business_car: "Upfront", business_van: "Upfront" } },
+      { id: "upfront", type: "money", label: "Upfront" },
       { id: "term", type: "number", label: "Term", unit: "months", chips: [24, 36, 48] },
-      { id: "mileage", type: "number", wide: true, label: "Annual mileage", unit: "miles a year", chips: [5000, 8000, 10000, 12000, 15000, 20000] },
-      { id: "workFrom", type: "choice", label: "Work from these terms?", options: ["Yes", "Adjust"] },
-      { id: "upfrontOk", type: "yesno", label: { personal: "Upfront comfortable?", business_car: "Upfront suitable for the business?", business_van: "Upfront suitable for the business?" } },
-      { id: "termFits", type: "yesno", label: { personal: "Term fits how long they keep a car?", business_car: "Term fits how long they keep vehicles?", business_van: "Term fits how long they keep vans?" } },
-      { id: "mileageOk", type: "yesno", label: "Mileage realistic?" },
+      { id: "mileage", type: "number", wide: true, label: "Miles a year", short: "Mileage", unit: "miles a year", chips: [5000, 8000, 10000, 12000, 15000, 20000] },
       { id: "maintenance", type: "choice", label: "Maintenance", options: ["Included", "Without"] },
-      { id: "accessoriesIn", type: "choice", kinds: VAN, label: "Accessories or conversion costs", options: ["In the rental", "Quoted separately"] },
-      { id: "adjust", type: "multi", wide: true, label: "If the rental is too high, adjust", options: ["Upfront", "Term", "Mileage", "Different model or spec"] },
+      { id: "rental", type: "money", label: "Rental on their terms", short: "Rental", unit: { personal: "a month", business_car: "+ VAT a month", business_van: "+ VAT a month" } },
+      { id: "availability", type: "choice", wide: true, label: "Their {v} is", short: "Availability", options: ["Available", "On a lead time", "Not available"] },
+      { id: "leadTime", type: "text", label: "Lead time", show: (c) => c.data.availability === "On a lead time" },
+      { id: "alternative", type: "text", wide: true, label: "Alternative offered", short: "Alternative" },
     ],
   },
   {
-    id: "decision", tone: "violet", kinds: BIZ, title: "Decision and procurement", nav: "Decision",
+    id: "decision", tone: "violet", kinds: BIZ, title: "Decision",
     fields: [
-      { id: "decider", type: "text", label: "Who makes the final decision" },
-      { id: "approver", type: "choice", label: "Do they approve it?", options: ["They approve", "Goes via someone else"] },
-      { id: "approverVia", type: "text", label: "Goes via", showIf: { field: "approver", is: "Goes via someone else" } },
-      { id: "involved", type: "text", label: "Who else needs to be involved" },
-      { id: "quoteTo", type: "text", label: "Quote addressed to" },
-      { id: "moreQuotes", type: "yesno", label: "More than one quote needed?" },
-      { id: "procurement", type: "yesno", label: "Set procurement process to follow?" },
-      { id: "showOnQuote", type: "multi", wide: true, label: "Show on the quote", options: {
-        business_car: ["P11D", "CO₂", "Maintenance", "VAT", "Delivery timescale", "Whole-life cost"],
-        business_van: ["Payload", "Load dimensions", "Maintenance", "Accessories or conversion", "VAT", "Delivery timescale"],
-      } },
-      { id: "po", type: "yesno", label: "Purchase order needed before we go ahead?" },
-      { id: "needFromMe", type: "text", wide: true, label: "What they need from me to move forward" },
-      { id: "beforeProceed", type: "text", wide: true, label: "Anything else before they can go ahead" },
+      { id: "decider", type: "text", label: "Who decides", short: "Decides" },
+      { id: "approver", type: "choice", label: "Do they sign it off?", short: "Sign-off", options: ["Yes", "Goes via someone else"] },
+      { id: "approverVia", type: "text", label: "Goes via", show: (c) => c.data.approver === "Goes via someone else" },
+      { id: "moreQuotes", type: "yesno", label: "Getting other quotes?", short: "Other quotes" },
+      { id: "po", type: "yesno", label: "Purchase order needed?", short: "PO needed" },
+      { id: "needFromMe", type: "text", wide: true, label: "What they need from us to go ahead", short: "Needs from us" },
     ],
   },
   {
-    id: "search", tone: "ink", title: "Availability and price", nav: "Availability", hint: "Check it live while they're on the phone",
-    fields: [
-      { id: "availability", type: "choice", wide: true, label: "The {v} they want is", options: ["Available", "Not available", "Available with lead time"] },
-      { id: "leadTime", type: "text", label: "Lead time", showIf: { field: "availability", is: "Available with lead time" } },
-      { id: "rental", type: "money", label: "Rental on their terms", unit: { personal: "a month", business_car: "+ VAT a month", business_van: "+ VAT a month" } },
-      { id: "accessoriesPrice", type: "text", kinds: VAN, label: "Accessories or conversion" },
-      { id: "alternative", type: "text", wide: true, label: "Alternative found" },
-      { id: "altWhy", type: "multi", wide: true, label: "The alternative is", options: {
-        personal: ["Cheaper", "Quicker", "Better spec", "Preferred colour", "Better availability"],
-        business_car: ["Cheaper", "Quicker", "Better spec", "Preferred colour", "Better availability"],
-        business_van: ["Cheaper", "Quicker", "Better payload", "Better load space", "Better availability", "Better suited to the job"],
-      } },
-    ],
-  },
-  {
-    id: "close", tone: "emerald", title: "Closing",
-    fields: [
-      { id: "rightPackage", type: "choice", label: "Right {v} and package?", options: ["Yes", "Not yet"] },
-      { id: "goAhead", type: "yesno", label: "Happy to go ahead today on these terms?" },
-      { id: "needFirst", type: "text", wide: true, label: "Anything else they need first" },
-      { id: "asked", type: "choice", wide: true, label: "Asked to get it started", options: ["Going ahead", "Send order or application details"] },
-    ],
-  },
-  {
-    id: "followup", tone: "orange", title: "If not ready today",
-    fields: [
-      { id: "toCheck", type: "text", wide: true, label: "What they need to check" },
-      { id: "whoElse", type: "text", kinds: BIZ, wide: true, label: "Who else needs to be involved" },
-      { id: "stopping", type: "text", wide: true, label: "Anything stopping them if the {v} and figures are right" },
-    ],
-  },
-  {
-    id: "insight", tone: "slate", title: { personal: "Customer insight", business_car: "Business insight", business_van: "Business insight" },
-    hint: "Makes the next call feel personal",
+    id: "notes", tone: "slate", title: "Notes",
     prompts: {
-      personal: ["Family and personal", "Work and driving habits", "Hot buttons", "Objections or hesitations", "Key dates and deadlines", "Anything to follow up"],
-      business_car: ["Decision maker", "Driver and role", "Renewals due", "Agreement end dates", "Procurement or PO process", "Company car policy", "Business priorities", "Future fleet opportunity", "Concerns", "Personal detail"],
-      business_van: ["Decision maker", "Driver and role", "Renewals due", "Van replacement cycle", "Payload or load needs", "Accessories or conversion", "Site or access limits", "Clean air zone needs", "Future fleet opportunity", "Concerns", "Personal detail"],
+      personal: ["Family", "Driving habits", "Hot buttons", "Worries", "Key dates"],
+      business_car: ["Decision maker", "Driver", "Hot buttons", "Worries", "Future fleet", "Personal"],
+      business_van: ["Decision maker", "Drivers", "Hot buttons", "Worries", "Future fleet", "Personal"],
     },
-    fields: [{ id: "insight", type: "long", wide: true, label: "Notes" }],
-  },
-  {
-    id: "notes", tone: "slate", title: "Other notes", hint: "Anything else from the call",
     fields: [{ id: "otherNotes", type: "long", wide: true, label: "Notes" }],
   },
 ];
 
+/**
+ * Questions the first version asked and this one doesn't. Anything already
+ * typed into them is kept, shown under Notes and copied, never dropped.
+ */
+export const RETIRED: Record<string, string> = {
+  onlineTerms: "Picked terms online", interest: "What interested them", trigger: "Why they enquired today",
+  employees: "Employees", fleetTotal: "Vehicles in total", fleetHeld: "Fleet held as", oneSupplier: "One supplier or several", renewalsBy: "Manages renewals",
+  cycle: "Replacement cycle", reviewed: "Vehicles reviewed", problems: "Problem vehicles", policy: "Vehicle policy", policyNote: "Policy details",
+  diarise: "Diarise renewals", carrying: "Carrying", carryingType: "Carrying", sites: "Site limits", sitesNote: "Site limits", drivers2: "More than one driver",
+  fuel: "Fuel", charging: "Charging at", trim: "Preferred trim", niceToHave: "Nice to have", notColours: "Colours they won't have", carRules: "Car policy needs",
+  waitOrSooner: "Wait or take something sooner", fitBefore: "Fit before delivery", fitBeforeNote: "To fit before delivery", essential: "Essential before use",
+  signwriting: "Signwriting", currentFunder: "Finance provider", prompted: "What prompted the change", hardDeadline: "Hard deadline",
+  workFrom: "Work from these terms", upfrontOk: "Upfront comfortable", termFits: "Term fits", mileageOk: "Mileage realistic", accessoriesIn: "Accessories costs",
+  adjust: "Adjust if too high", involved: "Also involved", quoteTo: "Quote addressed to", procurement: "Procurement process", showOnQuote: "Show on the quote",
+  beforeProceed: "Before they can go ahead", accessoriesPrice: "Accessories price", altWhy: "Alternative is", rightPackage: "Right package",
+  goAhead: "Happy to go ahead", needFirst: "Needed first", asked: "Asked for the business", toCheck: "Need to check", whoElse: "Who else",
+  stopping: "Anything stopping them", insight: "Insight",
+};
+
+/** "Label: value" for anything kept from the first version. */
+export function retiredLines(data: ProfileData): string[] {
+  return Object.entries(RETIRED)
+    .filter(([id]) => filled(data[id]))
+    .map(([id, label]) => `${label}: ${Array.isArray(data[id]) ? (data[id] as string[]).join(", ") : String(data[id]).trim()}`);
+}
+
 // ─── Part exchange ───────────────────────────────────────────────────────
 
-/** Vehicle Vision's appraisal form: the customer fills it in, the appraisal comes back as a PDF (user, 2026-11-04). */
-export const APPRAISAL_URL = "https://assist.vehicle-vision.com/landing.033c550a-7372-11ee-a3e1-0a45e79e31e9";
+/** CitNOW's Vehicle Vision appraisal form, Ford branded: the customer fills it in, the appraisal comes back as a PDF (user, 2026-11-04). */
+export const APPRAISAL_URL = "https://assist.vehicle-vision.com/landing/033c550a-7372-11ee-a3e1-0a45e79e31e9";
 
 export const PX_FIELDS: FieldDef[] = [
   { id: "pxHas", type: "choice", label: "Part exchange?", options: ["Yes", "No", "Not sure yet"] },
@@ -293,10 +274,6 @@ export const FORD_MODELS = [
   "E-Transit Custom", "Transit", "E-Transit", "Transit City", "Explorer Van",
 ];
 
-export const isRanger = (model: string) => /\b(ranger|raptor)\b/i.test(model);
-/** A model that's a van whatever the customer is: a business customer on one of these is on the van guide. */
-export const isVanModel = (model: string) => /\btransit\b|\bexplorer van\b|\bvan\b/i.test(model);
-
 // ─── Reading the definitions for one profile ─────────────────────────────
 
 const pick = <T,>(v: PerKind<T> | undefined, kind: ProfileKind): T | undefined => {
@@ -307,44 +284,53 @@ const pick = <T,>(v: PerKind<T> | undefined, kind: ProfileKind): T | undefined =
 const words = (s: string, kind: ProfileKind) => s.replaceAll("{v}", vehicleWord(kind));
 
 export const titleOf = (s: SectionDef, kind: ProfileKind) => words(pick(s.title, kind) ?? "", kind);
-export const navTitleOf = (s: SectionDef, kind: ProfileKind) => (pick(s.nav, kind) != null ? words(pick(s.nav, kind)!, kind) : titleOf(s, kind));
-export const hintOf = (s: SectionDef, kind: ProfileKind) => { const h = pick(s.hint, kind); return h ? words(h, kind) : null; };
 export const promptsOf = (s: SectionDef, kind: ProfileKind) => pick(s.prompts, kind) ?? [];
 export const labelOf = (f: FieldDef, kind: ProfileKind) => words(pick(f.label, kind) ?? "", kind);
+export const shortOf = (f: FieldDef, kind: ProfileKind) => f.short ?? labelOf(f, kind).replace(/\?$/, "");
 export const optionsOf = (f: FieldDef, kind: ProfileKind) => (f.type === "yesno" ? ["Yes", "No"] : (pick(f.options, kind) ?? []).map((o) => words(o, kind)));
 export const unitOf = (f: FieldDef, kind: ProfileKind) => pick(f.unit, kind) ?? null;
 export const placeholderOf = (f: FieldDef, kind: ProfileKind) => pick(f.placeholder, kind) ?? null;
 
 export const sectionsFor = (kind: ProfileKind) => SECTIONS.filter((s) => !s.kinds || s.kinds.includes(kind));
+/** The tiles on the profile's front page, in order. */
+export const topicsFor = (kind: ProfileKind) => sectionsFor(kind).filter((s) => s.id !== "next" && s.id !== "notes");
 
-/** The fields showing right now: this kind's, less any waiting on another answer. */
-export function fieldsShown(s: SectionDef, kind: ProfileKind, data: ProfileData): FieldDef[] {
-  return s.fields.filter((f) => (!f.kinds || f.kinds.includes(kind)) && (!f.showIf || has(data[f.showIf.field], f.showIf.is)));
+/** The fields showing right now: this kind's, less any waiting on a Ranger, a plug-in or another answer. */
+export function fieldsShown(s: SectionDef, c: Ctx): FieldDef[] {
+  return s.fields.filter((f) => (!f.kinds || f.kinds.includes(c.kind)) && (!f.show || f.show(c)));
 }
 
-const has = (v: FieldValue | undefined, x: string) => (Array.isArray(v) ? v.includes(x) : v === x);
 export const filled = (v: FieldValue | undefined) => (Array.isArray(v) ? v.length > 0 : typeof v === "string" && v.trim() !== "");
 
-export function sectionProgress(s: SectionDef, kind: ProfileKind, data: ProfileData) {
-  const shown = fieldsShown(s, kind, data);
-  const answered = shown.filter((f) => filled(data[f.id])).length;
+export function sectionProgress(s: SectionDef, c: Ctx) {
+  const shown = fieldsShown(s, c);
+  const answered = shown.filter((f) => filled(c.data[f.id])).length;
   return { answered, total: shown.length };
 }
 
-/** Every question section together, for the list's progress bar. */
-export function progressOf(kind: ProfileKind, data: ProfileData) {
+/** Every topic together, for the list's progress bar. */
+export function progressOf(c: Ctx) {
   let answered = 0;
   let total = 0;
-  for (const s of sectionsFor(kind)) {
-    if (s.id === "notes" || s.id === "next") continue;
-    const p = sectionProgress(s, kind, data);
+  for (const s of topicsFor(c.kind)) {
+    const p = sectionProgress(s, c);
     answered += p.answered;
     total += p.total;
   }
   return { answered, total, pct: total ? Math.round((answered / total) * 100) : 0 };
 }
 
-/** Every key a profile may hold. Anything else sent to the server is refused. */
+/**
+ * A topic on its summary tile: the answers so far as short label and value,
+ * and, while nothing's answered, what to ask about.
+ */
+export function summaryOf(s: SectionDef, c: Ctx, today: string, max = 4) {
+  const shown = fieldsShown(s, c);
+  const rows = shown.filter((f) => filled(c.data[f.id])).map((f) => [shortOf(f, c.kind), formatValue(f, c.data[f.id], c.kind, today)] as [string, string]);
+  return { rows: rows.slice(0, max), more: Math.max(0, rows.length - max), ask: rows.length ? [] : shown.slice(0, 4).map((f) => shortOf(f, c.kind)) };
+}
+
+/** Every key a profile may be sent. Anything else is refused. */
 export const DATA_KEYS = new Set<string>([...SECTIONS.flatMap((s) => s.fields.map((f) => f.id)), ...PX_FIELDS.map((f) => f.id), "heat"]);
 const FIELD_BY_ID = new Map<string, FieldDef>([...SECTIONS.flatMap((s) => s.fields), ...PX_FIELDS].map((f) => [f.id, f]));
 export const fieldById = (id: string) => FIELD_BY_ID.get(id);
@@ -510,10 +496,11 @@ export interface DocLine { createdAt: number; text: string }
  * how warm the lead is. With `since`, only what's new or changed since then.
  */
 export function crmText(input: {
-  kind: ProfileKind; data: ProfileData; docs?: DocLine[];
+  kind: ProfileKind; model: string; data: ProfileData; docs?: DocLine[];
   since?: { data: ProfileData; at: number } | null; only?: string; today?: string;
 }): string {
   const { kind, data, since } = input;
+  const c: Ctx = { kind, model: input.model, data };
   const today = input.today ?? ukNow().slice(0, 10);
   const changed = (id: string) => !since || JSON.stringify(since.data[id] ?? null) !== JSON.stringify(data[id] ?? null);
   const blocks: string[] = [];
@@ -530,12 +517,14 @@ export function crmText(input: {
       continue;
     }
     const lines: string[] = [];
-    for (const f of fieldsShown(s, kind, data)) {
+    for (const f of fieldsShown(s, c)) {
       const v = data[f.id];
       if (!filled(v)) continue;
       if (!changed(f.id)) continue;
-      lines.push(f.type === "long" ? (v as string).trim() : line(labelOf(f, kind), formatValue(f, v, kind, today)));
+      lines.push(f.type === "long" ? (v as string).trim() : line(shortOf(f, kind), formatValue(f, v, kind, today)));
     }
+    // Notes also carry anything typed into a question the first version asked.
+    if (s.id === "notes" && Object.keys(RETIRED).some((id) => filled(data[id]) && changed(id))) lines.push(...retiredLines(data));
     if (lines.length) blocks.push([titleOf(s, kind), ...lines].join("\n"));
   }
 
@@ -626,12 +615,13 @@ const TRIM_PATTERNS: [RangerTrim, RegExp][] = [
 ];
 
 export function rangerPrefillOf(p: { customerName: string; kind: ProfileKind; model: string; data: ProfileData }): RangerPrefill {
-  const text = [p.model, p.data.derivative, p.data.trim].filter((x) => typeof x === "string").join(" ");
+  const text = [p.model, p.data.derivative].filter((x) => typeof x === "string").join(" ");
   const trim = TRIM_PATTERNS.find(([, re]) => re.test(text))?.[0] ?? null;
   const fuel = /phev|plug[\s-]?in|\b2\.3\b/i.test(text) ? "phev" : /diesel|\bv6\b|\b3\.0\b|\b2\.0\b/i.test(text) ? "diesel" : null;
   const versions = trim ? RANGERS.filter((r) => r.trim === trim) : [];
   const version = versions.length === 1 ? versions[0] : versions.find((r) => r.fuel === fuel) ?? null;
-  const twoSeat = /\b(2|two)[\s-]?seat/i.test(text) && (version?.twoSeat ?? false);
+  const wantsTwo = p.data.rangerSeats === "2 seat" || (p.data.rangerSeats == null && /\b(2|two)[\s-]?seat/i.test(text));
+  const twoSeat = wantsTwo && (version?.twoSeat ?? false);
   const rate = typeof p.data.taxRate === "string" ? p.data.taxRate.replace("%", "") : "";
   const term = num(p.data.term);
   const rental = num(p.data.rental);

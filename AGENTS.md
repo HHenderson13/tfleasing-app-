@@ -1418,75 +1418,85 @@ Calculator. The maths, the range and the rates are pure and tested in
 Each exec's notes on their live enquiries, filled in while they're on the
 phone (user, 2026-11-04). **It is not a CRM** (user: "we have one of those
 already"): no reminders, emails, pipelines or manager reporting. Notes, the
-agreed next contact, and getting it all into the real CRM quickly. Not
-scripts either: the three opening call guides
-(personal, business car, business van) with the "say this" lines taken out,
-leaving what to capture. Sections, fields, the list's order, the CRM text and
-the calculator prefills are pure and tested in `lib/customer-profiles.ts`;
-storage in `lib/customer-profiles-store.ts`.
+agreed next contact, and getting it all into the real CRM quickly. Built from
+the three opening call guides with the scripts, the closing steps and the
+"if not ready today" section taken out (user: "sales calls never follow the
+exact process and order"). Questions, the list's order, the summaries, the
+CRM text and the calculator prefills are pure and tested in
+`lib/customer-profiles.ts`; storage in `lib/customer-profiles-store.ts`.
 
-- **Starting one is three things:** name, personal or business (car or van),
-  and the model. A van model (Transit, Explorer Van) suggests van for a
-  business; a Ranger is left as car and the exec can change it.
-- **Every section is on the page at once** so nothing is behind a "next"; the
-  side list (a swipeable strip on phones) jumps anywhere and shows answered /
-  shown per section. Choices are one tap, tap again to clear; numbers have
-  quick picks; dates have Today / Tomorrow. Follow-on questions (`showIf`)
-  appear only once needed and don't count until then.
-- **Answers save themselves** 700ms after typing stops, as a patch merged
-  with `json_patch` (null removes a key), so two quick saves can't undo each
-  other. Unknown keys are refused (`cleanPatch`, `DATA_KEYS`). The page
-  re-reads the profile on opening and when the tab comes back into view,
-  because the browser's back button can show an old copy of the page.
-- **Agreed next contact** ("ring me back tomorrow at 10am", user) sits at the
-  top of every profile, not in a section card: how (Call / Text / Email),
-  day and time, each a tap (Tomorrow, 10am), with a date or time box for
-  anything else. Kept as `contactBy`, `callbackDate`, `callbackTime` (the
-  `next` section, left out of progress). It reads back in words
-  (`nextContactText`: "Call tomorrow at 10am") and is the first line copied
-  for the CRM.
+- **The exec never decides car or van.** They pick Personal or Business and
+  type the model; `kindFor` puts a business on the van questions for a van
+  model, and **a Ranger counts as a van here** (user), whatever the tax
+  treatment. Changing the model on the profile re-derives it.
+- **The profile is a summary first** (user: "way too much on this page"). The
+  header holds the name, Personal / Business, the model, Hot / Warm / Cold,
+  Ordered / Lost sale and the agreed next contact. Below it, one tile per
+  topic (`topicsFor`) showing what's known as short label and value
+  (`summaryOf`, `short` on the field), or what to ask while it's empty. A tile
+  opens its questions beside the summary on a laptop, where the notes sit
+  otherwise, and full screen on a phone. Notes are always on the front page.
+- **Topics, kept short:** the car / van (derivative, **5 seat or 2 seat for a
+  Ranger** (`rangerSeats`), exact or similar, colour and must-haves for cars),
+  why now, the business, how it's used (van: payload, load space, access,
+  towing, clean air zones; business: driver's tax rate, fuel card),
+  accessories (vans), **charging**, current vehicle (with, for vans, **the V5
+  question that unlocks the renewal discount**), quote and price (with the
+  Stock link), decision (business). Questions decide whether they show from
+  the model and the answers (`show`).
+- **Charging** (user): for anything they'd plug in (`isPlugIn`: Gen-E, Capri,
+  Explorer, Mach-E, E-Transit, Transit City, any PHEV) it asks off-street
+  parking, home charger, work or depot charging and a typical day's miles
+  straight away; otherwise "Open to electric?" first, and the rest only for
+  Yes or Maybe.
+- **Questions the first version asked are retired, not lost** (`RETIRED`):
+  anything typed into them shows under Notes as "From before" and is copied
+  with the notes. `cleanPatch` refuses them, so nothing new lands there.
+- **Agreed next contact** ("ring me back tomorrow at 10am", user): how (Call /
+  Text / Email), day and time, each a tap. It stays open while being filled in
+  and folds away to the sentence (`nextContactText`: "Call tomorrow at
+  10am") once the day and time are in. It is the first line copied for the
+  CRM and decides the list's order.
 - **Most important first** (`urgencyOf`, `sortLive`): an overdue next
   contact, then one due later today, then Hot, then anything with nothing
   booked, then booked ones soonest first, then Cold. An agreed contact is a
-  promise, so it beats Cold. The list opens on "Up next", the top one. All
-  times are UK wall-clock text (`ukNow`), compared as strings.
-- **Who sees what** (user, 2026-11-04): an exec opens on their own, and can
-  flick to Everyone or one exec (`?view=mine|all|<user id>`); an admin opens
-  on Everyone. Anyone can open any profile and copy its notes; only the owner
-  or an admin can change it (the page puts a read-only notice up and disables
-  the fieldset, the actions check `canWork`). Delete is the owner's or an
-  admin's.
-- **Ordered and Lost sale** take it off the live list and keep it; Lost asks
-  for a reason (`LOST_REASONS`) and an optional note. Both can be moved back
-  to live. Delete is separate and permanent.
-- **Copy for CRM** (`crmText`): plain text, section by section, leaving out
-  what the CRM already has (name, personal or business, model) and how warm
-  the lead is. "Copy what's new" gives only answers changed since the last
-  full copy (the snapshot is `copied` / `copied_at` on the row) plus any
-  document made since. Each section also copies on its own.
+  promise, so it beats Cold. All times are UK wall-clock text (`ukNow`).
+- **Who sees what** (user): an exec opens on their own and can flick to
+  Everyone or one exec (`?view=mine|all|<user id>`); an admin opens on
+  Everyone. Anyone can open any profile and copy its notes; only the owner or
+  an admin can change it (read-only notice and disabled fieldsets on the page,
+  `canWork` in every action). Delete is the owner's or an admin's.
+- **Ordered and Lost sale go back to the customer list** (user), which shows
+  "moved to Ordered" with Undo (`?moved=<id>`). Lost asks for a reason
+  (`LOST_REASONS`) and an optional note. Both can be moved back to live.
+- **Answers save themselves** 700ms after typing stops, as a patch merged
+  with `json_patch` (null removes a key). The page re-reads the profile on
+  opening and when the tab comes back into view, because the browser's back
+  button can show an old copy.
+- **Copy for CRM** (`crmText`): plain text, topic by topic with short labels,
+  leaving out what the CRM already has (name, personal or business, model)
+  and how warm the lead is. "Copy what's new" gives only answers changed since
+  the last full copy (`copied` / `copied_at`) plus documents made since. Each
+  topic, part exchange and the notes also copy on their own.
 - **Fuel Cost and Ranger BIK open pre-filled** (`?profile=<id>`):
-  `fuelPrefillOf` (name, private / business, car / van, mileage, term, the
-  current vehicle as the search, and the electric model via `matchEvModel`);
-  `rangerPrefillOf` (trim and engine read from what's been typed, 2-Seat only
-  where Ford build one, the driver's tax rate, fuel card, term, and the
-  rental for a business only, being ex VAT). Their exported PDFs carry
-  `profile_id` and show on the profile; the save only links if the exec can
-  work on that profile. The Ranger section only shows for a Ranger.
-- **Part exchange:** reg, mileage, the Vehicle Vision link (`APPRAISAL_URL`)
-  to open or copy for the customer, "Mark as sent", the appraisal PDF, then
-  value, finance to settle and equity (`pxEquity`, to the penny).
-  **Appraisals are stored in our database in 2MB pieces**
-  (`customer_profile_file_chunks`), not the public blob store, because they
-  carry a customer's registration and valuation; pieces because a Vercel
-  function takes at most 4.5MB a request. Up to 30MB; the finish step checks
-  every piece arrived, the sizes add up and it starts `%PDF-`, or deletes it.
-  Half-finished uploads over an hour old are cleared on the next start.
-- **Availability and price links to Stock** ("Check stock for Puma Gen-E",
-  user: a link and nothing more), opening `/stock?q=<model>` in a new tab so
-  the profile stays open on the call. `StockBrowser` takes `initialQuery`
-  for this; only the TF page passes it. Shown only to users with stock access.
-- Wide screens get a right rail: Quick notes (the same answer as Other
-  notes, which hides from the main column there) and At a glance.
+  `fuelPrefillOf` and `rangerPrefillOf` (trim and engine read from the
+  derivative, seats from the 5 seat / 2 seat answer and only where Ford build
+  a 2-Seat, tax rate, fuel card, term, and the rental for a business only,
+  being ex VAT). Their exported PDFs carry `profile_id` and show on the tile.
+  The Ranger BIK tile only shows for a Ranger.
+- **Part exchange:** reg, mileage, the **CitNOW** appraisal link
+  (`APPRAISAL_URL`, `/landing/<id>`: the `landing.<id>` form the first version
+  used bounces to CitNOW's home page), open or copy for the customer (copying
+  marks it sent), the appraisal PDF, then value, finance to settle and equity
+  (`pxEquity`, to the penny). **Appraisals are stored in our database in 2MB
+  pieces** (`customer_profile_file_chunks`), not the public blob store,
+  because they carry a customer's registration and valuation; pieces because
+  a Vercel function takes at most 4.5MB a request. Up to 30MB; the finish step
+  checks every piece arrived, the sizes add up and it starts `%PDF-`.
+- **Quote and price links to Stock** ("Check stock for Ranger", user: a link
+  and nothing more), opening `/stock?q=<model>` in a new tab. `StockBrowser`
+  takes `initialQuery` for this; only the TF page passes it. Shown only to
+  users with stock access.
 - No em or en dashes in anything an exec reads; a test pins it.
 
 ## Sales leaderboard (Pole Position)

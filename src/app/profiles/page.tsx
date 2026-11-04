@@ -14,9 +14,10 @@ const requestTime = () => Date.now();
 // Customer Profiles: every signed-in user. An exec opens on their own
 // customers and can flick into a colleague's or everyone's; an admin opens on
 // everyone's (user, 2026-11-04). ?view=mine | all | <user id>.
-export default async function ProfilesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function ProfilesPage({ searchParams }: { searchParams: Promise<{ view?: string; moved?: string }> }) {
   const user = await requireUser();
-  const asked = String((await searchParams).view ?? "");
+  const sp = await searchParams;
+  const asked = String(sp.view ?? "");
   const owners = await listOwners();
   const chosen = asked === "all" || asked === "mine" ? asked : owners.some((o) => o.id === asked) ? asked : isAdmin(user) ? "all" : "mine";
   const view: ProfileView = chosen === "all" ? "all" : { owner: chosen === "mine" ? user.id : chosen };
@@ -28,7 +29,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
     id: r.id, customerName: r.customerName, kind: r.kind, model: r.model, status: r.status, lostReason: r.lostReason,
     ownerName: r.ownerName, createdAt: r.createdAt, updatedAt: r.updatedAt, closedAt: r.closedAt,
     data: Object.fromEntries(keep.filter((k) => r.data[k] != null).map((k) => [k, r.data[k]])),
-    progress: progressOf(r.kind, r.data).pct,
+    progress: progressOf({ kind: r.kind, model: r.model, data: r.data }).pct,
     docs: docs.get(r.id)?.length ?? 0,
   }));
   const whose = chosen === "all" ? "all" : chosen === "mine" || chosen === user.id ? "mine" : (owners.find((o) => o.id === chosen)?.name ?? "");
@@ -46,7 +47,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
-        <ProfileList rows={list} now={ukNow()} nowMs={requestTime()} whose={whose} showOwner={chosen === "all"} />
+        <ProfileList rows={list} now={ukNow()} nowMs={requestTime()} whose={whose} showOwner={chosen === "all"} moved={/^[0-9a-f-]{36}$/.test(String(sp.moved ?? "")) ? String(sp.moved) : null} />
       </main>
     </div>
   );

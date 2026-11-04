@@ -138,3 +138,26 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
     </div>
   );
 }
+
+/** Line icons for the profile's topics, drawn to one 24px grid and one stroke. */
+const GLYPHS: Record<string, ReactNode> = {
+  car: <><path d="M5 12l1.6-4.3A2 2 0 0 1 8.5 6.4h7a2 2 0 0 1 1.9 1.3L19 12" /><path d="M4 12h16v4.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1H7.5v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V12Z" /><path d="M7.5 14.5h.01M16.5 14.5h.01" /></>,
+  van: <><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H14v10H3V7.5Z" /><path d="M14 9h3.6l3.4 3.6V16h-7V9Z" /><circle cx="7" cy="17" r="1.8" /><circle cx="17" cy="17" r="1.8" /></>,
+  chat: <path d="M4.5 5h15a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-4.5 3.5V16h-1a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />,
+  building: <><path d="M5 20V5.5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1V20M14 9.5h4a1 1 0 0 1 1 1V20M3 20h18" /><path d="M8 8h3M8 11.5h3M8 15h3" /></>,
+  route: <><circle cx="6" cy="18" r="2" /><circle cx="18" cy="6" r="2" /><path d="M8 18h7.5a3 3 0 0 0 0-6h-7a3 3 0 0 1 0-6H16" /></>,
+  tools: <><path d="M3.5 9.5h17v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9Z" /><path d="M8.5 9.5V7a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v2.5M3.5 13.5h17" /></>,
+  plug: <><path d="M9 3.5v4M15 3.5v4" /><path d="M7 7.5h10v3a5 5 0 0 1-10 0v-3Z" /><path d="M12 15.5v5" /></>,
+  key: <><circle cx="8" cy="12" r="3.5" /><path d="M11.5 12H21M17.5 12v3M20.5 12v2" /></>,
+  pound: <path d="M16 7.5a3.5 3.5 0 0 0-6.5 1.8V19M7 13h6M6.5 19H17" />,
+  people: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M15.5 5.2a3 3 0 0 1 0 5.6M20.5 19a5.5 5.5 0 0 0-3.5-5.1" /></>,
+  note: <><path d="M6 3.5h9l4 4V20a.5.5 0 0 1-.5.5h-12A.5.5 0 0 1 6 20V3.5Z" /><path d="M9 11h7M9 14.5h7M9 18h4" /></>,
+};
+
+export function Glyph({ name, className = "h-4 w-4" }: { name: keyof typeof GLYPHS; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
+      {GLYPHS[name]}
+    </svg>
+  );
+}

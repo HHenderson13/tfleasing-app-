@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { KIND_LABEL, sortLive, ukNow, urgencyOf, type Heat, type ProfileData, type ProfileKind, type ProfileStatus } from "@/lib/customer-profiles";
 import { CARD, HEAT_DOT, Icon, KindBadge, Ring, UrgencyBadge, ago } from "./ui";
 import { NewProfile } from "./new-profile";
+import { setProfileStatusAction } from "./actions";
 
 export interface ListRow {
   id: string;
@@ -37,7 +39,7 @@ function useClock(now: string, nowMs: number) {
 
 const dateOf = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
 
-export function ProfileList({ rows, now, nowMs, whose, showOwner }: { rows: ListRow[]; now: string; nowMs: number; whose: string; showOwner: boolean }) {
+export function ProfileList({ rows, now, nowMs, whose, showOwner, moved }: { rows: ListRow[]; now: string; nowMs: number; whose: string; showOwner: boolean; moved: string | null }) {
   const team = showOwner;
   const theirs = whose === "mine" ? "Your" : whose === "all" ? "Everyone's" : `${whose}'s`;
   const clock = useClock(now, nowMs);
@@ -162,6 +164,7 @@ export function ProfileList({ rows, now, nowMs, whose, showOwner }: { rows: List
       </div>
 
       {adding && <NewProfile onClose={() => setAdding(false)} />}
+      <MovedToast row={moved ? rows.find((r) => r.id === moved && r.status !== "live") ?? null : null} />
     </>
   );
 }
@@ -286,6 +289,35 @@ function Empty({ tab, mine, any, searching, onlyUpNext, onAdd }: { tab: ProfileS
       <button type="button" onClick={onAdd} className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-[14px] font-semibold text-white hover:bg-slate-800">
         <Icon name="plus" />New customer
       </button>
+    </div>
+  );
+}
+
+/** After Ordered or Lost sale on a profile: back here, with a way to undo it. */
+function MovedToast({ row }: { row: ListRow | null }) {
+  const router = useRouter();
+  const [gone, setGone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!row) return;
+    const t = setTimeout(() => setGone(true), 8000);
+    return () => clearTimeout(t);
+  }, [row]);
+  if (!row || gone) return null;
+  const undo = async () => {
+    setBusy(true);
+    const r = await setProfileStatusAction(row.id, "live").catch(() => ({ ok: false }));
+    if (r.ok) router.replace(`/profiles/${row.id}`);
+    else setBusy(false);
+  };
+  return (
+    <div role="status" className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+      <div className="flex items-center gap-3 rounded-xl bg-slate-900 px-4 py-3 text-[14px] text-white shadow-xl">
+        <Icon name="check" className="h-4 w-4 text-emerald-400" />
+        <span>{`${row.customerName} moved to ${row.status === "ordered" ? "Ordered" : "Lost sales"}`}</span>
+        <button type="button" onClick={undo} disabled={busy} className="font-semibold text-emerald-300 hover:text-emerald-200 disabled:opacity-60">Undo</button>
+        <button type="button" onClick={() => setGone(true)} aria-label="Dismiss" className="text-slate-400 hover:text-white"><Icon name="x" className="h-4 w-4" /></button>
+      </div>
     </div>
   );
 }

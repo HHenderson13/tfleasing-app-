@@ -2,30 +2,27 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FORD_MODELS, isVanModel, type ProfileKind } from "@/lib/customer-profiles";
-import { Segmented } from "../fuel-calculator/ui";
+import { FORD_MODELS, kindFor } from "@/lib/customer-profiles";
 import { createProfileAction } from "./actions";
 import { Icon, Modal } from "./ui";
 
 const QUICK = ["Puma", "Kuga", "Explorer", "Ranger", "Transit Custom", "Transit"];
 
-/** Three things to start: who, personal or business, and the model. Everything else is filled in on the call. */
+/**
+ * Three things to start: who, personal or business, and the model. Whether a
+ * business gets the car or the van questions follows the model (a Ranger is a
+ * van here), so nobody decides that on a live call (user, 2026-11-04).
+ */
 export function NewProfile({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [who, setWho] = useState<"personal" | "business" | "">("");
-  const [body, setBody] = useState<"car" | "van">("car");
-  const [bodyChosen, setBodyChosen] = useState(false);
   const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // A van model makes a business customer a van customer, until the exec says otherwise.
-  const setModelSuggest = (m: string) => {
-    setModel(m);
-    if (!bodyChosen) setBody(isVanModel(m) ? "van" : "car");
-  };
-  const kind: ProfileKind | "" = who === "personal" ? "personal" : who === "business" ? (body === "van" ? "business_van" : "business_car") : "";
+  const setModelSuggest = setModel;
+  const kind = who ? kindFor(who, model) : "";
   const ready = name.trim() !== "" && kind !== "";
 
   async function submit() {
@@ -74,14 +71,6 @@ export function NewProfile({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
-
-        {who === "business" && (
-          <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-slate-700">Car or van?</span>
-            <Segmented label="Car or van" value={body} onChange={(b) => { setBody(b); setBodyChosen(true); }} options={[["car", "Car"], ["van", "Van"]]} />
-            <p className="mt-1.5 text-[12.5px] leading-5 text-slate-500">Sets which questions show. A Ranger can go either way; you can change it later.</p>
-          </div>
-        )}
 
         {error && <p className="text-[13px] text-rose-700">{error}</p>}
         <button type="submit" disabled={!ready || busy}
