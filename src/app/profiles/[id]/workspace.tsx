@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   APPRAISAL_URL, FORD_MODELS, HEAT, LOST_REASONS, PX_FIELDS, addDays, crmText, fieldsShown, filled, fmtDate, isRanger, kindFor, nextContactText,
-  pounds, promptsOf, pxEquity, pxText, retiredLines, sectionProgress, sectionsFor, summaryOf, titleOf, topicsFor, ukNow, urgencyOf,
+  panelLayout, pounds, promptsOf, pxEquity, pxText, retiredLines, sectionProgress, sectionsFor, summaryOf, titleOf, topicsFor, ukNow, urgencyOf,
   type Ctx, type DocLine, type FieldValue, type Heat, type ProfileData, type ProfileKind, type ProfileStatus, type SectionDef,
 } from "@/lib/customer-profiles";
 import type { ProfileDoc, ProfileSnapshot } from "@/lib/customer-profiles-store";
@@ -341,7 +341,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
 
           {/* ── Beside it on a laptop: the notes, or the topic being filled in ── */}
           <aside className="hidden lg:block">
-            <div className="sticky top-[72px] max-h-[calc(100vh-88px)] overflow-y-auto rounded-2xl [scrollbar-width:thin]">{editor ?? notes}</div>
+            <div key={open ?? "notes"} className="sticky top-[72px] max-h-[calc(100vh-88px)] overflow-y-auto rounded-2xl [scrollbar-width:thin]">{editor ?? notes}</div>
           </aside>
         </div>
       </div>
@@ -486,18 +486,21 @@ function Tile({ s, c, today, on, onOpen }: { s: SectionDef; c: Ctx; today: strin
       <div className="flex w-full items-center gap-2.5">
         <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white ${t.solid}`}><Glyph name={glyph} className="h-4 w-4" /></span>
         <h3 className="min-w-0 flex-1 truncate text-[14.5px] font-semibold text-slate-900">{titleOf(s, c.kind)}</h3>
-        <Dots answered={p.answered} total={p.total} />
+        <Count answered={p.answered} total={p.total} />
       </div>
       {sum.rows.length ? (
-        <dl className="mt-3 w-full space-y-1">
-          {sum.rows.map(([k, v]) => (
-            <div key={k} className="flex gap-2 text-[13px] leading-5">
-              <dt className="w-[38%] shrink-0 truncate text-slate-500">{k}</dt>
-              <dd className="min-w-0 flex-1 truncate font-medium text-slate-900">{v}</dd>
-            </div>
-          ))}
-          {sum.more > 0 && <div className="text-[12.5px] font-medium text-slate-400">{`+${sum.more} more`}</div>}
-        </dl>
+        <div className="mt-3 w-full">
+          {/* Labels as wide as this tile's longest, so they line up and the answers get the rest. */}
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px] leading-5">
+            {sum.rows.map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="max-w-[8rem] truncate text-slate-500">{k}</dt>
+                <dd className="truncate font-medium text-slate-900">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          {sum.more > 0 && <div className="mt-1 text-[12.5px] font-medium text-slate-400">{`+${sum.more} more`}</div>}
+        </div>
       ) : (
         <p className="mt-3 text-[13px] leading-5 text-slate-400">{sum.ask.join(" · ")}</p>
       )}
@@ -505,12 +508,12 @@ function Tile({ s, c, today, on, onOpen }: { s: SectionDef; c: Ctx; today: strin
   );
 }
 
-/** How much of a topic is answered, at a glance: a dot per question, up to six, then a count. */
-function Dots({ answered, total }: { answered: number; total: number }) {
-  if (total > 6) return <span className={`shrink-0 text-[11.5px] font-semibold tabular-nums ${answered === total ? "text-emerald-600" : answered ? "text-slate-500" : "text-slate-300"}`}>{answered}/{total}</span>;
+/** How much of a topic is answered: "2/5", the same width everywhere so nothing beside it moves. */
+function Count({ answered, total }: { answered: number; total: number }) {
   return (
-    <span className="flex shrink-0 gap-0.5" aria-label={`${answered} of ${total} answered`}>
-      {Array.from({ length: total }, (_, i) => <span key={i} className={`h-1.5 w-1.5 rounded-full ${i < answered ? (answered === total ? "bg-emerald-500" : "bg-slate-700") : "bg-slate-200"}`} />)}
+    <span className={`w-9 shrink-0 text-right text-[12px] font-semibold tabular-nums ${total && answered === total ? "text-emerald-600" : answered ? "text-slate-600" : "text-slate-300"}`}
+      aria-label={`${answered} of ${total} answered`}>
+      {answered}/{total}
     </span>
   );
 }
@@ -569,8 +572,8 @@ function Panel({ title, icon, glyphTone, onClose, onCopy, progress, children }: 
       <header className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-slate-100 bg-white px-4 py-3 sm:px-5">
         <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white ${TONE[glyphTone].solid}`}>{icon}</span>
         <h2 className="min-w-0 flex-1 truncate text-[15.5px] font-semibold tracking-tight text-slate-900">{title}</h2>
-        {progress}
-        {onCopy && <CopyButton onClick={onCopy} />}
+        {progress ?? <span className="w-9 shrink-0" />}
+        <CopyButton onClick={() => onCopy?.()} disabled={!onCopy} />
         <button type="button" onClick={onClose} className="h-8 shrink-0 rounded-lg bg-slate-900 px-3 text-[13px] font-semibold text-white hover:bg-slate-800">Done</button>
       </header>
       <div className="px-4 py-4 sm:px-5">{children}</div>
@@ -585,10 +588,10 @@ function TopicEditor({ s, c, set, today, canEdit, onClose, onCopy, extra }: {
   const glyph = s.id === "vehicle" && c.kind === "business_van" ? "van" : GLYPH[s.id] ?? "note";
   return (
     <Panel title={titleOf(s, c.kind)} glyphTone={s.tone} icon={<Glyph name={glyph} className="h-4 w-4" />} onClose={onClose} onCopy={p.answered ? onCopy : undefined}
-      progress={<Dots answered={p.answered} total={p.total} />}>
-      <fieldset disabled={!canEdit} className="grid min-w-0 gap-4">
-        {fieldsShown(s, c).map((f) => (
-          <FieldControl key={f.id} f={f} kind={c.kind} value={c.data[f.id]} onChange={(v) => set(f.id, v)} today={today} />
+      progress={<Count answered={p.answered} total={p.total} />}>
+      <fieldset disabled={!canEdit} className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-5">
+        {panelLayout(fieldsShown(s, c), c.kind).map(({ f, half }) => (
+          <FieldControl key={f.id} f={f} kind={c.kind} value={c.data[f.id]} onChange={(v) => set(f.id, v)} today={today} half={half} />
         ))}
       </fieldset>
       {extra && <div className="mt-4">{extra}</div>}
@@ -732,9 +735,9 @@ function PartExchange({ profileId, data, set, kind, today, appraisals, canEdit, 
       <FieldControl f={fieldOf("pxHas")} kind={kind} value={data.pxHas} onChange={(v) => set("pxHas", v)} today={today} />
       {has !== "No" && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <FieldControl f={fieldOf("pxReg")} kind={kind} value={data.pxReg} onChange={(v) => set("pxReg", typeof v === "string" ? v.toUpperCase() : v)} today={today} />
-            <FieldControl f={fieldOf("pxMileage")} kind={kind} value={data.pxMileage} onChange={(v) => set("pxMileage", v)} today={today} />
+          <div className="mt-5 grid grid-cols-2 gap-x-3 gap-y-5">
+            <FieldControl f={fieldOf("pxReg")} kind={kind} value={data.pxReg} onChange={(v) => set("pxReg", typeof v === "string" ? v.toUpperCase() : v)} today={today} half />
+            <FieldControl f={fieldOf("pxMileage")} kind={kind} value={data.pxMileage} onChange={(v) => set("pxMileage", v)} today={today} half />
           </div>
           <ol className="relative mt-5 before:absolute before:bottom-3 before:left-[11px] before:top-3 before:w-px before:bg-slate-200">
             {step(1, !!sent, "Send them the CitNOW appraisal", (
@@ -775,11 +778,9 @@ function PartExchange({ profileId, data, set, kind, today, appraisals, canEdit, 
             ))}
             {step(3, value != null, "The valuation", (
               <div>
-                <div className="grid grid-cols-2 gap-3">
-                  <FieldControl f={fieldOf("pxValue")} kind={kind} value={data.pxValue} onChange={(v) => set("pxValue", v)} today={today} />
-                  <FieldControl f={fieldOf("pxSettlement")} kind={kind} value={data.pxSettlement} onChange={(v) => set("pxSettlement", v)} today={today} />
-                </div>
-                <div className="mt-3">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+                  <FieldControl f={fieldOf("pxValue")} kind={kind} value={data.pxValue} onChange={(v) => set("pxValue", v)} today={today} half />
+                  <FieldControl f={fieldOf("pxSettlement")} kind={kind} value={data.pxSettlement} onChange={(v) => set("pxSettlement", v)} today={today} half />
                   <FieldControl f={fieldOf("pxValidUntil")} kind={kind} value={data.pxValidUntil} onChange={(v) => set("pxValidUntil", v)} today={today} plain />
                 </div>
                 {value != null && settle != null && settle > 0 && (() => {

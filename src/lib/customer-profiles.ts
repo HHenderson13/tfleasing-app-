@@ -142,7 +142,7 @@ export const SECTIONS: SectionDef[] = [
       { id: "towing", type: "yesno", kinds: VAN, label: "Towing?", short: "Towing" },
       { id: "caz", type: "yesno", kinds: VAN, label: "Into clean air zones?", short: "Clean air zones" },
       { id: "taxRate", type: "choice", kinds: BIZ, label: "Driver's tax rate", short: "Tax rate", options: ["20%", "40%", "45%"] },
-      { id: "fuelCard", type: "yesno", kinds: BIZ, label: "Fuel card for private miles?", short: "Fuel card" },
+      { id: "fuelCard", type: "yesno", kinds: BIZ, label: "Private fuel card?", short: "Fuel card" },
     ],
   },
   {
@@ -328,6 +328,35 @@ export function summaryOf(s: SectionDef, c: Ctx, today: string, max = 4) {
   const shown = fieldsShown(s, c);
   const rows = shown.filter((f) => filled(c.data[f.id])).map((f) => [shortOf(f, c.kind), formatValue(f, c.data[f.id], c.kind, today)] as [string, string]);
   return { rows: rows.slice(0, max), more: Math.max(0, rows.length - max), ask: rows.length ? [] : shown.slice(0, 4).map((f) => shortOf(f, c.kind)) };
+}
+
+/**
+ * How a topic's questions sit in its two-column panel: a short question
+ * (yes / no, two or three short options, an amount, a date) takes half the
+ * width, anything else the whole row. Halves only ever come in pairs, so every
+ * row lines up: a short question with no short neighbour takes the row.
+ * Widths are estimated from the text at the panel's size (13px pills).
+ */
+export function panelLayout(fields: FieldDef[], kind: ProfileKind): { f: FieldDef; half: boolean }[] {
+  const HALF = 180; // px available to one column in the narrowest panel
+  const fits = (text: string) => text.length * 7.2 <= HALF;
+  const short = (f: FieldDef) => {
+    if (f.wide || !fits(labelOf(f, kind)) || f.chips) return false;
+    if (f.type === "yesno" || f.type === "date" || f.type === "time") return true;
+    if (f.type === "money" || f.type === "number") return (unitOf(f, kind) ?? "").length <= 8;
+    if (f.type === "choice") {
+      const opts = optionsOf(f, kind);
+      return opts.reduce((w, o) => w + o.length * 7.2 + 26, 0) + (opts.length - 1) * 6 <= HALF;
+    }
+    return f.type === "text";
+  };
+  const out = fields.map((f) => ({ f, half: short(f) }));
+  for (let i = 0; i < out.length; i++) {
+    if (!out[i].half) continue;
+    if (out[i + 1]?.half) { i++; continue; }
+    out[i].half = false;
+  }
+  return out;
 }
 
 /** Every key a profile may be sent. Anything else is refused. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DATA_KEYS, KINDS, PX_FIELDS, RETIRED, SECTIONS, addDays, callbackOf, cleanPatch, crmText, dayWord, fieldsShown, fmtDate, fmtTime, fuelPrefillOf,
-  isPlugIn, isRanger, isVanModel, kindFor, labelOf, matchEvModel, nextContactText, optionsOf, progressOf, promptsOf, pxEquity, pxText, rangerPrefillOf,
+  isPlugIn, isRanger, isVanModel, kindFor, labelOf, matchEvModel, nextContactText, optionsOf, panelLayout, progressOf, promptsOf, pxEquity, pxText, rangerPrefillOf,
   retiredLines, sectionsFor, shortOf, sortLive, summaryOf, titleOf, topicsFor, ukNow, urgencyOf, type Ctx, type ProfileData, type ProfileKind,
 } from "./customer-profiles";
 
@@ -189,6 +189,23 @@ describe("the summary tiles", () => {
     const terms = summaryOf(sec("terms"), { kind: "business_car", model: "Kuga", data: { upfront: "3000", term: "36", mileage: "10000", maintenance: "Included", rental: "389.5" } }, TODAY, 4);
     expect(terms.rows).toEqual([["Upfront", "£3,000"], ["Term", "36 months"], ["Mileage", "10,000 miles a year"], ["Maintenance", "Included"]]);
     expect(terms.more).toBe(1);
+  });
+});
+
+describe("the panel's layout", () => {
+  it("only ever puts short questions side by side, in pairs, so every row lines up", () => {
+    const layout = (id: string, c: Ctx) => panelLayout(fieldsShown(sec(id), c), c.kind).map(({ f, half }) => `${f.id}${half ? "/2" : ""}`);
+    expect(layout("needs", { kind: "business_van", model: "Ranger", data: {} }))
+      .toEqual(["usedFor", "driver/2", "payload/2", "loadSize", "access", "towing/2", "caz/2", "taxRate/2", "fuelCard/2"]);
+    // A short question with no short neighbour takes the whole row rather than leave a gap.
+    expect(layout("terms", { kind: "business_van", model: "Ranger", data: {} }))
+      .toEqual(["upfront", "term", "mileage", "maintenance", "rental", "availability", "alternative"]);
+    for (const k of KINDS) for (const s of sectionsFor(k)) {
+      const rows = panelLayout(fieldsShown(s, { kind: k, model: "Ranger PHEV", data: { exact: "Open to similar", openToElectric: "Yes", approver: "Goes via someone else" } }), k);
+      let run = 0;
+      for (const r of rows) { if (r.half) run++; else { expect(run % 2, `${s.id} for ${k}`).toBe(0); run = 0; } }
+      expect(run % 2, `${s.id} for ${k}`).toBe(0);
+    }
   });
 });
 

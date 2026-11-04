@@ -12,12 +12,15 @@ import {
 const input =
   "h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14.5px]";
 
-export function FieldControl({ f, kind, value, onChange, today, prompts, plain }: {
+export function FieldControl({ f, kind, value, onChange, today, prompts, plain, half }: {
   f: FieldDef; kind: ProfileKind; value: FieldValue | undefined; onChange: (v: FieldValue) => void; today: string; prompts?: string[];
   /** A date with no quick picks: "In 2 days" means nothing for a valuation's expiry. */
   plain?: boolean;
+  /** Half the panel's width beside its pair (see `panelLayout`); a phone always gets the whole row. */
+  half?: boolean;
 }) {
   const id = useId();
+  const span = half ? "col-span-2 sm:col-span-1" : "col-span-2";
   const label = labelOf(f, kind);
   const str = typeof value === "string" ? value : "";
   const done = filled(value);
@@ -32,7 +35,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
     case "choice":
     case "yesno":
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           <span id={id} className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full transition ${done ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden />{label}
           </span>
@@ -47,7 +50,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
       const on = Array.isArray(value) ? value : [];
       const opts = optionsOf(f, kind);
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           <span id={id} className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full transition ${done ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden />{label}
             <span className="font-normal text-slate-400">· pick any</span>
@@ -65,7 +68,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
     }
     case "long":
       return (
-        <div className="sm:col-span-2">
+        <div className={`min-w-0 ${span}`}>
           {prompts && prompts.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {prompts.map((p) => (
@@ -81,7 +84,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
       );
     case "money":
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           {head}
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[14.5px] text-slate-400">£</span>
@@ -95,17 +98,17 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
       const unit = unitOf(f, kind);
       const n = Number(str.replace(/,/g, ""));
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           {head}
-          <div className={f.chips ? "flex flex-col gap-2 sm:flex-row sm:items-center" : ""}>
-            <div className={`relative ${f.chips ? "sm:w-48 sm:shrink-0" : ""}`}>
+          <div>
+            <div className="relative">
               <input id={id} inputMode="numeric" value={str ? Number.isFinite(n) && str.replace(/,/g, "") !== "" ? n.toLocaleString("en-GB") : str : ""}
                 onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 7))}
                 className={`${input} tabular-nums`} style={unit ? { paddingRight: `${unit.length * 0.47 + 1.2}rem` } : undefined} />
               {unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[12.5px] text-slate-400">{unit}</span>}
             </div>
             {f.chips && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {f.chips.map((c) => (
                   <Pill key={c} small on={n === c} onClick={() => onChange(n === c ? "" : String(c))}>
                     {c >= 1000 ? `${(c / 1000).toLocaleString("en-GB")}k` : c}
@@ -120,7 +123,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
     case "date": {
       const picks: [string, string][] = [["Today", today], ["Tomorrow", addDays(today, 1)], ["In 2 days", addDays(today, 2)], ["In a week", addDays(today, 7)]];
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           {head}
           <input id={id} type="date" value={str} onChange={(e) => onChange(e.target.value)} className={`${input} pr-2`} />
           {!plain && (
@@ -134,7 +137,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
     case "time": {
       const picks: [string, string][] = [["9am", "09:00"], ["12pm", "12:00"], ["3pm", "15:00"], ["5pm", "17:00"]];
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           {head}
           <input id={id} type="time" value={str} onChange={(e) => onChange(e.target.value)} className={`${input} pr-2`} />
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -145,7 +148,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain }
     }
     default:
       return (
-        <div className={f.wide ? "sm:col-span-2" : ""}>
+        <div className={`min-w-0 ${span}`}>
           {head}
           <input id={id} value={str} onChange={(e) => onChange(e.target.value)} placeholder={placeholderOf(f, kind) ?? undefined} className={input}
             autoCapitalize={f.id === "pxReg" ? "characters" : undefined} />

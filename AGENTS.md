@@ -1436,6 +1436,15 @@ CRM text and the calculator prefills are pure and tested in
   (`summaryOf`, `short` on the field), or what to ask while it's empty. A tile
   opens its questions beside the summary on a laptop, where the notes sit
   otherwise, and full screen on a phone. Notes are always on the front page.
+- **The panel is a strict two-column grid** (user, 2026-11-04: boxes and
+  buttons out of line when flicking through topics). `panelLayout` gives a
+  short question (yes / no, a few short options, an amount, a date) half the
+  width and anything else the row, and **halves only ever come in pairs**: a
+  short question with no short neighbour takes the row. Quick picks always
+  sit under their box. The panel header has fixed slots (count, copy, Done)
+  so nothing moves between topics, and each topic opens at the top. Never
+  give a field `col-span-2` inside a one-column grid: it silently creates a
+  second, content-sized column, which is what caused the uneven widths.
 - **Topics, kept short:** the car / van (derivative, **5 seat or 2 seat for a
   Ranger** (`rangerSeats`), exact or similar, colour and must-haves for cars),
   why now, the business, how it's used (van: payload, load space, access,
