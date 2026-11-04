@@ -31,6 +31,8 @@ export interface ParsedStockVehicle {
   // disagree about what these columns are called, but an operator reading
   // their own file just sees "column H".
   rawColE: string | null;
+  /** Column F (CUST2_SURNAME in the Trust Report): what the column F rules match. */
+  rawColF: string | null;
   rawColH: string | null;
   sourceSheet: string | null; // model bucket e.g. "Puma" — null when model isn't one we sell
 }
@@ -435,6 +437,7 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     // Positional, not by header: the rule is written in terms of column
     // letters because that is what the operator sees in Excel.
     const rawColE = toStr(row[4]);
+    const rawColF = toStr(row[5]);
     const rawColH = toStr(row[7]);
     const branchRaw = toStr(pick(row, "DEALER"));
     const modelRawUpper = (toStr(pick(row, "WERS_MODEL_NAME")) ?? "").toUpperCase();
@@ -488,6 +491,7 @@ function parseByHeaders(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       adoptedAt: toDate(pickIdx(row, adoptedIdx)),
       customerAssigned,
       rawColE,
+      rawColF,
       rawColH,
       sourceSheet: bucket,
     });
@@ -502,6 +506,7 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
   const C = {
     branch: col("B"),
     colE: col("E"),
+    colF: col("F"),
     colH: col("H"),
     modelYear: col("K"),
     model: col("L"),
@@ -541,6 +546,7 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
     }
 
     const rawColE = toStr(row[C.colE]);
+    const rawColF = toStr(row[C.colF]);
     const rawColH = toStr(row[C.colH]);
     const branchRaw = toStr(row[C.branch]);
     const modelRawUpper = (toStr(row[C.model]) ?? "").toUpperCase();
@@ -593,6 +599,7 @@ function parseByFixedColumns(sheet: XLSX.WorkSheet): ParsedStockVehicle[] {
       adoptedAt: toDate(row[C.adopted]),
       customerAssigned,
       rawColE,
+      rawColF,
       rawColH,
       sourceSheet: bucket,
     });

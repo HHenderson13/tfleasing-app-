@@ -1,19 +1,23 @@
 import { db } from "@/db";
+import { requireAdmin } from "@/lib/auth-guard";
 import { stockMappings, stockModelDealerRules, stockVehicles } from "@/db/schema";
 import { and, isNotNull, sql } from "drizzle-orm";
 import { StockMappingsView } from "./view";
 import type { MappingKind } from "./actions";
 import { ModelDealerRules, type ModelDealerRuleRow } from "./model-dealer-rules";
 import { dealerCode, parseDealerCodes } from "@/lib/stock-model-rules";
-import { loadAvailabilityRules, stockScopeSql } from "@/lib/stock-list";
+import { loadAvailabilityRules, loadColumnFRules, stockScopeSql } from "@/lib/stock-list";
 
 export const dynamic = "force-dynamic";
 
 export type RawCount = { raw: string; count: number; buckets: string[] };
 
 export default async function StockMappingsPage() {
-  // The values on the stock list — the same column H rules decide it.
-  const scope = stockScopeSql(await loadAvailabilityRules());
+  // Here as well as in the admin layout: the layout runs alongside the page, and this waits for
+  // the schema, so the first visit after a deploy never reads a table that isn't made yet.
+  await requireAdmin();
+  // The values on the stock list — the same column H and F rules decide it.
+  const scope = stockScopeSql(await loadAvailabilityRules(), await loadColumnFRules());
   const [mappings, modelRules, rows] = await Promise.all([
     db.select().from(stockMappings),
     db.select().from(stockModelDealerRules),

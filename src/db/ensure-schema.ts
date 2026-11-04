@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 65;
+const SCHEMA_VERSION = 66;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -722,8 +722,10 @@ async function ensureStockAvailabilityRules() {
   // before this existed simply do not match, and the next upload fills them.
   await ensureColumns("stock_vehicles", [
     { name: "raw_col_e", sqlType: "TEXT" },
+    { name: "raw_col_f", sqlType: "TEXT" },
     { name: "raw_col_h", sqlType: "TEXT" },
   ]);
+  await ensureColumnFRules();
   const existed = await db.all(sql`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'stock_column_h_rules'`);
   await db.run(sql.raw(`
     CREATE TABLE IF NOT EXISTS stock_column_h_rules (
@@ -739,6 +741,24 @@ async function ensureStockAvailabilityRules() {
   for (const r of [{ h: "CO", e: null }, { h: "CH", e: "66170" }]) {
     await db.run(sql`INSERT INTO stock_column_h_rules (h_code, e_value, enabled, updated_at) VALUES (${r.h}, ${r.e}, 1, ${now})`);
   }
+}
+
+// Column F rules (user, 2026-11-04): column F reading "TrustFord - TFL" on
+// dealer 62133 makes a vehicle available. Seeded only when the table is first
+// made, like the column H rules, so a deleted rule stays deleted.
+async function ensureColumnFRules() {
+  const existed = await db.all(sql`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'stock_column_f_rules'`);
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS stock_column_f_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      f_value TEXT NOT NULL,
+      dealer_code TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  if (existed.length > 0) return;
+  await db.run(sql`INSERT INTO stock_column_f_rules (f_value, dealer_code, enabled, updated_at) VALUES ('TrustFord - TFL', '62133', 1, ${Math.floor(Date.now() / 1000)})`);
 }
 
 // Trim codes Ford renames between model years. "SELECT" became "SELF" on the

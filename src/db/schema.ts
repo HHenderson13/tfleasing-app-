@@ -299,6 +299,17 @@ export const stockColumnHRules = sqliteTable("stock_column_h_rules", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Column F (CUST2_SURNAME) values that make a vehicle available, optionally
+// only on one dealer code (user, 2026-11-04: "TrustFord - TFL" on 62133).
+// See lib/stock-availability.ts.
+export const stockColumnFRules = sqliteTable("stock_column_f_rules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  fValue: text("f_value").notNull(),
+  dealerCode: text("dealer_code"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Pre-registered vehicles, entered by hand.
 //
 // A SEPARATE TABLE, and it has to be: every stock upload runs
@@ -423,6 +434,7 @@ export const stockVehicles = sqliteTable("stock_vehicles", {
   // operator reads off their own sheet, and the two parser layouts disagree
   // about what those columns are called.
   rawColE: text("raw_col_e"),
+  rawColF: text("raw_col_f"),
   rawColH: text("raw_col_h"),
   sourceSheet: text("source_sheet"),
   uploadId: text("upload_id").notNull(),

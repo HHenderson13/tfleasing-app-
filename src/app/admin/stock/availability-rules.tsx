@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteStockAvailabilityRuleAction, saveStockAvailabilityRuleAction } from "./actions";
+import { deleteStockAvailabilityRuleAction, deleteStockColumnFRuleAction, saveStockAvailabilityRuleAction, saveStockColumnFRuleAction } from "./actions";
 
 export interface RuleRow {
   id: number;
@@ -162,7 +162,7 @@ export function AvailabilityRules({ rules, hidden }: { rules: RuleRow[]; hidden:
       <p className="mt-1 max-w-3xl text-xs text-slate-500">
         Column H decides whether a vehicle is ours to sell. <span className="font-medium">Blank</span> is available (unless the
         report names a customer or fleet). <span className="font-medium">Any code</span> in it is not, unless a rule below names
-        that code, with the column E value it needs if it needs one. Models we don&apos;t sell, excluded branches, and vehicles
+        that code, with the column E value it needs if it needs one, or a column F rule further down brings it in. Models we don&apos;t sell, excluded branches, and vehicles
         with neither a VIN nor an ETA stay off the list whatever column H says. This applies to the TF stock list and the broker
         portal.
       </p>
@@ -189,6 +189,175 @@ export function AvailabilityRules({ rules, hidden }: { rules: RuleRow[]; hidden:
           </span>
         </p>
       )}
+    </section>
+  );
+}
+
+// ─── Column F rules ─────────────────────────────────────────────────────────
+
+export interface FRuleRow {
+  id: number;
+  fValue: string;
+  /** Blank = any dealer. */
+  dealerCode: string;
+  enabled: boolean;
+  pulledIn: number;
+  outOfRange: number;
+  notSellable: number;
+}
+
+const fInput = "mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm";
+
+function FRule({ rule }: { rule: FRuleRow }) {
+  const router = useRouter();
+  const [fValue, setFValue] = useState(rule.fValue);
+  const [dealerCode, setDealerCode] = useState(rule.dealerCode);
+  const [enabled, setEnabled] = useState(rule.enabled);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [pending, start] = useTransition();
+  const dirty = fValue !== rule.fValue || dealerCode !== rule.dealerCode || enabled !== rule.enabled;
+
+  function save(nextEnabled = enabled) {
+    setError(null);
+    setSaved(false);
+    start(async () => {
+      const res = await saveStockColumnFRuleAction({ id: rule.id, fValue, dealerCode, enabled: nextEnabled });
+      if (!res.ok) { setError(res.error); return; }
+      setSaved(true);
+      router.refresh();
+    });
+  }
+
+  function remove() {
+    if (!confirm(`Delete the rule for column F "${rule.fValue}"? Vehicles it makes available will leave the stock list.`)) return;
+    start(async () => {
+      const res = await deleteStockColumnFRuleAction(rule.id);
+      if (!res.ok) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col text-xs font-medium text-slate-700">
+          Column F is
+          <input value={fValue} onChange={(e) => setFValue(e.target.value)} placeholder="e.g. TrustFord - TFL" className={`${fInput} w-56`} />
+        </label>
+        <label className="flex flex-col text-xs font-medium text-slate-700">
+          on dealer code
+          <input value={dealerCode} onChange={(e) => setDealerCode(e.target.value)} placeholder="any" inputMode="numeric" className={`${fInput} w-28 font-mono`} />
+        </label>
+        <button
+          onClick={() => { const n = !enabled; setEnabled(n); save(n); }}
+          disabled={pending}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
+            enabled ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+          }`}
+        >
+          {enabled ? "On" : "Off"}
+        </button>
+        {dirty && (
+          <button onClick={() => save()} disabled={pending}
+            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+            {pending ? "Saving…" : "Save"}
+          </button>
+        )}
+        <button onClick={remove} disabled={pending} className="ml-auto text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50">
+          Delete
+        </button>
+      </div>
+      <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+        <div>
+          <dt className="inline text-slate-500">On the stock list because of this rule: </dt>
+          <dd className="inline font-semibold tabular-nums text-slate-900">{rule.pulledIn.toLocaleString()}</dd>
+          {rule.pulledIn === 0 && rule.outOfRange === 0 && rule.notSellable === 0 && (
+            <span className="ml-1 text-slate-400">(nothing in the latest upload matches yet)</span>
+          )}
+        </div>
+        {rule.outOfRange > 0 && (
+          <div>
+            <dt className="inline text-slate-500">Matched but out of range: </dt>
+            <dd className="inline font-semibold tabular-nums text-slate-700">{rule.outOfRange.toLocaleString()}</dd>
+            <span className="ml-1 text-slate-400">(a model we don&apos;t sell, or an excluded branch)</span>
+          </div>
+        )}
+        {rule.notSellable > 0 && (
+          <div>
+            <dt className="inline text-slate-500">Matched but skipped: </dt>
+            <dd className="inline font-semibold tabular-nums text-amber-700">{rule.notSellable.toLocaleString()}</dd>
+            <span className="ml-1 text-slate-400">(no VIN and no ETA)</span>
+          </div>
+        )}
+      </dl>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {saved && !error && !dirty && <p className="mt-2 text-xs text-emerald-700">Saved. Stock list updated.</p>}
+    </div>
+  );
+}
+
+function AddFRule() {
+  const router = useRouter();
+  const [fValue, setFValue] = useState("");
+  const [dealerCode, setDealerCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function add() {
+    setError(null);
+    start(async () => {
+      const res = await saveStockColumnFRuleAction({ id: null, fValue, dealerCode, enabled: true });
+      if (!res.ok) { setError(res.error); return; }
+      setFValue("");
+      setDealerCode("");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-dashed border-slate-300 p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col text-xs font-medium text-slate-700">
+          Column F is
+          <input value={fValue} onChange={(e) => setFValue(e.target.value)} placeholder="value" className={`${fInput} w-56`} />
+        </label>
+        <label className="flex flex-col text-xs font-medium text-slate-700">
+          on dealer code
+          <input value={dealerCode} onChange={(e) => setDealerCode(e.target.value)} placeholder="any" inputMode="numeric" className={`${fInput} w-28 font-mono`} />
+        </label>
+        <button onClick={add} disabled={pending || !fValue.trim()}
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+          {pending ? "Adding…" : "Add rule"}
+        </button>
+      </div>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+export function ColumnFRules({ rules }: { rules: FRuleRow[] }) {
+  const on = rules.filter((r) => r.enabled);
+  const total = on.reduce((a, r) => a + r.pulledIn, 0);
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-medium text-slate-700">Column F rules</h2>
+      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+        As well as the column H rules above. A vehicle whose column F (CUST2_SURNAME) reads the value below, on that dealer code if
+        one is given, is available whatever column H says and whoever is named on it. Capitals, spaces and the style of dash
+        don&apos;t matter; the dealer code must match exactly. Models we don&apos;t sell, excluded branches, and vehicles with
+        neither a VIN nor an ETA still stay off the list. These vehicles carry the same
+        <span className="mx-1 rounded bg-amber-100 px-1 font-medium text-amber-800">Rule</span> tag on the TF stock list.
+      </p>
+      <div className="mt-3 space-y-2">
+        {rules.map((r) => <FRule key={`${r.id}-${r.fValue}-${r.dealerCode}-${r.enabled}`} rule={r} />)}
+        <AddFRule />
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        {on.length === 0
+          ? "All column F rules are off."
+          : `${total.toLocaleString()} vehicle${total === 1 ? "" : "s"} on the stock list because of ${on.length === 1 ? "this rule" : "these rules"}.`}
+      </p>
     </section>
   );
 }

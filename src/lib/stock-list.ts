@@ -2,9 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
-import { preRegVehicles, stockColumnHRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
+import { preRegVehicles, stockColumnFRules, stockColumnHRules, stockMappings, stockModelDealerRules, stockUploads, stockVehicles } from "@/db/schema";
 import { and, desc, eq, isNotNull, or, sql, type SQL } from "drizzle-orm";
-import { EXCLUDED_BRANCH_CODES, availableByRule, type AvailabilityRule } from "./stock-availability";
+import { EXCLUDED_BRANCH_CODES, availableByFRule, availableByRule, branchCodeOf, fNorm, type AvailabilityRule, type ColumnFRule } from "./stock-availability";
 import { matchModelDealerRule, parseDealerCodes, type ModelDealerRule } from "./stock-model-rules";
 import { getStockReferenceSecret, vehicleIdentityKey, vehicleReferenceFromIdentity, vehicleReferenceFromVin } from "./stock-reference-mint";
 
@@ -117,14 +117,42 @@ export async function loadAvailabilityRules(): Promise<AvailabilityRule[]> {
   return (await db.select().from(stockColumnHRules)).map((r) => ({ hCode: r.hCode, eValue: r.eValue, enabled: !!r.enabled }));
 }
 
+/** The column F rules from Stock settings, read the same way. */
+export async function loadColumnFRules(): Promise<ColumnFRule[]> {
+  return (await db.select().from(stockColumnFRules)).map((r) => ({ fValue: r.fValue, dealerCode: r.dealerCode, enabled: !!r.enabled }));
+}
+
 const cellOf = (column: typeof stockVehicles.rawColH | typeof stockVehicles.rawColE) => sql`upper(trim(coalesce(${column}, '')))`;
+
+/** The dealer code at the start of the DEALER cell: "86492 (Spellbound)" is branch 86492. */
+function dealerCodeSql(): SQL {
+  const dealer = sql`trim(coalesce(${stockVehicles.dealerRaw}, ''))`;
+  return sql`(case when instr(${dealer}, ' ') > 0 then substr(${dealer}, 1, instr(${dealer}, ' ') - 1) else ${dealer} end)`;
+}
 
 /** A model we sell, on a branch whose stock we can sell — `inRange`, in SQL. */
 export function inRangeSql(): SQL {
-  const dealer = sql`trim(coalesce(${stockVehicles.dealerRaw}, ''))`;
-  // The leading code: "86492 (Spellbound)" is branch 86492.
-  const code = sql`case when instr(${dealer}, ' ') > 0 then substr(${dealer}, 1, instr(${dealer}, ' ') - 1) else ${dealer} end`;
-  return sql`(${stockVehicles.sourceSheet} is not null and ${code} not in (${sql.join([...EXCLUDED_BRANCH_CODES].map((c) => sql`${c}`), sql`, `)}))`;
+  return sql`(${stockVehicles.sourceSheet} is not null and ${dealerCodeSql()} not in (${sql.join([...EXCLUDED_BRANCH_CODES].map((c) => sql`${c}`), sql`, `)}))`;
+}
+
+/** Column F as `fNorm` reads it: upper case, any dash a hyphen (U+2010 to U+2015, U+2212), no spaces. */
+function fCellSql(): SQL {
+  let cell = sql`upper(coalesce(${stockVehicles.rawColF}, ''))`;
+  for (const cp of [0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2015, 0x2212]) cell = sql`replace(${cell}, char(${sql.raw(String(cp))}), '-')`;
+  for (const cp of [32, 9, 10, 13, 160]) cell = sql`replace(${cell}, char(${sql.raw(String(cp))}), '')`;
+  return cell;
+}
+
+/** Rows an enabled column F rule makes available. Null when no rule is on. */
+export function fRuleMatchSql(rules: readonly ColumnFRule[]): SQL | null {
+  const clauses = rules
+    .filter((r) => r.enabled && fNorm(r.fValue))
+    .map((r) => {
+      const f = sql`${fCellSql()} = ${fNorm(r.fValue)}`;
+      const dealer = branchCodeOf(r.dealerCode);
+      return dealer ? sql`(${f} and ${dealerCodeSql()} = ${dealer})` : f;
+    });
+  return clauses.length ? sql`(${sql.join(clauses, sql` or `)})` : null;
 }
 
 /** Rows an enabled column H rule makes available. Null when no rule is on. */
@@ -145,16 +173,16 @@ export function ruleMatchSql(rules: readonly AvailabilityRule[]): SQL | null {
  * H with no customer or fleet named, or a column H code a rule makes
  * available.
  */
-export function stockScopeSql(rules: readonly AvailabilityRule[]): SQL {
+export function stockScopeSql(rules: readonly AvailabilityRule[], fRules: readonly ColumnFRule[] = []): SQL {
   const blankH = sql`(${cellOf(stockVehicles.rawColH)} = '' and ${stockVehicles.customerAssigned} = 0)`;
-  const byRule = ruleMatchSql(rules);
-  return sql`(${inRangeSql()} and ${byRule ? sql`(${blankH} or ${byRule})` : blankH})`;
+  const either = [blankH, ruleMatchSql(rules), fRuleMatchSql(fRules)].filter((x): x is SQL => x != null);
+  return sql`(${inRangeSql()} and (${sql.join(either, sql` or `)}))`;
 }
 
 async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploadedAt: Date | null }> {
-  // The column H rules first — they decide which rows we ask for.
-  const rules = await loadAvailabilityRules();
-  const inScope = stockScopeSql(rules);
+  // The column H and column F rules first — they decide which rows we ask for.
+  const [rules, fRules] = await Promise.all([loadAvailabilityRules(), loadColumnFRules()]);
+  const inScope = stockScopeSql(rules, fRules);
 
   // A vehicle needs either a VIN (it exists) or an ETA (it is coming). With
   // neither it is an orderbank line with no arrival date — nothing anyone
@@ -290,7 +318,7 @@ async function _loadMappedStock(): Promise<{ rows: MappedStockRow[]; latestUploa
       destination: zm.hidden ? null : zm.value,
       // A rule needs a code in column H, and a code with no rule is hidden,
       // so a row a rule matches is here only because of it.
-      includedByRule: availableByRule(rules, v),
+      includedByRule: availableByRule(rules, v) || availableByFRule(fRules, v),
       preRegistered: false,
       regNumber: null,
       registeredAt: null,

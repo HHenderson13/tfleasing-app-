@@ -1,17 +1,21 @@
 import { db } from "@/db";
-import { stockColumnHRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
-import { inRangeSql, ruleMatchSql } from "@/lib/stock-list";
+import { requireAdmin } from "@/lib/auth-guard";
+import { stockColumnFRules, stockColumnHRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { fRuleMatchSql, inRangeSql, ruleMatchSql } from "@/lib/stock-list";
 import { desc, eq, sql } from "drizzle-orm";
 import { StockUploadView } from "./view";
-import { AvailabilityRules, type RuleRow } from "./availability-rules";
+import { AvailabilityRules, ColumnFRules, type FRuleRow, type RuleRow } from "./availability-rules";
 
 export const dynamic = "force-dynamic";
 // Workbook parse + DB replace can take a while; default 10s on Hobby would 504.
 export const maxDuration = 300;
 
 export default async function StockUploadPage() {
+  // Here as well as in the admin layout: the layout runs alongside the page, and this waits for
+  // the schema, so the first visit after a deploy never reads a table that isn't made yet.
+  await requireAdmin();
   // Four independent reads in parallel — was sequential.
-  const [latestRows, countRow, bySheet, settingsRows, availabilityRules] = await Promise.all([
+  const [latestRows, countRow, bySheet, settingsRows, availabilityRules, columnFRules] = await Promise.all([
     db.select().from(stockUploads).orderBy(desc(stockUploads.uploadedAt)).limit(1),
     db.select({ n: sql<number>`count(*)` }).from(stockVehicles),
     db
@@ -20,6 +24,7 @@ export default async function StockUploadPage() {
       .groupBy(stockVehicles.sourceSheet),
     db.select().from(stockSettings).where(eq(stockSettings.id, "default")).limit(1),
     db.select().from(stockColumnHRules),
+    db.select().from(stockColumnFRules),
   ]);
   const [latest] = latestRows;
   const [settings] = settingsRows;
@@ -61,10 +66,37 @@ export default async function StockUploadPage() {
       }),
   );
 
+  // The same three figures for each column F rule.
+  const fRuleRows: FRuleRow[] = await Promise.all(
+    columnFRules
+      .slice()
+      .sort((a, b) => a.id - b.id)
+      .map(async (r) => {
+        const matches = fRuleMatchSql([{ fValue: r.fValue, dealerCode: r.dealerCode, enabled: true }]);
+        const [row] = matches
+          ? await db
+            .select({
+              pulledIn: sql<number>`sum(case when ${inRange} and ${sellable} then 1 else 0 end)`,
+              outOfRange: sql<number>`sum(case when not ${inRange} then 1 else 0 end)`,
+              notSellable: sql<number>`sum(case when ${inRange} and not ${sellable} then 1 else 0 end)`,
+            })
+            .from(stockVehicles)
+            .where(matches)
+          : [];
+        return {
+          id: r.id, fValue: r.fValue, dealerCode: r.dealerCode ?? "", enabled: !!r.enabled,
+          pulledIn: Number(row?.pulledIn ?? 0), outOfRange: Number(row?.outOfRange ?? 0), notSellable: Number(row?.notSellable ?? 0),
+        };
+      }),
+  );
+
   // What column H keeps off the list: in range and sellable, with a code no
-  // enabled rule names. A new Ford code shows up here first.
+  // enabled rule names (and no column F rule bringing it in). A new Ford code
+  // shows up here first.
   const rules = availabilityRules.map((r) => ({ hCode: r.hCode, eValue: r.eValue, enabled: !!r.enabled }));
-  const byRule = ruleMatchSql(rules);
+  const byH = ruleMatchSql(rules);
+  const byF = fRuleMatchSql(columnFRules.map((r) => ({ fValue: r.fValue, dealerCode: r.dealerCode, enabled: !!r.enabled })));
+  const byRule = byH && byF ? sql`(${byH} or ${byF})` : byH ?? byF;
   const hidden = await db
     .select({ code: sql<string>`upper(trim(${stockVehicles.rawColH}))`, n: sql<number>`count(*)` })
     .from(stockVehicles)
@@ -86,6 +118,7 @@ export default async function StockUploadPage() {
         password={settings?.workbookPassword ?? "Ftru"}
       />
       <AvailabilityRules rules={ruleRows} hidden={hidden.map((h) => ({ code: h.code, count: Number(h.n) }))} />
+      <ColumnFRules rules={fRuleRows} />
     </div>
   );
 }

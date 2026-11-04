@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { proposalEtaSnapshots, proposals, stockColumnHRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
+import { proposalEtaSnapshots, proposals, stockColumnFRules, stockColumnHRules, stockSettings, stockUploads, stockVehicles } from "@/db/schema";
 import { parseStockWorkbook } from "@/lib/stock-parser";
 import { eq, inArray } from "drizzle-orm";
 import { matchProposalAgainstStock } from "@/lib/stock-match";
@@ -105,6 +105,7 @@ async function processWorkbook(buffer: Buffer, filename: string) {
           adoptedAt: v.adoptedAt,
           customerAssigned: v.customerAssigned,
           rawColE: v.rawColE,
+          rawColF: v.rawColF,
           rawColH: v.rawColH,
           sourceSheet: v.sourceSheet,
           uploadId,
@@ -201,6 +202,35 @@ export async function deleteStockAvailabilityRuleAction(id: number) {
   await requireAdmin();
   if (!Number.isInteger(id)) return { ok: false as const, error: "Invalid rule." };
   await db.delete(stockColumnHRules).where(eq(stockColumnHRules.id, id));
+  updateTag(STOCK_VEHICLES_TAG);
+  revalidatePath("/admin/stock");
+  return { ok: true as const };
+}
+
+// Column F rules (user, 2026-11-04): column F reading a value, optionally only
+// on one dealer code, makes a vehicle available alongside the column H rules.
+// See lib/stock-availability.ts.
+export async function saveStockColumnFRuleAction(input: { id: number | null; fValue: string; dealerCode: string; enabled: boolean }) {
+  await requireAdmin();
+  if (input.id != null && !Number.isInteger(input.id)) return { ok: false as const, error: "Invalid rule." };
+  const fValue = input.fValue.replace(/\s+/g, " ").trim();
+  const dealerCode = input.dealerCode.trim() || null;
+  // A blank value would stand for every blank cell: most of the report.
+  if (!fValue) return { ok: false as const, error: "Give the rule what column F should read." };
+  if (fValue.length > 60) return { ok: false as const, error: "That's longer than column F holds." };
+  if (dealerCode && !/^\d{3,8}$/.test(dealerCode)) return { ok: false as const, error: "A dealer code is digits only, like 62133." };
+  const values = { fValue, dealerCode, enabled: input.enabled, updatedAt: new Date() };
+  if (input.id == null) await db.insert(stockColumnFRules).values(values);
+  else await db.update(stockColumnFRules).set(values).where(eq(stockColumnFRules.id, input.id));
+  updateTag(STOCK_VEHICLES_TAG);
+  revalidatePath("/admin/stock");
+  return { ok: true as const };
+}
+
+export async function deleteStockColumnFRuleAction(id: number) {
+  await requireAdmin();
+  if (!Number.isInteger(id)) return { ok: false as const, error: "Invalid rule." };
+  await db.delete(stockColumnFRules).where(eq(stockColumnFRules.id, id));
   updateTag(STOCK_VEHICLES_TAG);
   revalidatePath("/admin/stock");
   return { ok: true as const };

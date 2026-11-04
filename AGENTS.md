@@ -272,6 +272,23 @@ applies on top and no availability rule overrides it: a model we sell
 - A rule decides whether a vehicle **appears**, not its badge: a matched
   vehicle keeps its normal status (`DELIVERED` still reads in stock,
   `CRAIOVA` still an ETA).
+- **Column F rules** (user, 2026-11-04: "keep the other rules in place, just
+  add this rule as well"): column F (CUST2_SURNAME in the Trust Report)
+  reading a value, optionally only on one dealer code, makes the vehicle
+  available **whatever column H says and whoever is named on it**. It adds
+  to the column H rules and replaces none of them. Seeded with
+  `TrustFord - TFL` on dealer `62133`, only when `stock_column_f_rules` is
+  first made, and edited under the column H rules in Stock settings. The
+  value is compared by `fNorm` (upper case, any dash a hyphen, no spaces, so
+  "TRUSTFORD-TFL" and the en-dash spelling match too) and the dealer code
+  exactly by its leading digits; `fCellSql` / `fRuleMatchSql` are the same in
+  SQL. Captured positionally as `raw_col_f` in both parser paths, so it only
+  applies from the first stock upload after it shipped. On the 4 Nov 2026
+  report nothing read that value anywhere (column F on 62133 was blank or a
+  surname), so the rule waits for Ford's report to carry it; with five 62133
+  rows given the value in memory, SQL and JS agreed on all 32,558 rows and
+  the list grew by exactly those five. Model, excluded branch and VIN-or-ETA
+  still apply.
 - `includedByRule` marks rows a rule made available — any rule match, since
   a code no rule names is hidden. **TF-only**, redacted for brokers; it
   drives the `Rule` tag and the "Included by" facet.
