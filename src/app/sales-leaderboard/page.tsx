@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { AppBar, BarLink, PageTitle } from "@/components/ui";
 import Image from "next/image";
 import { requireLeaderboardAccess } from "@/lib/auth-guard";
 import { isAdmin } from "@/lib/auth";
-import { signOutAction } from "../login/actions";
 import {
   closestRace,
   currentYearMonth,
@@ -68,51 +68,25 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 text-sm sm:px-6">
-          <Link href="/" className="text-slate-500 hover:text-slate-900">← Back to portal</Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-slate-700 sm:inline">{user.name}</span>
-            <form action={signOutAction}>
-              <button className="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+      <AppBar>
+        {user.salesExecId && <BarLink href="/sales-leaderboard/me">My scorecard</BarLink>}
+        {admin && <BarLink href="/sales-leaderboard/admin">Manage</BarLink>}
+      </AppBar>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl sm:text-4xl">🏁</span>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Pole Position</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            {user.salesExecId && (
-              <Link href="/sales-leaderboard/me" className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700">
-                My scorecard
-              </Link>
-            )}
-            {admin && (
-              <Link href="/sales-leaderboard/admin" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                Manage
-              </Link>
-            )}
-          </div>
-        </div>
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <PageTitle title="Pole Position">Who&apos;s leading the pack on orders, deliveries, insurance, conversion and response time.</PageTitle>
 
         {/* View switcher */}
-        <div className="mt-5 inline-flex rounded-xl border border-slate-200 bg-white p-0.5 text-sm font-medium">
+        <div className="inline-flex gap-1 rounded-xl bg-slate-200/60 p-1 text-sm font-medium">
           <Link
             href={`/sales-leaderboard?month=${yearMonth}&view=month`}
-            className={`rounded-lg px-3 py-1.5 ${view === "month" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+            className={`flex h-9 items-center rounded-lg px-3.5 ${view === "month" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
           >
             Month to date
           </Link>
           <Link
             href={`/sales-leaderboard?month=${yearMonth}&view=ytd`}
-            className={`rounded-lg px-3 py-1.5 ${view === "ytd" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+            className={`flex h-9 items-center rounded-lg px-3.5 ${view === "ytd" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
           >
             Year to date
           </Link>
@@ -149,7 +123,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     key={m}
                     href={`/sales-leaderboard?month=${m}&view=${view}`}
                     className={`flex-none rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
-                      active ? "bg-rose-600 text-white ring-rose-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                      active ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
                     }`}
                   >
                     {label.slice(0, 3)}
@@ -168,10 +142,10 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
             period-aware header, oversized photo with crown overlay,
             massive name. Stacks vertically on mobile. */}
         {champion && (
-          <div className="relative mt-6 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-400 via-rose-500 to-fuchsia-600 p-6 text-white shadow-xl sm:p-8">
+          <div className="relative mt-6 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-lg sm:p-8">
             {/* Subtle radial sparkle for depth */}
-            <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/20 blur-3xl" />
-            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-amber-300/30 blur-3xl" />
+            <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-amber-400/15 blur-3xl" />
+            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-white/5 blur-3xl" />
             <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:gap-8 sm:text-left">
               <div className="relative">
                 {champion.photoUrl ? (
@@ -187,21 +161,21 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                     priority
                     fetchPriority="high"
                     sizes="(max-width: 640px) 112px, 144px"
-                    className="h-28 w-28 rounded-full object-cover ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36"
+                    className="h-28 w-28 rounded-full object-cover ring-4 ring-white/20 shadow-xl sm:h-36 sm:w-36"
                   />
                 ) : (
-                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white/20 text-3xl font-bold ring-4 ring-white/90 shadow-xl sm:h-36 sm:w-36 sm:text-4xl">
+                  <div className="flex h-28 w-28 items-center justify-center rounded-full bg-slate-700 text-3xl font-bold ring-4 ring-white/20 shadow-xl sm:h-36 sm:w-36 sm:text-4xl">
                     {initials(champion.name)}
                   </div>
                 )}
                 <div className="absolute -top-3 -right-2 text-5xl drop-shadow-lg sm:-top-4 sm:-right-3 sm:text-6xl">👑</div>
               </div>
               <div className="flex-1">
-                <div className="text-2xl font-extrabold uppercase tracking-[0.18em] text-white drop-shadow-sm sm:text-4xl">
-                  {view === "ytd" ? "Year-to-Date Champion" : `${formatMonthLabel(yearMonth)} Champion`}
+                <div className="text-[15px] font-semibold text-amber-300 sm:text-[17px]">
+                  {view === "ytd" ? "Year to date champion" : `${formatMonthLabel(yearMonth)} champion`}
                 </div>
-                <div className="mt-3 text-3xl font-bold sm:text-5xl">{champion.name}</div>
-                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-sm font-semibold backdrop-blur-sm sm:text-base">
+                <div className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">{champion.name}</div>
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-semibold ring-1 ring-white/10 sm:text-base">
                   <span>🏆</span>
                   <span>{champion.totalPoints} points</span>
                 </div>
@@ -213,10 +187,10 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
         {/* Closest race callout — drives end-of-month hustle by surfacing
             the tightest gap between any two execs across any metric. */}
         {race && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm shadow-sm">
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm ring-1 ring-inset ring-rose-200">
             <span className="text-2xl">🏎️</span>
             <div className="flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Closest race · {race.metricLabel}</div>
+              <div className="font-semibold text-rose-700 text-[12.5px]">Closest race · {race.metricLabel}</div>
               <div className="mt-0.5 text-slate-800">
                 <strong>{race.leader.name}</strong> vs <strong>{race.challenger.name}</strong>
                 <span className="ml-2 rounded-full bg-rose-200/70 px-2 py-0.5 text-[11px] font-semibold text-rose-900">{race.gapLabel}</span>
@@ -234,10 +208,10 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
         </div>
 
         {/* Total points table */}
-        <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Total points</h2>
-        <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">Total points</h2>
+        <div className="mt-2 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Exec</th>
@@ -288,14 +262,14 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
           </table>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">
-          Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt — per metric, per period. Response Time is the average working minutes from a
-          MotorComplete lead reaching the exec to their first contact — fastest wins; scored from October 2026.
+          Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt, per metric, per period. Response Time is the average working minutes from a
+          MotorComplete lead reaching the exec to their first contact: fastest wins; scored from October 2026.
         </p>
 
         {/* Champion archive — Hall of Fame strip of past 6 monthly winners. */}
         {archive.some((a) => a.champion) && (
           <>
-            <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Hall of Fame</h2>
+            <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">Hall of Fame</h2>
             <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
               {archive.map((entry) => (
                 <ArchiveTile key={entry.yearMonth} entry={entry} isCurrent={entry.yearMonth === yearMonth} />
@@ -305,7 +279,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
         )}
 
         {/* Scorecards */}
-        <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Scorecards</h2>
+        <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">Scorecards</h2>
         <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {snapshot.rows.map((r, idx) => (
             <Scorecard key={r.salesExecId} rank={idx + 1} stats={r} badges={badgesByExec.get(r.salesExecId) ?? []} />
@@ -327,12 +301,13 @@ function Cell({ n, pts }: { n: number | string; pts: number }) {
 
 function MetricCard({ meta, leaders, teamTotal }: { meta: { key: LeaderboardMetric; label: string; tone: string; format: (s: ExecMonthStats) => string }; leaders: ExecMonthStats[]; teamTotal: string }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className={`flex items-end justify-between bg-gradient-to-r ${meta.tone} px-4 py-3 text-white`}>
-        <div className="text-sm font-semibold uppercase tracking-wide">{meta.label}</div>
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+      <div className={`h-1 bg-gradient-to-r ${meta.tone}`} />
+      <div className="flex items-end justify-between border-b border-slate-100 px-4 py-3">
+        <div className="text-[15px] font-semibold tracking-tight text-slate-900">{meta.label}</div>
         <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wide opacity-80">Team</div>
-          <div className="text-base font-semibold tabular-nums">{teamTotal}</div>
+          <div className="text-[12.5px] text-slate-500">Team</div>
+          <div className="text-base font-semibold tabular-nums text-slate-900">{teamTotal}</div>
         </div>
       </div>
       <div className="divide-y divide-slate-100">
@@ -363,7 +338,7 @@ function MetricCard({ meta, leaders, teamTotal }: { meta: { key: LeaderboardMetr
 
 function Scorecard({ rank, stats, badges }: { rank: number; stats: ExecMonthStats; badges: Badge[] }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex items-center gap-3 bg-slate-900 px-4 py-3 text-white">
         {stats.photoUrl ? (
           <Image src={stats.photoUrl} alt={stats.name} width={56} height={56} className="h-14 w-14 rounded-full object-cover ring-2 ring-white" />
@@ -373,11 +348,11 @@ function Scorecard({ rank, stats, badges }: { rank: number; stats: ExecMonthStat
           </div>
         )}
         <div className="flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">Rank #{rank}</div>
+          <div className="font-semibold text-slate-300 text-[12.5px]">Rank #{rank}</div>
           <div className="text-lg font-semibold">{stats.name}</div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">Points</div>
+          <div className="font-semibold text-slate-300 text-[12.5px]">Points</div>
           <div className="text-2xl font-semibold tabular-nums">{stats.totalPoints}</div>
         </div>
       </div>
@@ -417,7 +392,7 @@ function ScoreLine({ label, n, rank, sub }: { label: string; n: number | string;
   return (
     <div className="flex items-center justify-between">
       <div>
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+        <div className="font-semibold text-slate-500 text-[12.5px]">{label}</div>
         <div className="text-base font-semibold tabular-nums text-slate-900">{n}</div>
         {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
       </div>
@@ -437,7 +412,7 @@ function ArchiveTile({ entry, isCurrent }: { entry: ChampionEntry; isCurrent: bo
   return (
     <div className={`flex-none w-44 rounded-2xl border bg-white px-3 py-3 shadow-sm ${isCurrent ? "border-amber-300 ring-2 ring-amber-200" : "border-slate-200"}`}>
       <div className="flex items-center justify-between">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+        <div className="font-semibold text-slate-500 text-[12.5px]">{label}</div>
         <span className="text-base">👑</span>
       </div>
       {entry.champion ? (

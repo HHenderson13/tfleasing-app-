@@ -59,7 +59,7 @@ export function ManualEtaEditor({
               type="date"
               value={eta}
               onChange={(e) => setEta(e.target.value)}
-              className="rounded border border-amber-300 bg-white px-1 py-0.5"
+              className="rounded-xl border border-amber-300 bg-white px-1 py-0.5"
             />
           </label>
           <label className="flex items-center gap-1 text-amber-900">
@@ -68,7 +68,7 @@ export function ManualEtaEditor({
               value={loc}
               onChange={(e) => setLoc(e.target.value)}
               placeholder="e.g. AT DEALER"
-              className="w-36 rounded border border-amber-300 bg-white px-1 py-0.5"
+              className="w-36 rounded-xl border border-amber-300 bg-white px-1 py-0.5"
             />
           </label>
         </>

@@ -204,11 +204,11 @@ export function QuarterlyClient({
     <>
       <ForecastPageHeader
         title="Quarterly Forecast"
-        description={`${periodLabel} roll-up — each line's Forecast and Budget across the months in the period, plus the totals.`}
+        description={`${periodLabel} roll-up: each line's Forecast and Budget across the months in the period, plus the totals.`}
         picker={<PeriodPicker period={period} year={year} />}
       />
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
         <section className="grid gap-3 sm:grid-cols-2">
           {SHEET_TABS.map((t) => (
             <button
@@ -221,7 +221,7 @@ export function QuarterlyClient({
                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-sm"
               }`}
             >
-              <div className="text-xs uppercase tracking-[0.16em] opacity-70">{t.sub}</div>
+              <div className="opacity-70 text-[12.5px]">{t.sub}</div>
               <div className="mt-1 text-lg font-semibold">{t.label}</div>
             </button>
           ))}
@@ -230,7 +230,7 @@ export function QuarterlyClient({
         <div className="mt-3 text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
           <span>{periodLabel} · {periodMonths.length} month{periodMonths.length === 1 ? "" : "s"} loaded</span>
           {anySnapshotFrozen && (
-            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-indigo-800 ring-1 ring-indigo-200">
+            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 font-semibold text-indigo-800 ring-1 ring-indigo-200 text-[12.5px]">
               Frozen settings on uploaded months
             </span>
           )}
@@ -252,10 +252,10 @@ function PeriodSheet({
   periodLabel: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Line</th>
               {months.map((m) => (
@@ -271,7 +271,7 @@ function PeriodSheet({
               if (l.kind === "header") {
                 return (
                   <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                    <td colSpan={4 + months.length} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                    <td colSpan={4 + months.length} className="px-5 py-2.5 font-bold text-slate-700 text-[12.5px]">
                       {l.label}
                     </td>
                   </tr>

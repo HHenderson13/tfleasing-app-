@@ -17,7 +17,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
     const url = `${typeof window !== "undefined" ? window.location.origin : ""}/setup/${state.setupToken}`;
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
-        <div className="text-sm font-semibold text-emerald-800">User created — share this setup link</div>
+        <div className="text-sm font-semibold text-emerald-800">User created: share this setup link</div>
         <p className="mt-1 text-xs text-emerald-700">
           The user opens this link to choose their password. Link expires in 7 days.
         </p>
@@ -27,7 +27,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
         </div>
         <button
           onClick={() => location.reload()}
-          className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+          className="mt-3 rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white"
         >
           Add another
         </button>
@@ -36,7 +36,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
   }
 
   return (
-    <form action={action} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2">
+    <form action={action} className="grid gap-3 rounded-2xl bg-white p-4 sm:grid-cols-2 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <label className="block text-xs font-medium text-slate-700">
         Name
         <input className={inp} name="name" required />
@@ -60,7 +60,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
         </div>
       </fieldset>
       <label className="block text-xs font-medium text-slate-700 sm:col-span-2">
-        Sales exec link (optional — for exec users)
+        Sales exec link (optional, for exec users)
         <select name="salesExecId" className={inp} defaultValue="">
           <option value="">— None —</option>
           <option value="__new__">+ Create new sales exec from this user&apos;s name &amp; email</option>
@@ -82,7 +82,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {pending ? "Creating…" : "Create user"}
         </button>

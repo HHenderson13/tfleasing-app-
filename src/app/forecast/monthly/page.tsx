@@ -1,4 +1,4 @@
-import { TopNav } from "@/components/top-nav";
+import { AppBar } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
   listForecastLinesForMonth,
@@ -110,7 +110,7 @@ export default async function ForecastMonthlyPage({ searchParams }: PageProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopNav active="forecast" />
+      <AppBar back="/forecast" backLabel="Forecast" width="7xl" />
       <MonthlyClient
         month={month}
         monthNumber={activeMonthNum}

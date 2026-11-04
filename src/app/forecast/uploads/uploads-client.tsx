@@ -72,7 +72,7 @@ export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
           title="Allocate units"
           description="Confirm the month for each vehicle and check the Car / Van split. Anything we couldn't recognise is flagged at the top."
         />
-        <main className="mx-auto max-w-7xl px-6 py-8">
+        <main className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
           <ReviewWindow
             upload={focusUpload}
             lines={focusLines}
@@ -100,9 +100,9 @@ export function UploadsClient({ uploads, focusUpload, focusLines }: Props) {
     <>
       <ForecastPageHeader
         title="Uploads"
-        description="Two dealbooks: the Lease file (which contains both cars and vans — we split them by model), and the Salary Sacrifice file. Upload one per month, then review the allocation."
+        description="Two dealbooks: the Lease file (it holds both cars and vans, which we split by model), and the Salary Sacrifice file. Upload one per month, then review the allocation."
       />
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
         {err && !openUploadFor && (
           <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</p>
         )}
@@ -154,7 +154,7 @@ function DepartmentCard({
   const tone = department === "lease" ? "from-sky-500 to-blue-700" : "from-violet-500 to-indigo-700";
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="relative">
         <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${tone}`} />
         <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
@@ -171,7 +171,7 @@ function DepartmentCard({
             <button
               type="button"
               onClick={onOpen}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+              className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800"
             >
               + Upload
             </button>
@@ -260,11 +260,11 @@ function UploadForm({
     >
       <div className="grid gap-3 sm:grid-cols-[1fr_120px_2fr]">
         <label className="flex flex-col">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Month</span>
+          <span className="font-medium text-slate-500 text-[12.5px]">Month</span>
           <select
             value={monthIdx}
             onChange={(e) => setMonthIdx(parseInt(e.target.value, 10))}
-            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold focus:border-slate-500 focus:outline-none"
+            className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
           >
             {MONTH_NAMES.map((name, i) => (
               <option key={i} value={i + 1}>{name}</option>
@@ -272,23 +272,23 @@ function UploadForm({
           </select>
         </label>
         <label className="flex flex-col">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Year</span>
+          <span className="font-medium text-slate-500 text-[12.5px]">Year</span>
           <select
             value={year}
             onChange={(e) => setYear(parseInt(e.target.value, 10))}
-            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold tabular-nums focus:border-slate-500 focus:outline-none"
+            className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold tabular-nums focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
           >
             {years.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </label>
         <label className="flex flex-col">
-          <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">CSV file</span>
+          <span className="font-medium text-slate-500 text-[12.5px]">CSV file</span>
           <input
             type="file"
             name="file"
             accept=".csv,text/csv"
             required
-            className="mt-1 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm"
+            className="mt-1 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-sm"
           />
         </label>
       </div>
@@ -296,14 +296,14 @@ function UploadForm({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 ring-1 ring-inset ring-slate-300"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
         >
           {pending ? "Uploading…" : "Upload"}
         </button>
@@ -418,10 +418,10 @@ function ReviewWindow({
         </section>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+            <div className="font-medium text-slate-500 text-[12.5px]">
               {departmentLabel} · {upload.filename}
             </div>
             <h3 className="mt-1 text-base font-semibold text-slate-900">
@@ -438,7 +438,7 @@ function ReviewWindow({
               )}
             </p>
             <p className="mt-2 text-[11px] text-slate-500">
-              Volume always counts for <strong>{monthLabel(upload.monthYyyymm)}</strong> — the
+              Volume always counts for <strong>{monthLabel(upload.monthYyyymm)}</strong>: the
               dropdown below only changes which quarter / half-year a unit's DPA falls into.
             </p>
           </div>
@@ -460,7 +460,7 @@ function ReviewWindow({
             <button
               type="button"
               onClick={onComplete}
-              className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-800"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
               Complete
             </button>
@@ -473,7 +473,7 @@ function ReviewWindow({
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Reg No</th>
                 <th className="px-3 py-3 text-left font-medium">Customer</th>
@@ -513,7 +513,7 @@ function ReviewWindow({
                           value={eff}
                           disabled={pending}
                           onChange={(e) => setMonth(l.id, e.target.value, natural)}
-                          className={`rounded-lg border bg-white px-2 py-1 text-xs font-medium ${
+                          className={`rounded-xl border bg-white px-2 py-2 text-[13px] font-medium ${
                             moved ? "border-amber-300 text-amber-900" : "border-slate-200 text-slate-700"
                           }`}
                         >
@@ -544,7 +544,7 @@ function ReviewWindow({
         <button
           type="button"
           onClick={onComplete}
-          className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
         >
           Complete &amp; return
         </button>

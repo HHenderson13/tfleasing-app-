@@ -55,7 +55,7 @@ export default async function PreRegPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Pre-registered vehicles</h1>
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Pre-registered vehicles</h1>
       <p className="mt-1 max-w-3xl text-sm text-slate-500">
         Entered by hand and merged into both stock lists, tagged{" "}
         <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800">Pre-registered</span>.

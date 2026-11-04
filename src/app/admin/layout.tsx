@@ -8,10 +8,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="admin" />
-      <div className="border-b border-slate-200 bg-white">
-        <AdminNav />
-      </div>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6">
+        <div className="mb-8"><AdminNav /></div>
+        {children}
+      </main>
     </div>
   );
 }

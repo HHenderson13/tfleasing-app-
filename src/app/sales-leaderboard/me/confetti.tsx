@@ -17,7 +17,7 @@ export function PodiumConfetti({ userId, yearMonth, badgeKeys }: { userId: strin
     try {
       const raw = localStorage.getItem(storeKey);
       if (raw) already = JSON.parse(raw);
-    } catch { /* corrupted storage — treat as no history */ }
+    } catch { /* corrupted storage: treat as no history */ }
     const seen = new Set(already);
     const fresh = badgeKeys.filter((k) => !seen.has(k));
     if (fresh.length === 0) return;
@@ -50,7 +50,7 @@ export function PodiumConfetti({ userId, yearMonth, badgeKeys }: { userId: strin
 
     try {
       localStorage.setItem(storeKey, JSON.stringify(Array.from(new Set([...already, ...fresh]))));
-    } catch { /* quota/private mode — confetti will fire again next visit, no harm */ }
+    } catch { /* quota/private mode: confetti will fire again next visit, no harm */ }
   }, [userId, yearMonth, badgeKeys]);
 
   return null;

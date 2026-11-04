@@ -38,11 +38,11 @@ export default async function DeliveredPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="orders" />
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Delivered</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Deals handed over to the customer. Yours come first, then everyone else&apos;s — pick a month to dig back through.
+          <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Delivered</h1>
+          <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
+            Deals handed over to the customer. Yours come first, then everyone else&apos;s. Pick a month to look back through.
           </p>
         </div>
 

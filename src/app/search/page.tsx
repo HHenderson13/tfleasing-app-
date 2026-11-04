@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppBar } from "@/components/ui";
 import { db } from "@/db";
 import { customers, proposals, salesExecs } from "@/db/schema";
 import { inArray, like, or } from "drizzle-orm";
@@ -133,30 +134,30 @@ export default async function SearchPage({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-6 py-10">
-        <Link href="/" className="text-xs text-slate-500 hover:text-slate-900">← Back to home</Link>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Search</h1>
+      <AppBar width="4xl" />
+      <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Search</h1>
         <form className="mt-4">
           <input
             name="q"
             defaultValue={q}
             autoFocus
-            placeholder="Name, business, finance prop #, VIN, order #, reg, broker, model…"
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+            placeholder="Name, business, finance proposal number, VIN, order number, reg, broker or model"
+            className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base shadow-[0_1px_0_rgba(15,23,42,0.03)] focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]"
           />
         </form>
 
         {!canProps && (
           <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Your role doesn&apos;t have access to proposal data — search is unavailable.
+            Your role doesn&apos;t have access to proposal data: search is unavailable.
           </p>
         )}
 
         {q && canProps && (
           <div className="mt-8 space-y-8">
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Customers ({custResults.length})</h2>
-              <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <h2 className="font-semibold text-[17px] tracking-tight text-slate-900">Customers ({custResults.length})</h2>
+              <ul className="mt-2 divide-y divide-slate-100 overflow-hidden bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
                 {custResults.map((c) => (
                   <li key={c.id}>
                     <Link href={`/customers/${c.id}`} className="block px-4 py-2 text-sm hover:bg-slate-50">
@@ -172,8 +173,8 @@ export default async function SearchPage({
             </section>
 
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Proposals ({propResults.length})</h2>
-              <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <h2 className="font-semibold text-[17px] tracking-tight text-slate-900">Proposals ({propResults.length})</h2>
+              <ul className="mt-2 divide-y divide-slate-100 overflow-hidden bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
                 {propResults.map((p) => {
                   const tone = statusColor(p.status);
                   return (
@@ -209,7 +210,7 @@ export default async function SearchPage({
 
         {!q && (
           <p className="mt-6 text-sm text-slate-500">
-            Search across every stage of the pipeline — proposals, in-order, awaiting delivery, delivered.
+            Search across every stage of the pipeline: proposals, in-order, awaiting delivery, delivered.
             Matches on customer name, business name, finance proposal #, VIN, order #, reg, broker, and vehicle model.
           </p>
         )}

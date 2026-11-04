@@ -1,4 +1,4 @@
-import { TopNav } from "@/components/top-nav";
+import { AppBar } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
   loadForecastActuals,
@@ -42,7 +42,7 @@ export default async function ForecastAdminPage({ searchParams }: PageProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopNav active="forecast" />
+      <AppBar back="/forecast" backLabel="Forecast" width="6xl" />
       <AdminClient
         tab={tab}
         sheet={sheet}

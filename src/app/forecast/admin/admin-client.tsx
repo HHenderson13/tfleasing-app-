@@ -53,10 +53,10 @@ const SHEET_LABELS: Record<SheetKey, string> = {
 };
 
 const TABS: { key: Props["tab"]; label: string; description: string }[] = [
-  { key: "math",       label: "Costs",              description: "Nominal £ costs — per unit (PDI, cleaning, sales commission) or per month (personnel, sales promotion, interest). Only takes effect on new uploads." },
+  { key: "math",       label: "Costs",              description: "Nominal £ costs: per unit (PDI, cleaning, sales commission) or per month (personnel, sales promotion, interest). Only takes effect on new uploads." },
   { key: "vehicles",   label: "Vehicles",           description: "The car / van catalogue. Powertrain + keywords + all the % bonus rates (Guarantee B, Stocking Credits, DPA, etc.) live here." },
   { key: "baselines",  label: "Budget",             description: "Per-sheet, per-month budget values driving the variance column on the monthly view." },
-  { key: "published",  label: "Published Accounts", description: "Final published account numbers — once entered they overwrite that month's forecast." },
+  { key: "published",  label: "Published Accounts", description: "Final published account numbers: once entered they overwrite that month's forecast." },
 ];
 
 export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonuses }: Props) {
@@ -75,25 +75,26 @@ export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonu
   return (
     <>
       <ForecastPageHeader
+        width="6xl"
         title="Admin"
         description="Math config, vehicle catalogue, baseline numbers and final published accounts."
         picker={tab === "baselines" || tab === "published" ? <MonthPicker value={month} /> : undefined}
       />
 
-      <main className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 pb-16 sm:px-6">
         {err && (
           <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</p>
         )}
 
         {/* Tabs */}
-        <nav className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        <nav className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
           {TABS.map((t) => (
             <button
               key={t.key}
               type="button"
               onClick={() => go({ tab: t.key })}
               className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-                tab === t.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                tab === t.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
               }`}
             >
               {t.label}
@@ -211,7 +212,7 @@ function MathTab({
 
       <p className="text-xs text-slate-500">
         Percentages (Guarantee B, Stocking Credits, DPA etc.) live on the
-        <strong> Vehicles</strong> tab — they're per-vehicle. Edits to either tab only affect
+        <strong> Vehicles</strong> tab: they're per-vehicle. Edits to either tab only affect
         forecasts on <strong>new uploads</strong>; existing months stay frozen at the settings
         captured when they were first uploaded.
       </p>
@@ -220,12 +221,12 @@ function MathTab({
         const rows = byCat.get(cat);
         if (!rows || rows.length === 0) return null;
         return (
-          <section key={cat} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <section key={cat} className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             <div className="border-b border-slate-200 px-6 py-3">
               <h3 className="text-sm font-semibold text-slate-900">{CATEGORY_LABELS[cat] ?? cat}</h3>
             </div>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
                 <tr>
                   <th className="px-6 py-2.5 text-left font-medium w-1/4">Description</th>
                   <th className="px-3 py-2.5 text-left font-medium w-32">Type</th>
@@ -249,7 +250,7 @@ function MathTab({
                             Special
                           </span>
                         ) : (
-                          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-[10px] font-semibold uppercase tracking-[0.1em]">
+                          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 font-semibold text-[12.5px]">
                             <button type="button" onClick={() => commitApplies(c.key, "per_unit")} disabled={pending}
                               className={`px-2 py-1 ${c.applies === "per_unit" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
                               Per unit
@@ -269,7 +270,7 @@ function MathTab({
                             value={c.appliesToLineKey ?? ""}
                             disabled={pending}
                             onChange={(e) => commitLineKey(c.key, e.target.value || null)}
-                            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                            className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-[13px]"
                           >
                             <option value="">— Pick a line —</option>
                             {CAR_TARGET_LINES.map((l) => (
@@ -285,7 +286,7 @@ function MathTab({
                             const v = Number(e.target.value);
                             if (Number.isFinite(v) && v !== c.value) commitValue(c.key, v);
                           }}
-                          className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right text-sm tabular-nums hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+                          className="w-28 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-right text-sm tabular-nums hover:border-slate-300 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50 focus:ring-4 focus:ring-slate-900/10"
                         />
                       </td>
                       <td className="px-6 py-2 text-right">
@@ -326,11 +327,11 @@ function AddConfigCard({
   const [lineKey, setLineKey] = useState<string>("");
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50 to-transparent px-6 py-3">
         <h3 className="text-sm font-semibold text-slate-900">Add a new cost</h3>
         <p className="mt-0.5 text-xs text-slate-500">
-          Nominal £ cost — pick whether it's <strong>per unit</strong> (multiplied by total
+          Nominal £ cost: pick whether it's <strong>per unit</strong> (multiplied by total
           units on the sheet) or <strong>per month</strong> (flat monthly figure), and which
           line it lands on.
         </p>
@@ -356,18 +357,18 @@ function AddConfigCard({
       >
         <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
           <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (e.g. Personnel costs)"
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
           <select value={category} onChange={(e) => setCategory(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
             {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
           </select>
           <select value={applies} onChange={(e) => setApplies(e.target.value as "per_unit" | "per_month")}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
             <option value="per_unit">Per unit</option>
             <option value="per_month">Per month</option>
           </select>
           <select value={lineKey} onChange={(e) => setLineKey(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
             <option value="">Pick line…</option>
             {CAR_TARGET_LINES.map((l) => (
               <option key={l.key} value={l.key}>{l.label}</option>
@@ -376,11 +377,11 @@ function AddConfigCard({
         </div>
         <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto]">
           <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Stable key (e.g. car_personnel_per_month)"
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs" />
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-[13px]" />
           <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="£ value" type="number" step="1"
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm tabular-nums" />
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm tabular-nums" />
           <button type="submit" disabled={pending}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add cost</button>
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add cost</button>
         </div>
       </form>
     </section>
@@ -431,9 +432,9 @@ function DataTab({
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="border-b border-slate-200 px-5 py-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+          <div className="font-medium text-slate-500 text-[12.5px]">
             Sheet
           </div>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -456,13 +457,13 @@ function DataTab({
 
         <div className="border-b border-slate-200 px-5 py-2.5 text-[11px] text-slate-500">
           {tab === "baselines"
-            ? "Key budget figures for each line — these drive the variance column on the monthly view."
+            ? "Key budget figures for each line: these drive the variance column on the monthly view."
             : "Once the official accounts publish, key the final figures here. They'll overwrite that month's forecast on the monthly + quarterly views."}
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Line</th>
                 <th className="px-5 py-3 text-right font-medium">
@@ -475,7 +476,7 @@ function DataTab({
                 if (l.kind === "header") {
                   return (
                     <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                      <td colSpan={2} className="px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                      <td colSpan={2} className="px-5 py-2 font-bold text-slate-700 text-[12.5px]">
                         {l.label}
                       </td>
                     </tr>
@@ -507,7 +508,7 @@ function DataTab({
       <p className="text-[11px] text-slate-500">
         Working in <strong>{SHEET_LABELS[sheet]}</strong>. Editing here only affects {month};
         switch month with the picker above, or sheet with the buttons. Total / per-unit rows derive
-        themselves on the Monthly view — you only need to key the source lines.
+        themselves on the Monthly view: you only need to key the source lines.
       </p>
     </div>
   );
@@ -537,7 +538,7 @@ function ValueCell({
             if (Number.isFinite(v) && v !== value) onCommit(v);
           }
         }}
-        className="w-32 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right text-sm tabular-nums hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+        className="w-32 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-right text-sm tabular-nums hover:border-slate-300 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50 focus:ring-4 focus:ring-slate-900/10"
       />
     </td>
   );
@@ -633,12 +634,12 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
   }, [text, parsed, result]);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 bg-gradient-to-r from-sky-50 to-transparent px-6 py-3">
         <h3 className="text-sm font-semibold text-slate-900">Test the classifier</h3>
         <p className="mt-0.5 text-xs text-slate-500">
           Paste a Dealbook "Model" string to confirm it lands on the right vehicle. Longest matching
-          keyword wins — that's how "Puma Gen-E" beats plain "Puma" and "Kuga PHEV" beats "Kuga".
+          keyword wins: that's how "Puma Gen-E" beats plain "Puma" and "Kuga PHEV" beats "Kuga".
         </p>
       </div>
       <div className="p-6 space-y-3">
@@ -647,7 +648,7 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="e.g. Kuga 5 Door 2.5 Duratec 243 Phev Active Auto"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
         />
         {text.trim() && (
           <div className="space-y-2">
@@ -658,7 +659,7 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
                   <span className="font-semibold text-slate-900">
                     {parsed.find((v) => v.id === result.vehicleId)?.name ?? result.vehicleId}
                   </span>
-                  <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-800">
+                  <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800 text-[12.5px]">
                     {result.kind}
                   </span>
                   <span className="ml-2 text-xs text-slate-500">
@@ -666,7 +667,7 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
                   </span>
                 </>
               ) : (
-                <span className="font-semibold text-amber-800">No vehicle matched — would land as Unmatched.</span>
+                <span className="font-semibold text-amber-800">No vehicle matched: would land as Unmatched.</span>
               )}
             </div>
             {otherMatches.length > 1 && (
@@ -734,7 +735,7 @@ function VehicleSection({
   onRefresh: () => void;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="relative border-b border-slate-200">
         <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`} />
         <div className="px-5 py-4">
@@ -747,11 +748,11 @@ function VehicleSection({
       </div>
 
       {vehicles.length === 0 ? (
-        <div className="px-5 py-8 text-sm text-slate-400">No {title.toLowerCase()} yet — add one above.</div>
+        <div className="px-5 py-8 text-sm text-slate-400">No {title.toLowerCase()} yet. Add one above.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-5 py-3 text-left font-medium w-1/5">Vehicle</th>
                 <th className="px-3 py-3 text-left font-medium w-24">Powertrain</th>
@@ -852,14 +853,14 @@ function VehicleRow({
         {betterMatches.length > 0 && (
           <div
             className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 ring-1 ring-amber-200"
-            title={`When a model also contains "${betterMatches.map((m) => m.keyword).join('", "')}" the classifier picks the more specific vehicle instead — which is what you want. If the more specific vehicle is missing its keyword, models will fall back here.`}
+            title={`When a model also contains "${betterMatches.map((m) => m.keyword).join('", "')}" the classifier picks the more specific vehicle instead, which is what you want. If the more specific vehicle is missing its keyword, models will fall back here.`}
           >
             outranked by {betterMatches.map((m) => m.vehicleName).join(", ")}
           </div>
         )}
       </td>
       <td className="px-3 py-2">
-        <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-[10px] font-semibold uppercase tracking-[0.1em]">
+        <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 font-semibold text-[12.5px]">
           <button
             type="button"
             onClick={() => commitFuel("ice")}
@@ -885,7 +886,7 @@ function VehicleRow({
           disabled={pending}
           onBlur={(e) => commitKeywords(e.target.value)}
           placeholder="comma, separated, model phrases"
-          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+          className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-[13px] hover:border-slate-300 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50 focus:ring-4 focus:ring-slate-900/10"
         />
       </td>
       {bonuses.map((b) => {
@@ -905,7 +906,7 @@ function VehicleRow({
                   if (Number.isFinite(v) && v !== value) commitBonus(b.key, v);
                 }
               }}
-              className="w-20 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-right text-xs tabular-nums hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50"
+              className="w-20 rounded-xl border border-slate-300 bg-white px-1.5 py-2 text-right text-[13px] tabular-nums hover:border-slate-300 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-50 focus:ring-4 focus:ring-slate-900/10"
             />
           </td>
         );
@@ -938,7 +939,7 @@ function AddVehicleCard({
   const [keywords, setKeywords] = useState("");
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50 to-transparent px-6 py-3">
         <h3 className="text-sm font-semibold text-slate-900">Add a new vehicle</h3>
         <p className="mt-0.5 text-xs text-slate-500">
@@ -967,21 +968,21 @@ function AddVehicleCard({
         className="grid gap-3 p-6 sm:grid-cols-[1fr_100px_100px_2fr_auto]"
       >
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Vehicle name"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
         <select value={kind} onChange={(e) => setKind(e.target.value as "car" | "van")}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
           <option value="car">Car</option>
           <option value="van">Van</option>
         </select>
         <select value={fuel} onChange={(e) => setFuel(e.target.value as "ice" | "bev")}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
           <option value="ice">ICE</option>
           <option value="bev">BEV</option>
         </select>
         <input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Keywords (defaults to name if empty)"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
         <button type="submit" disabled={pending}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add</button>
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Add</button>
       </form>
     </section>
   );

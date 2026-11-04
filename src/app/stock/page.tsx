@@ -1,4 +1,4 @@
-import { TopNav } from "@/components/top-nav";
+import { PageShell, PageTitle, StatusPill } from "@/components/ui";
 import { StockBrowser, type StockRow } from "@/components/stock-browser";
 import { requireStockAccess } from "@/lib/auth-guard";
 import { loadMappedStock } from "@/lib/stock-list";
@@ -15,25 +15,12 @@ export default async function PublicStockPage({ searchParams }: { searchParams: 
   // redactForBroker in lib/stock-list.ts), not a different pipeline.
   const out: StockRow[] = rows;
   return (
-    <div className="min-h-screen bg-slate-50">
-      <TopNav active="stock" />
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Available stock</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {out.length.toLocaleString()} vehicles in stock. Use the filters to narrow down, or paste a
-              broker&rsquo;s <span className="font-mono text-slate-600">TF-</span> reference into search to jump straight to their vehicle.
-              {latestUploadedAt && (
-                <> · <span className="text-slate-400">Updated {new Date(latestUploadedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="mt-6">
-          <StockBrowser rows={out} audience="tf" initialQuery={q} />
-        </div>
-      </main>
-    </div>
+    <PageShell width="7xl">
+      <PageTitle title="Available stock"
+        pill={latestUploadedAt ? <StatusPill>{`Updated ${new Date(latestUploadedAt).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}</StatusPill> : undefined}>
+        {`${out.length.toLocaleString("en-GB")} vehicles in stock. Use the filters to narrow it down, or paste a broker's TF- reference into the search to jump straight to their vehicle.`}
+      </PageTitle>
+      <StockBrowser rows={out} audience="tf" initialQuery={q} />
+    </PageShell>
   );
 }

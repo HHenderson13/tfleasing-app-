@@ -46,7 +46,7 @@ export function VehiclesView({ rows }: { rows: Row[] }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
+        <div className="flex gap-1 rounded-xl bg-slate-200/60 p-1">
           {([
             ["all", `All (${counts.all})`],
             ["unmapped", `Unmapped (${counts.unmapped})`],
@@ -55,7 +55,7 @@ export function VehiclesView({ rows }: { rows: Row[] }) {
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+              className={`h-8 rounded-lg px-3 text-[13px] font-medium transition ${tab === k ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
             >
               {label}
             </button>
@@ -65,21 +65,21 @@ export function VehiclesView({ rows }: { rows: Row[] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search model, derivative, cap code…"
-          className="flex-1 min-w-[240px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"
+          className="flex-1 min-w-[240px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
         />
         <select
           value={fuel}
           onChange={(e) => setFuel(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+          className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm"
         >
           <option value="">All fuels</option>
           {fuels.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-3 py-3 text-left font-medium">Model</th>
               <th className="px-3 py-3 text-left font-medium">Derivative</th>

@@ -48,7 +48,7 @@ export function AddDealForm({ execs }: { execs: { id: string; name: string }[] }
   const lbl = "text-xs font-medium text-slate-700";
 
   return (
-    <form onSubmit={submit} className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <form onSubmit={submit} className="mt-6 space-y-4 rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={lbl}>Customer name</label>
@@ -79,7 +79,7 @@ export function AddDealForm({ execs }: { execs: { id: string; name: string }[] }
           <input className={inp} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
         </div>
       </div>
-      <p className="text-[11px] text-slate-500">VIN or order number required — ETA / location auto-populates from the next stock upload, or can be edited later on the awaiting list.</p>
+      <p className="text-[11px] text-slate-500">VIN or order number required. The ETA and location fill in from the next stock upload, or can be edited later on the awaiting list.</p>
       <div>
         <label className={lbl}>Allocate to exec</label>
         <select className={inp} value={salesExecId} onChange={(e) => setSalesExecId(e.target.value)} required>
@@ -91,10 +91,10 @@ export function AddDealForm({ execs }: { execs: { id: string; name: string }[] }
       {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{err}</div>}
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={() => router.push("/orders/awaiting")} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">
+        <button type="button" onClick={() => router.push("/orders/awaiting")} className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300">
           Cancel
         </button>
-        <button type="submit" disabled={pending} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={pending} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {pending ? "Saving…" : "Add deal"}
         </button>
       </div>

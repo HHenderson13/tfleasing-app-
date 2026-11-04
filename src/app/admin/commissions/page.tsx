@@ -12,8 +12,8 @@ export default async function CommissionsPage() {
   ]);
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Commissions</h1>
-      <p className="mt-1 text-sm text-slate-500">Commission paid to TF by each funder, per contract + maintenance. Edit and tab away to save.</p>
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Commissions</h1>
+      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Commission paid to TF by each funder, per contract + maintenance. Edit and tab away to save.</p>
       <div className="mt-6">
         <CommissionsGrid funders={fs} rows={cs} />
       </div>

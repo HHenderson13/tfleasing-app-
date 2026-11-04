@@ -128,7 +128,7 @@ export function Overview({
           <div>
             <div className="table-card-title">Model × funder grid</div>
             <div className="table-card-sub">
-              Wins / slots covered per funder per model — across all terms and mileages. Click a model row to see derivatives.
+              Wins / slots covered per funder per model: across all terms and mileages. Click a model row to see derivatives.
             </div>
           </div>
         </div>

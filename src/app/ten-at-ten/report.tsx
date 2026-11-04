@@ -142,17 +142,21 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
     <div className="mt-5 space-y-5">
       {/* Seven tabs don't fit a phone: they wrap onto a second line rather
           than scroll sideways (user, 2026-10-20), and Export PDF stays put. */}
-      <div className="flex items-center gap-3 border-b border-slate-200">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-1">
-          {SECTIONS.map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setSection(key)}
-              className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition ${section === key ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div role="tablist" aria-label="Sections" className="inline-flex max-w-full flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
+            {SECTIONS.map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={section === key}
+                onClick={() => setSection(key)}
+                className={`h-9 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-[14px] font-medium transition ${section === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <ExportPdfButton label={range.label} input={() => ({
           range, today, exportedAt: new Date().toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
@@ -162,13 +166,13 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
       </div>
 
       {/* Period, shared by every section but the market, which is always the latest scrape */}
-      {section !== "market" && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="inline-flex flex-wrap rounded-lg bg-slate-100 p-0.5">
+      {section !== "market" && <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+        <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
           {MODES.map((m) => (
             <button
               key={m.key}
               onClick={() => setMode(m.key)}
-              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition sm:px-3 sm:text-sm ${mode === m.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              className={`h-8 rounded-lg px-2.5 text-[13px] font-medium transition sm:px-3 ${mode === m.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
             >
               {m.label}
             </button>
@@ -177,10 +181,10 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         {mode === "custom" ? (
           <div className="flex items-center gap-2 text-sm">
             <input type="date" value={custom.from} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))}
-              className="rounded-lg border border-slate-300 px-2 py-1" />
+              className="rounded-xl border border-slate-300 px-2 py-2" />
             <span className="text-slate-400">to</span>
             <input type="date" value={custom.to} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))}
-              className="rounded-lg border border-slate-300 px-2 py-1" />
+              className="rounded-xl border border-slate-300 px-2 py-2" />
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -246,8 +250,8 @@ function ExportPdfButton({ label, input }: { label: string; input: () => PdfRepo
   }
   return (
     <button onClick={run} disabled={busy} title={`Seven pages, one per tab, for ${label}`}
-      className={`mb-1 shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${failed ? "border-rose-300 bg-rose-50 text-rose-700" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"}`}>
-      {busy ? "Preparing PDF…" : failed ? "Export failed — retry" : "Export PDF"}
+      className={`inline-flex h-9 shrink-0 items-center rounded-xl px-3.5 text-[13px] font-semibold ring-1 ring-inset transition disabled:opacity-60 ${failed ? "bg-rose-50 text-rose-700 ring-rose-200" : "bg-white text-slate-800 ring-slate-300 hover:bg-slate-50"}`}>
+      {busy ? "Preparing PDF…" : failed ? "Export failed, try again" : "Export PDF"}
     </button>
   );
 }
@@ -261,7 +265,7 @@ function Empty({ children }: { children: ReactNode }) {
 function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     // min-w-0 lets a card in a grid shrink, so a wide table scrolls inside it rather than widening the page.
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+    <section className="min-w-0 rounded-2xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {note && <span className="text-[11px] text-slate-400">{note}</span>}
@@ -280,12 +284,12 @@ function Tiles({ tiles }: { tiles: { label: string; value: string; sub?: string;
     <div className={`grid grid-cols-2 gap-3 ${TILE_COLS[tiles.length] ?? "sm:grid-cols-2 lg:grid-cols-4"}`}>
       {tiles.map((t) => (
         <div key={t.label} className={`min-w-0 rounded-2xl border px-4 py-3 shadow-sm ${t.hero ? "border-indigo-900 bg-indigo-950 text-white" : "border-slate-200 bg-white"}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${t.hero ? "text-indigo-200" : "text-slate-500"}`}>{t.label}</div>
+          <div className={`font-semibold ${t.hero ? "text-indigo-200" : "text-slate-500"} text-[12.5px]`}>{t.label}</div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={`text-xl font-bold tabular-nums min-[380px]:text-2xl sm:text-3xl ${t.hero ? "text-white" : t.tone === "good" ? "text-emerald-700" : t.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{t.value}</span>
             {/* The highlighted tile keeps its white figure; on/off target shows as a badge. */}
             {t.hero && t.tone && (
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${t.tone === "good" ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/25 text-rose-200"}`}>
+              <span className={`rounded-full px-2 py-0.5 font-bold ${t.tone === "good" ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/25 text-rose-200"} text-[12.5px]`}>
                 {t.tone === "good" ? "On target" : "Over target"}
               </span>
             )}
@@ -321,7 +325,7 @@ function Chips<T extends string>({ options, selected, onChange, colours }: {
 
 function Select({ value, onChange, all, options }: { value: string; onChange: (v: string) => void; all: string; options: string[] }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-[13px]">
       <option value="">{all}</option>
       {options.map((x) => <option key={x} value={x}>{x}</option>)}
     </select>
@@ -400,7 +404,7 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
   return (
     <div className="@container overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+        <thead className="text-slate-500 text-[12.5px]">
           <tr className="border-b border-slate-200">
             {head("label", dimTitle, true)}
             {cols.map((c) => head(c.key, c.label, c.left, c.show))}
@@ -437,15 +441,15 @@ function BuilderCard<D extends string>({ dims, first, second, setFirst, setSecon
   dims: { key: D; label: string }[]; first: D; second: D | ""; setFirst: (d: D) => void; setSecond: (d: D | "") => void; labelOf: (d: D) => string; children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <h2 className="mr-2 text-sm font-semibold text-slate-900">Build a breakdown</h2>
         <span className="text-xs text-slate-500">By</span>
-        <select value={first} onChange={(e) => setFirst(e.target.value as D)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
+        <select value={first} onChange={(e) => setFirst(e.target.value as D)} className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-[13px]">
           {dims.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
         <span className="text-xs text-slate-500">then by</span>
-        <select value={second} onChange={(e) => setSecond(e.target.value as D | "")} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
+        <select value={second} onChange={(e) => setSecond(e.target.value as D | "")} className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-[13px]">
           <option value="">Nothing</option>
           {dims.filter((d) => d.key !== first).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
@@ -500,7 +504,7 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
+        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
         <Chips options={SOURCES} selected={sources} onChange={setSources} colours={SOURCE_COLOURS} />
         <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
         <Select value={model} onChange={setModel} all="All models" options={modelOptions} />
@@ -534,21 +538,21 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
 function ConversionPanel({ s }: { s: Stats }) {
   const brokerEnq = s.enquiries - s.inboundEnquiries;
   const cards = [
-    { title: "Inbound conversion", what: "MotorComplete leads — TF Lead, Leasing.com, LeaseLoco, CarWow", colour: "#4f46e5", rate: inboundPct(s), orders: s.inboundOrders, enquiries: s.inboundEnquiries },
+    { title: "Inbound conversion", what: "MotorComplete leads: TF Lead, Leasing.com, LeaseLoco, CarWow", colour: "#4f46e5", rate: inboundPct(s), orders: s.inboundOrders, enquiries: s.inboundEnquiries },
     { title: "Broker / Prospect conversion", what: "Every other source", colour: SOURCE_COLOURS["Broker / Prospect"], rate: brokerPct(s), orders: s.orders - s.inboundOrders, enquiries: brokerEnq },
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       {cards.map((c) => (
-        <div key={c.title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${c.colour}` }}>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{c.title}</div>
+        <div key={c.title} className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${c.colour}` }}>
+          <div className="font-semibold text-slate-500 text-[12.5px]">{c.title}</div>
           <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{pct(c.rate)}</div>
           <div className="mt-0.5 text-xs text-slate-600">{int(c.orders)} orders of {int(c.enquiries)} enquiries</div>
           <div className="mt-1 text-[11px] text-slate-400">{c.what}</div>
         </div>
       ))}
       <div className="rounded-2xl border border-indigo-900 bg-indigo-950 p-4 text-white shadow-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-200">Overall conversion</div>
+        <div className="font-semibold text-indigo-200 text-[12.5px]">Overall conversion</div>
         <div className="mt-1 text-3xl font-bold tabular-nums">{pct(conversionPct(s))}</div>
         <div className="mt-0.5 text-xs text-indigo-200">{int(s.orders)} orders of {int(s.enquiries)} enquiries</div>
         <div className="mt-1 text-[11px] text-indigo-300">Inbound and broker / prospect together</div>
@@ -598,7 +602,7 @@ function EnquiryList({ rows }: { rows: ReportRow[] }) {
   const sorted = useMemo(() => [...rows].sort((a, b) => b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer)), [rows]);
   return (
     <table className="w-full text-xs">
-      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+      <thead className="text-slate-500 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Source</th>
@@ -730,7 +734,7 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, r
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
+        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
         <Chips options={SEGMENTS} selected={segments} onChange={setSegments} colours={SEGMENT_COLOURS} />
         {isDel && <Chips options={STATUSES} selected={statuses} onChange={setStatuses} colours={STATUS_COLOURS} />}
         <Select value={exec} onChange={setExec} all="All execs" options={options.exec} />
@@ -792,7 +796,7 @@ function BudgetPanel({ rows, range, budgets, today }: { rows: OrderRow[]; range:
   if (!months) {
     return (
       <div className="rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
-        <span className="font-semibold text-slate-900">Budget</span> is set by month — choose Month or Quarter (or a custom range of whole months) to compare against it.
+        <span className="font-semibold text-slate-900">Budget</span> is set by month: choose Month or Quarter (or a custom range of whole months) to compare against it.
       </div>
     );
   }
@@ -817,13 +821,13 @@ function BudgetCard({ title, colour, line, pace }: { title: string; colour: stri
   const deliveredPct = going ? Math.round((delivered / going) * 100) : null;
   const bar = (n: number, of: number) => `${of ? Math.min(100, (n / of) * 100) : 0}%`;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${colour}` }}>
+    <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${colour}` }}>
       <div className="flex items-baseline justify-between">
         <div className="text-sm font-semibold text-slate-900">{title}</div>
         <div className="text-xs text-slate-500">{budget == null ? "No budget set" : `Budget ${int(budget)}`}</div>
       </div>
 
-      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Going vs budget</div>
+      <div className="mt-2 font-semibold text-slate-500 text-[12.5px]">Going vs budget</div>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-bold tabular-nums text-slate-900">{int(going)}</span>
         {budget != null && <span className="text-sm text-slate-500">of {int(budget)} · {ofBudget}%</span>}
@@ -841,7 +845,7 @@ function BudgetCard({ title, colour, line, pace }: { title: string; colour: stri
       {missing.length > 0 && budget != null && <div className="text-xs text-amber-700">No budget set for {missing.join(", ")}</div>}
 
       <div className="mt-3 border-t border-slate-100 pt-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Delivered of what&apos;s going</div>
+        <div className="font-semibold text-slate-500 text-[12.5px]">Delivered of what&apos;s going</div>
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-bold tabular-nums text-slate-900">{deliveredPct == null ? "—" : `${deliveredPct}%`}</span>
           <span className="text-xs text-slate-500">{int(delivered)} of {int(going)} delivered</span>
@@ -883,12 +887,12 @@ function TypeCards({ rows, noun }: { rows: OrderRow[]; noun: string }) {
         const st = g?.stats;
         const avg = st ? avgProfit(st) : null;
         return (
-          <div key={t} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${meta.colour}` }}>
+          <div key={t} className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${meta.colour}` }}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-2">
               <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
               <div className="text-xs text-slate-500">{g ? `${int(g.stats.orders)} units · ${g.share.toFixed(0)}% of ${noun}` : `No ${noun}`}</div>
             </div>
-            <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Avg profit per unit</div>
+            <div className="mt-2 font-semibold text-slate-500 text-[12.5px]">Avg profit per unit</div>
             <div className={`text-3xl font-bold tabular-nums ${avg != null && avg < 0 ? "text-rose-700" : "text-slate-900"}`}>{gbp(avg)}</div>
             <div className="mt-2 flex flex-wrap justify-between gap-x-3 border-t border-slate-100 pt-2 text-xs text-slate-600">
               <span>Invoice <b className="tabular-nums">{st ? gbp(invoiceProfit(st)) : "—"}</b> · bonuses <b className="tabular-nums">{st ? gbp(st.bonus) : "—"}</b></span>
@@ -926,7 +930,7 @@ function BonusCell({ r }: { r: OrderRow }) {
   return (
     <span title={`${r.bonusType}, delivering ${month}`}>
       <BonusMoney n={r.bonus} />
-      {r.bonusFlag === "noBasic" && <span className="ml-1 text-[10px] font-semibold text-amber-700" title="A percentage is due but no Basic price is held — upload the Dealbook Extract">no Basic</span>}
+      {r.bonusFlag === "noBasic" && <span className="ml-1 text-[10px] font-semibold text-amber-700" title="A percentage is due but no Basic price is held: upload the Dealbook Extract">no Basic</span>}
     </span>
   );
 }
@@ -946,14 +950,14 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
   return (
     <div className="@container">
       <table className="w-full text-xs">
-        <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+        <thead className="text-slate-500 text-[12.5px]">
           <tr>
             {th("Customer · vehicle")}
             {showExec && th("Exec", false, "2xl")}
             {th(dateLabel)}
             {th("Funder", false, "3xl")}
             {th(statusLabel, false, "xl")}
-            {th("Basic", true, "2xl", "Basic price from the deal's Dealbook Extract line — what a percentage bonus is paid on")}
+            {th("Basic", true, "2xl", "Basic price from the deal's Dealbook Extract line: what a percentage bonus is paid on")}
             {th("Invoice", true, "lg")}
             {th("Bonus", true, "md")}
             {th("Total", true)}
@@ -991,7 +995,7 @@ function BestWorst({ rows, title = "Most and least profitable orders" }: { rows:
   const n = Math.min(5, Math.floor(priced.length / 2));
   const list = (title: string, items: OrderRow[]) => (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</div>
+      <div className="font-semibold text-slate-500 text-[12.5px]">{title}</div>
       <table className="mt-2 w-full text-sm">
         <tbody>
           {items.map((r, i) => (
@@ -1070,9 +1074,9 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
     const make = (label: string, rows: EnquiryRow[]): RGroup =>
       ({ key: label, label, stats: summariseResponse(rows), share: reportable.length ? (rows.length / reportable.length) * 100 : 0, rows, children: [] });
     return [
-      make("Missed same day — exec", reportable.filter((r) => sameDayMissOwner(r) === "exec")),
-      make("Missed same day — late allocation (Sales Support)", reportable.filter((r) => sameDayMissOwner(r) === "salesSupport")),
-      make("Never contacted — exec", reportable.filter((r) => neverContactedOwner(r) === "exec")),
+      make("Missed same day: exec", reportable.filter((r) => sameDayMissOwner(r) === "exec")),
+      make("Missed same day: late allocation (Sales Support)", reportable.filter((r) => sameDayMissOwner(r) === "salesSupport")),
+      make("Never contacted: exec", reportable.filter((r) => neverContactedOwner(r) === "exec")),
       make(`First contact over ${CONTACT_TARGET_MINS} min`, reportable.filter((r) => r.contactMins != null && r.contactMins > CONTACT_TARGET_MINS)),
       make(`Allocation over ${ALLOCATION_TARGET_MINS} min`, reportable.filter((r) => r.allocMins != null && r.allocMins > ALLOCATION_TARGET_MINS)),
       make("Never passed to an exec (Sales Support)", reportable.filter((r) => isTransferMissing(r))),
@@ -1099,7 +1103,7 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
+        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
         <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
         <span className="text-[11px] text-slate-400">Working hours only: Mon–Fri 09:00–17:30.</span>
       </div>
@@ -1172,7 +1176,7 @@ function HeldNote({ rows }: { rows: EnquiryRow[] }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-xs text-slate-600">
           <span className="font-semibold text-slate-900">{rows.length} {rows.length === 1 ? "enquiry is" : "enquiries are"} not judged yet</span>
-          {" — "}raised too recently to have had a full working day to be actioned. They count once that day has closed, so every figure here is final.
+          {": "}raised too recently to have had a full working day to be actioned. They count once that day has closed, so every figure here is final.
         </p>
         <button onClick={() => setOpen((v) => !v)} className="shrink-0 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
           {open ? "Hide" : "See them"}
@@ -1194,7 +1198,7 @@ function ResponseList({ rows, focus }: { rows: EnquiryRow[]; focus: Focus }) {
   const target = focus === "alloc" ? ALLOCATION_TARGET_MINS : CONTACT_TARGET_MINS;
   return (
     <table className="w-full text-xs">
-      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+      <thead className="text-slate-500 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Exec</th>
@@ -1221,7 +1225,7 @@ function ResponseList({ rows, focus }: { rows: EnquiryRow[]; focus: Focus }) {
                 <span className={`rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${mins == null ? "bg-slate-100 text-slate-400" : mins <= target ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"}`}>
                   {formatMins(mins)}
                 </span>
-                {isSameDayReportable(r) && !r.sameDayMet && <div className="mt-0.5 text-[10px] font-bold uppercase text-rose-600">not same day</div>}
+                {isSameDayReportable(r) && !r.sameDayMet && <div className="mt-0.5 font-bold text-rose-600 text-[12.5px]">Not same day</div>}
               </td>
             </tr>
           );
@@ -1300,7 +1304,7 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</span>
+        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
         <Chips options={SEGMENTS} selected={segments} onChange={setSegments} colours={SEGMENT_COLOURS} />
         <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
         <Select value={model} onChange={setModel} all="All models" options={modelOptions} />
@@ -1309,7 +1313,7 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
       </div>
       <Tiles tiles={[
         { label: "Cancellations", value: int(proper.length), sub: "cancelled and not re-ordered", hero: true },
-        { label: "Re-Writes", value: int(rewrites.length), sub: "cancelled and re-ordered — not counted" },
+        { label: "Re-Writes", value: int(rewrites.length), sub: "cancelled and re-ordered, not counted" },
         { label: "Reasons to add", value: int(unexplained), tone: proper.length ? (unexplained ? "bad" : "good") : undefined, sub: proper.length ? `${proper.length - unexplained} of ${proper.length} explained` : undefined },
         { label: "Avg time to cancel", value: avgDays == null ? "—" : `${Math.round(avgDays)} days`, sub: "from order to cancellation" },
       ]} />
@@ -1319,7 +1323,7 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
         <>
           <Card title="Cancellations" note="The manager's reason for each">
             {proper.length === 0
-              ? <p className="text-sm text-slate-500">None — everything cancelled in {range.label} was ordered again.</p>
+              ? <p className="text-sm text-slate-500">None: everything cancelled in {range.label} was ordered again.</p>
               : <div className="divide-y divide-slate-100">{proper.map((c) => <CancellationItem key={c.id} c={c} />)}</div>}
           </Card>
           <Card title="Re-Writes" note="Cancelled and ordered again · shown, not counted as cancellations">
@@ -1386,7 +1390,7 @@ function CancellationItem({ c }: { c: CancellationView }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {c.overridden && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Manager&apos;s call</span>}
+          {c.overridden && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-800 text-[12.5px]">Manager&apos;s call</span>}
           {canManage && <button onClick={() => re.set(c.overridden ? null : "rewrite")} disabled={re.pending} className={smallButton}
             title={c.overridden ? `Hand it back to the matching, which found a re-order${c.reorder ? ` on ${shortDate(c.reorder.orderDay)}` : ""}` : "It was ordered again — count it as a Re-Write"}>
             {c.overridden ? "Undo" : "It's a Re-Write"}
@@ -1395,16 +1399,16 @@ function CancellationItem({ c }: { c: CancellationView }) {
       </div>
       {!canManage ? (
         <div className={`mt-2 rounded-lg px-3 py-2 text-sm ${c.note ? "bg-slate-50 text-slate-800" : "bg-amber-50 font-semibold text-amber-800"}`}>
-          {c.note || "Reason needed — a manager adds it"}
+          {c.note || "Reason needed: a manager adds it"}
           {c.note && c.noteBy && <div className="mt-0.5 text-[11px] font-normal text-slate-400">{c.noteBy} · {c.noteAt}</div>}
         </div>
       ) : (<>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
         <textarea value={text} onChange={(e) => { setText(e.target.value); setMsg(null); }} rows={2} maxLength={2000}
           placeholder="Reason for the cancellation…" aria-label={`Reason ${c.customer} cancelled`}
-          className={`w-full flex-1 rounded-lg border px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none ${c.note ? "border-slate-300" : "border-amber-300 bg-amber-50/40"}`} />
+          className={`w-full flex-1 rounded-xl border px-3 py-2 text-sm text-slate-800 focus:border-slate-900 focus:outline-none ${c.note ? "border-slate-300" : "border-amber-300 bg-amber-50/40"} focus:ring-4 focus:ring-slate-900/10`} />
         <button onClick={save} disabled={pending || !dirty}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40">
+          className="rounded-xl bg-slate-900 px-4 py-2 text-[13px] font-semibold text-white hover:bg-slate-800 disabled:opacity-40">
           {pending ? "Saving…" : "Save"}
         </button>
       </div>
@@ -1423,11 +1427,11 @@ function CancellationItem({ c }: { c: CancellationView }) {
 function RewriteAction({ c }: { c: CancellationView }) {
   const re = useReclassify(c.id);
   const canManage = useContext(CanManage);
-  if (!canManage) return c.overridden ? <span className="text-[10px] font-semibold uppercase text-amber-700">Manager&apos;s call</span> : null;
+  if (!canManage) return c.overridden ? <span className="font-semibold text-amber-700 text-[12.5px]">Manager&apos;s call</span> : null;
   return (
     <div className="text-right">
       <button onClick={() => re.set(c.overridden ? null : "proper")} disabled={re.pending} className={smallButton}
-        title={c.overridden ? "Hand it back to the matching" : "It wasn't ordered again — count it as a cancellation"}>
+        title={c.overridden ? "Hand it back to the matching" : "It wasn't ordered again: count it as a cancellation"}>
         {c.overridden ? "Undo" : "Not a Re-Write"}
       </button>
       {re.error && <div className="mt-1 text-[10px] text-rose-700">{re.error}</div>}
@@ -1440,7 +1444,7 @@ function RewriteList({ rows }: { rows: CancellationView[] }) {
   return (
     <div className="overflow-x-auto">
     <table className="w-full text-xs">
-      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+      <thead className="text-slate-500 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Exec</th>
@@ -1486,7 +1490,7 @@ function CancellationList({ rows, showExec = true }: { rows: CancellationView[];
   const sorted = useMemo(() => [...rows].sort((a, b) => Number(isProper(b)) - Number(isProper(a)) || b.day.localeCompare(a.day)), [rows]);
   return (
     <table className="w-full text-xs">
-      <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+      <thead className="text-slate-500 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Vehicle</th>
@@ -1530,7 +1534,7 @@ interface SummaryStat { label: string; value: string; sub?: string; tone?: "good
 // knowing — a split, the names behind a number — never a full table.
 function SummaryCard({ title, onOpen, stats, note, children }: { title: string; onOpen: () => void; stats: SummaryStat[]; note?: ReactNode; children?: ReactNode }) {
   return (
-    <section className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="flex min-w-0 flex-col rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         <button onClick={onOpen} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Open →</button>
@@ -1538,7 +1542,7 @@ function SummaryCard({ title, onOpen, stats, note, children }: { title: string; 
       <div className={`mt-3 grid grid-cols-2 gap-x-4 gap-y-3 ${stats.length >= 4 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         {stats.map((st) => (
           <div key={st.label} className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{st.label}</div>
+            <div className="font-semibold text-slate-500 text-[12.5px]">{st.label}</div>
             <div className={`text-xl font-bold tabular-nums sm:text-2xl ${st.tone === "good" ? "text-emerald-700" : st.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{st.value}</div>
             {st.sub && <div className="text-[11px] leading-snug text-slate-500">{st.sub}</div>}
           </div>
@@ -1554,7 +1558,7 @@ function SummaryCard({ title, onOpen, stats, note, children }: { title: string; 
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2">
-      <span className="w-28 shrink-0 pt-px text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="w-28 shrink-0 pt-px font-semibold text-slate-500 text-[12.5px]">{label}</span>
       <span className="min-w-0">{children}</span>
     </div>
   );
@@ -1671,7 +1675,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
         { label: "First contact", value: formatMins(rs.contactAvg), tone: timeTone(rs.contactAvg, CONTACT_TARGET_MINS), sub: `target ${CONTACT_TARGET_MINS}m · ${int(rs.contactMissed)} over` },
         { label: "Same-day contact", value: sameDay == null ? "—" : `${Math.round(sameDay)}%`, tone: rs.sameDayExpected ? (rs.sameDayMissed ? "bad" : "good") : undefined, sub: `${int(rs.sameDayMissed)} missed · ${int(rs.sameDayMissedSupport)} late allocation` },
         { label: "Never contacted", value: int(rs.neverContacted), tone: rs.neverContacted ? "bad" : undefined, sub: `of ${int(rs.total)} judged` },
-      ]} note={r.held > 0 ? `${int(r.held)} more not judged yet — they need a full working day first.` : undefined}>
+      ]} note={r.held > 0 ? `${int(r.held)} more not judged yet: they need a full working day first.` : undefined}>
         {rs.total > 0 && (
           <>
             <Line label="Allocation">
@@ -1698,7 +1702,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
                 const avg = g ? avgProfit(g.stats) : null;
                 return (
                   <div key={seg} className="rounded-lg bg-slate-50 px-2 py-1.5" style={{ borderLeft: `3px solid ${SEGMENT_META[seg].colour}` }}>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{SEGMENT_META[seg].title}</div>
+                    <div className="font-semibold text-slate-500 text-[12.5px]">{SEGMENT_META[seg].title}</div>
                     <div><b className="tabular-nums text-slate-800">{int(g?.stats.orders ?? 0)}</b> · <span className="tabular-nums"><Money n={avg} /></span> avg</div>
                   </div>
                 );
@@ -1722,7 +1726,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
         { label: "Going", value: int(d.length), sub: "delivered + arrived + due" },
         { label: "Delivered", value: int(delivered), sub: deliveredPct == null ? undefined : `${deliveredPct}% of what's going` },
         { label: "Still to deliver", value: int(d.length - delivered), sub: `${int(arrived)} arrived · ${int(d.length - delivered - arrived)} due` },
-      ]} note={line ? undefined : "Budget is monthly — choose Month or Quarter to measure against it."}>
+      ]} note={line ? undefined : "Budget is monthly: choose Month or Quarter to measure against it."}>
         {lines && (["car", "cv"] as const).map((k) => {
           const l = lines[k];
           const g = l.budget == null ? null : l.going - l.budget;
@@ -1743,7 +1747,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
 
       <SummaryCard title="Cancellations" onOpen={() => open("cancellations")} stats={[
         { label: "Cancellations", value: int(proper), sub: "cancelled, not re-ordered" },
-        { label: "Re-Writes", value: int(c.length - proper), sub: "re-ordered — not counted" },
+        { label: "Re-Writes", value: int(c.length - proper), sub: "re-ordered, not counted" },
         { label: "Reasons to add", value: int(unexplained), tone: proper ? (unexplained ? "bad" : "good") : undefined, sub: proper ? `${int(proper - unexplained)} of ${int(proper)} explained` : undefined },
       ]}>
         {proper > 0 && (
@@ -1769,7 +1773,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
         { label: "Lowest headline", value: pct(share(all.headlineLowest, all.headlineCompared), 0), sub: "our best price at any term" },
       ] : [
         { label: "Cheapest", value: "—", sub: "no scrape yet" },
-      ]} note={market ? `Latest scrape, ${scrapeWhen(market.run.startedAt)} — not tied to the period above.` : undefined}>
+      ]} note={market ? `Latest scrape, ${scrapeWhen(market.run.startedAt)}: not tied to the period above.` : undefined}>
         {rangesRanked.length >= 2 && (
           <>
             <Line label="Strongest">
@@ -1782,7 +1786,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
         )}
         {undercutter && (
           <Line label="Top undercutter">
-            <b className="text-slate-800">{undercutter[0]}</b> — cheaper on {int(undercutter[1].undercuts)} of {int(undercutter[1].headToHead)} deals
+            <b className="text-slate-800">{undercutter[0]}</b>, cheaper on {int(undercutter[1].undercuts)} of {int(undercutter[1].headToHead)} deals
           </Line>
         )}
       </SummaryCard>
@@ -1817,7 +1821,7 @@ function MarketSection({ market }: { market: MarketOverview | null }) {
   if (!market || market.segments.length === 0) {
     return (
       <Empty>
-        No market data yet. Each scrape from the RateX app shows here as soon as it finishes — the full analysis is on{" "}
+        No market data yet. Each scrape from the RateX app shows here as soon as it finishes. The full analysis is on{" "}
         <a href="/scraper" className="font-medium text-indigo-600">Market Analysis</a>.
       </Empty>
     );
@@ -1854,12 +1858,12 @@ function MarketColumn({ s }: { s: MarketSegmentView }) {
   );
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: `4px solid ${meta.colour}` }}>
+      <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${meta.colour}` }}>
         <div className="flex items-baseline justify-between">
           <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
           <div className="text-xs text-slate-500">{int(o.compared)} deals compared</div>
         </div>
-        <div className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">We&apos;re cheapest on</div>
+        <div className="mt-2 font-semibold text-slate-500 text-[12.5px]">We&apos;re cheapest on</div>
         <div className="text-3xl font-bold tabular-nums text-slate-900">{pct(share(o.cheapest, o.compared), 0)}</div>
         <div className={`mt-1 text-sm font-semibold ${gapTone(o.gap)}`}>{gapText(o.gap)}</div>
         <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
@@ -1881,7 +1885,7 @@ function CompetitorList({ rows }: { rows: CompetitorRow[] }) {
   if (rows.length === 0) return <p className="text-sm text-slate-500">Nobody undercuts us on these deals.</p>;
   return (
     <table className="w-full text-sm">
-      <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+      <thead className="text-slate-500 text-[12.5px]">
         <tr className="border-b border-slate-200">
           <th className="px-2 py-2 text-left font-semibold">Broker</th>
           <th className="px-2 py-2 text-right font-semibold">Head to head</th>

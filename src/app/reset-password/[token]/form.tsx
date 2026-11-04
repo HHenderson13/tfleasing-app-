@@ -3,7 +3,7 @@ import { useActionState, useState } from "react";
 import { resetPasswordAction } from "./actions";
 import { PasswordIndicator } from "@/app/login/forms";
 
-const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm";
+const inp = "mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 transition hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]";
 
 export function ResetPasswordForm({ token }: { token: string }) {
   const [state, action, pending] = useActionState(resetPasswordAction, null as { error?: string } | null);
@@ -43,7 +43,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <button
         type="submit"
         disabled={pending || mismatch}
-        className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="h-11 w-full rounded-xl bg-slate-900 px-4 text-[14px] font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
       >
         {pending ? "Saving…" : "Set new password & sign in"}
       </button>

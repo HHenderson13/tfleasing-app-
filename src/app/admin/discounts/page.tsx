@@ -38,8 +38,8 @@ export default async function DiscountsPage() {
     <div>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Discount profiles</h1>
-          <p className="mt-1 text-sm text-slate-500">Per-model discount breakdown. Total = Terms + Dealer. Each vehicle can belong to only one profile.</p>
+          <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Discount profiles</h1>
+          <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Per-model discount breakdown. Total = Terms + Dealer. Each vehicle can belong to only one profile.</p>
         </div>
         {unmappedCount > 0 && (
           <a href="/admin/vehicles" className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100">

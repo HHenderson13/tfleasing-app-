@@ -1,7 +1,7 @@
+import { PageShell, PageTitle } from "@/components/ui";
 import Link from "next/link";
 import Image from "next/image";
 import { requireLeaderboardAccess } from "@/lib/auth-guard";
-import { signOutAction } from "../../login/actions";
 import {
   currentYearMonth,
   emptyMetricRecord,
@@ -105,8 +105,8 @@ export default async function MyScorecardPage() {
             </div>
           )}
           <div className="flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-white/60">
-              {formatMonthLabel(month)} — your scorecard
+            <div className="font-semibold text-white/60 text-[12.5px]">
+              {formatMonthLabel(month)}: your scorecard
             </div>
             <div className="mt-1 text-3xl font-bold sm:text-4xl">{mine.name}</div>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-white/80">
@@ -117,11 +117,11 @@ export default async function MyScorecardPage() {
           </div>
           <div className="grid grid-cols-2 gap-2 text-center sm:gap-3">
             <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10">
-              <div className="text-[9px] font-semibold uppercase tracking-wide text-white/60">MTD pts</div>
+              <div className="font-semibold text-white/60 text-[12.5px]">MTD pts</div>
               <div className="text-2xl font-bold tabular-nums">{mine.totalPoints}</div>
             </div>
             <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10">
-              <div className="text-[9px] font-semibold uppercase tracking-wide text-white/60">YTD pts</div>
+              <div className="font-semibold text-white/60 text-[12.5px]">YTD pts</div>
               <div className="text-2xl font-bold tabular-nums">{mineYtd.totalPoints}</div>
             </div>
           </div>
@@ -129,7 +129,7 @@ export default async function MyScorecardPage() {
       </div>
 
       {/* Achievements (MTD + YTD) */}
-      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Achievements</h2>
+      <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">Achievements</h2>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         <AchievementsCard title={`${formatMonthLabel(month)}`} subtitle="Badges earned this month" badges={badgesMtd} />
         <AchievementsCard title="Year to date" subtitle="Across the whole year so far" badges={badgesYtd} />
@@ -139,7 +139,7 @@ export default async function MyScorecardPage() {
           and what would it take to overtake them. */}
       {overtakes.length > 0 && (
         <>
-          <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Your overtake targets</h2>
+          <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">Your overtake targets</h2>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {overtakes.slice(0, 4).map((t) => (
               <OvertakeCard key={t.metric} target={t} closest={t === overtakes[0]} />
@@ -149,7 +149,7 @@ export default async function MyScorecardPage() {
       )}
 
       {/* Metric breakdown — your score vs dept avg vs top */}
-      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">This month, metric by metric</h2>
+      <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">This month, metric by metric</h2>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         {METRIC_META.map((meta) => {
           const myVal = metricValue(mine, meta.key);
@@ -191,7 +191,7 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
   return (
     <div className={`overflow-hidden rounded-2xl border bg-white p-4 ${closest ? "border-rose-300 ring-2 ring-rose-100" : "border-slate-200"}`}>
       <div className="flex items-center justify-between">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{target.metricLabel}</div>
+        <div className="font-semibold text-slate-500 text-[12.5px]">{target.metricLabel}</div>
         {closest && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Closest</span>}
       </div>
       <div className="mt-2 flex items-center gap-3">
@@ -207,7 +207,7 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
           <div className="text-base font-semibold text-slate-900">{target.target.name}</div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Need</div>
+          <div className="font-semibold text-rose-600 text-[12.5px]">Need</div>
           <div className="text-lg font-bold tabular-nums text-rose-700">{target.gapLabel}</div>
         </div>
       </div>
@@ -238,14 +238,14 @@ function computeDeptAverages(rows: ExecMonthStats[]): Record<LeaderboardMetric, 
 
 function AchievementsCard({ title, subtitle, badges }: { title: string; subtitle: string; badges: Badge[] }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-100 px-4 py-3">
         <div className="text-sm font-semibold text-slate-900">{title}</div>
         <div className="text-xs text-slate-500">{subtitle}</div>
       </div>
       <div className="px-4 py-3">
         {badges.length === 0 ? (
-          <p className="py-3 text-center text-xs text-slate-500">No badges yet — keep going! 💪</p>
+          <p className="py-3 text-center text-xs text-slate-500">No badges yet: keep going! 💪</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {badges.map((b) => (
@@ -292,17 +292,18 @@ function MetricBreakdownCard({
 }) {
   const pct = fill > 0 ? Math.max(2, Math.min(100, fill)) : 0;
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className={`flex items-center justify-between bg-gradient-to-r ${meta.tone} px-4 py-3 text-white`}>
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+      <div className={`h-1 bg-gradient-to-r ${meta.tone}`} />
+      <div className="flex items-center justify-between px-4 pt-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide opacity-90">{meta.label}</div>
-          <div className="mt-0.5 text-2xl font-bold tabular-nums">{myLabel}</div>
+          <div className="text-[12.5px] font-medium text-slate-600">{meta.label}</div>
+          <div className="mt-0.5 text-[26px] font-semibold leading-tight tabular-nums text-slate-900">{myLabel}</div>
         </div>
         <div className="text-right">
           {rank !== null && rank <= 3 ? (
             <span className="text-3xl leading-none">{TROPHIES[rank as 1 | 2 | 3]}</span>
           ) : rank !== null ? (
-            <div className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">Rank #{rank}</div>
+            <div className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Rank #{rank}</div>
           ) : null}
         </div>
       </div>
@@ -319,33 +320,18 @@ function MetricBreakdownCard({
   );
 }
 
-function Shell({ userName, title, children }: { userName: string; title: string; children: React.ReactNode }) {
+function Shell({ title, children }: { userName?: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 text-sm sm:px-6">
-          <Link href="/sales-leaderboard" className="text-slate-500 hover:text-slate-900">← Pole Position</Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-slate-700 sm:inline">{userName}</span>
-            <form action={signOutAction}>
-              <button className="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
-        {children}
-      </main>
-    </div>
+    <PageShell width="4xl" back="/sales-leaderboard" backLabel="Pole Position">
+      <PageTitle title={title} />
+      {children}
+    </PageShell>
   );
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-6 rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-8 text-center text-[14px] text-slate-500">
       {children}
     </div>
   );

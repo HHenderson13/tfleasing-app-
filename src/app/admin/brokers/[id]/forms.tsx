@@ -28,7 +28,7 @@ function SetupLinkBanner({
         {kind === "reset" ? "Password reset link ready" : "Setup link ready"}
       </div>
       <div className="mt-1 text-emerald-900/80">
-        Send this to them — it expires {new Date(expiresAt).toLocaleString("en-GB")}.
+        Send this to them: it expires {new Date(expiresAt).toLocaleString("en-GB")}.
         {kind === "reset" && " They've been signed out everywhere until they use it."}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -71,7 +71,7 @@ export function AddBrokerUserForm({ brokerId }: { brokerId: string }) {
           Email
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} required />
         </label>
-        <button type="submit" disabled={pending || !name.trim() || !email.trim()} className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={pending || !name.trim() || !email.trim()} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {pending ? "Creating…" : "Create user"}
         </button>
         {error && <span className="text-xs text-red-600">{error}</span>}
@@ -135,9 +135,9 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
 
   return (
     <div>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-3 text-left font-medium">User</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -195,7 +195,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No users yet — add one above.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No users yet. Add one above.</td></tr>
             )}
           </tbody>
         </table>

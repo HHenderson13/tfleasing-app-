@@ -50,7 +50,7 @@ export function DeliveryCalendar({ entries }: { entries: CalendarEntry[] }) {
   const selectedEntries = selectedIso ? (entriesByDate.get(selectedIso) ?? []) : [];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       {/* Header — month label + navigation */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
         <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ export function DeliveryCalendar({ entries }: { entries: CalendarEntry[] }) {
       </div>
 
       {/* Weekday header — Mon–Sun (UK convention) */}
-      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50 text-center font-semibold text-slate-500 text-[12.5px]">
         {WEEKDAY_LABELS.map((w) => (
           <div key={w} className="px-1 py-1.5">{w}</div>
         ))}
@@ -164,8 +164,8 @@ function DetailPanel({ iso, entries }: { iso: string | null; entries: CalendarEn
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline gap-1.5">
                     <span className="font-semibold text-slate-900">{e.customerName}</span>
-                    {e.isGroupBq && <span className="rounded bg-violet-100 px-1 py-0.5 text-[9px] font-bold uppercase text-violet-800">BQ</span>}
-                    {e.isEv && <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-bold uppercase text-emerald-800">⚡ EV</span>}
+                    {e.isGroupBq && <span className="rounded bg-violet-100 px-1 py-0.5 font-bold text-violet-800 text-[12.5px]">BQ</span>}
+                    {e.isEv && <span className="rounded bg-emerald-100 px-1 py-0.5 font-bold text-emerald-800 text-[12.5px]">⚡ EV</span>}
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-600">
                     {e.model} · {e.funderName}

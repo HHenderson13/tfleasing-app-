@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
+import { CARD_LINK, StatusPill } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth-guard";
 import { listForecastUploads, listForecastLinesForMonth } from "@/lib/forecast";
 
@@ -39,14 +40,14 @@ export default async function ForecastHubPage() {
     {
       href: "/forecast/monthly",
       title: "Monthly Forecast",
-      desc: `Lease New Cars, Lease New CV and General Overheads — line-by-line for ${monthLabel(month)}.`,
+      desc: `Lease New Cars, Lease New CV and General Overheads: line-by-line for ${monthLabel(month)}.`,
       tone: "from-sky-500 to-blue-700",
       footer: `${lineCount} dealbook line${lineCount === 1 ? "" : "s"} for this month`,
     },
     {
       href: "/forecast/quarterly",
       title: "Quarterly Forecast",
-      desc: `Three-months-across BPM layout — PBT, physicals and bonus opportunity. Currently in ${quarterLabel(month)}.`,
+      desc: `Three-months-across BPM layout: PBT, physicals and bonus opportunity. Currently in ${quarterLabel(month)}.`,
       tone: "from-violet-500 to-indigo-700",
       footer: "Quarter view + YTD rollups",
     },
@@ -71,30 +72,28 @@ export default async function ForecastHubPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="forecast" />
-      <main className="mx-auto max-w-5xl px-6 py-12">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Forecast</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Forecast</h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
               Monthly P&amp;L forecasts and the quarterly rollup that feeds BPM. Pick a section to start.
             </p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
-            Active month: <span className="font-semibold text-slate-700">{monthLabel(month)}</span>
-          </div>
+          <StatusPill>Active month: <span className="font-semibold text-slate-800">{monthLabel(month)}</span></StatusPill>
         </div>
 
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
           {tiles.map((t) => (
             <Link
               key={t.href}
               href={t.href}
-              className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+              className={`group relative flex flex-col overflow-hidden p-6 ${CARD_LINK}`}
             >
               <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${t.tone}`} />
-              <div className="text-xl font-semibold text-slate-900 group-hover:text-slate-950">{t.title}</div>
-              <p className="mt-1 text-sm leading-relaxed text-slate-500">{t.desc}</p>
-              <div className="mt-6 text-[11px] uppercase tracking-[0.18em] text-slate-400">{t.footer}</div>
+              <div className="text-[17px] font-semibold tracking-tight text-slate-900">{t.title}</div>
+              <p className="mt-1.5 flex-1 text-[14px] leading-6 text-slate-600">{t.desc}</p>
+              <div className="mt-5 text-[12.5px] text-slate-500">{t.footer}</div>
             </Link>
           ))}
         </div>

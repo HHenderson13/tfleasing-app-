@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { signOutAction } from "../login/actions";
 
 // Each panel is a sibling tab — only one is rendered at any time. Lazy-load
 // them so the initial JS download only ships what's needed for the default
@@ -22,7 +21,7 @@ const TABS: Array<{ id: TabName; label: string }> = [
   { id: "history", label: "History" },
 ];
 
-export function ScraperClient({ userName }: { userName: string }) {
+export function ScraperClient() {
   const [activeTab, setActiveTab] = useState<TabName>("intelligence");
   const [activeRunId, setActiveRunId] = useState<string | undefined>();
 
@@ -30,32 +29,28 @@ export function ScraperClient({ userName }: { userName: string }) {
     <div className="rx">
       <div className="shell">
         <header>
-          <div className="logo">
-            <Link href="/" className="back-btn">
-              ← Back to portal
-            </Link>
-            <span className="header-title">Market Analysis</span>
-          </div>
-          <div className="header-right">
+          <Link href="/" className="back-btn">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden><path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" /></svg>
+            Home
+          </Link>
+          <div className="seg-nav" role="tablist" aria-label="Market Analysis">
             {TABS.map((t) => (
               <button
                 key={t.id}
+                role="tab"
+                aria-selected={activeTab === t.id}
                 className={`nav-tab ${activeTab === t.id ? "active" : ""}`}
                 onClick={() => setActiveTab(t.id)}
               >
                 {t.label}
               </button>
             ))}
-            <div className="user-chip">
-              <span className="user-name">{userName}</span>
-              <form action={signOutAction}>
-                <button className="logout-btn" type="submit">
-                  Sign out
-                </button>
-              </form>
-            </div>
           </div>
         </header>
+        <div className="page-head">
+          <h1>Market Analysis</h1>
+          <p>Our leasing.com prices against every other broker, from the runs the RateX app uploads.</p>
+        </div>
 
         <main>
           <div className="content">

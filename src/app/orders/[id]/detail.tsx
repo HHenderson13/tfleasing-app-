@@ -118,7 +118,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text} ring-1 ${c.ring}`}>
             {statusLabel(status)}
@@ -148,10 +148,10 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
           </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-slate-500 md:grid-cols-3">
-          <div><div className="text-[10px] uppercase tracking-wide">Funder</div><div className="mt-0.5 text-sm text-slate-900">{proposal.funderName}</div></div>
+          <div><div className="text-[12.5px]">Funder</div><div className="mt-0.5 text-sm text-slate-900">{proposal.funderName}</div></div>
           {proposal.isEv && (
             <div>
-              <div className="text-[10px] uppercase tracking-wide">EV option</div>
+              <div className="text-[12.5px]">EV option</div>
               <div className="mt-0.5 text-sm text-slate-900">
                 {proposal.wallboxIncluded
                   ? "Wallbox"
@@ -162,7 +162,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
             </div>
           )}
           <div>
-            <div className="text-[10px] uppercase tracking-wide">{isBq ? "Assigned to" : "Sales exec"}</div>
+            <div className="text-[12.5px]">{isBq ? "Assigned to" : "Sales exec"}</div>
             {isBq ? (
               <>
                 <div className="mt-0.5 text-sm text-slate-900">Group BQ Deal</div>
@@ -180,7 +180,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Order checks</h2>
         <p className="mt-0.5 text-xs text-slate-500">All required items must be confirmed before moving to awaiting delivery.</p>
 
@@ -220,27 +220,27 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
       </div>
 
       {!isBq && (
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Vehicle details</h2>
         <p className="mt-0.5 text-xs text-slate-500">Enter an order number and/or VIN. At least one is required to move to awaiting delivery.</p>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Order number</span>
+            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Order number</span>
             <input
               value={orderNumber}
               onChange={(e) => setOrderNumber(e.target.value)}
               placeholder="e.g. ORD-123456"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">VIN</span>
+            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">VIN</span>
             <input
               value={vin}
               onChange={(e) => setVin(e.target.value)}
               placeholder="17-character VIN"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm focus:border-slate-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
             />
           </label>
         </div>
@@ -259,18 +259,18 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
       )}
 
       {(proposal.isBroker || isBq) && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <h2 className="text-sm font-semibold text-slate-900">Deal source</h2>
           <div className="mt-3 grid gap-3 text-xs text-slate-500 sm:grid-cols-2">
             {isBq && (
               <div>
-                <div className="text-[10px] uppercase tracking-wide">Group BQ site</div>
+                <div className="text-[12.5px]">Group BQ site</div>
                 <div className="mt-0.5 text-sm text-slate-900">{proposal.groupSiteName ?? "—"}</div>
               </div>
             )}
             {proposal.isBroker && (
               <div>
-                <div className="text-[10px] uppercase tracking-wide">Broker</div>
+                <div className="text-[12.5px]">Broker</div>
                 <div className="mt-0.5 text-sm text-slate-900">{proposal.brokerName ?? "—"}</div>
                 {proposal.brokerEmail && <div className="text-[11px] text-slate-400">{proposal.brokerEmail}</div>}
               </div>
@@ -282,7 +282,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
 
       {status === "in_order" && (
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <div>
             <div className="text-sm font-medium text-slate-900">Ready to move to awaiting delivery?</div>
             <div className="text-xs text-slate-500">

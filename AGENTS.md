@@ -100,6 +100,18 @@ When you touch either of these, run `npm test` before pushing.
 
 ## Shared UI primitives
 
+- **One look across the site** (user, 2026-11-04: "a unified look across
+  the whole site, every section", taken from the Fuel Cost Calculator, Ranger
+  BIK and Customer Profiles). The kit is `src/components/ui.tsx`: `PageShell`
+  (or `AppBar` + `PageTitle`), `Tabs` (the grey segmented switch), `CARD`,
+  `BTN`, `INPUT`, `LABEL`, `StatusPill`, `PageSkeleton`. Build new pages from
+  it rather than by hand. White "‹ Home" bar, 28 / 34px title with a plain
+  line under it, white hairline cards, labels in sentence case (no uppercase
+  tracking, nothing under 12px), dark rounded buttons. Colour marks meaning
+  (a dot, a thin strip on a tile), never a whole coloured card. Market
+  Analysis and Funder Comparison style through their own stylesheets
+  (`scraper.css`, `funders.css`), whose unlayered reset beats Tailwind
+  utilities, so change them there.
 - `<StatTile />` — `src/components/stat-tile.tsx`. Used on every dashboard
   page (orders/awaiting/delivered/proposals). Pass `tone`; optionally
   `href` (becomes a Link with active ring). Don't reimplement.

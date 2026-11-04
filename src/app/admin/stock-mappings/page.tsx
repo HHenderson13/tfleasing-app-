@@ -135,8 +135,8 @@ export default async function StockMappingsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Stock mappings</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Stock mappings</h1>
+      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
         Tidy up raw Ford feed values. New values from future uploads appear as <span className="font-medium text-amber-700">Unmapped</span>. Use the model filter to work through Kuga, Puma, Transit Custom etc. one at a time.
       </p>
       <div className="mt-6">

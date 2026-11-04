@@ -496,7 +496,7 @@ export function StockBrowser({
     <div className="lg:grid lg:grid-cols-[280px_1fr] lg:gap-6">
       {/* Sidebar */}
       <aside className={`${mobileFiltersOpen ? "block" : "hidden"} lg:block lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto`}>
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="space-y-3 rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           {facets.map((f) => {
             const opts = facetOptions[f.id];
             // Hide whole facet when current filters leave nothing to pick (and user hasn't already chosen one here).
@@ -518,7 +518,7 @@ export function StockBrowser({
       {/* Main column */}
       <div className="mt-4 lg:mt-0">
         {/* Toolbar */}
-        <div className="sticky top-0 z-10 -mx-6 border-b border-slate-200 bg-slate-50/85 px-6 py-3 backdrop-blur lg:mx-0 lg:rounded-2xl lg:border lg:bg-white lg:px-4 lg:shadow-sm">
+        <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-slate-50/85 px-4 py-3 sm:-mx-6 sm:px-6 backdrop-blur lg:mx-0 lg:rounded-2xl lg:border lg:bg-white lg:px-4 lg:shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[220px]">
               <input
@@ -528,7 +528,7 @@ export function StockBrowser({
                 placeholder={isBroker
                   ? "Search model, colour, options, reference…   (press /)"
                   : "Search VIN, order no, reference, options…   (press /)"}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
               />
               {q && (
                 <button onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search">×</button>
@@ -543,7 +543,7 @@ export function StockBrowser({
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm"
+              className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm"
             >
               {sorts.map((s) => (
                 <option key={s.id} value={s.id}>{s.label}</option>
@@ -664,7 +664,7 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
               {!isBroker && r.includedByRule && (
                 <span
                   className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
-                  title="Column H or E matched an availability rule — this vehicle would otherwise be hidden as customer/fleet assigned"
+                  title="Column H or E matched an availability rule: this vehicle would otherwise be hidden as customer/fleet assigned"
                 >
                   Rule
                 </span>
@@ -687,7 +687,7 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
             {/* Brokers get exactly one badge, from one component, in every
-                case — see BrokerAvailabilityBadge. TF keeps the status pill
+                case: see BrokerAvailabilityBadge. TF keeps the status pill
                 alongside the urgency-toned ETA. */}
             {r.preRegistered ? (
               <PreRegBadge registeredAt={r.registeredAt} audience={audience} />
@@ -707,11 +707,11 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
             )}
             {/* Funding is TF-only and never rendered on the broker view. */}
             {!isBroker && (isPast(r.adopted) ? (
-              <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+              <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 font-semibold text-red-700 text-[12.5px]">
                 Adopted · {fmtDate(r.adopted)}
               </span>
             ) : isPast(r.interestBearing) ? (
-              <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+              <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700 text-[12.5px]">
                 Interest bearing · {fmtDate(r.interestBearing)}
               </span>
             ) : null)}
@@ -729,7 +729,7 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
         {/* Row 3: factory options front-and-centre */}
         {r.options.length > 0 && (
           <div className="mt-3">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Factory options</div>
+            <div className="mb-1 font-semibold text-slate-500 text-[12.5px]">Factory options</div>
             <div className="flex flex-wrap gap-1">
               {r.options.map((o, i) => (
                 <span key={i} className="inline-block rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-800 ring-1 ring-violet-100">{o}</span>
@@ -830,7 +830,7 @@ function FacetGroup({
         className="flex w-full items-center justify-between gap-2"
       >
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">{title}</span>
+          <span className="font-semibold text-slate-700 text-[12.5px]">{title}</span>
           {selected.size > 0 ? (
             <span className="rounded-full bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">{selected.size}</span>
           ) : (
@@ -852,7 +852,7 @@ function FacetGroup({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={`Find ${title.toLowerCase()}…`}
-              className="mt-2 w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-slate-400 focus:outline-none"
+              className="mt-2 w-full rounded-xl border border-slate-300 px-2 py-2 text-[13px] focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
             />
           )}
           <ul className="mt-2 space-y-0.5">
@@ -923,14 +923,14 @@ function EnquiryButtons({ row, availability, from }: {
       <a
         href={buildEnquiryMailto("quote", vehicle, from)}
         onClick={stop}
-        className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+        className="flex-1 rounded-xl bg-white px-3 py-2 text-center text-sm font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 ring-1 ring-inset ring-slate-300"
       >
         Get a quote
       </a>
       <a
         href={buildEnquiryMailto("secure", vehicle, from)}
         onClick={stop}
-        className="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+        className="flex-1 rounded-xl bg-slate-900 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
       >
         Secure this vehicle
       </a>
@@ -959,14 +959,14 @@ function PreRegBadge({ registeredAt, audience }: { registeredAt: string | null |
 
   return (
     <div className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-right shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-700">Pre-registered</div>
+      <div className="font-semibold text-violet-700 text-[12.5px]">Pre-registered</div>
       <div className="text-sm font-semibold leading-tight text-violet-900">Available now</div>
       {w && (
         w.expired ? (
           <div className="mt-1 max-w-[13rem] rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-amber-900">
             {isBroker
-              ? `Contact dealer for manual quote — over ${PRE_REG_WINDOW_MONTHS} months`
-              : `Over ${PRE_REG_WINDOW_MONTHS} months — check with funder before quoting`}
+              ? `Contact dealer for manual quote: over ${PRE_REG_WINDOW_MONTHS} months`
+              : `Over ${PRE_REG_WINDOW_MONTHS} months: check with funder before quoting`}
           </div>
         ) : isBroker ? (
           // A broker works to a date, not a number that changes under them —
@@ -1014,7 +1014,7 @@ function BrokerAvailabilityBadge({ row }: { row: StockRow }) {
   if (row.inStock) {
     return (
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-right shadow-sm">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">In stock</div>
+        <div className="font-semibold text-emerald-700 text-[12.5px]">In stock</div>
         <div className="text-sm font-semibold leading-tight text-emerald-900">{label}</div>
       </div>
     );
@@ -1024,7 +1024,7 @@ function BrokerAvailabilityBadge({ row }: { row: StockRow }) {
   const isDate = label !== "Due now" && label !== "To be confirmed";
   return (
     <div className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-right shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Arriving</div>
+      <div className="font-semibold text-sky-700 text-[12.5px]">Arriving</div>
       <div className={`text-sm leading-tight text-sky-900 ${isDate ? "font-semibold tabular-nums" : "font-medium"}`}>{label}</div>
     </div>
   );
@@ -1041,7 +1041,7 @@ function DeliveredBadge({ label, days }: { label: string | null; days: number | 
     null;
   return (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-right shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Delivered</div>
+      <div className="font-semibold text-emerald-700 text-[12.5px]">Delivered</div>
       {label ? (
         <>
           <div className="text-sm font-semibold tabular-nums leading-tight text-emerald-900">{label}</div>
@@ -1058,7 +1058,7 @@ function EtaBadge({ etaLabel, etaDays, hasEta }: { etaLabel: string | null; etaD
   if (!hasEta || !etaLabel) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-white px-2.5 py-1.5 text-right">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">ETA</div>
+        <div className="font-semibold text-slate-500 text-[12.5px]">ETA</div>
         <div className="text-xs font-medium text-slate-400">Not set</div>
       </div>
     );
@@ -1079,7 +1079,7 @@ function EtaBadge({ etaLabel, etaDays, hasEta }: { etaLabel: string | null; etaD
                       `In ${etaDays} days`;
   return (
     <div className={`rounded-lg border px-2.5 py-1.5 text-right shadow-sm ${cls}`}>
-      <div className={`text-[10px] font-semibold uppercase tracking-wide ${labelCls}`}>ETA</div>
+      <div className={`font-semibold ${labelCls} text-[12.5px]`}>ETA</div>
       <div className="text-sm font-semibold tabular-nums leading-tight">{etaLabel}</div>
       {rel && <div className={`text-[11px] font-medium ${labelCls}`}>{rel}</div>}
     </div>
@@ -1089,7 +1089,7 @@ function EtaBadge({ etaLabel, etaDays, hasEta }: { etaLabel: string | null; etaD
 function Pair({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{k}</div>
+      <div className="font-semibold text-slate-500 text-[12.5px]">{k}</div>
       <div className="mt-0.5 text-slate-800">{v}</div>
     </div>
   );

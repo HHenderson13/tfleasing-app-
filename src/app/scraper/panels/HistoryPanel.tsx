@@ -52,7 +52,7 @@ export function HistoryPanel({
   if (runs.length === 0)
     return (
       <div className="empty-state">
-        No runs yet. Run a scrape from the desktop RateX app — it'll auto-upload here.
+        No runs yet. Run a scrape from the desktop RateX app and it'll upload here by itself.
       </div>
     );
 

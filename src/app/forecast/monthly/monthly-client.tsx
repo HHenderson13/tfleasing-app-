@@ -275,7 +275,7 @@ export function MonthlyClient({
         picker={<MonthPicker value={month} />}
       />
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-4 pb-16 sm:px-6">
         <section className="grid gap-3 sm:grid-cols-3">
           {SHEET_TABS.map((t) => (
             <button
@@ -288,7 +288,7 @@ export function MonthlyClient({
                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-sm"
               }`}
             >
-              <div className="text-xs uppercase tracking-[0.16em] opacity-70">{t.sub}</div>
+              <div className="opacity-70 text-[12.5px]">{t.sub}</div>
               <div className="mt-1 text-lg font-semibold">{t.label}</div>
             </button>
           ))}
@@ -297,7 +297,7 @@ export function MonthlyClient({
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
           <span>
             {uploadCount === 0
-              ? "No uploads yet — head to Uploads to drop a dealbook CSV."
+              ? "No uploads yet: head to Uploads to drop a dealbook CSV."
               : `${lineCount} dealbook line${lineCount === 1 ? "" : "s"} loaded for ${monthLabel(month)} across all departments.`}
           </span>
           {sheet === "car" && (sheetForecast.iceUnits > 0 || sheetForecast.bevUnits > 0 || sheetForecast.salSacUnits > 0) && (
@@ -312,11 +312,11 @@ export function MonthlyClient({
             </span>
           )}
           {snapshotSource === "frozen" ? (
-            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-indigo-800 ring-1 ring-indigo-200" title="Forecast uses the admin settings captured when this month was first uploaded.">
+            <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 font-semibold text-indigo-800 ring-1 ring-indigo-200 text-[12.5px]" title="Forecast uses the admin settings captured when this month was first uploaded.">
               Frozen settings
             </span>
           ) : uploadCount > 0 ? (
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600 ring-1 ring-slate-200">
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200 text-[12.5px]">
               Live settings
             </span>
           ) : null}

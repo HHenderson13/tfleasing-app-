@@ -5,18 +5,18 @@
   --fc-surface2: #f1f5f9;
   --fc-border: #e2e8f0;
   --fc-border2: #cbd5e1;
-  --fc-accent: #2563eb;
-  --fc-accent-hover: #1d4ed8;
-  --fc-accent-glow: rgba(37,99,235,0.08);
+  --fc-accent: #0f172a;
+  --fc-accent-hover: #1e293b;
+  --fc-accent-glow: rgba(15,23,42,0.05);
   --fc-text: #0f172a;
   --fc-text2: #475569;
   --fc-text3: #94a3b8;
-  --fc-red: #dc2626;
+  --fc-red: #be123c;
   --fc-amber: #d97706;
-  --fc-green: #16a34a;
-  --fc-radius: 8px;
-  --fc-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
-  --fc-shadow-md: 0 4px 12px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
+  --fc-green: #047857;
+  --fc-radius: 12px;
+  --fc-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.07);
+  --fc-shadow-md: 0 1px 2px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.14), 0 10px 24px -14px rgba(15,23,42,0.35);
 }
 .fc, .fc *, .fc *::before, .fc *::after { box-sizing: border-box; margin: 0; padding: 0; }
 .fc {
@@ -49,7 +49,7 @@
 .fc .header-right { display: flex; align-items: center; gap: 10px; }
 .fc .user-name { font-size: 12px; color: var(--fc-text2); font-weight: 500; padding-left: 14px; border-left: 1px solid var(--fc-border); }
 .fc .logout-btn {
-  font-size: 11px; color: var(--fc-text2);
+  font-size: 12px; color: var(--fc-text2);
   background: var(--fc-surface); border: 1px solid var(--fc-border);
   padding: 5px 11px; border-radius: var(--fc-radius);
   cursor: pointer; font-weight: 500; transition: all 0.15s;
@@ -68,7 +68,7 @@
   transition: all 0.15s;
 }
 .fc .subnav-tab:hover { color: var(--fc-text); background: var(--fc-surface2); }
-.fc .subnav-tab.active { color: var(--fc-accent); background: var(--fc-accent-glow); border-color: rgba(37,99,235,0.2); font-weight: 600; }
+.fc .subnav-tab.active { color: var(--fc-accent); background: var(--fc-accent-glow); border-color: rgba(15,23,42,0.12); font-weight: 600; }
 
 /* Filter bar */
 .fc .filter-bar {
@@ -78,8 +78,7 @@
 }
 .fc .filter-group { display: flex; flex-direction: column; gap: 4px; }
 .fc .filter-label {
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--fc-text3);
+  font-size: 12px; font-weight: 600; color: var(--fc-text3);
 }
 .fc select {
   background: var(--fc-bg); border: 1px solid var(--fc-border);
@@ -99,27 +98,27 @@
 }
 .fc .sum-card {
   background: var(--fc-surface); border: 1px solid var(--fc-border);
-  border-radius: 12px; padding: 16px 18px; box-shadow: var(--fc-shadow);
+  border-radius: 16px; padding: 16px 18px; box-shadow: var(--fc-shadow);
 }
 .fc .sum-val { font-size: 22px; font-weight: 700; color: var(--fc-accent); letter-spacing: -0.02em; }
-.fc .sum-lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fc-text3); margin-top: 4px; }
+.fc .sum-lbl { font-size: 12px; font-weight: 600; color: var(--fc-text3); margin-top: 4px; }
 
 /* Tables */
 .fc .table-card {
   background: var(--fc-surface); border: 1px solid var(--fc-border);
-  border-radius: 12px; overflow: hidden; box-shadow: var(--fc-shadow);
+  border-radius: 16px; overflow: hidden; box-shadow: var(--fc-shadow);
 }
 .fc .table-card-header {
   padding: 14px 18px; border-bottom: 1px solid var(--fc-border);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 .fc .table-card-title { font-size: 14px; font-weight: 600; }
-.fc .table-card-sub { font-size: 11px; color: var(--fc-text3); margin-top: 2px; }
+.fc .table-card-sub { font-size: 12px; color: var(--fc-text3); margin-top: 2px; }
 .fc .table-scroll { overflow-x: auto; max-width: 100%; }
 .fc table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .fc thead th {
   background: var(--fc-surface2); color: var(--fc-text3);
-  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 12px; font-weight: 600;
   padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--fc-border);
   white-space: nowrap; position: sticky; top: 0;
 }
@@ -138,7 +137,7 @@
 .fc td.fname { font-weight: 600; color: var(--fc-text); }
 .fc td.mname { font-weight: 600; color: var(--fc-text); }
 
-.fc .pill { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
+.fc .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
 .fc .pill-best   { background: rgba(22,163,74,0.12); color: #15803d; border: 1px solid rgba(22,163,74,0.3); }
 .fc .pill-mid    { background: rgba(217,119,6,0.10); color: #b45309; border: 1px solid rgba(217,119,6,0.3); }
 .fc .pill-bad    { background: rgba(220,38,38,0.08); color: #b91c1c; border: 1px solid rgba(220,38,38,0.25); }
@@ -173,3 +172,25 @@
 .fc ::-webkit-scrollbar-track { background: transparent; }
 .fc ::-webkit-scrollbar-thumb { background: var(--fc-border2); border-radius: 99px; }
 .fc ::-webkit-scrollbar-thumb:hover { background: var(--fc-text3); }
+
+/* ── The site's one look (src/components/ui.tsx): bar, title, tabs, cards ── */
+.fc header { height: 56px; padding: 0 24px; background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(226,232,240,0.8); }
+.fc .back-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: #64748b; padding: 0; border: none; background: transparent; }
+.fc .back-btn:hover { color: var(--fc-text); background: transparent; }
+.fc .back-btn svg { width: 16px; height: 16px; }
+.fc .page-head { padding: 28px 28px 16px; }
+.fc .page-head h1 { font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.025em; color: var(--fc-text); }
+.fc .page-head p { margin-top: 8px; max-width: 42rem; font-size: 15px; line-height: 24px; color: #475569; }
+.fc .subnav { padding: 0 28px 16px; background: transparent; border-bottom: none; }
+.fc .subnav-inner { display: inline-flex; gap: 4px; padding: 4px; background: rgba(226,232,240,0.6); border-radius: 12px; }
+.fc .subnav-tab { height: 32px; padding: 0 14px; border-radius: 8px; border: none; font-size: 14px; color: #475569; }
+.fc .subnav-tab:hover { background: transparent; color: var(--fc-text); }
+.fc .subnav-tab.active { background: #fff; color: var(--fc-text); border: none; box-shadow: 0 1px 2px rgba(15,23,42,0.08); font-weight: 500; }
+.fc .filter-bar { margin: 0 28px; border: none; border-radius: 16px; box-shadow: var(--fc-shadow); }
+.fc .filter-label { color: #64748b; font-weight: 500; font-size: 12.5px; }
+.fc .sum-card, .fc .table-card { border: none; }
+.fc .sum-val { color: var(--fc-text); font-weight: 600; font-size: 26px; }
+.fc .sum-lbl { color: #64748b; font-weight: 500; font-size: 12.5px; }
+.fc .table-card-title { font-size: 17px; letter-spacing: -0.01em; }
+.fc select { border-radius: 12px; background: #fff; border-color: #cbd5e1; padding: 7px 10px; }
+.fc .chip.active { background: var(--fc-text); border-color: var(--fc-text); }

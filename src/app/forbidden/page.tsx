@@ -3,10 +3,10 @@ import Link from "next/link";
 export default function ForbiddenPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-center">
-        <h1 className="text-lg font-semibold text-slate-900">Access denied</h1>
-        <p className="mt-2 text-sm text-slate-500">You don&apos;t have permission to view that page. Ask an administrator if this is wrong.</p>
-        <Link href="/" className="mt-4 inline-block text-sm font-medium text-slate-700 hover:text-slate-900">← Back to home</Link>
+      <div className="w-full max-w-md rounded-2xl bg-white p-7 sm:p-8 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+        <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">Access denied</h1>
+        <p className="mt-2 text-[15px] leading-6 text-slate-600">You don&apos;t have permission to view that page. Ask an administrator if this is wrong.</p>
+        <Link href="/" className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-[14px] font-semibold text-white hover:bg-slate-800">Back to home</Link>
       </div>
     </div>
   );

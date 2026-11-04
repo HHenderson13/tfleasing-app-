@@ -86,7 +86,7 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
           every signed-in user with orders access; back-loaded rows still
           get flagged so they're excluded from reports. */}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Link href={addDealHref} className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">
+        <Link href={addDealHref} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
           + Add deal
         </Link>
         <ExecFilterClient execs={execs} value={execFilter} onChange={setExecFilter} myExecId={myExecId} />
@@ -103,22 +103,22 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
 
       {/* Tab nav — purely client state */}
       <div className="mt-6">
-        <nav className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-sm">
-          <TabButton active={view === "tracker"} onClick={() => setView("tracker")}>📋 Delivery tracker</TabButton>
-          <TabButton active={view === "calendar"} onClick={() => setView("calendar")}>📅 Calendar</TabButton>
+        <nav className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1 text-sm">
+          <TabButton active={view === "tracker"} onClick={() => setView("tracker")}>Delivery tracker</TabButton>
+          <TabButton active={view === "calendar"} onClick={() => setView("calendar")}>Calendar</TabButton>
         </nav>
       </div>
 
       {view === "tracker" ? (
         filtered.length === 0 ? (
           <div className="mt-4 rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
-            No deals waiting on delivery — {execFilter ? "try clearing the exec filter." : "you're all caught up."}
+            No deals waiting on delivery. {execFilter ? "Try clearing the exec filter." : "You're all caught up."}
           </div>
         ) : (
           <div className="mt-4 space-y-6">
             {trackerBuckets.sortedKeys.map((key) => (
               <section key={key}>
-                <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <h2 className="mb-2 font-semibold text-slate-500 text-[12.5px]">
                   {bucketLabel(key)}
                   <span className="ml-2 text-slate-400">({trackerBuckets.groups.get(key)!.length})</span>
                 </h2>
@@ -136,7 +136,7 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
           <DeliveryCalendar entries={calendarEntries} />
           {calendarMissing > 0 && (
             <p className="text-[11px] italic text-slate-500">
-              {calendarMissing} deal{calendarMissing === 1 ? "" : "s"} on the tracker without a confirmed delivery date — set one on the Tracker tab to surface them here.
+              {calendarMissing} deal{calendarMissing === 1 ? "" : "s"} on the tracker without a confirmed delivery date. Set one on the Tracker tab to show them here here.
             </p>
           )}
         </div>
@@ -160,10 +160,10 @@ function ExecFilterClient({
     <select
       value={value === null ? "all" : value}
       onChange={(e) => onChange(e.target.value === "all" ? null : e.target.value)}
-      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+      className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700 hover:bg-slate-50"
     >
       <option value="all">All execs ({execs.length})</option>
-      {myExecId && <option value={myExecId}>— My deals —</option>}
+      {myExecId && <option value={myExecId}>My deals</option>}
       {execs.map((e) => (
         <option key={e.id} value={e.id}>{e.name}</option>
       ))}
@@ -177,7 +177,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={`rounded-lg px-3 py-1.5 font-medium transition ${
-        active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
       }`}
     >
       {children}

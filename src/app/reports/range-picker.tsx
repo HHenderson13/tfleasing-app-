@@ -29,13 +29,13 @@ export function RangePicker({ value }: { value: RangeKey }) {
     router.push(s ? `/reports?${s}` : "/reports");
   }
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+    <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
       {ORDER.map((o) => (
         <button
           key={o.key}
           onClick={() => set(o.key)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-            value === o.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+          className={`h-8 rounded-lg px-3 text-[13px] font-medium transition ${
+            value === o.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
           }`}
         >
           {o.label}
@@ -56,13 +56,13 @@ export function SourceFilter({ value }: { value: SourceKey }) {
     router.push(s ? `/reports?${s}` : "/reports");
   }
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+    <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
       {SOURCES.map((o) => (
         <button
           key={o.key}
           onClick={() => set(o.key)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-            value === o.key ? "bg-rose-600 text-white" : "text-slate-600 hover:bg-slate-100"
+          className={`h-8 rounded-lg px-3 text-[13px] font-medium transition ${
+            value === o.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
           }`}
         >
           {o.label}

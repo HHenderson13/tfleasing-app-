@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { PageTitle } from "@/components/ui";
 export { monthLabel } from "./pickers";
 
 // Shared chrome for every /forecast/* sub-page. Takes a custom picker
@@ -10,25 +10,17 @@ export function ForecastPageHeader({
   title,
   description,
   picker,
+  width = "7xl",
 }: {
   title: string;
   description: string;
   picker?: React.ReactNode;
+  width?: "6xl" | "7xl";
 }) {
+  // The bar above ("‹ Forecast", from the page) and this title follow the site's look (components/ui.tsx).
   return (
-    <div className="border-b border-slate-200 bg-white">
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        <Link href="/forecast" className="text-xs font-medium text-slate-500 hover:text-slate-700">
-          ← Forecast hub
-        </Link>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-            <p className="mt-1 text-sm text-slate-500">{description}</p>
-          </div>
-          {picker && <div className="flex flex-wrap items-center gap-3">{picker}</div>}
-        </div>
-      </div>
+    <div className={`mx-auto ${width === "6xl" ? "max-w-6xl" : "max-w-7xl"} px-4 pt-8 sm:px-6 sm:pt-10`}>
+      <PageTitle title={title} actions={picker}>{description}</PageTitle>
     </div>
   );
 }

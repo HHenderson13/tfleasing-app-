@@ -87,9 +87,9 @@ export function PreRegList({ vehicles }: { vehicles: PreRegRow[] }) {
   const sold = vehicles.filter((v) => v.status === "sold");
 
   const table = (rows: PreRegRow[], empty: string) => (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
           <tr>
             <th className="px-4 py-3 text-left font-medium">Vehicle</th>
             <th className="px-4 py-3 text-left font-medium">Reg</th>
@@ -115,7 +115,7 @@ export function PreRegList({ vehicles }: { vehicles: PreRegRow[] }) {
         <h2 className="mb-2 text-sm font-medium text-slate-700">
           On the stock list <span className="font-normal text-slate-400">({live.length})</span>
         </h2>
-        {table(live, "No pre-registered vehicles yet — add one above.")}
+        {table(live, "No pre-registered vehicles yet. Add one above.")}
       </section>
 
       <section className="mt-8">
@@ -123,7 +123,7 @@ export function PreRegList({ vehicles }: { vehicles: PreRegRow[] }) {
           Sold <span className="font-normal text-slate-400">({sold.length})</span>
         </h2>
         <p className="mb-2 text-xs text-slate-500">
-          Off both stock lists, but kept here — sales fall through, and putting one back should not mean typing it
+          Off both stock lists, but kept here: sales fall through, and putting one back should not mean typing it
           again. Marking it invoiced deletes it for good.
         </p>
         {table(sold, "Nothing sold.")}

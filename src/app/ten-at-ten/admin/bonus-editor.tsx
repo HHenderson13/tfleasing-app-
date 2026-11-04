@@ -89,14 +89,14 @@ export function BonusEditor({ rates, initialYear, initialQuarter }: { rates: Bon
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => shift(-1)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100" aria-label="Previous quarter">‹</button>
+          <button onClick={() => shift(-1)} className="rounded-xl bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100 ring-1 ring-inset ring-slate-300" aria-label="Previous quarter">‹</button>
           <span className="min-w-[72px] text-center font-semibold text-slate-900">Q{quarter} {year}</span>
-          <button onClick={() => shift(1)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100" aria-label="Next quarter">›</button>
+          <button onClick={() => shift(1)} className="rounded-xl bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100 ring-1 ring-inset ring-slate-300" aria-label="Next quarter">›</button>
         </div>
       </div>
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Delivered</th>
               {months.map((ym) => (
@@ -146,11 +146,11 @@ export function BonusEditor({ rates, initialYear, initialQuarter }: { rates: Bon
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button onClick={save} disabled={pending || touched.length === 0}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40">
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40">
           {pending ? "Saving…" : "Save bonuses"}
         </button>
         <button onClick={copyFirstMonth} disabled={pending}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40">
+          className="rounded-xl bg-white px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 ring-1 ring-inset ring-slate-300">
           Copy {monthName(months[0])} to {monthName(months[1])} and {monthName(months[2])}
         </button>
         {msg && <span className={`text-xs ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</span>}

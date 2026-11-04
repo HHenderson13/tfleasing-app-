@@ -15,10 +15,10 @@ export default async function AddAwaitingDealPage() {
   const execs = await db.select().from(salesExecs).orderBy(asc(salesExecs.name));
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopNav active="orders" />
-      <main className="mx-auto max-w-2xl px-6 py-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Back-load awaiting-delivery deal</h1>
-        <p className="mt-1 text-sm text-slate-500">Lands directly in awaiting delivery and is excluded from reports.</p>
+      <TopNav active="orders" width="2xl" />
+      <main className="mx-auto max-w-2xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Back-load awaiting-delivery deal</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Lands directly in awaiting delivery and is excluded from reports.</p>
         <AddDealForm execs={execs.map((e) => ({ id: e.id, name: e.name }))} />
       </main>
     </div>

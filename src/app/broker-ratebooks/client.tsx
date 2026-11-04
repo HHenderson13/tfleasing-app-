@@ -89,12 +89,12 @@ function Card({
 }) {
   const loading = status === "loading";
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-2xl bg-white transition hover:border-slate-300 hover:shadow-md shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-700" />
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-baseline justify-between">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{format}</span>
+          <span className="font-medium text-slate-500 text-[12.5px]">{format}</span>
         </div>
         <p className="mt-1.5 text-sm text-slate-600">{desc}</p>
         <div className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 ring-1 ring-amber-100">
@@ -107,7 +107,7 @@ function Card({
           type="button"
           onClick={onClick}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {loading ? (
             <>

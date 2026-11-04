@@ -60,7 +60,7 @@ export function QuoteForm({ models }: { models: string[] }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,440px)_1fr]">
-      <div className="space-y-5 self-start rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-6">
+      <div className="space-y-5 self-start rounded-2xl bg-white p-6 lg:sticky lg:top-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="space-y-3">
           <Segmented
             label="Contract"
@@ -121,7 +121,7 @@ export function QuoteForm({ models }: { models: string[] }) {
             each funder's headline discount by the percentage that
             commission represents of the list price. */}
         <div className="rounded-xl border border-slate-100 bg-violet-50/40 p-3">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-violet-700">Broker commission</div>
+          <div className="font-medium text-violet-700 text-[12.5px]">Broker commission</div>
           <p className="mt-0.5 text-[11px] text-slate-500">
             Only applies on broker deals. Reduces each funder&apos;s discount by{" "}
             <code className="rounded bg-white px-1 text-[10px]">£ / list price</code>.
@@ -135,14 +135,14 @@ export function QuoteForm({ models }: { models: string[] }) {
               value={brokerCommissionGbp}
               onChange={(e) => setBrokerCommissionGbp(e.target.value)}
               placeholder="e.g. 500"
-              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 pl-6 text-sm tabular-nums focus:border-slate-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 pl-6 text-sm tabular-nums focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
             />
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <span className={`h-1.5 w-1.5 rounded-full ${pending ? "animate-pulse bg-amber-400" : "bg-emerald-400"}`} />
-          {pending ? "Updating…" : "Live — changes apply instantly"}
+          {pending ? "Updating…" : "Live: changes apply instantly"}
         </div>
       </div>
 
@@ -237,10 +237,10 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
 
   return (
     <div className={`space-y-4 transition-opacity ${pending ? "opacity-60" : ""}`}>
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-500">{result.model}</div>
+            <div className="text-slate-500 text-[12.5px]">{result.model}</div>
             <div className="text-lg font-semibold text-slate-900">{result.derivative}</div>
             {result.discountLabel && (
               <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
@@ -263,7 +263,7 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
 
         <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
           <div>
-            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Best funder</div>
+            <div className="font-medium text-slate-500 text-[12.5px]">Best funder</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{best.funderName}</div>
           </div>
           {result.funders.length > 1 && (
@@ -323,18 +323,18 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
                   {isBest ? (
                     <>
                       <div className="text-lg font-semibold tabular-nums text-emerald-700">Cheapest</div>
-                      <div className="text-[10px] uppercase tracking-wide text-slate-400">rank #1</div>
+                      <div className="text-slate-500 text-[12.5px]">Ranked first</div>
                     </>
                   ) : (
                     <>
                       <div className="text-lg font-semibold tabular-nums text-slate-900">+£{(f.totalMonthly - best.totalMonthly).toFixed(2)}</div>
-                      <div className="text-[10px] uppercase tracking-wide text-slate-400">/ month vs #1</div>
+                      <div className="text-slate-500 text-[12.5px]">a month more than the cheapest</div>
                     </>
                   )}
                 </div>
                 <button
                   onClick={() => setSaveFor({ funderId: f.funderId, funderName: f.funderName, rank: f.rank, monthlyRental: f.totalMonthly })}
-                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+                  className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800"
                 >
                   Save proposal
                 </button>
@@ -460,7 +460,7 @@ function SaveProposalModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Save proposal</div>
+          <div className="text-slate-500 text-[12.5px]">Save proposal</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">{result.model} {result.derivative}</div>
           <div className="mt-0.5 text-xs text-slate-500">
             {funder.funderName} (rank #{funder.rank}) · £{funder.monthlyRental.toFixed(2)}/mo · {config.contract} {config.maintenance === "maintained" ? "maintained" : "customer maint."} · {config.termMonths}m / {config.annualMileage.toLocaleString()}mi / {config.initialRentalMultiplier}×
@@ -469,7 +469,7 @@ function SaveProposalModal({
 
         <div className="space-y-3 px-5 py-4">
           <label className="block text-sm">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Customer name</span>
+            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Customer name</span>
             <input
               autoFocus
               value={customerName}
@@ -480,7 +480,7 @@ function SaveProposalModal({
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Finance Proposal Number</span>
+            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Finance Proposal Number</span>
             <input
               value={financeProposalNumber}
               onChange={(e) => setFinanceProposalNumber(e.target.value)}
@@ -493,11 +493,11 @@ function SaveProposalModal({
           {isBroker && (
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <label className="block text-sm">
-                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Broker name</span>
+                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Broker name</span>
                 <input value={brokerName} onChange={(e) => setBrokerName(e.target.value)} placeholder="e.g. Acme Broker Ltd" className={inputCls} />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Broker email</span>
+                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Broker email</span>
                 <input type="email" value={brokerEmail} onChange={(e) => setBrokerEmail(e.target.value)} placeholder="deals@acmebroker.com" className={inputCls} />
               </label>
             </div>
@@ -508,7 +508,7 @@ function SaveProposalModal({
           {isGroupBq ? (
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <div>
-                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Site type</span>
+                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Site type</span>
                 <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 text-xs">
                   {(["car", "cv"] as const).map((k) => (
                     <button
@@ -523,9 +523,9 @@ function SaveProposalModal({
                 </div>
               </div>
               <label className="block text-sm">
-                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{bqKind === "car" ? "Car" : "CV"} site</span>
+                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{bqKind === "car" ? "Car" : "CV"} site</span>
                 {sitesForKind === null ? (
-                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-400">Loading…</div>
+                  <div className="bg-white px-3 py-2 text-xs text-slate-400 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">Loading…</div>
                 ) : noSites ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     No {bqKind === "car" ? "car" : "CV"} sites yet. <Link href="/admin/group-sites" className="font-medium underline">Add one →</Link>
@@ -535,12 +535,12 @@ function SaveProposalModal({
                     {sitesForKind.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
-                <span className="mt-1 block text-[11px] text-slate-400">Auto-assigned to Group BQ Deal — no sales exec.</span>
+                <span className="mt-1 block text-[11px] text-slate-400">Auto-assigned to Group BQ Deal: no sales exec.</span>
               </label>
             </div>
           ) : (
             <label className="block text-sm">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Assign to sales exec</span>
+              <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Assign to sales exec</span>
               {execs === null ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-400">Loading…</div>
               ) : noExecs ? (
@@ -587,7 +587,7 @@ function MissingFundersList({
   return (
     <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">No ratebook data — manually check</div>
+        <div className="font-semibold text-amber-800 text-[12.5px]">No ratebook data: manually check</div>
         <div className="text-[11px] text-amber-700">{missing.length} funder{missing.length === 1 ? "" : "s"}</div>
       </div>
       <ul className="mt-2 space-y-1.5">
@@ -612,7 +612,7 @@ function MissingFundersList({
                   <button
                     type="button"
                     onClick={() => { setOpenId(m.funderId); setRaw(""); }}
-                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+                    className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800"
                   >
                     Save proposal
                   </button>
@@ -628,7 +628,7 @@ function MissingFundersList({
                       placeholder="monthly"
                       value={raw}
                       onChange={(e) => setRaw(e.target.value)}
-                      className="w-28 rounded-md border border-slate-200 bg-white px-2 py-1 pl-5 text-xs tabular-nums shadow-sm focus:border-slate-900 focus:outline-none"
+                      className="w-28 rounded-xl border border-slate-300 bg-white px-2 py-2 pl-5 text-[13px] tabular-nums shadow-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                     />
                   </div>
                   <button
@@ -659,7 +659,7 @@ function MissingFundersList({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
       {children}
     </label>
   );
@@ -675,7 +675,7 @@ function Segmented<T extends string>({
 }) {
   return (
     <div>
-      {label && <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>}
+      {label && <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>}
       <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
         {options.map((o) => (
           <button
@@ -706,7 +706,7 @@ function PillPicker<T extends number>({
 }) {
   return (
     <div>
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => (
           <button
@@ -730,7 +730,7 @@ function PillPicker<T extends number>({
 function YesNo({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div>
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
       <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
         {[
           { v: false, label: "No" },

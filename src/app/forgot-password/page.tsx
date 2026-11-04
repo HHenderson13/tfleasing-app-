@@ -12,9 +12,9 @@ export default async function ForgotPasswordPage() {
   if (me) redirect("/");
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-slate-900">Forgot password</h1>
-        <p className="mt-1 text-sm text-slate-500">
+      <div className="w-full max-w-md rounded-2xl bg-white p-7 sm:p-8 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-slate-900">Forgot password</h1>
+        <p className="mt-1.5 text-[15px] leading-6 text-slate-600">
           Enter the email address on your TrustFord Leasing account. If we recognise it,
           we&apos;ll send you a link to set a new password.
         </p>

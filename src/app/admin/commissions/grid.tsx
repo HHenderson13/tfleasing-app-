@@ -37,9 +37,9 @@ export function CommissionsGrid({ funders, rows }: { funders: Funder[]; rows: Ro
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
           <tr>
             <th className="px-4 py-3 text-left font-medium">Funder</th>
             {COMBOS.map((c) => <th key={c.label} className="px-4 py-3 text-right font-medium">{c.label}</th>)}
@@ -60,7 +60,7 @@ export function CommissionsGrid({ funders, rows }: { funders: Funder[]; rows: Ro
                         step="1"
                         defaultValue={values[key]}
                         onBlur={(e) => save(f.id, c.contract, c.maintenance, e.currentTarget.value)}
-                        className={`w-20 rounded-lg border bg-white px-2 py-1 text-right text-sm tabular-nums transition ${
+                        className={`w-20 rounded-xl border bg-white px-2 py-2 text-right text-sm tabular-nums transition ${
                           saving === key ? "border-amber-300" : "border-slate-200 focus:border-slate-500"
                         } outline-none`}
                       />

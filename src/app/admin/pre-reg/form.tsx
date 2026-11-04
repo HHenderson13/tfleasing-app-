@@ -45,11 +45,11 @@ function Field({
         // Named only while a real value is picked, so the free-text input
         // below owns the field name when "Other" is chosen.
         name={custom ? undefined : name}
-        className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+        className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
       >
         <option value="">{required ? "Choose…" : "—"}</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
-        <option value={OTHER}>Other — type it in…</option>
+        <option value={OTHER}>Other: type it in…</option>
       </select>
       {custom && (
         <input
@@ -57,7 +57,7 @@ function Field({
           required={required}
           autoFocus
           placeholder={placeholder ?? `New ${label.toLowerCase()}`}
-          className="mt-1 rounded-lg border border-violet-300 bg-violet-50/40 px-3 py-1.5 text-sm"
+          className="mt-1 rounded-xl border border-violet-300 bg-violet-50/40 px-3 py-2 text-sm"
         />
       )}
     </label>
@@ -101,7 +101,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
   }
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <form onSubmit={submit} className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field name="bucket" label="Model" options={choices.bucket} required />
         <Field name="variant" label="Variant / series" options={choices.variant} />
@@ -119,11 +119,11 @@ export function PreRegForm({ choices }: { choices: Choices }) {
       <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col text-xs font-medium text-slate-700">
           Date of registration<span className="text-red-600"> *</span>
-          <input name="registeredAt" type="date" required className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <input name="registeredAt" type="date" required className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="flex flex-col text-xs font-medium text-slate-700">
           Notes <span className="font-normal text-slate-400">(internal)</span>
-          <input name="notes" className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <input name="notes" className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
         </label>
       </div>
 
@@ -138,7 +138,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
             value={regsText}
             onChange={(e) => setRegsText(e.target.value)}
             placeholder={"AB12 CDE\nEF13 GHI\nJK14 LMN"}
-            className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 font-mono text-sm uppercase"
+            className="mt-1 rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm uppercase"
           />
         </label>
         <label className="flex flex-col text-xs font-medium text-slate-700">
@@ -149,13 +149,13 @@ export function PreRegForm({ choices }: { choices: Choices }) {
             value={vinsText}
             onChange={(e) => setVinsText(e.target.value)}
             placeholder={"E00R5580811\nE02R5580812\nE09R5581875"}
-            className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 font-mono text-sm uppercase"
+            className="mt-1 rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm uppercase"
           />
         </label>
       </div>
 
       {/* The pairing is positional, so the counts have to be visible while
-          typing — a mismatch found after submitting is a mismatch that has
+          typing: a mismatch found after submitting is a mismatch that has
           already put VINs on the wrong cars in someone's head. */}
       <div className="mt-2 text-[11px]">
         <span className="text-slate-500">
@@ -185,7 +185,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
 
       <label className="mt-3 flex flex-col text-xs font-medium text-slate-700">
         Factory options <span className="font-normal text-slate-400">(one per line)</span>
-        <textarea name="options" rows={3} className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+        <textarea name="options" rows={3} className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
       </label>
 
       <div className="mt-4 flex items-center gap-3">

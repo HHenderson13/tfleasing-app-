@@ -49,7 +49,7 @@ function Rule({ rule, isNew }: { rule: ModelDealerRuleRow; isNew?: boolean }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="bg-white p-4 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col text-xs font-medium text-slate-700">
           Feed model
@@ -87,7 +87,7 @@ function Rule({ rule, isNew }: { rule: ModelDealerRuleRow; isNew?: boolean }) {
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {(dirty || isNew) && (
-          <button onClick={() => save()} disabled={pending} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+          <button onClick={() => save()} disabled={pending} className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
             {pending ? "Saving…" : isNew ? "Add rule" : "Save changes"}
           </button>
         )}
@@ -121,7 +121,7 @@ export function ModelDealerRules({ rules }: { rules: ModelDealerRuleRow[] }) {
     <section className="mt-10">
       <h2 className="text-sm font-medium text-slate-700">Model overrides by dealer</h2>
       <p className="mt-1 max-w-3xl text-xs text-slate-500">
-        Some vehicles are a different model from what Ford&rsquo;s feed calls them, and only the dealer says so — an
+        Some vehicles are a different model from what Ford&rsquo;s feed calls them, and only the dealer says so: an
         Explorer on a van site is an Explorer Van. A matching vehicle is renamed everywhere, including in the Model
         filter, and carries a warning on both stock lists.
       </p>
@@ -139,7 +139,7 @@ export function ModelDealerRules({ rules }: { rules: ModelDealerRuleRow[] }) {
         )}
       </div>
       {!adding && (
-        <button onClick={() => setAdding(`rule-${Date.now()}`)} className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+        <button onClick={() => setAdding(`rule-${Date.now()}`)} className="mt-3 rounded-xl bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 ring-1 ring-inset ring-slate-300">
           Add a rule
         </button>
       )}

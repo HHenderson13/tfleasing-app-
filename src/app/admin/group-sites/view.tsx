@@ -40,10 +40,10 @@ function SitesSection({ title, kind, rows }: { title: string; kind: SiteKind; ro
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <h2 className="font-semibold text-[17px] tracking-tight text-slate-900">{title}</h2>
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Site name</th>
               <th className="px-4 py-3 text-left font-medium">Type</th>
@@ -57,14 +57,14 @@ function SitesSection({ title, kind, rows }: { title: string; kind: SiteKind; ro
                   <input
                     defaultValue={r.name}
                     onBlur={(e) => e.currentTarget.value !== r.name && start(() => updateGroupSite(r.id, { name: e.currentTarget.value }))}
-                    className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 hover:border-slate-200 focus:border-slate-500 focus:outline-none"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                   />
                 </td>
                 <td className="px-4 py-2">
                   <select
                     value={r.kind}
                     onChange={(e) => changeKind(r.id, e.currentTarget.value as SiteKind)}
-                    className="rounded-md border border-transparent bg-transparent px-2 py-1 hover:border-slate-200 focus:border-slate-500 focus:outline-none"
+                    className="rounded-xl border border-transparent bg-transparent px-2 py-2 hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                   >
                     <option value="car">Car</option>
                     <option value="cv">CV</option>
@@ -83,9 +83,9 @@ function SitesSection({ title, kind, rows }: { title: string; kind: SiteKind; ro
       </div>
 
       {adding ? (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="space-y-2 bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <div className="flex gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`${kind === "car" ? "Car" : "CV"} site name`} className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`${kind === "car" ? "Car" : "CV"} site name`} className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={add} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white">Add</button>
             <button onClick={() => { setAdding(false); setError(null); }} className="text-sm text-slate-400">Cancel</button>
           </div>

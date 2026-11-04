@@ -101,11 +101,11 @@ export default async function OrdersActionsPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="orders" />
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Orders awaiting actions</h1>
-            <p className="mt-1 text-sm text-slate-500">Accepted proposals where something needs doing on our side before they can move to delivery.</p>
+            <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Orders awaiting actions</h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Accepted proposals where something needs doing on our side before they can move to delivery.</p>
           </div>
           <ExecFilter
             execs={execs.map((e) => ({ id: e.id, name: e.name }))}
@@ -122,7 +122,7 @@ export default async function OrdersActionsPage({
         </section>
 
         {focus && (
-          <div className="mt-6 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">
+          <div className="mt-6 flex items-center justify-between bg-white px-4 py-2 text-sm rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             <div className="text-slate-700">
               Showing <span className="font-medium">{FOCUS_LABELS[focus]}</span> · {inOrder.length} {inOrder.length === 1 ? "deal" : "deals"}
             </div>

@@ -55,14 +55,14 @@ export function BudgetEditor({ budgets, initialYear }: { budgets: Budgets; initi
           <p className="text-xs text-slate-500">Monthly units the Deliveries tab measures against. Combined is Car + CV.</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => setYear((y) => y - 1)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100" aria-label="Previous year">‹</button>
+          <button onClick={() => setYear((y) => y - 1)} className="rounded-xl bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100 ring-1 ring-inset ring-slate-300" aria-label="Previous year">‹</button>
           <span className="min-w-[48px] text-center font-semibold text-slate-900">{year}</span>
-          <button onClick={() => setYear((y) => y + 1)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100" aria-label="Next year">›</button>
+          <button onClick={() => setYear((y) => y + 1)} className="rounded-xl bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100 ring-1 ring-inset ring-slate-300" aria-label="Next year">›</button>
         </div>
       </div>
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Month</th>
               <th className="px-3 py-2 text-right font-semibold">Car</th>
@@ -81,7 +81,7 @@ export function BudgetEditor({ budgets, initialYear }: { budgets: Budgets; initi
                   {(["car", "cv"] as const).map((seg) => (
                     <td key={seg} className="px-3 py-1.5 text-right">
                       <input inputMode="numeric" value={valueOf(key, seg)} onChange={(e) => set(key, seg, e.target.value)} placeholder="—"
-                        className="w-20 rounded-md border border-slate-300 px-2 py-1 text-right tabular-nums focus:border-slate-500 focus:outline-none" />
+                        className="w-20 rounded-xl border border-slate-300 px-2 py-2 text-right tabular-nums focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10" />
                     </td>
                   ))}
                   <td className="px-4 py-1.5 text-right font-semibold tabular-nums text-slate-900">{car != null && cv != null ? car + cv : "—"}</td>
@@ -93,7 +93,7 @@ export function BudgetEditor({ budgets, initialYear }: { budgets: Budgets; initi
       </div>
       <div className="mt-3 flex items-center gap-3">
         <button onClick={save} disabled={pending || !dirty}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40">
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40">
           {pending ? "Saving…" : "Save budgets"}
         </button>
         {msg && <span className={`text-xs ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</span>}

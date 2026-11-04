@@ -346,7 +346,7 @@ function FunderDetail({
             <div className="table-card-header">
               <div>
                 <div className="table-card-title">
-                  {g.model} — {g.missing} missing
+                  {g.model}: {g.missing} missing
                 </div>
                 <div className="table-card-sub">
                   Covered {g.covered} / {g.total} ({(g.pct * 100).toFixed(0)}%)
@@ -414,7 +414,7 @@ function FunderDetail({
 
       {groups.every((g) => g.missing === 0) && (
         <div className="empty">
-          {scopeLabel} — no gaps. Every derivative covered. 🎉
+          {scopeLabel}: no gaps. Every derivative covered. 🎉
         </div>
       )}
     </>
@@ -503,7 +503,7 @@ function ModelDetail({
       <div className="table-card">
         <div className="table-card-header">
           <div>
-            <div className="table-card-title">{model} — every derivative</div>
+            <div className="table-card-title">{model}: every derivative</div>
             <div className="table-card-sub">
               Which funders are missing or covering each derivative in {model}.
             </div>
@@ -525,7 +525,7 @@ function ModelDetail({
                   <td>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                       {d.missingFrom.length === 0 ? (
-                        <span className="pill pill-best">none — fully covered</span>
+                        <span className="pill pill-best">none: fully covered</span>
                       ) : (
                         d.missingFrom.map((id) => (
                           <span key={id} className="pill pill-bad">

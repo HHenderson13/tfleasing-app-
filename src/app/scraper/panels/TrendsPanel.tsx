@@ -241,7 +241,7 @@ function History({
               {runs.map((r, i) => (
                 <th
                   key={r.id}
-                  title={`${runName(r)} — click to compare with the run before`}
+                  title={`${runName(r)}. Click to compare with the run before`}
                   className={i > 0 ? "tr-pickable" : ""}
                   onClick={() => i > 0 && onPick(r.id)}
                 >

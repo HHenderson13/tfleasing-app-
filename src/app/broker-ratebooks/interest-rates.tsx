@@ -96,7 +96,7 @@ export function InterestRatesSection({ snapshots }: { snapshots: FunderRateSnaps
             lastSolved: s,
           };
         });
-        return { ...x, status: "idle", message: "Saved — broker exports will use these rates.", rows };
+        return { ...x, status: "idle", message: "Saved: broker exports will use these rates.", rows };
       }),
     );
   }
@@ -107,13 +107,13 @@ export function InterestRatesSection({ snapshots }: { snapshots: FunderRateSnaps
         const isSolved = f.rows.some((r) => r.updatedAt);
         const lastSolvedAt = f.rows.find((r) => r.updatedAt)?.updatedAt ?? null;
         return (
-          <div key={f.funderId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div key={f.funderId} className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             <div className="flex items-baseline justify-between border-b border-slate-100 px-5 py-3">
               <div className="flex items-center gap-2.5">
                 <StatusDot solved={isSolved} />
                 <div className="text-base font-semibold text-slate-900">{f.funderName}</div>
               </div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.15em] text-slate-400">{f.funderId}</div>
+              <div className="font-mono text-[12px] font-medium uppercase text-slate-500">{f.funderId}</div>
             </div>
 
             <div className="divide-y divide-slate-100">
@@ -135,14 +135,14 @@ export function InterestRatesSection({ snapshots }: { snapshots: FunderRateSnaps
                 ) : lastSolvedAt ? (
                   `Last solved ${formatWhen(lastSolvedAt)}`
                 ) : (
-                  "Using seeded defaults — enter quotes to recalibrate"
+                  "Using seeded defaults: enter quotes to recalibrate"
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => onSave(fi)}
                 disabled={f.status === "saving"}
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {f.status === "saving" ? "Solving…" : "Solve & save"}
               </button>
@@ -205,7 +205,7 @@ function CurrencyInput({
         value={value}
         placeholder={placeholder ?? "—"}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-6 pr-2 text-sm tabular-nums text-slate-900 placeholder:text-slate-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-6 pr-2 text-sm tabular-nums text-slate-900 placeholder:text-slate-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10"
       />
     </div>
   );

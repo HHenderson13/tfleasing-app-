@@ -66,7 +66,7 @@ export function LeaderboardAdminView({
   const [tab, setTab] = useState<Tab>("dashboard");
   return (
     <div>
-      <div className="mt-6 flex gap-1 border-b border-slate-200">
+      <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
         <TabButton active={tab === "dashboard"} onClick={() => setTab("dashboard")}>Department</TabButton>
         <TabButton active={tab === "participants"} onClick={() => setTab("participants")}>Participants</TabButton>
         <TabButton active={tab === "names"} onClick={() => setTab("names")}>Name map</TabButton>
@@ -89,7 +89,7 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{monthLabel} — department totals</h3>
+        <h3 className="font-semibold text-[17px] tracking-tight text-slate-900">{monthLabel}: department totals</h3>
         <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {dashboard.kpis.map((k) => (
             <KpiTile key={k.label} kpi={k} />
@@ -98,8 +98,8 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Coaching focus</h3>
-        <p className="mt-1 text-xs text-slate-500">Who&apos;s at the bottom of each metric this month — useful starting point for one-to-ones.</p>
+        <h3 className="font-semibold text-[17px] tracking-tight text-slate-900">Coaching focus</h3>
+        <p className="mt-1 text-xs text-slate-500">Who&apos;s at the bottom of each metric this month: useful starting point for one-to-ones.</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {dashboard.coachingFocus.map((c) => (
             <CoachingCard key={c.metric} focus={c} />
@@ -108,10 +108,10 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">6-month trend</h3>
-        <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <h3 className="font-semibold text-[17px] tracking-tight text-slate-900">6-month trend</h3>
+        <div className="mt-2 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3">Month</th>
                 <th className="px-2 py-3 text-right">Orders</th>
@@ -159,8 +159,8 @@ function KpiTile({ kpi }: { kpi: DeptDashboard["kpis"][number] }) {
   const worse = kpi.lowerIsBetter ? delta > 0 : delta < 0;
   const tone = better ? "text-emerald-600" : worse ? "text-red-600" : "text-slate-400";
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{kpi.label}</div>
+    <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+      <div className="font-semibold text-slate-500 text-[12.5px]">{kpi.label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{fmt(kpi.current)}</div>
       <div className={`mt-1 text-xs font-medium ${tone}`}>
         {kpi.empty || (kpi.previous === 0 && kpi.current === 0) ? "—" : kpi.previous === 0 && kpi.format === "mins" ? "first month measured" : `${deltaText} vs last month`}
@@ -171,8 +171,8 @@ function KpiTile({ kpi }: { kpi: DeptDashboard["kpis"][number] }) {
 
 function CoachingCard({ focus }: { focus: DeptDashboard["coachingFocus"][number] }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{focus.metricLabel}</div>
+    <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+      <div className="font-semibold text-slate-500 text-[12.5px]">{focus.metricLabel}</div>
       {focus.bottom && focus.top ? (
         <div className="mt-2 space-y-2 text-sm">
           <div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ function Badge({ tone, children }: { tone: "rose" | "emerald"; children: React.R
   const cls = tone === "rose"
     ? "bg-rose-100 text-rose-800"
     : "bg-emerald-100 text-emerald-800";
-  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>{children}</span>;
+  return <span className={`rounded px-1.5 py-0.5 font-semibold ${cls} text-[12.5px]`}>{children}</span>;
 }
 
 function PersonChip({ name, photoUrl }: { name: string; photoUrl: string | null }) {
@@ -219,8 +219,8 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-        active ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"
+      className={`h-9 rounded-lg px-3.5 text-[14px] font-medium transition ${
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
       }`}
     >
       {children}
@@ -232,9 +232,9 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function ParticipantsTab({ execs }: { execs: AdminExec[] }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+        <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
           <tr>
             <th className="px-4 py-3">Exec</th>
             <th className="px-4 py-3">Photo</th>
@@ -401,7 +401,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h3 className="text-sm font-semibold text-slate-900">Add a mapping</h3>
         <p className="mt-1 text-xs text-slate-500">
           Report codes like <span className="font-mono">GaSh</span> appear in column B of the Dealerweb exports. Map them onto the salesperson on this system.
@@ -413,7 +413,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="GaSh"
-              className="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono"
+              className="mt-1 rounded-xl border border-slate-300 px-2 py-2 text-sm font-mono"
             />
           </label>
           <label className="flex flex-col text-xs font-medium text-slate-600">
@@ -421,7 +421,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
             <select
               value={execId}
               onChange={(e) => setExecId(e.target.value)}
-              className="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              className="mt-1 rounded-xl border border-slate-300 px-2 py-2 text-sm"
             >
               {execs.map((e) => (
                 <option key={e.id} value={e.id}>{e.name}</option>
@@ -431,7 +431,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
           <button
             onClick={add}
             disabled={pending}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
           >
             Save mapping
           </button>
@@ -439,9 +439,9 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-3">Report code</th>
               <th className="px-4 py-3">Maps to</th>
@@ -530,10 +530,10 @@ function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: strin
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm">
           <span className="font-medium text-slate-700">Month:</span>
-          <select value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+          <select value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} className="rounded-xl border border-slate-300 px-2 py-2 text-sm">
             {months.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
-          <span className="text-xs text-slate-500">{fed ? "Built from 10 at 10." : "History — from uploads made here before 10 at 10."}</span>
+          <span className="text-xs text-slate-500">{fed ? "Built from 10 at 10." : "History: from uploads made here before 10 at 10."}</span>
         </label>
         <ReprocessButton />
       </div>
@@ -562,7 +562,7 @@ function ReprocessButton() {
           }
         })}
         disabled={pending}
-        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        className="rounded-xl bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 ring-1 ring-inset ring-slate-300"
         title="Pull the latest from 10 at 10, then re-apply every month through the current name map and participants"
       >
         {pending ? "Re-processing…" : "Re-process"}
@@ -599,7 +599,7 @@ function SourceCard({
 
   const when = last ? new Date(last.uploadedAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-slate-900">{report.label} <span className="font-normal text-slate-500">· from {report.file}</span></h3>
@@ -624,7 +624,7 @@ function SourceCard({
       </div>
       {fed && last?.source === "upload" && (
         <p className="mt-2 text-xs text-amber-700">
-          Still showing the upload made here — it switches to 10 at 10 once {report.file} for {formatMonthLabel(yearMonth)} is on 10 at 10
+          Still showing the upload made here: it switches to 10 at 10 once {report.file} for {formatMonthLabel(yearMonth)} is on 10 at 10
           {report.type === "delivered" ? " (uploaded since insurance was read there)" : ""}.
         </p>
       )}
@@ -640,7 +640,7 @@ function SourceCard({
           ) : (
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attribution for this month</h4>
+                <h4 className="font-semibold text-slate-500 text-[12.5px]">Attribution for this month</h4>
                 <button onClick={() => setDetailOpen(false)} className="text-xs text-slate-500 hover:text-slate-800">Hide</button>
               </div>
               {detail && <UploadDetailTable detail={detail} />}
@@ -657,7 +657,7 @@ function UploadDetailTable({ detail }: { detail: UploadDetail }) {
   return (
     <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-left font-medium uppercase tracking-wide text-slate-500">
+        <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
           <tr>
             <th className="px-3 py-2">Report code</th>
             <th className="px-3 py-2">Attributed to</th>

@@ -22,12 +22,12 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="proposals" />
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <Link href="/proposals" className="text-xs text-slate-500 hover:text-slate-900">← All proposals</Link>
         <div className="mt-2 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">{data.customer.name}</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">{data.customer.name}</h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
               {data.items.length} proposal{data.items.length === 1 ? "" : "s"} · {declinedCount} declined
             </p>
           </div>

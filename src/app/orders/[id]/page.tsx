@@ -22,13 +22,13 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopNav active="orders" />
-      <main className="mx-auto max-w-4xl px-6 py-8">
+      <TopNav active="orders" width="4xl" />
+      <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <BackLink fallback="/orders" label="Back" />
         <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">{ctx.customer?.name ?? "—"}</h1>
-            <p className="mt-1 text-sm text-slate-500">{p.model} {p.derivative}</p>
+            <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">{ctx.customer?.name ?? "—"}</h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">{p.model} {p.derivative}</p>
           </div>
           {ctx.customer && (
             <Link href={`/customers/${ctx.customer.id}`} className="text-xs font-medium text-slate-500 hover:text-slate-900">

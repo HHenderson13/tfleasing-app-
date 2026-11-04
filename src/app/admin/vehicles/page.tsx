@@ -14,8 +14,8 @@ export default async function VehiclesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Vehicles</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Vehicles</h1>
+      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
         Master list populated automatically by ratebook uploads. Rows without a discount profile need attention on the Discounts tab.
       </p>
       <div className="mt-6">

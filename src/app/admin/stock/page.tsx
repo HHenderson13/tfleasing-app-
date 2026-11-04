@@ -106,9 +106,9 @@ export default async function StockUploadPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Stock upload</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Upload the Ford <span className="font-mono">Leasing Stock Report.xlsm</span>. We read the <span className="font-mono">input</span> tab directly — no need to run the macro first.
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Stock upload</h1>
+      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
+        Upload the Ford <span className="font-mono">Leasing Stock Report.xlsm</span>. We read the <span className="font-mono">input</span> tab directly: no need to run the macro first.
         Each upload <span className="font-medium">replaces</span> the previous stock snapshot.
       </p>
       <StockUploadView

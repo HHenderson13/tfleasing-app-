@@ -4,6 +4,6 @@ import { FundersClient } from "./client";
 export const dynamic = "force-dynamic";
 
 export default async function FundersPage() {
-  const user = await requireAdmin();
-  return <FundersClient userName={user.name ?? user.email} />;
+  await requireAdmin();
+  return <FundersClient />;
 }

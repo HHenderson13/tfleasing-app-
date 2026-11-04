@@ -39,7 +39,7 @@ export function SalesExecPicker({
         disabled={pending}
         className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 focus:border-slate-400 focus:outline-none disabled:opacity-60"
       >
-        <option value="">— Unassigned —</option>
+        <option value="">Unassigned</option>
         {execs.map((e) => (
           <option key={e.id} value={e.id}>{e.name}</option>
         ))}

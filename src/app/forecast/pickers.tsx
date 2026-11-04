@@ -50,7 +50,7 @@ export function MonthPicker({ value }: { value: string; label?: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm">
+    <div className="flex items-center gap-2 bg-white px-3 py-1.5 text-sm rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <select
         value={activeMonth}
         onChange={(e) => go(parseInt(e.target.value, 10), activeYear)}
@@ -107,8 +107,8 @@ export function PeriodPicker({
   const halves: ForecastPeriod[] = ["H1", "H2"];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm">
-      <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Period</span>
+    <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-1.5 text-sm rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+      <span className="text-slate-500 text-[12.5px]">Period</span>
       <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
         {quarters.map((p) => (
           <button

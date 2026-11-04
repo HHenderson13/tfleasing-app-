@@ -25,12 +25,12 @@ export default async function AdminOverview() {
   ];
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Overview</h1>
-      <p className="mt-1 text-sm text-slate-500">Reference data that drives the quote tool.</p>
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Overview</h1>
+      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Reference data that drives the quote tool.</p>
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
         {cards.map((c) => (
           <Link key={c.title} href={c.href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300">
-            <div className="text-xs uppercase tracking-wide text-slate-500">{c.title}</div>
+            <div className="text-slate-500 text-[12.5px]">{c.title}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{c.value.toLocaleString()}</div>
           </Link>
         ))}

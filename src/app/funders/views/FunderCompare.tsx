@@ -181,7 +181,7 @@ function ModelSummary({
       <div className="table-card">
         <div className="table-card-header">
           <div>
-            <div className="table-card-title">{fname} — by model</div>
+            <div className="table-card-title">{fname}: by model</div>
             <div className="table-card-sub">
               Aggregated across all derivatives, terms & mileages. Click a model to see derivatives.
             </div>
@@ -317,7 +317,7 @@ function DerivativeSummary({
       <div className="table-card">
         <div className="table-card-header">
           <div>
-            <div className="table-card-title">{fname} — {model} derivatives</div>
+            <div className="table-card-title">{fname}: {model} derivatives</div>
             <div className="table-card-sub">
               Averaged across all term × mileage combos. Click a derivative to see the term × mileage breakdown.
             </div>
@@ -490,7 +490,7 @@ function DerivativeDetail({
       <div className="table-card" style={{ marginBottom: 20 }}>
         <div className="table-card-header">
           <div>
-            <div className="table-card-title">{fname} vs cheapest — term × mileage grid</div>
+            <div className="table-card-title">{fname} vs cheapest: term × mileage grid</div>
             <div className="table-card-sub">
               {model} · {derivative.derivative} · click any cell to compare all funders for that slot
             </div>
@@ -558,7 +558,7 @@ function DerivativeDetail({
           <div className="table-card-header">
             <div>
               <div className="table-card-title">
-                Funder ranking — {selectedSlot.termMonths}mo · {fmtMileage(selectedSlot.annualMileage)}/yr
+                Funder ranking: {selectedSlot.termMonths}mo · {fmtMileage(selectedSlot.annualMileage)}/yr
               </div>
               <div className="table-card-sub">
                 Every funder's rate for this exact slot, sorted by cheapest. {fname} highlighted.
@@ -622,7 +622,7 @@ function DerivativeDetail({
       <div className="table-card">
         <div className="table-card-header">
           <div>
-            <div className="table-card-title">All slots — list view</div>
+            <div className="table-card-title">All slots: list view</div>
             <div className="table-card-sub">Same data as the grid above, as a sortable list</div>
           </div>
           <div>

@@ -115,14 +115,14 @@ export function UploadClient() {
         <div className="text-sm font-medium text-slate-800">
           {queued.length > 0 ? `${queued.length} file${queued.length === 1 ? "" : "s"} ready: ${queued.map((f) => f.name).join(", ")}` : "Drop Enquiry Tracker, Enquiry Log, Dealbook, Cancelled Orders or Dealbook Extract files here, or click to choose"}
         </div>
-        <div className="mt-1 text-xs text-slate-500">.xlsx, or .csv for the Dealbook Extract · several at once is fine — they&apos;re merged in the order chosen</div>
+        <div className="mt-1 text-xs text-slate-500">.xlsx, or .csv for the Dealbook Extract · several at once is fine. They&apos;re merged in the order chosen</div>
       </label>
 
       <div className="mt-3 flex items-center gap-3">
         <button
           onClick={submit}
           disabled={pending || queued.length === 0}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
         >
           {pending ? "Uploading…" : "Upload"}
         </button>
@@ -131,7 +131,7 @@ export function UploadClient() {
 
       {undecided.map((file) => (
         <div key={file.name} className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <span><b>{file.name}</b> — is this Dealbook – Orders or Dealbook – Deliveries? Its dates fit either.</span>
+          <span><b>{file.name}</b>: is this Dealbook – Orders or Dealbook – Deliveries? Its dates fit either.</span>
           <span className="flex gap-2">
             {(["orders", "deliveries"] as const).map((k) => (
               <button key={k} disabled={pending} onClick={() => decide(file, k)}
@@ -153,7 +153,7 @@ export function UploadClient() {
             <div className="mt-1 text-xs">
               <b>{x.inserted}</b> new · <b>{x.updated}</b> overwritten with newer values · {x.unchanged} already up to date
               {x.excluded > 0 && <> · {x.excluded} lines left out ({k === "response" ? "not a MotorComplete lead, Harry Henderson / Joseph Rustigini, or a merged lead" : k === "cancellations" || k === "extract" ? "Harry Henderson / Joseph Rustigini" : "HaHe / JoRu"})</>}
-              {x.removed > 0 && <> · {x.removed} stored lines removed ({k === "deliveries" || k === "extract" ? "no longer in that month's report — slipped or cancelled" : "moved to HaHe / JoRu"})</>}
+              {x.removed > 0 && <> · {x.removed} stored lines removed ({k === "deliveries" || k === "extract" ? "no longer in that month's report: slipped or cancelled" : "moved to HaHe / JoRu"})</>}
               {x.duplicatesCollapsed > 0 && <> · {x.duplicatesCollapsed} repeated lines collapsed</>}
               {x.unreadable > 0 && <> · {x.unreadable} unreadable lines skipped</>}
             </div>

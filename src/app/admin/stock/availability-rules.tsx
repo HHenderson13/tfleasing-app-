@@ -49,7 +49,7 @@ function Rule({ rule }: { rule: RuleRow }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="bg-white p-4 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col text-xs font-medium text-slate-700">
           Column H is
@@ -72,7 +72,7 @@ function Rule({ rule }: { rule: RuleRow }) {
           <button
             onClick={() => save()}
             disabled={pending}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save"}
           </button>
@@ -142,7 +142,7 @@ function AddRule() {
         <button
           onClick={add}
           disabled={pending || !hCode.trim()}
-          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
         >
           {pending ? "Adding…" : "Add rule"}
         </button>
@@ -178,7 +178,7 @@ export function AvailabilityRules({ rules, hidden }: { rules: RuleRow[]; hidden:
       </div>
       <p className="mt-2 text-xs text-slate-500">
         {on.length === 0
-          ? "All rules are off — only vehicles with an empty column H appear."
+          ? "All rules are off: only vehicles with an empty column H appear."
           : `${total.toLocaleString()} vehicle${total === 1 ? "" : "s"} on the stock list because of ${on.length === 1 ? "this rule" : "these rules"}.`}
       </p>
       {hiddenTotal > 0 && (
@@ -239,7 +239,7 @@ function FRule({ rule }: { rule: FRuleRow }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="bg-white p-4 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col text-xs font-medium text-slate-700">
           Column F is
@@ -260,7 +260,7 @@ function FRule({ rule }: { rule: FRuleRow }) {
         </button>
         {dirty && (
           <button onClick={() => save()} disabled={pending}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+            className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
             {pending ? "Saving…" : "Save"}
           </button>
         )}
@@ -327,7 +327,7 @@ function AddFRule() {
           <input value={dealerCode} onChange={(e) => setDealerCode(e.target.value)} placeholder="any" inputMode="numeric" className={`${fInput} w-28 font-mono`} />
         </label>
         <button onClick={add} disabled={pending || !fValue.trim()}
-          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+          className="rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
           {pending ? "Adding…" : "Add rule"}
         </button>
       </div>

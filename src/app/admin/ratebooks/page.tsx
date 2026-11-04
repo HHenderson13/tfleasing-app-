@@ -28,15 +28,15 @@ export default async function RatebooksPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Ratebooks</h1>
-        <p className="mt-1 text-sm text-slate-500">Upload the 8 BCH ratebooks (4 funders x Customer Maintained + Maintained). PCH is calculated as BCH x 1.2 VAT at quote time. Uploading replaces all rows for that slice.</p>
+        <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Ratebooks</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Upload the 8 BCH ratebooks (4 funders x Customer Maintained + Maintained). PCH is calculated as BCH x 1.2 VAT at quote time. Uploading replaces all rows for that slice.</p>
       </div>
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-700">Currently loaded</h2>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Funder</th>
                 <th className="px-4 py-3 text-right font-medium">Customer Maintained</th>
@@ -79,7 +79,7 @@ export default async function RatebooksPage() {
         ) : (
           <ul className="space-y-1 text-sm">
             {recent.map((u) => (
-              <li key={u.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-2">
+              <li key={u.id} className="flex items-center justify-between bg-white px-4 py-2 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
                 <span className="text-slate-700">
                   <span className="font-medium">{u.funderId}</span> · {u.isMaintained ? "Maintained" : "Customer Maint."} · {u.filename}
                 </span>

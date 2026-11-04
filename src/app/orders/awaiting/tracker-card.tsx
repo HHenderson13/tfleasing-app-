@@ -76,7 +76,7 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
     (data.invoiced ? 1 : 0) + (data.itcComplete ? 1 : 0) + (data.taxed ? 1 : 0);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -88,8 +88,8 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
             {data.businessName && data.businessName !== "Not Applicable" && (
               <span className="text-xs text-slate-500">· {data.businessName}</span>
             )}
-            {data.isGroupBq && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">Group BQ</span>}
-            {data.isEv && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800">⚡ EV</span>}
+            {data.isGroupBq && <span className="rounded bg-violet-100 px-1.5 py-0.5 font-bold text-violet-800 text-[12.5px]">Group BQ</span>}
+            {data.isEv && <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-800 text-[12.5px]">⚡ EV</span>}
           </div>
           <div className="mt-1 text-[11px] text-slate-600">
             {data.model} {data.derivative}
@@ -131,13 +131,13 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
               </span>
             )}
             {data.regNumber && (
-              <span className="rounded-md bg-slate-900 px-2 py-1 font-mono text-[11px] font-bold uppercase text-white">{data.regNumber}</span>
+              <span className="rounded-md bg-slate-900 px-2 py-1 font-mono font-bold text-white text-[12.5px]">{data.regNumber}</span>
             )}
             <span className="rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200">{completedCount}/5 ✓</span>
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <span className="text-[10px] uppercase tracking-wide text-slate-400">{open ? "Close" : "Open"}</span>
+          <span className="text-slate-500 text-[12.5px]">{open ? "Close" : "Open"}</span>
         </div>
       </button>
 
@@ -258,7 +258,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
             onCommit={(iso) => commit({ deliveryBookedAt: iso ? new Date(iso) : null })}
           />
         </Field>
-        <Field label="Estimated month" hint="when no firm date yet — planning only">
+        <Field label="Estimated month" hint="when there's no firm date yet, for planning only">
           <EstimatedMonthInput
             value={data.estimatedDeliveryMonth}
             disabled={pending}
@@ -266,7 +266,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
           />
         </Field>
         <Field label="Wallbox / customer saving" hint="EV only">
-          <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700">
+          <div className="bg-white px-2.5 py-1.5 text-sm text-slate-700 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             {data.isEv
               ? (data.wallboxIncluded
                   ? "Wallbox"
@@ -306,7 +306,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
       {/* Policies — GAP + TF Protect tri-state, with policy number sub-field
           revealed once the customer has actually purchased one. */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <Field label="GAP policy">
             <PolicySelect
               value={data.gapPolicyStatus}
@@ -327,7 +327,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <Field label="TrustFord Protect">
             <PolicySelect
               value={data.tfpPolicyStatus}
@@ -473,7 +473,7 @@ function MarkDeliveredModal({
             visible. Helps the user spot the one item that's stopping the
             transition (the case that's burned Karen Elizabeth Williams). */}
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Ready to deliver?</div>
+          <div className="font-semibold text-slate-600 text-[12.5px]">Ready to deliver?</div>
           <ul className="mt-1.5 space-y-1.5">
             {preflight.map((item) => (
               <li key={item.label} className="flex items-start gap-2 text-xs">
@@ -498,7 +498,7 @@ function MarkDeliveredModal({
 
         <div className="mt-4 space-y-3">
           <p className="text-xs text-slate-700">
-            Tick the two boxes below once each step is actually done — they unlock the green button.
+            Tick the two boxes below once each step is actually done. They unlock the green button.
           </p>
           <label className="flex items-start gap-2.5 rounded-xl border-2 border-slate-200 bg-slate-50 p-3 hover:bg-slate-100 cursor-pointer">
             <input
@@ -510,7 +510,7 @@ function MarkDeliveredModal({
             />
             <span className="text-sm">
               <span className="font-semibold text-slate-900">Delivery pack submitted to the funder</span>
-              <span className="block text-[11px] text-slate-600">Full pack — finance documents, invoice, ITC etc — sent to {data.funderName}.</span>
+              <span className="block text-[11px] text-slate-600">Full pack (finance documents, invoice, ITC and so on) sent to {data.funderName}.</span>
             </span>
           </label>
           <label className="flex items-start gap-2.5 rounded-xl border-2 border-slate-200 bg-slate-50 p-3 hover:bg-slate-100 cursor-pointer">
@@ -523,7 +523,7 @@ function MarkDeliveredModal({
             />
             <span className="text-sm">
               <span className="font-semibold text-slate-900">Delivery details checked before submission</span>
-              <span className="block text-[11px] text-slate-600">Reg, VIN, dates, customer info — all reviewed and correct.</span>
+              <span className="block text-[11px] text-slate-600">Reg, VIN, dates and customer details all reviewed and correct.</span>
             </span>
           </label>
         </div>
@@ -535,7 +535,7 @@ function MarkDeliveredModal({
         )}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={onClose} className="rounded-xl bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 ring-1 ring-inset ring-slate-300">
             Cancel
           </button>
           <button
@@ -557,7 +557,7 @@ function MarkDeliveredModal({
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+      <span className="font-semibold text-slate-600 text-[12.5px]">
         {label}{hint && <span className="ml-1 text-slate-400 italic">({hint})</span>}
       </span>
       <div className="mt-1">{children}</div>
@@ -580,7 +580,7 @@ function BlurInput({
       onBlur={() => { if (value !== initial) onCommit(value.trim()); }}
       disabled={disabled || pending}
       placeholder={placeholder}
-      className={`w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${uppercase ? "uppercase tabular-nums" : ""}`}
+      className={`w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${uppercase ? "uppercase tabular-nums" : ""}`}
     />
   );
 }
@@ -597,7 +597,7 @@ function BlurTextarea({
       disabled={pending}
       placeholder={placeholder}
       rows={2}
-      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+      className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
     />
   );
 }
@@ -617,7 +617,7 @@ function PolicySelect({ value, onChange, disabled }: { value: "none" | "pending"
       value={value}
       onChange={(e) => onChange(e.target.value as "none" | "pending" | "complete")}
       disabled={disabled}
-      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm disabled:opacity-50"
+      className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm disabled:opacity-50"
     >
       <option value="none">{POLICY_LABEL.none}</option>
       <option value="pending">{POLICY_LABEL.pending}</option>
@@ -680,9 +680,9 @@ function DealerFitOptionsEditor({
   const fittedCount = options.filter((o) => o.fitted).length;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <div className="bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex items-baseline justify-between">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Dealer-fit options</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">Dealer-fit options</div>
         {options.length > 0 && (
           <div className="text-[10px] font-medium text-slate-500 tabular-nums">{fittedCount}/{options.length} fitted</div>
         )}
@@ -727,13 +727,13 @@ function DealerFitOptionsEditor({
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
           disabled={pending}
           placeholder="Tow bar, mats, paint protection…"
-          className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm disabled:opacity-50"
+          className="flex-1 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm disabled:opacity-50"
         />
         <button
           type="button"
           onClick={add}
           disabled={pending || !newLabel.trim()}
-          className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add
         </button>
@@ -779,7 +779,7 @@ function EstimatedMonthInput({
         const v = e.target.value || null;
         if (v !== value) onCommit(v);
       }}
-      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm tabular-nums disabled:opacity-50"
+      className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm tabular-nums disabled:opacity-50"
     />
   );
 }
@@ -929,7 +929,7 @@ function FlexibleDateInput({
         onChange={(e) => { setText(e.target.value); setParseErr(false); }}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitText((e.target as HTMLInputElement).value); } }}
-        className={`flex-1 rounded-lg border px-2.5 py-1.5 text-sm tabular-nums disabled:opacity-50 ${
+        className={`flex-1 rounded-xl border px-2.5 py-2 text-sm tabular-nums disabled:opacity-50 ${
           parseErr ? "border-rose-400 bg-rose-50" : "border-slate-300 bg-white"
         }`}
       />
@@ -939,7 +939,7 @@ function FlexibleDateInput({
         disabled={disabled}
         title="Pick from calendar"
         aria-label="Pick from calendar"
-        className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        className="inline-flex shrink-0 items-center justify-center rounded-xl bg-white px-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50 ring-1 ring-inset ring-slate-300"
       >
         <span aria-hidden>📅</span>
       </button>

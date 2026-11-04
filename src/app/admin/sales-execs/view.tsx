@@ -27,9 +27,9 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Name</th>
               <th className="px-4 py-3 text-left font-medium">Email</th>
@@ -43,7 +43,7 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
                   <input
                     defaultValue={r.name}
                     onBlur={(e) => e.currentTarget.value !== r.name && start(() => updateSalesExec(r.id, { name: e.currentTarget.value }))}
-                    className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 hover:border-slate-200 focus:border-slate-500 focus:outline-none"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -51,7 +51,7 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
                     type="email"
                     defaultValue={r.email}
                     onBlur={(e) => e.currentTarget.value !== r.email && start(() => updateSalesExec(r.id, { email: e.currentTarget.value }))}
-                    className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 hover:border-slate-200 focus:border-slate-500 focus:outline-none"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                   />
                 </td>
                 <td className="px-2 py-2 text-right">
@@ -67,10 +67,10 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
       </div>
 
       {adding ? (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="space-y-2 bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <div className="flex gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm" />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@tfleasing.co.uk" className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@tfleasing.co.uk" className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={add} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white">Add</button>
             <button onClick={() => { setAdding(false); setError(null); }} className="text-sm text-slate-400">Cancel</button>
           </div>

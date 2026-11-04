@@ -72,7 +72,7 @@ export function DeliveryEditor({
               type="date"
               value={bookedAt}
               onChange={(e) => setBookedAt(e.target.value)}
-              className="rounded border border-teal-300 bg-white px-1 py-0.5"
+              className="rounded-xl border border-teal-300 bg-white px-1 py-0.5"
             />
           </label>
           <label className="flex items-center gap-1 text-teal-900">
@@ -81,7 +81,7 @@ export function DeliveryEditor({
               value={reg}
               onChange={(e) => setReg(e.target.value)}
               placeholder="optional"
-              className="w-28 rounded border border-teal-300 bg-white px-1 py-0.5 uppercase"
+              className="w-28 rounded-xl border border-teal-300 bg-white px-1 py-0.5 uppercase"
             />
           </label>
           <button
@@ -95,7 +95,7 @@ export function DeliveryEditor({
         </div>
       )}
       {isGroupBq && (
-        <div className="font-medium text-teal-800">Group BQ delivery — tick the checklist to mark as delivered.</div>
+        <div className="font-medium text-teal-800">Group BQ delivery: tick the checklist to mark it delivered.</div>
       )}
 
       {checks.length > 0 && (

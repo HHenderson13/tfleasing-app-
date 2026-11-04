@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { signOutAction } from "../login/actions";
 import { Overview } from "./views/Overview";
 
 // Overview ships up-front since it's the default view. The other three
@@ -52,7 +51,7 @@ type View =
   | { kind: "funder"; funderId: string }
   | { kind: "coverage" };
 
-export function FundersClient({ userName }: { userName: string }) {
+export function FundersClient() {
   const [contract, setContract] = useState<"PCH" | "BCH">("BCH");
   const [maintenance, setMaintenance] = useState<"customer" | "maintained">("customer");
   const [irm, setIrm] = useState<number>(6);
@@ -86,19 +85,18 @@ export function FundersClient({ userName }: { userName: string }) {
     <div className="fc">
       <div className="shell">
         <header>
-          <div className="header-left">
-            <Link href="/" className="back-btn">← Back to portal</Link>
-            <span className="header-title">Funder Comparison</span>
-          </div>
-          <div className="header-right">
-            <span className="user-name">{userName}</span>
-            <form action={signOutAction}>
-              <button type="submit" className="logout-btn">Sign out</button>
-            </form>
-          </div>
+          <Link href="/" className="back-btn">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden><path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" /></svg>
+            Home
+          </Link>
         </header>
+        <div className="page-head">
+          <h1>Funder Comparison</h1>
+          <p>Every funder&apos;s rates side by side, across our ratebooks.</p>
+        </div>
 
         <nav className="subnav">
+          <div className="subnav-inner" role="tablist" aria-label="Funder Comparison">
           {subnavTabs.map((t) => (
             <button
               key={t.id}
@@ -113,6 +111,7 @@ export function FundersClient({ userName }: { userName: string }) {
               {t.label}
             </button>
           ))}
+          </div>
         </nav>
 
         <div className="filter-bar">

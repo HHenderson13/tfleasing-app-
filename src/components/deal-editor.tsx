@@ -154,7 +154,7 @@ export function CancelDealButton({ proposalId, currentStatus }: { proposalId: st
       <textarea
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="Reason (required) — e.g. customer pulled out, vehicle no longer available…"
+        placeholder="Reason (required), e.g. customer pulled out, vehicle no longer available"
         rows={2}
         className="mt-2 w-full rounded-md border border-rose-300 bg-white px-2 py-1 text-xs"
       />

@@ -27,14 +27,14 @@ export default async function OrderChecksPage({ searchParams }: { searchParams: 
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Stage checks</h1>
-      <p className="mt-1 text-sm text-slate-500">{meta.blurb}</p>
-      <nav className="mt-4 inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-sm">
+      <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Stage checks</h1>
+      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">{meta.blurb}</p>
+      <nav className="mt-5 inline-flex gap-1 rounded-xl bg-slate-200/60 p-1 text-sm">
         {(Object.keys(STAGE_META) as Stage[]).map((s) => (
           <Link
             key={s}
             href={`/admin/order-checks${s === "order" ? "" : "?stage=delivery"}`}
-            className={`rounded-lg px-3 py-1.5 font-medium transition ${stage === s ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+            className={`flex h-9 items-center rounded-lg px-3.5 font-medium transition ${stage === s ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
           >
             {STAGE_META[s].label}
           </Link>

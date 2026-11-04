@@ -59,7 +59,7 @@ export function StockUploadView({
 
   return (
     <div className="mt-6 space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Upload stock report</h2>
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-center gap-3">
           <input
@@ -80,7 +80,7 @@ export function StockUploadView({
         {success !== null && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">Loaded {success.toLocaleString()} vehicles.</div>}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Workbook password</h2>
         <p className="mt-1 text-xs text-slate-500">Ford protect the workbook with a password. Default is <span className="font-mono">Ftru</span>. Update here if they change it.</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -88,7 +88,7 @@ export function StockUploadView({
             type="text"
             value={pwValue}
             onChange={(e) => setPwValue(e.target.value)}
-            className="w-48 rounded-md border border-slate-200 px-2 py-1.5 font-mono text-sm focus:border-slate-400 focus:outline-none"
+            className="w-48 rounded-xl border border-slate-300 px-2 py-2 font-mono text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
           />
           <button
             type="button"
@@ -102,7 +102,7 @@ export function StockUploadView({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Current snapshot</h2>
         {latest ? (
           <div className="mt-2 text-sm text-slate-600">

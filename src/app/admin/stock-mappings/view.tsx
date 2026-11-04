@@ -60,7 +60,7 @@ export function StockMappingsView({
   return (
     <div className="space-y-4">
       {/* Kind tabs */}
-      <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 text-sm">
+      <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1 text-sm">
         {KINDS.map((k) => {
           const active = tab === k.id;
           const unmapped = unmappedCounts[k.id] ?? 0;
@@ -68,11 +68,11 @@ export function StockMappingsView({
             <button
               key={k.id}
               onClick={() => setTab(k.id)}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium ${active ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"}`}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 font-medium transition ${active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
             >
               {k.label}
               {unmapped > 0 && (
-                <span className={`rounded-full px-1.5 text-[10px] font-semibold ${active ? "bg-amber-400 text-slate-900" : "bg-amber-100 text-amber-700"}`}>
+                <span className="rounded-full bg-amber-100 px-1.5 text-[11.5px] font-semibold text-amber-800">
                   {unmapped}
                 </span>
               )}
@@ -83,8 +83,8 @@ export function StockMappingsView({
 
       {/* Bucket filter (per-model) */}
       {bucketApplicable && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-xs">
-          <span className="mr-1 px-1 font-semibold uppercase tracking-wide text-slate-500">Model:</span>
+        <div className="flex flex-wrap items-center gap-1.5 bg-white p-2 text-xs rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
+          <span className="mr-1 px-1 font-semibold text-slate-500 text-[12.5px]">Model:</span>
           <BucketPill label="All" active={bucketFilter === null} onClick={() => setBucketFilter(null)} />
           {allBuckets.map((b) => (
             <BucketPill key={b} label={b} active={bucketFilter === b} onClick={() => setBucketFilter(b)} />
@@ -133,10 +133,10 @@ function MappingsTable({
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder={`Filter ${kind}s…`}
-        className="w-72 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm focus:border-slate-400 focus:outline-none"
+        className="w-72 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
       />
 
-      <Section title={`Unmapped — ${unmapped.length}`} tint="amber">
+      <Section title={`Unmapped: ${unmapped.length}`} tint="amber">
         {apply(unmapped).length === 0 ? (
           <Empty text={unmapped.length === 0 ? "Nothing unmapped." : "No matches."} />
         ) : (
@@ -148,7 +148,7 @@ function MappingsTable({
         )}
       </Section>
 
-      <Section title={`Mapped — ${mapped.length}`} tint="slate">
+      <Section title={`Mapped: ${mapped.length}`} tint="slate">
         {apply(mapped).length === 0 ? (
           <Empty text="No matches." />
         ) : (
@@ -170,7 +170,7 @@ function Section({ title, children, tint }: { title: string; children: React.Rea
   const c = tint === "amber" ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white";
   return (
     <section className={`overflow-hidden rounded-2xl border ${c} shadow-sm`}>
-      <div className="border-b border-slate-200 bg-white/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</div>
+      <div className="border-b border-slate-200 bg-white/60 px-4 py-2 font-semibold text-slate-600 text-[12.5px]">{title}</div>
       <div className="bg-white">{children}</div>
     </section>
   );
@@ -226,7 +226,7 @@ function UnmappedRow({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Display name"
-        className="w-64 rounded-md border border-slate-200 px-2 py-1 text-sm"
+        className="w-64 rounded-xl border border-slate-300 px-2 py-2 text-sm"
       />
       <label className="inline-flex items-center gap-1 text-xs text-slate-500">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300" />
@@ -278,7 +278,7 @@ function MappedRow({
         value={name}
         onChange={(e) => setName(e.target.value)}
         onBlur={() => save()}
-        className="w-64 rounded-md border border-slate-200 px-2 py-1 text-sm"
+        className="w-64 rounded-xl border border-slate-300 px-2 py-2 text-sm"
       />
       <label className="inline-flex items-center gap-1 text-xs text-slate-500">
         <input

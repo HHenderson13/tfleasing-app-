@@ -26,10 +26,10 @@ export default async function AdminBrokersPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Brokers</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Brokers</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
           Each broker is a separate sign-in scope, with no visibility of another broker&apos;s users. Brokers see one
-          thing — the stock list — with funding, dealer, status and internal identifiers stripped server-side. The
+          thing, the stock list, with funding, dealer, status and internal identifiers stripped server-side. The
           broker portal lives at <span className="font-mono">/broker/login</span>.
         </p>
       </div>
@@ -41,9 +41,9 @@ export default async function AdminBrokersPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-700">Existing brokers</h2>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Broker</th>
                 <th className="px-4 py-3 text-right font-medium">Users</th>
@@ -78,7 +78,7 @@ export default async function AdminBrokersPage() {
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No brokers yet — add one above.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No brokers yet. Add one above.</td></tr>
               )}
             </tbody>
           </table>

@@ -28,9 +28,9 @@ export function OrderChecksView({ rows, stage }: { rows: Row[]; stage: Stage }) 
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Label</th>
               <th className="px-4 py-3 text-left font-medium">Sort</th>
@@ -45,7 +45,7 @@ export function OrderChecksView({ rows, stage }: { rows: Row[]; stage: Stage }) 
                   <input
                     defaultValue={r.label}
                     onBlur={(e) => e.currentTarget.value !== r.label && start(() => updateOrderCheck(r.id, { label: e.currentTarget.value }))}
-                    className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 hover:border-slate-200 focus:border-slate-500 focus:outline-none"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-2 py-2 hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -56,7 +56,7 @@ export function OrderChecksView({ rows, stage }: { rows: Row[]; stage: Stage }) 
                       const v = Number(e.currentTarget.value);
                       if (!Number.isNaN(v) && v !== r.sortOrder) start(() => updateOrderCheck(r.id, { sortOrder: v }));
                     }}
-                    className="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 tabular-nums hover:border-slate-200 focus:border-slate-500 focus:outline-none"
+                    className="w-20 rounded-xl border border-transparent bg-transparent px-2 py-2 tabular-nums hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -83,9 +83,9 @@ export function OrderChecksView({ rows, stage }: { rows: Row[]; stage: Stage }) 
       </div>
 
       {adding ? (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="space-y-2 bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <div className="flex flex-wrap items-center gap-2">
-            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Proof of address received" className="min-w-[240px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm" />
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Proof of address received" className="min-w-[240px] flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             <label className="inline-flex items-center gap-2 text-xs text-slate-600">
               <input type="checkbox" checked={newAppliesToBq} onChange={(e) => setNewAppliesToBq(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
               Required for BQ

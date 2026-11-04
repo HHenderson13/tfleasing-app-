@@ -227,7 +227,7 @@ function Table<R>({ cols, rows, keyOf, empty = "Nothing in this period.", more, 
 }
 
 /** "and 4 more — see the tab" under a table cut to fit. */
-const moreNote = (shown: number, total: number, what: string) => (total > shown ? `and ${total - shown} more ${what} — see the tab` : undefined);
+const moreNote = (shown: number, total: number, what: string) => (total > shown ? `and ${total - shown} more ${what}, see the tab` : undefined);
 
 function Line({ label, children, size = 7 }: { label: string; children: ReactNode; size?: number }) {
   return (
@@ -415,7 +415,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
     .sort((a, b) => b[1].u - a[1].u)[0];
 
   return (
-    <ReportPage title="Summary" input={input} note="Every area at a glance — the pages after go through each in turn">
+    <ReportPage title="Summary" input={input} note="Every area at a glance: the pages after go through each in turn">
       <View style={[s.stack, { flex: 1 }]}>
         <View style={[s.row, { flex: 1 }]}>
           <SummaryCard title="Enquiries" kpis={[
@@ -441,7 +441,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
                 <Line size={SUMMARY_TEXT} label="Fastest contact">{join(byExecResponse.slice(-2).reverse().map((x) => <Text key={x.name}><B tone="good">{x.name}</B> {formatMins(x.avg)}</Text>))}</Line>
               </>
             )}
-            {r.held.length > 0 && <Line size={SUMMARY_TEXT} label="Not judged yet">{int(r.held.length)} — they need a full working day first</Line>}
+            {r.held.length > 0 && <Line size={SUMMARY_TEXT} label="Not judged yet">{int(r.held.length)}: they need a full working day first</Line>}
           </SummaryCard>
           <SummaryCard title="Orders" kpis={[
             { label: "Orders", value: int(o.orders), sub: ordersAdjusted(cancelledHere, rewritesOut) },
@@ -476,7 +476,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
                   <View style={{ marginTop: 2.5 }}><Bar value={l.going} of={l.budget ?? l.going} colour={DEPARTMENT_COLOURS[k]} width="100%" height={5} /></View>
                 </View>
               );
-            }) : <Text style={[s.note, { marginTop: 2, fontSize: 7.5 }]}>Budget is monthly — export a Month or Quarter to measure against it.</Text>}
+            }) : <Text style={[s.note, { marginTop: 2, fontSize: 7.5 }]}>Budget is monthly: export a Month or Quarter to measure against it.</Text>}
             {dv.d.length > 0 && (
               <View style={{ marginTop: 5 }}>
                 <Line size={SUMMARY_TEXT} label="By segment">{join(SEGMENTS.map((seg) => <Text key={seg}>{SEGMENT_META[seg].title} <B>{int(dSeg.get(seg)?.stats.orders ?? 0)}</B></Text>))}</Line>
@@ -491,7 +491,7 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
           ]}>
             {proper.slice(0, 4).map((x) => (
               <Text key={x.id} style={{ fontSize: SUMMARY_TEXT, marginTop: 4, maxLines: 1, textOverflow: "ellipsis" }}>
-                <B>{x.customer}</B> · {firstName(x.exec)} — <Text style={{ color: x.note ? C.body : C.warn, fontFamily: x.note ? "Helvetica" : "Helvetica-Bold" }}>{x.note || "Reason needed"}</Text>
+                <B>{x.customer}</B> · {firstName(x.exec)}: <Text style={{ color: x.note ? C.body : C.warn, fontFamily: x.note ? "Helvetica" : "Helvetica-Bold" }}>{x.note || "Reason needed"}</Text>
               </Text>
             ))}
             {proper.length > 4 && <Text style={[s.note, { marginTop: 3, fontSize: 7.5 }]}>and {int(proper.length - 4)} more</Text>}
@@ -508,8 +508,8 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
                 <Line size={SUMMARY_TEXT} label="Weakest">{join(ranked.slice(-2).reverse().map((x) => <Text key={x.name}><B tone="bad">{x.name}</B> {x.pct.toFixed(0)}%</Text>))}</Line>
               </>
             )}
-            {undercutter && <Line size={SUMMARY_TEXT} label="Top undercutter"><B>{undercutter[0]}</B> — cheaper on {int(undercutter[1].u)} of {int(undercutter[1].h)}</Line>}
-            {m && <Text style={[s.note, { marginTop: 5, color: C.faint, fontSize: 7 }]}>Latest scrape, {scrapeWhen(m.run.startedAt)} — not tied to the period.</Text>}
+            {undercutter && <Line size={SUMMARY_TEXT} label="Top undercutter"><B>{undercutter[0]}</B>, cheaper on {int(undercutter[1].u)} of {int(undercutter[1].h)}</Line>}
+            {m && <Text style={[s.note, { marginTop: 5, color: C.faint, fontSize: 7 }]}>Latest scrape, {scrapeWhen(m.run.startedAt)}: not tied to the period.</Text>}
           </SummaryCard>
         </View>
       </View>
@@ -545,7 +545,7 @@ function EnquiriesPage({ input }: { input: PdfReportInput }) {
         <View style={s.row}>
           <Kpi label="Inbound conversion" value={pct(inboundPct(e))} sub={`${int(e.inboundOrders)} orders of ${int(e.inboundEnquiries)} MotorComplete leads`} accent={C.accent} />
           <Kpi label="Broker / Prospect conv." value={pct(brokerPct(e))} sub={`${int(e.orders - e.inboundOrders)} orders of ${int(e.enquiries - e.inboundEnquiries)}`} accent={SOURCE_COLOURS["Broker / Prospect"]} />
-          <Kpi label="Overall conversion" value={pct(conversionPct(e))} sub={`${int(e.orders)} orders of ${int(e.enquiries)} — the two together`} hero />
+          <Kpi label="Overall conversion" value={pct(conversionPct(e))} sub={`${int(e.orders)} orders of ${int(e.enquiries)}: the two together`} hero />
           <Kpi label="Enquiries" value={int(e.enquiries)} flex={0.75} />
           <Kpi label="Orders" value={int(e.orders)} flex={0.75} />
           <Kpi label="Live" value={int(e.live)} flex={0.75} />
@@ -606,9 +606,9 @@ function ResponsePage({ input }: { input: PdfReportInput }) {
   const { reportable, held, s: rs } = responseFor(input);
   const sameDay = share(rs.sameDayMet, rs.sameDayExpected);
   const attention: RRow[] = [
-    ["Missed same day — exec", reportable.filter((r) => sameDayMissOwner(r) === "exec")],
-    ["Missed same day — late allocation (Sales Support)", reportable.filter((r) => sameDayMissOwner(r) === "salesSupport")],
-    ["Never contacted — exec", reportable.filter((r) => neverContactedOwner(r) === "exec")],
+    ["Missed same day: exec", reportable.filter((r) => sameDayMissOwner(r) === "exec")],
+    ["Missed same day: late allocation (Sales Support)", reportable.filter((r) => sameDayMissOwner(r) === "salesSupport")],
+    ["Never contacted: exec", reportable.filter((r) => neverContactedOwner(r) === "exec")],
     [`First contact over ${CONTACT_TARGET_MINS} min`, reportable.filter((r) => r.contactMins != null && r.contactMins > CONTACT_TARGET_MINS)],
     [`Allocation over ${ALLOCATION_TARGET_MINS} min`, reportable.filter((r) => r.allocMins != null && r.allocMins > ALLOCATION_TARGET_MINS)],
     ["Never passed to an exec (Sales Support)", reportable.filter((r) => isTransferMissing(r))],
@@ -632,7 +632,7 @@ function ResponsePage({ input }: { input: PdfReportInput }) {
     <ReportPage title="Response times" input={input} note="MotorComplete leads · working hours Mon–Fri 09:00–17:30">
       <View style={s.stack}>
         <View style={s.row}>
-          <Kpi label="Enquiries judged" value={int(rs.total)} sub={held.length ? `${int(held.length)} more not judged yet — they need a full working day` : "every one had a full working day"} />
+          <Kpi label="Enquiries judged" value={int(rs.total)} sub={held.length ? `${int(held.length)} more not judged yet: they need a full working day` : "every one had a full working day"} />
           <Kpi label={`Allocation · target ${ALLOCATION_TARGET_MINS}m`} value={mins(rs.allocAvg)} tone={minsTone(rs.allocAvg, ALLOCATION_TARGET_MINS)} sub={`${int(rs.allocHit)} on target · ${int(rs.allocMissed)} over · Sales Support`} />
           <Kpi label={`First contact · target ${CONTACT_TARGET_MINS}m`} value={mins(rs.contactAvg)} hero sub={`${int(rs.contactHit)} on target · ${int(rs.contactMissed)} over`} />
           <Kpi label="Same-day contact" value={sameDay == null ? "—" : `${Math.round(sameDay)}%`} tone={rs.sameDayExpected ? (rs.sameDayMissed ? "bad" : "good") : undefined} sub={`${int(rs.sameDayMissed)} missed of ${int(rs.sameDayExpected)} · ${int(rs.sameDayMissedSupport)} late allocation`} />
@@ -773,7 +773,7 @@ function DeliveriesPage({ input }: { input: PdfReportInput }) {
             <BudgetBox title="CV (commercial)" colour={DEPARTMENT_COLOURS.cv} line={dv.lines.cv} pace={dv.pace} />
             <BudgetBox title="Combined" colour={DEPARTMENT_COLOURS.combined} line={dv.lines.combined} pace={dv.pace} />
           </View>
-        ) : <Text style={s.strip}>Budget is set by month — export a Month or Quarter to see Car, CV and Combined against budget.</Text>}
+        ) : <Text style={s.strip}>Budget is set by month: export a Month or Quarter to see Car, CV and Combined against budget.</Text>}
         <View style={s.row}>
           <Kpi label="Going" value={int(rows.length)} sub="delivered + arrived + due" />
           <Kpi label="Delivered" value={int(dv.delivered)} sub={deliveredPct == null ? undefined : `${deliveredPct}% of what's going`} />
@@ -839,7 +839,7 @@ function CancellationsPage({ input }: { input: PdfReportInput }) {
       <View style={s.stack}>
         <View style={s.row}>
           <Kpi label="Cancellations" value={int(proper.length)} hero sub="cancelled and not re-ordered" />
-          <Kpi label="Re-Writes" value={int(rewrites.length)} sub="cancelled and re-ordered — not counted" />
+          <Kpi label="Re-Writes" value={int(rewrites.length)} sub="cancelled and re-ordered, not counted" />
           <Kpi label="Reasons to add" value={int(unexplained)} tone={proper.length ? (unexplained ? "bad" : "good") : undefined} sub={proper.length ? `${int(proper.length - unexplained)} of ${int(proper.length)} explained` : undefined} />
           <Kpi label="Avg time to cancel" value={avgDays == null ? "—" : `${Math.round(avgDays)} days`} sub="from order to cancellation" />
         </View>
@@ -855,7 +855,7 @@ function CancellationsPage({ input }: { input: PdfReportInput }) {
                 { label: "Days", w: 26, text: (x) => int(daysToCancel(x)) },
                 { label: "Profit", w: 40, text: (x) => money(x.orderProfit), tone: (x) => ((x.orderProfit ?? 0) < 0 ? "bad" : undefined) },
                 { label: "Reason", w: 220, align: "left", wrap: true, text: (x) => x.note || "Reason needed", tone: (x) => (x.note ? undefined : "warn") },
-              ]} rows={proper} keyOf={(x) => x.id} empty="None — everything cancelled in this period was ordered again." />
+              ]} rows={proper} keyOf={(x) => x.id} empty="None: everything cancelled in this period was ordered again." />
             </Panel>
             <View style={s.row}>
               <Panel title="Re-Writes" note="shown, not counted" flex={1.7} breakable>
@@ -963,7 +963,7 @@ function MarketPage({ input }: { input: PdfReportInput }) {
 
 export function TenAtTenPdf(input: PdfReportInput) {
   return (
-    <Document title={`10 at 10 — ${input.range.label}`} author="TrustFord Leasing" subject="10 at 10" creator="TF Leasing">
+    <Document title={`10 at 10, ${input.range.label}`} author="TrustFord Leasing" subject="10 at 10" creator="TF Leasing">
       <SummaryPage input={input} />
       <EnquiriesPage input={input} />
       <ResponsePage input={input} />

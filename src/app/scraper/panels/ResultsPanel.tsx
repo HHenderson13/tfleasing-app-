@@ -88,10 +88,10 @@ export function ResultsPanel({
             fontFamily: "var(--sans)",
           }}
         >
-          <option value="">— Select run —</option>
+          <option value="">Select a run</option>
           {runs.map((r) => (
             <option key={r.id} value={r.id}>
-              {(r.label || "Unlabelled")} — {r.startedAt.slice(0, 10)} (
+              {(r.label || "Unlabelled")} · {r.startedAt.slice(0, 10)} (
               {r.totalResults.toLocaleString()})
             </option>
           ))}

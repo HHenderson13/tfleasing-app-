@@ -22,7 +22,7 @@ export function AdminNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 scrollbar-none">
+    <nav aria-label="Admin" className="inline-flex max-w-full flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1">
       {NAV.map((n) => {
         const isActive = n.exact
           ? pathname === n.href
@@ -31,10 +31,9 @@ export function AdminNav() {
           <Link
             key={n.href}
             href={n.href}
-            className={`relative shrink-0 px-4 py-2.5 text-sm font-medium transition-colors ${
-              isActive
-                ? "text-slate-900 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-slate-900"
-                : "text-slate-500 hover:text-slate-800"
+            aria-current={isActive ? "page" : undefined}
+            className={`flex h-8 shrink-0 items-center rounded-lg px-3 text-[13px] font-medium transition ${
+              isActive ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
             }`}
           >
             {n.label}

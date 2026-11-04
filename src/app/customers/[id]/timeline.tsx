@@ -59,7 +59,7 @@ export function CustomerTimeline({ items, customerId: _customerId, declinedCount
     <div className="space-y-6">
       {declinedCount >= 3 && (
         <div className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
-          <span className="font-medium">Three declines recorded.</span> This is a lost sale — mark any remaining open proposal as lost.
+          <span className="font-medium">Three declines recorded.</span> This is a lost sale: mark any open proposal left as lost.
         </div>
       )}
       {items.map((it) => (
@@ -122,7 +122,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <header className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -259,7 +259,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
               onChange={(e) => setUnderwritingNote(e.target.value)}
               rows={3}
               placeholder="e.g. Three months of bank statements, signed director's guarantee…"
-              className="w-full rounded-md border border-amber-200 bg-white px-2 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+              className="w-full rounded-xl border border-amber-200 bg-white px-2 py-2 text-sm focus:border-amber-400 focus:outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10"
             />
           </label>
           <div className="flex gap-2">
@@ -282,7 +282,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
               onChange={(e) => setNotEligibleNote(e.target.value)}
               rows={3}
               placeholder="e.g. Customer does not meet minimum trading history requirement."
-              className="w-full rounded-md border border-orange-200 bg-white px-2 py-1.5 text-sm focus:border-orange-400 focus:outline-none"
+              className="w-full rounded-xl border border-orange-200 bg-white px-2 py-2 text-sm focus:border-orange-400 focus:outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10"
             />
           </label>
           <div className="flex gap-2">
@@ -305,7 +305,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
               onChange={(e) => setLostSaleNote(e.target.value)}
               rows={2}
               placeholder="e.g. Customer bought elsewhere."
-              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-slate-400 focus:outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
             />
           </label>
           <div className="flex gap-2">
@@ -322,7 +322,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
       {showEvConfirm && (
         <div className="space-y-3 border-t border-emerald-100 bg-emerald-50/60 px-5 py-3">
           <div className="text-xs">
-            <span className="font-medium text-emerald-900">EV option — confirm before moving to order</span>
+            <span className="font-medium text-emerald-900">EV option: confirm before moving to order</span>
             <div className="mt-0.5 text-emerald-800">
               Currently set to: <span className="font-medium">{p.wallboxIncluded ? "Wallbox" : p.customerSavingGbp ? `Customer saving £${p.customerSavingGbp.toFixed(0)}` : "(not set)"}</span>
             </div>
@@ -340,7 +340,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
                 value={evSaving}
                 disabled={evChoice !== "saving"}
                 onChange={(e) => setEvSaving(e.target.value)}
-                className="w-24 rounded border border-emerald-300 bg-white px-1.5 py-0.5 disabled:bg-slate-100"
+                className="w-24 rounded-xl border border-emerald-300 bg-white px-1.5 py-0.5 disabled:bg-slate-100"
               />
             </label>
           </div>
@@ -377,7 +377,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
       {error && <div className="border-t border-red-100 bg-red-50 px-5 py-2 text-xs text-red-700">{error}</div>}
 
       <div className="border-t border-slate-100 px-5 py-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Timeline</div>
+        <div className="font-semibold text-slate-500 text-[12.5px]">Timeline</div>
         <ol className="mt-2 space-y-1.5">
           {events.map((e) => (
             <li key={e.id} className="flex gap-3 text-xs">
@@ -468,12 +468,12 @@ function ReproposeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Log proposal with another funder</div>
+          <div className="text-slate-500 text-[12.5px]">Log proposal with another funder</div>
           <div className="mt-0.5 text-xs text-slate-500">Attempt #{nextRank} of 3</div>
         </div>
         <div className="space-y-3 px-5 py-4">
           <label className="block text-sm">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Funder</span>
+            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Funder</span>
             {funders === null ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-400">Loading…</div>
             ) : funders.length === 0 ? (
@@ -481,7 +481,7 @@ function ReproposeModal({
                 No other funders configured.
               </div>
             ) : (
-              <select value={funderId} onChange={(e) => setFunderId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+              <select value={funderId} onChange={(e) => setFunderId(e.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
                 {funders.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.monthly !== null
@@ -495,7 +495,7 @@ function ReproposeModal({
 
           {needsManual && (
             <label className="block text-sm">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Manual monthly rental (£)</span>
+              <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Manual monthly rental (£)</span>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">£</span>
                 <input
@@ -503,20 +503,20 @@ function ReproposeModal({
                   value={manualMonthly}
                   onChange={(e) => setManualMonthly(e.target.value)}
                   placeholder="e.g. 429.50"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pl-7 text-sm tabular-nums"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 pl-7 text-sm tabular-nums"
                 />
               </div>
-              <span className="mt-1 block text-[11px] text-amber-700">No automatic rate for this funder — enter the £/mo you've quoted.</span>
+              <span className="mt-1 block text-[11px] text-amber-700">No automatic rate for this funder. Enter the monthly amount you've quoted.</span>
             </label>
           )}
 
           <label className="block text-sm">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Finance Proposal Number</span>
+            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Finance Proposal Number</span>
             <input
               value={fpn}
               onChange={(e) => setFpn(e.target.value)}
               placeholder="e.g. FP-00012345"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
             />
           </label>
 

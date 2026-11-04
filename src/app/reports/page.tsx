@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CARD, CARD_LINK, PageShell, PageTitle } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
   buildReport,
@@ -84,15 +85,12 @@ export default async function ReportsPage({
   ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <Link href="/" className="text-xs text-slate-500 hover:text-slate-900">← Back to home</Link>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Reports</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {RANGE_LABELS[range]} · {SOURCE_LABELS[source]} · {r.totalProposals} proposals across {r.uniqueDeals} deals
-        </p>
+    <PageShell>
+      <PageTitle title="Reports">
+        {`${RANGE_LABELS[range]} · ${SOURCE_LABELS[source]} · ${r.totalProposals} proposals across ${r.uniqueDeals} deals`}
+      </PageTitle>
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <RangePicker value={range} />
           <SourceFilter value={source} />
         </div>
@@ -194,7 +192,7 @@ export default async function ReportsPage({
 
         <Card
           title="Source split"
-          desc={source === "all" ? "Click a source to filter every chart below" : `Filtered to ${SOURCE_LABELS[source]} — click All to clear`}
+          desc={source === "all" ? "Click a source to filter every chart below" : `Filtered to ${SOURCE_LABELS[source]}. Click All sources to clear it`}
           gradient="from-rose-50 to-fuchsia-50"
           accent="rose"
         >
@@ -211,11 +209,13 @@ export default async function ReportsPage({
                 <Link
                   key={s.key}
                   href={setSourceHref(range, s.key)}
-                  className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${s.tone} p-4 text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg ${active ? "ring-2 ring-white ring-offset-2 ring-offset-rose-50" : ""}`}
+                  className={`rounded-2xl bg-white p-4 transition ${active ? "shadow-[0_0_0_2px_rgba(15,23,42,0.9)]" : "shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)] hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.18)]"}`}
                 >
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/80">{s.label}{active ? " · selected" : ""}</div>
-                  <div className="mt-1 text-2xl font-bold tabular-nums">{s.submitted}</div>
-                  <div className="text-[11px] text-white/80">{s.accepted} accepted · {rate}%</div>
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500">
+                    <span className={`h-1.5 w-1.5 rounded-full ${DOT[s.tone.match(/from-(\w+)-/)?.[1] ?? "slate"] ?? "bg-slate-400"}`} />{s.label}{active ? ", selected" : ""}
+                  </div>
+                  <div className="mt-1.5 text-[24px] font-semibold leading-none tabular-nums text-slate-900">{s.submitted}</div>
+                  <div className="mt-1 text-[12.5px] text-slate-500">{s.accepted} accepted · {rate}%</div>
                 </Link>
               );
             })}
@@ -228,7 +228,7 @@ export default async function ReportsPage({
           </Card>
         )}
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Funder share" desc="Click a funder to drill into its proposals" gradient="from-sky-50 to-white" accent="sky">
             <BarList
               rows={r.funderSplit.map((f) => ({
@@ -270,7 +270,7 @@ export default async function ReportsPage({
           </Card>
         </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card title="2nd / 3rd-string acceptance by funder" gradient="from-amber-50 to-white" accent="amber">
             <RateList
               rows={r.secondStringByFunder.map((f) => ({
@@ -306,7 +306,7 @@ export default async function ReportsPage({
 
         {/* Splits header with the proposed/accepted toggle */}
         <div className="mt-6 flex items-baseline justify-between gap-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Deal shape</h2>
+          <h2 className="font-semibold text-[17px] tracking-tight text-slate-900">Deal shape</h2>
           <SplitsToggle range={range} source={source} mode={splitMode} />
         </div>
 
@@ -367,7 +367,7 @@ export default async function ReportsPage({
 
         <Card title="Top derivatives" gradient="from-slate-50 to-white" accent="slate">
           <table className="w-full text-sm">
-            <thead className="text-[11px] uppercase tracking-wide text-slate-500">
+            <thead className="text-slate-500 text-[12.5px]">
               <tr><th className="py-1 text-left">Model</th><th className="py-1 text-left">Derivative</th><th className="text-right">Count</th><th className="text-right">Share</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -384,7 +384,7 @@ export default async function ReportsPage({
           </table>
         </Card>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Cancellations by funder" gradient="from-rose-50 to-white" accent="rose">
             <BarList
               rows={r.cancellationByFunder.map((x) => ({
@@ -412,7 +412,7 @@ export default async function ReportsPage({
             </div>
             {r.evByModel.length > 0 && (
               <table className="mt-4 w-full text-sm">
-                <thead className="text-[11px] uppercase tracking-wide text-slate-500">
+                <thead className="text-slate-500 text-[12.5px]">
                   <tr><th className="py-1 text-left">Model</th><th className="text-right">Total</th><th className="text-right">Wallbox</th><th className="text-right">Saving</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -432,7 +432,7 @@ export default async function ReportsPage({
 
         <Card title="Sales exec leaderboard" desc="Rate = accepted ÷ decided · pending shown separately" gradient="from-emerald-50 to-white" accent="emerald">
           <table className="w-full text-sm">
-            <thead className="text-[11px] uppercase tracking-wide text-slate-500">
+            <thead className="text-slate-500 text-[12.5px]">
               <tr>
                 <th className="py-1 text-left">Exec</th>
                 <th className="text-right">Submitted</th>
@@ -459,8 +459,7 @@ export default async function ReportsPage({
             </tbody>
           </table>
         </Card>
-      </main>
-    </div>
+    </PageShell>
   );
 }
 
@@ -485,11 +484,11 @@ function DeltaChip({ current, previous, invertGood, unit }: { current: number; p
   const positive = invertGood ? value < 0 : value > 0;
   const negative = invertGood ? value > 0 : value < 0;
   const cls = positive
-    ? "bg-emerald-500/30 text-emerald-50"
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
     : negative
-      ? "bg-rose-500/30 text-rose-50"
-      : "bg-white/20 text-white/80";
-  return <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ring-white/20 ${cls}`}>{label}</span>;
+      ? "bg-rose-50 text-rose-700 ring-rose-200"
+      : "bg-slate-50 text-slate-600 ring-slate-200";
+  return <span className={`rounded-md px-1.5 py-0.5 text-[12px] font-semibold tabular-nums ring-1 ring-inset ${cls}`}>{label}</span>;
 }
 
 function HeroTile({ gradient, label, value, sub, href, delta }: {
@@ -503,46 +502,44 @@ function HeroTile({ gradient, label, value, sub, href, delta }: {
   // unit chooses the chip format ("pp" for percentage-points, omit for %Δ).
   delta?: { current: number; previous: number; invertGood?: boolean; unit?: "pp" };
 }) {
+  // The site's stat card (components/ui.tsx): white, a plain label, a big number.
+  // The tile's colour survives as the dot by its label.
+  const dot = gradient.match(/from-(\w+)-/)?.[1] ?? "slate";
   const inner = (
-    <div className={`relative h-full overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-5 text-white shadow-lg ${href ? "transition hover:-translate-y-0.5 hover:shadow-xl" : ""}`}>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
-      <div className="relative">
-        <div className="flex items-center justify-between">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
-          {href && <span className="text-[10px] font-medium text-white/70">Drill in →</span>}
+    <div className={`h-full p-5 ${href ? CARD_LINK : CARD}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[dot] ?? "bg-slate-400"}`} />{label}
         </div>
-        <div className="mt-1 flex items-baseline gap-2">
-          <div className="text-3xl font-bold tabular-nums">{value}</div>
-          {delta && <DeltaChip {...delta} />}
-        </div>
-        {sub && <div className="mt-0.5 text-xs text-white/80">{sub}</div>}
+        {href && <span className="text-[12px] font-medium text-slate-400">Drill in</span>}
       </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <div className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">{value}</div>
+        {delta && <DeltaChip {...delta} />}
+      </div>
+      {sub && <div className="mt-1.5 text-[13px] text-slate-500">{sub}</div>}
     </div>
   );
   return href ? <Link href={href} className="block">{inner}</Link> : inner;
 }
 
-const ACCENT_BORDER: Record<string, string> = {
-  sky: "border-sky-200",
-  emerald: "border-emerald-200",
-  amber: "border-amber-200",
-  violet: "border-violet-200",
-  rose: "border-rose-200",
-  fuchsia: "border-fuchsia-200",
-  orange: "border-orange-200",
-  slate: "border-slate-200",
+const DOT: Record<string, string> = {
+  emerald: "bg-emerald-500", amber: "bg-amber-500", red: "bg-rose-500", rose: "bg-rose-500", sky: "bg-sky-500", indigo: "bg-indigo-500",
+  violet: "bg-violet-500", fuchsia: "bg-fuchsia-500", orange: "bg-orange-500", teal: "bg-teal-500", lime: "bg-lime-500", slate: "bg-slate-400", cyan: "bg-cyan-500",
 };
 
+
+/** `gradient` and `accent` are what the cards were tinted with; every section now shares one card. */
 function Card({
-  title, desc, children, gradient = "from-slate-50 to-white", accent = "slate",
+  title, desc, children,
 }: { title: string; desc?: string; children: React.ReactNode; gradient?: string; accent?: string }) {
   return (
-    <section className={`mt-6 overflow-hidden rounded-2xl border bg-gradient-to-br ${gradient} ${ACCENT_BORDER[accent]} shadow-sm`}>
-      <div className="border-b border-white/60 bg-white/40 px-5 py-3 backdrop-blur">
-        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
-        {desc && <p className="text-xs text-slate-500">{desc}</p>}
+    <section className={`mt-6 overflow-hidden ${CARD}`}>
+      <div className="px-5 pt-5">
+        <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">{title}</h2>
+        {desc && <p className="mt-0.5 text-[13px] text-slate-500">{desc}</p>}
       </div>
-      <div className="bg-white/70 p-5 backdrop-blur">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
@@ -701,7 +698,7 @@ const MINI_STAT_BG: Record<string, string> = {
 function MiniStat({ label, value, sub, colour, href }: { label: string; value: string; sub?: string; colour: string; href?: string }) {
   const inner = (
     <div className={`rounded-xl p-3 ring-1 ring-inset ring-white/40 ${MINI_STAT_BG[colour]}`}>
-      <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</div>
+      <div className="font-semibold opacity-70 text-[12.5px]">{label}</div>
       <div className="mt-0.5 text-2xl font-bold tabular-nums">{value}</div>
       {sub && <div className="text-[11px] opacity-70">{sub}</div>}
     </div>
@@ -761,7 +758,7 @@ function DrilldownPanel({
     <section className="mt-6 overflow-hidden rounded-2xl border-2 border-sky-300 bg-gradient-to-br from-sky-50 to-white shadow-md">
       <div className="flex items-center justify-between border-b border-sky-200 bg-sky-100/60 px-5 py-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-sky-700">Drilldown · {kind}</div>
+          <div className="font-semibold text-sky-700 text-[12.5px]">Drilldown · {kind}</div>
           <div className="text-base font-semibold text-slate-900">{headline}</div>
           <div className="text-xs text-slate-500">{rows.length} {rows.length === 1 ? "proposal" : "proposals"} · {RANGE_LABELS[range]}</div>
         </div>
@@ -771,7 +768,7 @@ function DrilldownPanel({
       </div>
       <div className="max-h-[420px] overflow-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white/95 text-[11px] uppercase tracking-wide text-slate-500 backdrop-blur">
+          <thead className="sticky top-0 bg-white/95 text-slate-500 backdrop-blur text-[12.5px]">
             <tr>
               <th className="px-4 py-2 text-left">Customer</th>
               <th className="px-4 py-2 text-left">Vehicle</th>

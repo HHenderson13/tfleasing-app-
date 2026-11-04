@@ -69,14 +69,14 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
   const totalScenarioChassis = scenarios.reduce((acc, s) => acc + s.chassisGpPerUnit * s.units, 0);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Forecast scenarios</h3>
+            <h3 className="font-semibold text-[17px] tracking-tight text-slate-900">Forecast scenarios</h3>
             <p className="mt-1 text-sm text-slate-500">
               Add units you expect on top of the dealbook. Pick the model + set chassis £ per unit
-              and the volume — F&I, Standards, Stocking, DPA and Pot of Gold scale off this
+              and the volume: F&I, Standards, Stocking, DPA and Pot of Gold scale off this
               vehicle's all-year averages and its per-vehicle bonus rates.
             </p>
           </div>
@@ -93,7 +93,7 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
       {scenarios.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-5 py-2.5 text-left font-medium">Model</th>
                 <th className="px-3 py-2.5 text-right font-medium w-32">Chassis £/unit</th>
@@ -115,7 +115,7 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
                         defaultValue={s.vehicleId}
                         disabled={pending}
                         onChange={(e) => update(s.id, { vehicleId: e.target.value })}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-sm font-medium"
+                        className="rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm font-medium"
                       >
                         {vehicles.map((v) => (
                           <option key={v.id} value={v.id}>{v.name} ({v.fuelType.toUpperCase()})</option>
@@ -129,7 +129,7 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
                           const v = Number(e.target.value);
                           if (Number.isFinite(v) && v !== s.chassisGpPerUnit) update(s.id, { chassisGpPerUnit: v });
                         }}
-                        className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right text-sm tabular-nums"
+                        className="w-28 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-right text-sm tabular-nums"
                       />
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -139,7 +139,7 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
                           const v = Number(e.target.value);
                           if (Number.isFinite(v) && v !== s.units) update(s.id, { units: v });
                         }}
-                        className="w-20 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right text-sm tabular-nums"
+                        className="w-20 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-right text-sm tabular-nums"
                       />
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
@@ -151,7 +151,7 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
                           {avg.units} units in history · avg Basic £{avgBasic.toLocaleString("en-GB")} · avg F&I £{avgFi.toLocaleString("en-GB")}
                         </>
                       ) : (
-                        <span className="text-amber-700">No history for {vehicleName(s.vehicleId)} yet — F&I + DPA contributions will be £0 until some lines land.</span>
+                        <span className="text-amber-700">No history for {vehicleName(s.vehicleId)} yet: F&I + DPA contributions will be £0 until some lines land.</span>
                       )}
                     </td>
                     <td className="px-5 py-2 text-right">
@@ -169,9 +169,9 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
       <form action={add} className="border-t border-slate-200 bg-slate-50/60 px-5 py-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col">
-            <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Model</span>
+            <span className="text-slate-500 text-[12.5px]">Model</span>
             <select name="vehicleId" required defaultValue=""
-              className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium">
+              className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium">
               <option value="" disabled>Pick a model…</option>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>{v.name} ({v.fuelType.toUpperCase()})</option>
@@ -179,17 +179,17 @@ export function ScenarioBuilder({ month, scenarios, vehicles, averages }: Props)
             </select>
           </label>
           <label className="flex flex-col">
-            <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Chassis £/unit</span>
+            <span className="text-slate-500 text-[12.5px]">Chassis £/unit</span>
             <input type="number" step="1" name="chassisGpPerUnit" required defaultValue="0"
-              className="mt-1 w-32 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-right text-sm tabular-nums" />
+              className="mt-1 w-32 rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm tabular-nums" />
           </label>
           <label className="flex flex-col">
-            <span className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Units</span>
+            <span className="text-slate-500 text-[12.5px]">Units</span>
             <input type="number" step="1" name="units" required defaultValue="0"
-              className="mt-1 w-24 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-right text-sm tabular-nums" />
+              className="mt-1 w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm tabular-nums" />
           </label>
           <button type="submit" disabled={pending}
-            className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
             + Add scenario
           </button>
         </div>

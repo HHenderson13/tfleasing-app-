@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./funders.css";
 
 export const metadata: Metadata = {
-  title: "Funder Comparison — TrustFord Leasing",
+  title: "Funder Comparison · TrustFord Leasing",
 };
 
 export default function FundersLayout({

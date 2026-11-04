@@ -85,7 +85,7 @@ export function DiscountsGrid({ rows }: { rows: Row[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search profiles or vehicles…"
-          className="w-72 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-400 focus:outline-none"
+          className="w-72 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
         />
         <div className="text-xs text-slate-400">{rows.length} profile{rows.length === 1 ? "" : "s"}</div>
       </div>
@@ -109,14 +109,14 @@ export function DiscountsGrid({ rows }: { rows: Row[] }) {
       </div>
 
       {adding ? (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex items-center gap-2 bg-white p-3 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <input
             autoFocus
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") add(); if (e.key === "Escape") { setAdding(false); setNewLabel(""); } }}
             placeholder="Profile name, e.g. Puma Gen-E Select"
-            className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
           />
           <button onClick={add} disabled={!newLabel.trim()} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">Create</button>
           <button onClick={() => { setAdding(false); setNewLabel(""); }} className="text-sm text-slate-400 hover:text-slate-700">Cancel</button>
@@ -158,12 +158,12 @@ function ProfileCard({
   const total = row.termsPct + row.dealerPct;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <header className="flex items-start justify-between gap-4 px-5 pt-4">
         <input
           defaultValue={row.label}
           onBlur={(e) => e.currentTarget.value !== row.label && onSave({ label: e.currentTarget.value })}
-          className="flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-slate-900 hover:border-slate-200 focus:border-slate-400 focus:outline-none"
+          className="flex-1 rounded-xl border border-transparent bg-transparent px-2 py-2 text-lg font-semibold text-slate-900 hover:border-slate-200 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
         />
         <div className="flex items-center gap-2 pt-1">
           <button
@@ -194,7 +194,7 @@ function ProfileCard({
           placeholder="0"
         />
         <div className="flex flex-col justify-center rounded-xl bg-slate-50 px-3 py-2">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Total discount</span>
+          <span className="font-medium text-slate-500 text-[12.5px]">Total discount</span>
           <span className="text-xl font-semibold tabular-nums text-slate-900">{(total * 100).toFixed(2)}%</span>
         </div>
       </div>
@@ -221,14 +221,14 @@ function ProfileCard({
       {showDetails && (
         <div className="grid gap-4 border-t border-slate-100 px-5 py-4 md:grid-cols-2">
           <fieldset className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
-            <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Novuna chip (Novuna only)</legend>
+            <legend className="px-1 font-semibold text-indigo-700 text-[12.5px]">Novuna chip (Novuna only)</legend>
             <div className="mt-1 grid grid-cols-2 gap-3">
               <NumField label="3-year" value={row.novunaChip3Yr} suffix="%" isPct nullable onSave={(v) => onSave({ novunaChip3Yr: v })} placeholder="—" />
               <NumField label="4-year" value={row.novunaChip4Yr} suffix="%" isPct nullable onSave={(v) => onSave({ novunaChip4Yr: v })} placeholder="—" />
             </div>
           </fieldset>
           <fieldset className="rounded-xl border border-slate-200 p-3">
-            <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Customer-facing</legend>
+            <legend className="px-1 font-semibold text-slate-500 text-[12.5px]">Customer-facing</legend>
             <div className="mt-1 grid grid-cols-1 gap-3">
               <label className="block text-xs">
                 <span className="mb-1 block font-medium text-slate-500">Grant text</span>
@@ -239,7 +239,7 @@ function ProfileCard({
                     const v = e.currentTarget.value.trim();
                     if (v !== (row.grantText ?? "")) onSave({ grantText: v || null });
                   }}
-                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-slate-400 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
                 />
               </label>
               <NumField
@@ -418,7 +418,7 @@ function VehiclePicker({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Add vehicles to</div>
+          <div className="text-slate-500 text-[12.5px]">Add vehicles to</div>
           <div className="text-lg font-semibold text-slate-900">{profile.label}</div>
           <p className="mt-1 text-xs text-slate-500">Showing vehicles that aren't yet mapped to any discount profile.</p>
         </div>
@@ -428,13 +428,13 @@ function VehiclePicker({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search…"
-            className="flex-1 min-w-[200px] rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+            className="flex-1 min-w-[200px] rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
-          <select value={model} onChange={(e) => setModel(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
+          <select value={model} onChange={(e) => setModel(e.target.value)} className="rounded-xl border border-slate-300 px-2 py-2 text-sm">
             <option value="">All models</option>
             {models.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={fuel} onChange={(e) => setFuel(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
+          <select value={fuel} onChange={(e) => setFuel(e.target.value)} className="rounded-xl border border-slate-300 px-2 py-2 text-sm">
             <option value="">All fuels</option>
             {fuels.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
@@ -444,7 +444,7 @@ function VehiclePicker({
           <select
             value={ruleDraft.mode}
             onChange={(e) => setRuleDraft((d) => ({ ...d, mode: e.target.value as "include" | "exclude" }))}
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+            className="rounded-xl border border-slate-300 px-2 py-2 text-[13px]"
           >
             <option value="include">Include</option>
             <option value="exclude">Exclude</option>
@@ -458,8 +458,8 @@ function VehiclePicker({
                 setRuleDraft({ mode: ruleDraft.mode, text: "" });
               }
             }}
-            placeholder='e.g. "gen-e select" — space-separated words all must match'
-            className="flex-1 min-w-[240px] rounded-lg border border-slate-200 px-3 py-1.5 text-xs"
+            placeholder='e.g. "gen-e select": space-separated words all must match'
+            className="flex-1 min-w-[240px] rounded-xl border border-slate-300 px-3 py-2 text-[13px]"
           />
           <button
             onClick={() => {
@@ -494,7 +494,7 @@ function VehiclePicker({
             <div className="p-8 text-center text-sm text-slate-400">No matching unmapped vehicles.</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="sticky top-0 bg-slate-50 text-slate-500 text-[12.5px]">
                 <tr>
                   <th className="px-3 py-2 text-left">
                     <input

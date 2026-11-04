@@ -29,17 +29,17 @@ export default async function AdminUsersPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Users</h1>
-        <p className="mt-1 text-sm text-slate-500">Create accounts, assign roles, and link to a sales exec. Users set their own password via a one-time link.</p>
+        <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Users</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">Create accounts, assign roles, and link to a sales exec. Users set their own password via a one-time link.</p>
       </header>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Add a user</h2>
+        <h2 className="mb-2 font-semibold text-[17px] tracking-tight text-slate-900">Add a user</h2>
         <NewUserForm execs={execs.map((e) => ({ id: e.id, name: e.name }))} />
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Existing users ({allUsers.length})</h2>
+        <h2 className="mb-2 font-semibold text-[17px] tracking-tight text-slate-900">Existing users ({allUsers.length})</h2>
         <ul className="space-y-3">
           {allUsers.map((u) => {
             const roles = parseRoles(u.roles);
@@ -47,12 +47,12 @@ export default async function AdminUsersPage() {
             const pending = !!u.setupToken;
             const expired = pending && u.setupTokenExpiresAt && u.setupTokenExpiresAt.getTime() < Date.now();
             return (
-              <li key={u.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <li key={u.id} className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-slate-900">
                       {u.name}
-                      {isMe && <span className="ml-2 text-[10px] uppercase text-slate-400">(you)</span>}
+                      {isMe && <span className="ml-2 text-slate-500 text-[12.5px]">(you)</span>}
                       {pending && (
                         <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${expired ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
                           {expired ? "Setup expired" : "Setup pending"}
@@ -84,7 +84,7 @@ export default async function AdminUsersPage() {
                 <form action={updateUserAction} className="mt-3 grid gap-3 sm:grid-cols-2">
                   <input type="hidden" name="id" value={u.id} />
                   <fieldset>
-                    <legend className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Roles</legend>
+                    <legend className="font-medium text-slate-500 text-[12.5px]">Roles</legend>
                     <div className="mt-1 flex flex-wrap gap-2">
                       {(["admin", "exec", "quote", "stock"] as const).map((r) => (
                         <label key={r} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs">
@@ -94,9 +94,9 @@ export default async function AdminUsersPage() {
                       ))}
                     </div>
                   </fieldset>
-                  <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <label className="block font-medium text-slate-500 text-[12.5px]">
                     Linked sales exec
-                    <select name="salesExecId" defaultValue={u.salesExecId ?? ""} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-xs">
+                    <select name="salesExecId" defaultValue={u.salesExecId ?? ""} className="mt-1 w-full rounded-xl border border-slate-300 px-2 py-2 text-[13px]">
                       <option value="">— None —</option>
                       <option value="__new__">+ Create new sales exec from this user</option>
                       {execs.map((e) => (

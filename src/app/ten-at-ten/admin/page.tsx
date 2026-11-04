@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
 import { listTenAtTenUploads, loadBonusRates, loadBudgets, tenAtTenSummary, type HeldSummary } from "@/lib/ten-at-ten-store";
 import { BonusEditor } from "./bonus-editor";
 import { BudgetEditor } from "./budget-editor";
 import { UploadClient } from "./upload-client";
+
+import { AppBar } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ const FILES: FileGuide[] = [
     columns: "Created By · Customer · Date Raised · Type · Source · 2nd Contact · Date Transferred",
     feeds: "Response times",
     rules: [
-      "Keeps MotorComplete leads only — MotorComplete Lead, Leasing.com, LeaseLoco and carwow. Every other source is stripped.",
+      "Keeps MotorComplete leads only: MotorComplete Lead, Leasing.com, LeaseLoco and carwow. Every other source is stripped.",
       "Strips anything Harry Henderson or Joseph Rustigini is on, and leads merged into an existing customer.",
     ],
     matched: "exec, customer and when it was raised",
@@ -77,7 +78,7 @@ const FILES: FileGuide[] = [
     columns: "Sales Executive · Order Date · Customer · Model · Registration Number · Cancelled Date",
     feeds: "Cancellations",
     rules: [
-      "Each cancellation is checked against Dealbook – Orders and Deliveries. Re-ordered within 30 days — same registration by the same exec, or same customer and model — it's a Re-Write: shown, but not counted as a cancellation.",
+      "Each cancellation is checked against Dealbook – Orders and Deliveries. Re-ordered within 30 days (same registration by the same exec, or same customer and model), it's a Re-Write: shown, but not counted as a cancellation.",
       "An order we still hold that was later cancelled is left out of Orders, as Dealerweb's own order list now does. Notes added on the Cancellations tab are never touched by an upload. Harry Henderson and Joseph Rustigini are stripped.",
     ],
     matched: "order time, customer and vehicle",
@@ -88,7 +89,7 @@ const FILES: FileGuide[] = [
     columns: "Customer · Model · Order Date · SE · Deliv Date · Deliv Status · Basic (column BQ)",
     feeds: "Bonuses on Orders and Deliveries",
     rules: [
-      "Held for Basic in column BQ — the price a percentage bonus is paid on. The upload stops if BQ isn't Basic.",
+      "Held for Basic in column BQ: the price a percentage bonus is paid on. The upload stops if BQ isn't Basic.",
       "Each line is tied to its deal on Dealbook – Orders and Deliveries by order date and vehicle, plus the exec, registration or customer. A deal with no line yet shows only its £ bonus, and says so.",
       "Upload the full month, as for Dealbook – Deliveries: a line no longer on it is removed from that month. Harry Henderson and Joseph Rustigini are stripped.",
     ],
@@ -105,28 +106,23 @@ export default async function TenAtTenAdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3 text-sm">
-          <Link href="/ten-at-ten" className="text-slate-500 hover:text-slate-900">← 10 at 10</Link>
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Admin</span>
-        </div>
-      </header>
+      <AppBar back="/ten-at-ten" backLabel="10 at 10" width="5xl"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12.5px] font-semibold text-slate-600">Admin</span></AppBar>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Upload data</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Six files keep 10 at 10 up to date. Drop any of them in below — one at a time or all together — and
+      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Upload data</h1>
+        <p className="mt-2 max-w-3xl text-[15px] leading-6 text-slate-600">
+          Six files keep 10 at 10 up to date. Drop any of them in below, one at a time or all together, and
           each is recognised for you. Delivery budgets and quarterly bonuses are set at the bottom of the page.
         </p>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
           {FILES.map((f) => {
             const h = held[f.kind];
             return (
-              <div key={f.kind} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div key={f.kind} className="flex flex-col rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
                 <div className="text-base font-semibold text-slate-900">{KIND_LABEL[f.kind]}</div>
                 <div className="text-xs text-slate-500">{f.from} · feeds <span className="font-medium text-slate-700">{f.feeds}</span></div>
-                <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Has the columns</div>
+                <div className="mt-3 font-semibold text-slate-500 text-[12.5px]">Has the columns</div>
                 <div className="mt-0.5 text-xs text-slate-600">{f.columns}</div>
                 <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-slate-600">
                   {f.rules.map((r) => <li key={r}>{r}</li>)}
@@ -144,7 +140,7 @@ export default async function TenAtTenAdminPage() {
 
         <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-xs text-indigo-900">
           <span className="font-semibold">These uploads also drive Pole Position.</span>{" "}The Enquiry Log, Dealbook – Orders and Dealbook – Deliveries
-          are uploaded here only — Pole Position&apos;s Order Take, Deliveries, Insurance and Inbound Conversion are built from them, from October
+          are uploaded here only: Pole Position&apos;s Order Take, Deliveries, Insurance and Inbound Conversion are built from them, from October
           2026 on. Earlier months keep the figures Pole Position already had.
         </div>
 
@@ -169,9 +165,9 @@ export default async function TenAtTenAdminPage() {
           {uploads.length === 0 ? (
             <p className="mt-2 text-sm text-slate-400">Nothing uploaded yet.</p>
           ) : (
-            <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
                   <tr>
                     <th className="px-4 py-2 text-left font-semibold">File</th>
                     <th className="px-3 py-2 text-left font-semibold">Type</th>

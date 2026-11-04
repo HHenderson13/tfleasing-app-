@@ -45,14 +45,14 @@ export function SheetView({ sheet, lines, dealbookValues, forecastValues, foreca
   })();
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-slate-900">
             {sheet === "car" ? "Lease New Cars" : sheet === "cv" ? "Lease New Commercial" : "General Overheads"}
           </h3>
           {isPublished && (
-            <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-800 ring-1 ring-emerald-200">
+            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800 ring-1 ring-emerald-200 text-[12.5px]">
               Published actuals
             </span>
           )}
@@ -61,7 +61,7 @@ export function SheetView({ sheet, lines, dealbookValues, forecastValues, foreca
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Line</th>
               <th className="px-3 py-3 text-right font-medium">Budget</th>
@@ -76,7 +76,7 @@ export function SheetView({ sheet, lines, dealbookValues, forecastValues, foreca
               if (l.kind === "header") {
                 return (
                   <tr key={l.key} className="bg-gradient-to-r from-slate-100 to-transparent">
-                    <td colSpan={6} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700">
+                    <td colSpan={6} className="px-5 py-2.5 font-bold text-slate-700 text-[12.5px]">
                       {l.label}
                     </td>
                   </tr>

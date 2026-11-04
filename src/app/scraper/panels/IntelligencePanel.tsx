@@ -198,10 +198,10 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
             value={activeRunId || ""}
             onChange={(e) => onSelectRun(e.target.value || undefined)}
           >
-            <option value="">— Select run —</option>
+            <option value="">Select a run</option>
             {runs.map((r) => (
               <option key={r.id} value={r.id}>
-                {(r.label || "Unlabelled")} — {r.startedAt.slice(0, 10)} (
+                {(r.label || "Unlabelled")} · {r.startedAt.slice(0, 10)} (
                 {r.totalResults.toLocaleString()} listings)
               </option>
             ))}
@@ -259,7 +259,7 @@ export function IntelligencePanel({ activeRunId, onSelectRun }: IntelligencePane
         {results.length === 0 && !loading && (
           <div className="empty-state">
             {runs.length === 0
-              ? "No runs yet. Run a scrape from the desktop RateX app — it'll auto-upload here."
+              ? "No runs yet. Run a scrape from the desktop RateX app and it'll upload here by itself."
               : "Select a run above to see intelligence."}
           </div>
         )}
@@ -518,7 +518,7 @@ function HeadlineLosses({
           Losing on headline price
           <span className="ov-count">
             {mode === "cross"
-              ? "Our best price wins its own term, but a rival's price on another term is lower — the customer sees theirs first."
+              ? "Our best price wins its own term, but a rival's price on another term is lower: the customer sees theirs first."
               : "A rival's cheapest monthly (any term) is below ours (any term), for the same vehicle and mileage."}
           </span>
         </div>
@@ -865,7 +865,7 @@ function DrilldownView({
       <div className="drill-search">
         <input
           type="search"
-          placeholder={`Search ${vehicles.length} vehicles — e.g. "320 L2 trend"`}
+          placeholder={`Search ${vehicles.length} vehicles, e.g. "320 L2 trend"`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

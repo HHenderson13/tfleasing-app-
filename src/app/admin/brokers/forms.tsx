@@ -34,7 +34,7 @@ export function CreateBrokerForm() {
       <button
         type="submit"
         disabled={pending || !name.trim()}
-        className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >
         {pending ? "Adding…" : "Add broker"}
       </button>
@@ -104,7 +104,7 @@ export function DeleteBrokerButton({ id, name, userCount }: { id: string; name: 
           onChange={(e) => setTyped(e.target.value)}
           placeholder={name}
           autoFocus
-          className="rounded-lg border border-red-300 bg-white px-2 py-1 text-xs"
+          className="rounded-xl border border-red-300 bg-white px-2 py-2 text-[13px]"
         />
         <button onClick={confirm} disabled={pending || !typed.trim()} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-medium text-white hover:bg-red-800 disabled:opacity-50">
           {pending ? "Deleting…" : "Delete"}

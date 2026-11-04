@@ -33,7 +33,7 @@ export function OrderRow({
   const c = statusColor(status);
   const linkHref = href === undefined ? `/orders/${id}` : href;
   return (
-    <div className="group relative flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+    <div className="group relative flex items-center gap-4 rounded-2xl bg-white px-4 py-3 transition hover:border-slate-300 hover:shadow-md shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       {linkHref && (
         <Link href={linkHref} aria-label={`Open order for ${customer}`} className="absolute inset-0 z-0 rounded-2xl" />
       )}

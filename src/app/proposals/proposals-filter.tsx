@@ -54,21 +54,21 @@ export function ProposalsFilter({
     <div className="flex flex-wrap items-end gap-3">
       <form onSubmit={onSubmitQuery} className="flex items-center gap-2">
         <label className="flex flex-col gap-1 text-xs text-slate-500">
-          <span className="font-medium uppercase tracking-wide">Search customer</span>
+          <span className="font-medium text-[12.5px]">Search customer</span>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Name…"
-            className="w-48 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+            className="w-48 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
           />
         </label>
       </form>
       <label className="flex flex-col gap-1 text-xs text-slate-500">
-        <span className="font-medium uppercase tracking-wide">Range</span>
+        <span className="font-medium text-[12.5px]">Range</span>
         <select
           value={range}
           onChange={(e) => updateParam("range", e.target.value === "month" ? null : e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
         >
           {(Object.keys(RANGE_LABELS) as RangeKey[]).map((r) => (
             <option key={r} value={r}>{RANGE_LABELS[r]}</option>
@@ -76,11 +76,11 @@ export function ProposalsFilter({
         </select>
       </label>
       <label className="flex flex-col gap-1 text-xs text-slate-500">
-        <span className="font-medium uppercase tracking-wide">Sales exec</span>
+        <span className="font-medium text-[12.5px]">Sales exec</span>
         <select
           value={execValue}
           onChange={(e) => updateParam("exec", e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
         >
           <option value="all">All</option>
           {execs.map((e) => (

@@ -100,7 +100,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
           options. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-xs text-slate-500">Show:</span>
-        <nav className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-sm">
+        <nav className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1 text-sm">
           <ScopeButton active={scope === "mine"} onClick={() => setScope("mine")} disabled={!myExecId}>
             {myExecName ?? "Mine"}
           </ScopeButton>
@@ -108,7 +108,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
           <ScopeButton active={scope === "others"} onClick={() => setScope("others")} disabled={!myExecId}>Others</ScopeButton>
         </nav>
         {isAdmin && (
-          <span className="text-[11px] text-slate-400">(admin — all execs visible)</span>
+          <span className="text-[11px] text-slate-400">(admin, so every exec is visible)</span>
         )}
       </div>
 
@@ -122,7 +122,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
       {/* Month tabs — one per month with deliveries, current month always
           appears so the user can land on it even when empty. */}
       <div className="mt-6 overflow-x-auto">
-        <nav className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-sm">
+        <nav className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1 text-sm">
           {(monthKeys.includes(thisMonthKey) ? monthKeys : [thisMonthKey, ...monthKeys]).map((k) => (
             <MonthButton key={k} active={k === activeMonth} onClick={() => setActiveMonth(k)}>
               {monthLabel(k)}
@@ -138,7 +138,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
             No deliveries to show for {monthLabel(activeMonth)}{scope !== "all" ? ` (${scopeLabel.toLowerCase()})` : ""}.
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <ul className="divide-y divide-slate-100 rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             {sortedItems.map((it) => (
               <li key={it.id} className="p-3 sm:p-4">
                 <DeliveredRow item={it} highlight={it.execId === myExecId} />
@@ -158,7 +158,7 @@ function ScopeButton({ active, onClick, disabled, children }: { active: boolean;
       onClick={onClick}
       disabled={disabled}
       className={`rounded-lg px-3 py-1.5 font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
-        active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
       }`}
     >
       {children}
@@ -172,7 +172,7 @@ function MonthButton({ active, onClick, children }: { active: boolean; onClick: 
       type="button"
       onClick={onClick}
       className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-        active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
       }`}
     >
       {children}

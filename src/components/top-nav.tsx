@@ -1,14 +1,7 @@
-import Link from "next/link";
+import type { ReactNode } from "react";
+import { AppBar, type PageWidth } from "./ui";
 
-export function TopNav(_props?: { active?: string }) {
-  void _props;
-  return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center px-6 py-3">
-        <Link href="/" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-          ← Back to home
-        </Link>
-      </div>
-    </header>
-  );
+/** The "‹ Home" bar every section shares (components/ui.tsx). `active` is kept for the pages that still pass it. */
+export function TopNav({ width = "6xl", children }: { active?: string; width?: PageWidth; children?: ReactNode } = {}) {
+  return <AppBar width={width}>{children}</AppBar>;
 }

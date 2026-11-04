@@ -1,10 +1,9 @@
-import Link from "next/link";
+import { AppBar, CARD, PageTitle } from "@/components/ui";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { ratebook, vehicles, funders } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-guard";
-import { signOutAction } from "../login/actions";
 import { COMMISSION_TIERS, IRM_OUTPUT } from "@/lib/broker-ratebooks";
 import { BrokerRatebooksClient } from "./client";
 import { InterestRatesSection } from "./interest-rates";
@@ -57,7 +56,7 @@ const loadFunderCounts = unstable_cache(
 );
 
 export default async function BrokerRatebooksPage() {
-  const user = await requireAdmin();
+  await requireAdmin();
 
   const [slotsRow, funderCounts, rateSnapshots] = await Promise.all([
     loadSlotsAggregate(),
@@ -72,39 +71,16 @@ export default async function BrokerRatebooksPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3 text-sm">
-          <Link href="/" className="text-slate-500 hover:text-slate-900">← Back to portal</Link>
-          <div className="flex items-center gap-3">
-            <span className="text-slate-700">{user.name}</span>
-            <form action={signOutAction}>
-              <button className="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+      <AppBar />
 
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        {/* Hero card with the same amber/orange accent as the homepage tile */}
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-700" />
-          <div className="px-7 pt-7 pb-6">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Admin · Exports</div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Broker Ratebooks</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Best rental per slot across all four funders, expanded to {IRM_OUTPUT.join(", ")}× upfronts,
-              with one file per commission tier (£{COMMISSION_TIERS.join(", £")}). Commission is amortised
-              on top with interest at the funder-specific rate solved below.
-            </p>
-          </div>
-          {/* Inline stat pills — denser than three separate cards */}
-          <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/60">
-            <Pill label="Vehicles (CAP codes)" value={summary.capCodes.toLocaleString()} />
-            <Pill label="Source slots @ 6× upfront" value={summary.slots.toLocaleString()} />
-            <Pill label="Source funder rates" value={summary.rentals.toLocaleString()} />
-          </div>
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <PageTitle title="Broker Ratebooks">
+          {`Best rental per slot across all four funders, expanded to ${IRM_OUTPUT.join(", ")}× upfronts, with one file per commission tier (£${COMMISSION_TIERS.join(", £")}). Commission is spread on top with interest at the funder's own rate, solved below.`}
+        </PageTitle>
+        <section className={`grid grid-cols-3 divide-x divide-slate-100 overflow-hidden ${CARD}`}>
+          <Pill label="Vehicles (CAP codes)" value={summary.capCodes.toLocaleString()} />
+          <Pill label="Source slots @ 6× upfront" value={summary.slots.toLocaleString()} />
+          <Pill label="Source funder rates" value={summary.rentals.toLocaleString()} />
         </section>
 
         {/* Downloads — primary action, gradient-accented cards */}
@@ -117,7 +93,7 @@ export default async function BrokerRatebooksPage() {
         <section className="mt-10">
           <SectionHeader
             title="Interest rates"
-            subtitle="Back-solve each funder's rate from a 1+ vs 12+ rental pair on the same vehicle — saved rates feed straight into the export above."
+            subtitle="Back-solve each funder's rate from a 1+ vs 12+ rental pair on the same vehicle: saved rates feed straight into the export above."
           />
           <InterestRatesSection snapshots={rateSnapshots} />
         </section>
@@ -125,7 +101,7 @@ export default async function BrokerRatebooksPage() {
         {/* Source coverage — horizontal bar viz instead of plain rows */}
         <section className="mt-10">
           <SectionHeader title="Source coverage" subtitle="Funder rate counts feeding the export (6× upfront, BCH)." />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             <ul className="space-y-3">
               {sortedFunders.map((f) => {
                 const n = Number(f.rentals);
@@ -155,13 +131,13 @@ export default async function BrokerRatebooksPage() {
 
         {/* Methodology — compact footnote */}
         <section className="mt-10 mb-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5 text-xs text-slate-600">
-          <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Methodology</h3>
+          <h3 className="font-semibold tracking-[0.18em] text-slate-500 text-[12.5px]">Methodology</h3>
           <p className="mt-2">
             Source ratebooks carry the 6× upfront. Other upfronts hold total contract cost constant
             for the bare lease; commission is amortised on top with annuity-due interest at the
             (funder, term) rate solved above.
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-700">
+          <pre className="mt-3 overflow-x-auto bg-white px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-700 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
 {`followOns      = term − 1                                  (24m → 23, 36m → 35, 48m → 47)
 totalCost      = (6 + followOns) × rental@6×
 bareRental@N×  = totalCost / (N + followOns)
@@ -190,8 +166,8 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 function Pill({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-6 py-4">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold text-slate-900">{value}</div>
+      <div className="text-[12.5px] font-medium text-slate-500">{label}</div>
+      <div className="mt-1 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">{value}</div>
     </div>
   );
 }

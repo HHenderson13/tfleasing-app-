@@ -137,11 +137,11 @@ export default async function ProposalsPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <TopNav active="proposals" />
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Proposals</h1>
-            <p className="mt-1 text-sm text-slate-500">One row per customer, latest status on top. Use the range and search to find older proposals.</p>
+            <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Proposals</h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">One row per customer, latest status on top. Use the range and search to find older proposals.</p>
           </div>
           <ProposalsFilter
             execs={execs.map((e) => ({ id: e.id, name: e.name }))}
@@ -152,7 +152,7 @@ export default async function ProposalsPage({
           />
         </div>
 
-        <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {PROPOSAL_SECTION_STATUSES.map((s) => (
             <StatTile
               key={s}
@@ -166,7 +166,7 @@ export default async function ProposalsPage({
         </section>
 
         {(statusFilter || query || range !== "month" || execFilter) && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-2 text-sm rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             <div className="text-slate-700">
               Showing <span className="font-medium">{visible.length}</span> {visible.length === 1 ? "customer" : "customers"}
               {statusFilter && <> · latest status <span className="font-medium">{STATUS_LABELS[statusFilter]}</span></>}
@@ -177,9 +177,9 @@ export default async function ProposalsPage({
           </div>
         )}
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Customer</th>
                 <th className="px-4 py-3 text-left font-medium">Latest vehicle</th>
@@ -240,7 +240,7 @@ export default async function ProposalsPage({
                             return (
                               <span
                                 key={a.id}
-                                title={`#${a.funderRank} ${a.funderName} — ${statusLabel(a.status)}`}
+                                title={`#${a.funderRank} ${a.funderName}: ${statusLabel(a.status)}`}
                                 className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${ac.bg} ${ac.text} ring-1 ${ac.ring}`}
                               >
                                 #{a.funderRank}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { isAdmin } from "@/lib/auth";
 import { requireTenAtTenAccess } from "@/lib/auth-guard";
 import { reportingHorizonFromInstant } from "@/lib/business-hours";
@@ -13,6 +12,8 @@ import {
   loadTenAtTenDeliveries, loadTenAtTenOrders, loadTenAtTenRows,
 } from "@/lib/ten-at-ten-store";
 import { ReportClient } from "./report";
+
+import { AppBar, BarLink, PageTitle, StatusPill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -59,24 +60,11 @@ export default async function TenAtTenPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 text-sm sm:px-6">
-          <Link href="/" className="text-slate-500 hover:text-slate-900">← Home</Link>
-          {canManage && (
-            <Link href="/ten-at-ten/admin" className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
-              Upload data
-            </Link>
-          )}
-        </div>
-      </header>
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">10 at 10</h1>
-            <p className="text-sm text-slate-500">Enquiries and conversion, response times, orders and profit, deliveries against budget, cancellations and the market.</p>
-          </div>
-          {lastUpload && <p className="text-xs text-slate-400">Last upload {lastUpload}</p>}
-        </div>
+      <AppBar width="7xl">{canManage && <BarLink href="/ten-at-ten/admin">Upload data</BarLink>}</AppBar>
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <PageTitle title="10 at 10" pill={lastUpload ? <StatusPill>{`Last upload ${lastUpload}`}</StatusPill> : undefined}>
+          Enquiries and conversion, response times, orders and profit, deliveries against budget, cancellations and the market.
+        </PageTitle>
         <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
           responses={responses} reportHorizon={reportHorizon} today={today}
           cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} canManage={canManage} />
