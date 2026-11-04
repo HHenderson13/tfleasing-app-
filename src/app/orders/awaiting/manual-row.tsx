@@ -77,7 +77,7 @@ export function ManualEtaEditor({
         type="button"
         onClick={save}
         disabled={!dirty || pending}
-        className="rounded bg-amber-600 px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+        className="rounded bg-amber-700 px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
       >
         {pending ? "Saving…" : "Save"}
       </button>

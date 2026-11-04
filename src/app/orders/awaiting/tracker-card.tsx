@@ -86,16 +86,16 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-base font-semibold text-slate-900">{data.customerName}</span>
             {data.businessName && data.businessName !== "Not Applicable" && (
-              <span className="text-xs text-slate-500">· {data.businessName}</span>
+              <span className="text-xs text-slate-600">· {data.businessName}</span>
             )}
             {data.isGroupBq && <span className="rounded bg-violet-100 px-1.5 py-0.5 font-bold text-violet-800 text-[12.5px]">Group BQ</span>}
             {data.isEv && <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-800 text-[12.5px]">⚡ EV</span>}
           </div>
           <div className="mt-1 text-[11px] text-slate-600">
             {data.model} {data.derivative}
-            <span className="mx-1 text-slate-300">·</span>
+            <span className="mx-1 text-slate-500">·</span>
             <span className="font-medium text-slate-700">{data.funderName}</span>
-            {data.execName && <><span className="mx-1 text-slate-300">·</span>{data.execName}</>}
+            {data.execName && <><span className="mx-1 text-slate-500">·</span>{data.execName}</>}
           </div>
           {/* ETA tile — Ford location + ETA date prominent on the card so
               the exec doesn't have to expand to see when the vehicle's
@@ -137,7 +137,7 @@ export function TrackerCard({ data, openByDefault = false }: { data: TrackerCard
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <span className="text-slate-500 text-[12.5px]">{open ? "Close" : "Open"}</span>
+          <span className="text-slate-600 text-[12.5px]">{open ? "Close" : "Open"}</span>
         </div>
       </button>
 
@@ -273,7 +273,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
                   : data.customerSavingGbp
                     ? `Customer saving · £${data.customerSavingGbp.toFixed(0)}`
                     : "—")
-              : <span className="text-slate-400">Not EV</span>}
+              : <span className="text-slate-600">Not EV</span>}
           </div>
         </Field>
       </div>
@@ -384,7 +384,7 @@ function TrackerCardBody({ data }: { data: TrackerCardData }) {
             type="button"
             onClick={() => setConfirmOpen(true)}
             disabled={pending || !data.deliveryBookedAt || !allChecksDone}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             title={
               !data.deliveryBookedAt
                 ? "Set the delivery date first"
@@ -466,7 +466,7 @@ function MarkDeliveredModal({
             <h3 className="text-base font-semibold text-slate-900">Mark as delivered</h3>
             <p className="mt-0.5 text-xs text-slate-600">{data.customerName} · {data.model} {data.derivative}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700">✕</button>
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-700">✕</button>
         </div>
 
         {/* Pre-flight checklist — every server-side requirement made
@@ -542,7 +542,7 @@ function MarkDeliveredModal({
             type="button"
             onClick={onMarkDelivered}
             disabled={!canMark || pending}
-            className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-emerald-700 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pending ? "Submitting…" : "Mark as delivered"}
           </button>
@@ -558,7 +558,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return (
     <label className="block">
       <span className="font-semibold text-slate-600 text-[12.5px]">
-        {label}{hint && <span className="ml-1 text-slate-400 italic">({hint})</span>}
+        {label}{hint && <span className="ml-1 text-slate-600 italic">({hint})</span>}
       </span>
       <div className="mt-1">{children}</div>
     </label>
@@ -684,7 +684,7 @@ function DealerFitOptionsEditor({
       <div className="flex items-baseline justify-between">
         <div className="font-semibold text-slate-600 text-[12.5px]">Dealer-fit options</div>
         {options.length > 0 && (
-          <div className="text-[10px] font-medium text-slate-500 tabular-nums">{fittedCount}/{options.length} fitted</div>
+          <div className="text-[10px] font-medium text-slate-600 tabular-nums">{fittedCount}/{options.length} fitted</div>
         )}
       </div>
       {options.length > 0 && (
@@ -708,7 +708,7 @@ function DealerFitOptionsEditor({
                 type="button"
                 onClick={() => remove(o.id)}
                 disabled={pending}
-                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-700 disabled:opacity-50"
+                className="shrink-0 rounded-md p-1 text-slate-600 hover:bg-slate-100 hover:text-rose-700 disabled:opacity-50"
                 aria-label="Remove option"
                 title="Remove"
               >

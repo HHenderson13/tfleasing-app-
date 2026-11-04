@@ -91,7 +91,7 @@ export function ReverseCommissionCalculator() {
       <div className="space-y-5 self-start rounded-2xl bg-white p-6 lg:sticky lg:top-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Reverse commission calculator</h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-600">
             Work out the broker commission +VAT from the rentals on either side.
             Difference per month × number of payments, then subtract interest at the
             background rate to get the present-value commission.
@@ -110,7 +110,7 @@ export function ReverseCommissionCalculator() {
         <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
           <PillPicker label="Upfront (months)" value={upfront} options={UPFRONT_OPTIONS} onChange={setUpfront} />
           <PillPicker label="Term (remaining payments)" value={term} options={TERM_OPTIONS} onChange={setTerm} />
-          <div className="rounded-md bg-white px-2.5 py-1.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
+          <div className="rounded-md bg-white px-2.5 py-1.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
             Total payments: <strong className="text-slate-900">{upfront + term}</strong>
           </div>
         </div>
@@ -125,7 +125,7 @@ export function ReverseCommissionCalculator() {
               onChange={(e) => setRate(e.target.value)}
               className="w-24 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-sm tabular-nums focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
             />
-            <span className="text-sm text-slate-500">% APR</span>
+            <span className="text-sm text-slate-600">% APR</span>
           </div>
         </Field>
       </div>
@@ -134,8 +134,8 @@ export function ReverseCommissionCalculator() {
       <div>
         {out === null ? (
           <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white/50 p-8 text-center">
-            <div className="text-sm font-medium text-slate-500">Enter rentals on the left</div>
-            <div className="text-xs text-slate-400">All four numbers feed the commission calc: try the worked example: £400 / £350 / 6 / 35 / 7%.</div>
+            <div className="text-sm font-medium text-slate-600">Enter rentals on the left</div>
+            <div className="text-xs text-slate-600">All four numbers feed the commission calc: try the worked example: £400 / £350 / 6 / 35 / 7%.</div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -147,7 +147,7 @@ export function ReverseCommissionCalculator() {
                   ? "border-emerald-300 bg-emerald-50"
                   : "border-slate-200 bg-white"
             }`}>
-              <div className="font-semibold text-slate-500 text-[12.5px]">Broker commission +VAT</div>
+              <div className="font-semibold text-slate-600 text-[12.5px]">Broker commission +VAT</div>
               <div className={`mt-1 text-4xl font-bold tabular-nums sm:text-5xl ${
                 negativeUpsell ? "text-rose-700" : positiveUpsell ? "text-emerald-700" : "text-slate-700"
               }`}>
@@ -160,11 +160,11 @@ export function ReverseCommissionCalculator() {
               )}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-lg bg-white/70 px-3 py-2 ring-1 ring-slate-200">
-                  <div className="font-medium text-slate-500 text-[12.5px]">Ex-VAT (broker invoices)</div>
+                  <div className="font-medium text-slate-600 text-[12.5px]">Ex-VAT (broker invoices)</div>
                   <div className="mt-0.5 text-base font-semibold tabular-nums text-slate-900">{gbp(out.commissionExVat)}</div>
                 </div>
                 <div className="rounded-lg bg-white/70 px-3 py-2 ring-1 ring-slate-200">
-                  <div className="font-medium text-slate-500 text-[12.5px]">VAT (20%)</div>
+                  <div className="font-medium text-slate-600 text-[12.5px]">VAT (20%)</div>
                   <div className="mt-0.5 text-base font-semibold tabular-nums text-slate-900">{gbp(out.vat)}</div>
                 </div>
               </div>
@@ -172,7 +172,7 @@ export function ReverseCommissionCalculator() {
 
             {/* Working */}
             <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
-              <div className="font-semibold text-slate-500 text-[12.5px]">How we got there</div>
+              <div className="font-semibold text-slate-600 text-[12.5px]">How we got there</div>
               <ol className="mt-3 space-y-2 text-sm">
                 <WorkingRow
                   step="1"
@@ -236,7 +236,7 @@ export function ReverseCommissionCalculator() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
+      <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">{label}</span>
       {children}
     </label>
   );
@@ -245,7 +245,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Money({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">£</span>
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-600">£</span>
       <input
         type="number"
         step="0.01"
@@ -262,7 +262,7 @@ function Money({ value, onChange, placeholder }: { value: string; onChange: (v: 
 function PillPicker({ label, value, options, onChange }: { label: string; value: number; options: number[]; onChange: (v: number) => void }) {
   return (
     <div>
-      <div className="font-medium text-slate-500 text-[12.5px]">{label}</div>
+      <div className="font-medium text-slate-600 text-[12.5px]">{label}</div>
       <div className="mt-1 flex flex-wrap gap-1.5">
         {options.map((opt) => (
           <button
@@ -294,7 +294,7 @@ function WorkingRow({ step, label, detail, value, tone, bold }: {
       }`}>{step}</span>
       <div className="min-w-0">
         <div className={`${bold ? "font-semibold text-slate-900" : "text-slate-700"}`}>{label}</div>
-        <div className="text-[11px] text-slate-500">{detail}</div>
+        <div className="text-[11px] text-slate-600">{detail}</div>
       </div>
       <div className={`shrink-0 tabular-nums text-right ${bold ? "text-base font-bold text-slate-900" : "text-sm text-slate-700"}`}>
         {value}

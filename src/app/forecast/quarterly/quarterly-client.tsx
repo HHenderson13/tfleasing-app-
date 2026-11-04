@@ -227,7 +227,7 @@ export function QuarterlyClient({
           ))}
         </section>
 
-        <div className="mt-3 text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+        <div className="mt-3 text-[11px] text-slate-600 flex flex-wrap items-center gap-2">
           <span>{periodLabel} · {periodMonths.length} month{periodMonths.length === 1 ? "" : "s"} loaded</span>
           {anySnapshotFrozen && (
             <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 font-semibold text-indigo-800 ring-1 ring-indigo-200 text-[12.5px]">
@@ -255,7 +255,7 @@ function PeriodSheet({
     <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Line</th>
               {months.map((m) => (
@@ -301,7 +301,7 @@ function PeriodSheet({
                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
                     {formatNumber(pTotal, l.kind)}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">
                     {formatNumber(pBudget, l.kind)}
                   </td>
                   <td className={`px-5 py-2 text-right tabular-nums ${tone(vsBudget)}`}>
@@ -318,7 +318,7 @@ function PeriodSheet({
 }
 
 function tone(v: number): string {
-  if (Math.abs(v) < 0.005) return "text-slate-300";
+  if (Math.abs(v) < 0.005) return "text-slate-500";
   return v > 0 ? "text-emerald-700" : "text-rose-700";
 }
 

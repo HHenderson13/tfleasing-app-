@@ -249,7 +249,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Money({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-500">£</span>
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-600">£</span>
       <input
         type="number"
         step="0.01"

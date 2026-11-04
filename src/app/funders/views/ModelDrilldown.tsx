@@ -154,7 +154,7 @@ export function ModelDrilldown({
                         >
                           <div style={{ fontWeight: 600 }}>{fmtMoney(r.totalMonthly, 0)}</div>
                           {gap !== null && gap > 0 && (
-                            <div style={{ fontSize: 10, opacity: 0.75 }}>
+                            <div style={{ fontSize: 11 }}>
                               {fmtGap(gap)}
                             </div>
                           )}

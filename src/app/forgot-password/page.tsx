@@ -19,7 +19,7 @@ export default async function ForgotPasswordPage() {
           we&apos;ll send you a link to set a new password.
         </p>
         <ForgotPasswordForm />
-        <p className="mt-4 text-center text-xs text-slate-500">
+        <p className="mt-4 text-center text-xs text-slate-600">
           <Link href="/login" className="text-slate-700 underline-offset-2 hover:underline">
             ← Back to sign in
           </Link>

@@ -10,7 +10,7 @@ import {
 } from "@/lib/customer-profiles";
 
 const input =
-  "h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14.5px]";
+  "h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-500 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14.5px]";
 
 export function FieldControl({ f, kind, value, onChange, today, prompts, plain, half }: {
   f: FieldDef; kind: ProfileKind; value: FieldValue | undefined; onChange: (v: FieldValue) => void; today: string; prompts?: string[];
@@ -53,7 +53,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain, 
         <div className={`min-w-0 ${span}`}>
           <span id={id} className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full transition ${done ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden />{label}
-            <span className="font-normal text-slate-400">· pick any</span>
+            <span className="font-normal text-slate-600">· pick any</span>
           </span>
           <div role="group" aria-labelledby={id} className="flex flex-wrap gap-1.5">
             {opts.map((o) => {
@@ -87,10 +87,10 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain, 
         <div className={`min-w-0 ${span}`}>
           {head}
           <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[14.5px] text-slate-400">£</span>
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[14.5px] text-slate-600">£</span>
             <input id={id} inputMode="decimal" value={str} onChange={(e) => onChange(e.target.value.replace(/[^\d.,]/g, ""))}
               className={`${input} pl-7 tabular-nums`} style={unitOf(f, kind) ? { paddingRight: `${(unitOf(f, kind)!.length * 0.47) + 1.2}rem` } : undefined} />
-            {unitOf(f, kind) && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[12.5px] text-slate-400">{unitOf(f, kind)}</span>}
+            {unitOf(f, kind) && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[12.5px] text-slate-600">{unitOf(f, kind)}</span>}
           </div>
         </div>
       );
@@ -105,7 +105,7 @@ export function FieldControl({ f, kind, value, onChange, today, prompts, plain, 
               <input id={id} inputMode="numeric" value={str ? Number.isFinite(n) && str.replace(/,/g, "") !== "" ? n.toLocaleString("en-GB") : str : ""}
                 onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 7))}
                 className={`${input} tabular-nums`} style={unit ? { paddingRight: `${unit.length * 0.47 + 1.2}rem` } : undefined} />
-              {unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[12.5px] text-slate-400">{unit}</span>}
+              {unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[12.5px] text-slate-600">{unit}</span>}
             </div>
             {f.chips && (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -184,7 +184,7 @@ export function AutoTextarea({ id, value, onChange, placeholder, label, minRows 
   }, [value, minRows, ref]);
   return (
     <textarea id={id} ref={ref} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={label} rows={minRows}
-      className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base leading-[22px] text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14.5px]" />
+      className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base leading-[22px] text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-500 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14.5px]" />
   );
 }
 

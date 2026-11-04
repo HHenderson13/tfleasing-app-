@@ -44,13 +44,13 @@ export function OrderRow({
             {statusLabel(status)}
           </span>
           {customerId && (
-            <Link href={`/customers/${customerId}`} className="pointer-events-auto relative z-10 text-[11px] text-slate-400 hover:text-slate-700 hover:underline">
+            <Link href={`/customers/${customerId}`} className="pointer-events-auto relative z-10 text-[11px] text-slate-600 hover:text-slate-700 hover:underline">
               timeline →
             </Link>
           )}
         </div>
         <div className="mt-0.5 text-xs text-slate-700">{title}</div>
-        <div className="text-[11px] text-slate-400">{meta}</div>
+        <div className="text-[11px] text-slate-600">{meta}</div>
         {(actions && actions.length > 0) || (customCount && customCount > 0) ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {actions?.map((a) => (
@@ -72,8 +72,8 @@ export function OrderRow({
 }
 
 export function CountdownBadge({ days }: { days: number | null }) {
-  if (days === null) return <div className="text-[11px] text-slate-400">no countdown</div>;
+  if (days === null) return <div className="text-[11px] text-slate-600">no countdown</div>;
   if (days < 0) return <div className="text-[11px] font-medium text-red-600">{Math.abs(days)} day{Math.abs(days) === 1 ? "" : "s"} overdue</div>;
-  if (days <= 7) return <div className="text-[11px] font-medium text-amber-600">{days} day{days === 1 ? "" : "s"} to sign</div>;
-  return <div className="text-[11px] text-slate-500">{days} days to sign</div>;
+  if (days <= 7) return <div className="text-[11px] font-medium text-amber-700">{days} day{days === 1 ? "" : "s"} to sign</div>;
+  return <div className="text-[11px] text-slate-600">{days} days to sign</div>;
 }

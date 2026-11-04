@@ -93,7 +93,7 @@ export default async function ForecastHubPage() {
               <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${t.tone}`} />
               <div className="text-[17px] font-semibold tracking-tight text-slate-900">{t.title}</div>
               <p className="mt-1.5 flex-1 text-[14px] leading-6 text-slate-600">{t.desc}</p>
-              <div className="mt-5 text-[12.5px] text-slate-500">{t.footer}</div>
+              <div className="mt-5 text-[12.5px] text-slate-600">{t.footer}</div>
             </Link>
           ))}
         </div>

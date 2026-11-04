@@ -30,7 +30,7 @@ export default async function AdminOverview() {
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
         {cards.map((c) => (
           <Link key={c.title} href={c.href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300">
-            <div className="text-slate-500 text-[12.5px]">{c.title}</div>
+            <div className="text-slate-600 text-[12.5px]">{c.title}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{c.value.toLocaleString()}</div>
           </Link>
         ))}

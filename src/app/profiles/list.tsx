@@ -131,14 +131,14 @@ export function ProfileList({ rows, now, nowMs, whose, showOwner, moved }: { row
             <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setFilter("all"); }}
               className={`flex h-9 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-[14px] font-medium transition sm:flex-none ${tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
               {t === "live" ? "Live" : t === "ordered" ? "Ordered" : "Lost sales"}
-              <span className={`rounded-full px-1.5 text-[12px] tabular-nums ${tab === t ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}>{counts[t]}</span>
+              <span className={`rounded-full px-1.5 text-[12px] tabular-nums ${tab === t ? "bg-slate-100 text-slate-700" : "text-slate-600"}`}>{counts[t]}</span>
             </button>
           ))}
         </div>
         <div className="relative sm:w-80">
-          <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+          <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, model, reg" aria-label="Search customers"
-            className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14px]" />
+            className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3.5 text-base text-slate-900 placeholder:text-slate-500 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14px]" />
         </div>
       </div>
 
@@ -174,7 +174,7 @@ function Stat({ label, value, sub, tone, on, onClick }: { label: string; value: 
   return (
     <button type="button" onClick={onClick} aria-pressed={on}
       className={`${CARD} px-4 py-3.5 text-left transition hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.18)] ${on ? "!shadow-[0_0_0_2px_rgba(15,23,42,0.9)]" : ""}`}>
-      <div className="text-[12.5px] font-medium text-slate-500">{label}</div>
+      <div className="text-[12.5px] font-medium text-slate-600">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className={`text-[26px] font-semibold leading-none tracking-tight tabular-nums ${colour}`}>{value}</span>
         {sub && <span className="text-[12.5px] font-medium text-rose-700">{sub}</span>}
@@ -198,7 +198,7 @@ function UpNext({ r, now, nowMs, total, team, mine }: { r: ListRow; now: string;
               <span className={`relative inline-flex h-2 w-2 rounded-full ${u.tier <= 1 ? "bg-rose-400" : "bg-emerald-400"}`} />
             </span>
             Up next
-            <span className="font-normal normal-case tracking-normal text-slate-500">{total > 1 ? `the most important of ${total} live` : mine ? "your only live enquiry" : "the only live enquiry"}</span>
+            <span className="font-normal normal-case tracking-normal text-slate-400">{total > 1 ? `the most important of ${total} live` : mine ? "your only live enquiry" : "the only live enquiry"}</span>
           </div>
           <div className="mt-3 flex items-center gap-2.5">
             {heat && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${HEAT_DOT[heat]}`} title={heat} />}
@@ -245,7 +245,7 @@ function Row({ r, now, nowMs, team }: { r: ListRow; now: string; nowMs: number; 
             <span className="absolute inset-0 grid place-items-center text-[10.5px] font-semibold tabular-nums text-slate-600">{r.progress}</span>
           </div>
         ) : (
-          <span className={`hidden h-9 w-9 shrink-0 place-items-center rounded-full sm:grid ${r.status === "ordered" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+          <span className={`hidden h-9 w-9 shrink-0 place-items-center rounded-full sm:grid ${r.status === "ordered" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
             <Icon name={r.status === "ordered" ? "check" : "x"} />
           </span>
         )}
@@ -253,34 +253,34 @@ function Row({ r, now, nowMs, team }: { r: ListRow; now: string; nowMs: number; 
           <div className="flex items-center gap-2">
             {heat && r.status === "live" && <span className={`h-2 w-2 shrink-0 rounded-full ${HEAT_DOT[heat]}`} title={heat} />}
             <span className="truncate text-[15px] font-semibold text-slate-900">{r.customerName}</span>
-            {r.docs > 0 && <span className="flex shrink-0 items-center gap-0.5 text-[12px] text-slate-400" title={`${r.docs} document${r.docs === 1 ? "" : "s"}`}><Icon name="doc" className="h-3.5 w-3.5" />{r.docs}</span>}
+            {r.docs > 0 && <span className="flex shrink-0 items-center gap-0.5 text-[12px] text-slate-600" title={`${r.docs} document${r.docs === 1 ? "" : "s"}`}><Icon name="doc" className="h-3.5 w-3.5" />{r.docs}</span>}
           </div>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-500">
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-600">
             <KindBadge kind={r.kind} />
             {sub && <span className="min-w-0 truncate">{sub}</span>}
-            {team && <span className="text-slate-400">· {r.ownerName}</span>}
+            {team && <span className="text-slate-600">· {r.ownerName}</span>}
           </div>
           {u && <div className="mt-2 md:hidden"><UrgencyBadge u={u} size="sm" /></div>}
           {r.status !== "live" && (
-            <div className="mt-1.5 text-[12.5px] text-slate-500">
+            <div className="mt-1.5 text-[12.5px] text-slate-600">
               {r.status === "ordered" ? `Ordered ${r.closedAt ? dateOf(r.closedAt) : ""}` : `Lost ${r.closedAt ? dateOf(r.closedAt) : ""}${r.lostReason ? `: ${r.lostReason}` : ""}`}
             </div>
           )}
         </div>
         {u && <div className="hidden shrink-0 md:block"><UrgencyBadge u={u} /></div>}
-        <div className="hidden w-28 shrink-0 text-right text-[12.5px] text-slate-500 lg:block">{ago(r.updatedAt, nowMs)}</div>
-        <Icon name="chevron" className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-slate-500" />
+        <div className="hidden w-28 shrink-0 text-right text-[12.5px] text-slate-600 lg:block">{ago(r.updatedAt, nowMs)}</div>
+        <Icon name="chevron" className="h-4 w-4 shrink-0 text-slate-500 transition group-hover:text-slate-600" />
       </Link>
     </li>
   );
 }
 
 function Empty({ tab, mine, any, searching, onlyUpNext, onAdd }: { tab: ProfileStatus; mine: boolean; any: boolean; searching: boolean; onlyUpNext: boolean; onAdd: () => void }) {
-  if (onlyUpNext) return <p className="px-5 py-6 text-center text-[14px] text-slate-500">That&apos;s everything: one live enquiry, shown above.</p>;
-  if (searching && any) return <p className="px-5 py-8 text-center text-[14px] text-slate-500">Nothing matches that.</p>;
-  if (tab === "ordered") return <p className="px-5 py-8 text-center text-[14px] text-slate-500">Nothing ordered yet. Press Ordered on a profile and it moves here.</p>;
-  if (tab === "lost") return <p className="px-5 py-8 text-center text-[14px] text-slate-500">No lost sales. Long may it last.</p>;
-  if (!mine) return <p className="px-5 py-8 text-center text-[14px] text-slate-500">No live enquiries here.</p>;
+  if (onlyUpNext) return <p className="px-5 py-6 text-center text-[14px] text-slate-600">That&apos;s everything: one live enquiry, shown above.</p>;
+  if (searching && any) return <p className="px-5 py-8 text-center text-[14px] text-slate-600">Nothing matches that.</p>;
+  if (tab === "ordered") return <p className="px-5 py-8 text-center text-[14px] text-slate-600">Nothing ordered yet. Press Ordered on a profile and it moves here.</p>;
+  if (tab === "lost") return <p className="px-5 py-8 text-center text-[14px] text-slate-600">No lost sales. Long may it last.</p>;
+  if (!mine) return <p className="px-5 py-8 text-center text-[14px] text-slate-600">No live enquiries here.</p>;
   return (
     <div className="px-6 py-12 text-center">
       <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-slate-900 text-white"><Icon name="person" className="h-6 w-6" /></div>

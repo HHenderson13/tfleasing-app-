@@ -160,8 +160,8 @@ function DepartmentCard({
         <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-slate-900">{DEPARTMENT_LABELS[department]}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">{DEPARTMENT_DESCRIPTIONS[department]}</p>
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-0.5 text-xs text-slate-600">{DEPARTMENT_DESCRIPTIONS[department]}</p>
+            <p className="mt-1 text-[11px] text-slate-600">
               {uploads.length === 0
                 ? "No uploads yet"
                 : `${uploads.length} upload${uploads.length === 1 ? "" : "s"} on file`}
@@ -189,7 +189,7 @@ function DepartmentCard({
       )}
 
       {uploads.length === 0 ? (
-        <div className="px-5 pb-5 text-xs text-slate-400">Click + Upload to add a dealbook CSV.</div>
+        <div className="px-5 pb-5 text-xs text-slate-600">Click + Upload to add a dealbook CSV.</div>
       ) : (
         <ul className="divide-y divide-slate-100">
           {uploads.slice(0, 30).map((u) => (
@@ -197,10 +197,10 @@ function DepartmentCard({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-semibold text-slate-900">{monthLabel(u.monthYyyymm)}</div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">
+                  <div className="mt-0.5 text-[11px] text-slate-600">
                     {u.rowCount} line{u.rowCount === 1 ? "" : "s"}
                     {" · "}{new Date(u.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    {" · "}<span className="text-slate-400">{u.filename}</span>
+                    {" · "}<span className="text-slate-600">{u.filename}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -260,7 +260,7 @@ function UploadForm({
     >
       <div className="grid gap-3 sm:grid-cols-[1fr_120px_2fr]">
         <label className="flex flex-col">
-          <span className="font-medium text-slate-500 text-[12.5px]">Month</span>
+          <span className="font-medium text-slate-600 text-[12.5px]">Month</span>
           <select
             value={monthIdx}
             onChange={(e) => setMonthIdx(parseInt(e.target.value, 10))}
@@ -272,7 +272,7 @@ function UploadForm({
           </select>
         </label>
         <label className="flex flex-col">
-          <span className="font-medium text-slate-500 text-[12.5px]">Year</span>
+          <span className="font-medium text-slate-600 text-[12.5px]">Year</span>
           <select
             value={year}
             onChange={(e) => setYear(parseInt(e.target.value, 10))}
@@ -282,7 +282,7 @@ function UploadForm({
           </select>
         </label>
         <label className="flex flex-col">
-          <span className="font-medium text-slate-500 text-[12.5px]">CSV file</span>
+          <span className="font-medium text-slate-600 text-[12.5px]">CSV file</span>
           <input
             type="file"
             name="file"
@@ -398,7 +398,7 @@ function ReviewWindow({
                     key={model}
                     className="rounded-md border border-amber-200 bg-white px-2 py-0.5 text-[11px] text-amber-900"
                   >
-                    {model} <span className="text-amber-500">×{count}</span>
+                    {model} <span className="text-amber-700">×{count}</span>
                   </li>
                 ))}
                 {unmatchedModels.length > 8 && (
@@ -421,13 +421,13 @@ function ReviewWindow({
       <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
-            <div className="font-medium text-slate-500 text-[12.5px]">
+            <div className="font-medium text-slate-600 text-[12.5px]">
               {departmentLabel} · {upload.filename}
             </div>
             <h3 className="mt-1 text-base font-semibold text-slate-900">
               {upload.rowCount} unit{upload.rowCount === 1 ? "" : "s"} for {monthLabel(upload.monthYyyymm)}
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600">
               <span className="font-medium text-slate-700">{carCount}</span> car{carCount === 1 ? "" : "s"} ·{" "}
               <span className="font-medium text-slate-700">{vanCount}</span> van{vanCount === 1 ? "" : "s"}
               {unmatched.length > 0 && (
@@ -437,7 +437,7 @@ function ReviewWindow({
                 <> · <span className="font-medium text-amber-700">{changed.length} reg-month override</span></>
               )}
             </p>
-            <p className="mt-2 text-[11px] text-slate-500">
+            <p className="mt-2 text-[11px] text-slate-600">
               Volume always counts for <strong>{monthLabel(upload.monthYyyymm)}</strong>: the
               dropdown below only changes which quarter / half-year a unit's DPA falls into.
             </p>
@@ -473,7 +473,7 @@ function ReviewWindow({
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Reg No</th>
                 <th className="px-3 py-3 text-left font-medium">Customer</th>
@@ -485,7 +485,7 @@ function ReviewWindow({
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">No rows.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-600">No rows.</td></tr>
               ) : (
                 filtered.map((l, idx) => {
                   const natural = naturalRegMonth(l);
@@ -507,7 +507,7 @@ function ReviewWindow({
                         {l.kind === "van" && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">Van</span>}
                         {isUnmatched && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">Unmatched</span>}
                       </td>
-                      <td className="px-3 py-2 text-slate-500">{l.regDate ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{l.regDate ?? "—"}</td>
                       <td className="px-5 py-2">
                         <select
                           value={eff}
@@ -537,7 +537,7 @@ function ReviewWindow({
         <button
           type="button"
           onClick={() => router.push("/forecast/uploads")}
-          className="text-xs text-slate-500 hover:text-slate-700"
+          className="text-xs text-slate-600 hover:text-slate-700"
         >
           ← Back to uploads
         </button>

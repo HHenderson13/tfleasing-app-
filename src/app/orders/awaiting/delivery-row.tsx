@@ -88,7 +88,7 @@ export function DeliveryEditor({
             type="button"
             onClick={saveFields}
             disabled={!fieldsDirty || pending}
-            className="rounded bg-teal-600 px-2 py-0.5 font-medium text-white disabled:opacity-50"
+            className="rounded bg-teal-700 px-2 py-0.5 font-medium text-white disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save"}
           </button>
@@ -119,7 +119,7 @@ export function DeliveryEditor({
           type="button"
           onClick={markDelivered}
           disabled={!canMarkDelivered || pending}
-          className="rounded bg-emerald-600 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40"
+          className="rounded bg-emerald-700 px-3 py-1 text-[11px] font-medium text-white disabled:opacity-40"
         >
           Mark as delivered →
         </button>

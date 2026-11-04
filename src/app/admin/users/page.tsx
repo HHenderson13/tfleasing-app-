@@ -52,14 +52,14 @@ export default async function AdminUsersPage() {
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-slate-900">
                       {u.name}
-                      {isMe && <span className="ml-2 text-slate-500 text-[12.5px]">(you)</span>}
+                      {isMe && <span className="ml-2 text-slate-600 text-[12.5px]">(you)</span>}
                       {pending && (
                         <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${expired ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
                           {expired ? "Setup expired" : "Setup pending"}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500">{u.email}</div>
+                    <div className="text-xs text-slate-600">{u.email}</div>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <form action={regenerateInviteAction}>
@@ -84,7 +84,7 @@ export default async function AdminUsersPage() {
                 <form action={updateUserAction} className="mt-3 grid gap-3 sm:grid-cols-2">
                   <input type="hidden" name="id" value={u.id} />
                   <fieldset>
-                    <legend className="font-medium text-slate-500 text-[12.5px]">Roles</legend>
+                    <legend className="font-medium text-slate-600 text-[12.5px]">Roles</legend>
                     <div className="mt-1 flex flex-wrap gap-2">
                       {(["admin", "exec", "quote", "stock"] as const).map((r) => (
                         <label key={r} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs">
@@ -94,7 +94,7 @@ export default async function AdminUsersPage() {
                       ))}
                     </div>
                   </fieldset>
-                  <label className="block font-medium text-slate-500 text-[12.5px]">
+                  <label className="block font-medium text-slate-600 text-[12.5px]">
                     Linked sales exec
                     <select name="salesExecId" defaultValue={u.salesExecId ?? ""} className="mt-1 w-full rounded-xl border border-slate-300 px-2 py-2 text-[13px]">
                       <option value="">— None —</option>

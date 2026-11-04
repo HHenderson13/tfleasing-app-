@@ -179,7 +179,7 @@ export default async function ProposalsPage({
 
         <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Customer</th>
                 <th className="px-4 py-3 text-left font-medium">Latest vehicle</th>
@@ -205,21 +205,21 @@ export default async function ProposalsPage({
                     </td>
                     <td className="px-4 py-2 text-slate-700">
                       <div>{p.model}</div>
-                      <div className="text-xs text-slate-400">{p.derivative}</div>
+                      <div className="text-xs text-slate-600">{p.derivative}</div>
                     </td>
                     <td className="px-4 py-2 text-slate-700">
-                      <div>{p.funderName} <span className="text-xs text-slate-400">#{p.funderRank}</span></div>
-                      {p.financeProposalNumber && <div className="font-mono text-[11px] text-slate-400">FP {p.financeProposalNumber}</div>}
+                      <div>{p.funderName} <span className="text-xs text-slate-600">#{p.funderRank}</span></div>
+                      {p.financeProposalNumber && <div className="font-mono text-[11px] text-slate-600">FP {p.financeProposalNumber}</div>}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">
                       £{p.monthlyRental.toFixed(2)}
                       {p.isBroker && <div className="text-[10px] font-medium text-indigo-600">Broker</div>}
                     </td>
-                    <td className="px-4 py-2 text-xs text-slate-500">
+                    <td className="px-4 py-2 text-xs text-slate-600">
                       {p.isGroupBq ? (
                         <>
                           <div className="font-medium text-slate-700">Group BQ Deal</div>
-                          {p.groupSite && <div className="text-[11px] text-slate-400">{p.groupSite.name}</div>}
+                          {p.groupSite && <div className="text-[11px] text-slate-600">{p.groupSite.name}</div>}
                         </>
                       ) : (
                         p.exec?.name ?? "—"
@@ -232,7 +232,7 @@ export default async function ProposalsPage({
                     </td>
                     <td className="px-4 py-2 text-xs">
                       {g.attempts.length === 1 ? (
-                        <span className="text-slate-400">1 attempt</span>
+                        <span className="text-slate-600">1 attempt</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {g.attempts.map((a) => {
@@ -250,12 +250,12 @@ export default async function ProposalsPage({
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-xs text-slate-500">{new Date(p.updatedAt).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-xs text-slate-600">{new Date(p.updatedAt).toLocaleString()}</td>
                   </ClickableRow>
                 );
               })}
               {visible.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">{statusFilter || execFilter || query || range !== "month" ? "No customers match these filters." : "No proposals in this period. Try a wider range."}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-600">{statusFilter || execFilter || query || range !== "month" ? "No customers match these filters." : "No proposals in this period. Try a wider range."}</td></tr>
               )}
             </tbody>
           </table>

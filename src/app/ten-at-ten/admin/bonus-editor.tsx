@@ -83,7 +83,7 @@ export function BonusEditor({ rates, initialYear, initialQuarter }: { rates: Bon
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Quarterly bonuses</h2>
-          <p className="max-w-2xl text-xs text-slate-500">
+          <p className="max-w-2xl text-xs text-slate-600">
             By delivery month: a percentage of Basic (column BQ of the Dealbook Extract), £ per unit, or both. Orders and Deliveries
             show each deal&apos;s bonus from the month it delivers, on top of Invoice profit. Leave a whole month blank for no scheme.
           </p>
@@ -96,7 +96,7 @@ export function BonusEditor({ rates, initialYear, initialQuarter }: { rates: Bon
       </div>
       <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Delivered</th>
               {months.map((ym) => (
@@ -108,7 +108,7 @@ export function BonusEditor({ rates, initialYear, initialQuarter }: { rates: Bon
             </tr>
             <tr className="text-[9px]">
               <th />
-              {months.map((ym) => <th key={ym} className="px-3 pb-1.5 text-center font-normal normal-case tracking-normal text-slate-400">% of Basic · £ per unit</th>)}
+              {months.map((ym) => <th key={ym} className="px-3 pb-1.5 text-center font-normal normal-case tracking-normal text-slate-600">% of Basic · £ per unit</th>)}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -123,16 +123,16 @@ export function BonusEditor({ rates, initialYear, initialQuarter }: { rates: Bon
                         <span className="inline-flex items-center gap-0.5">
                           <input inputMode="decimal" value={valueOf(ym, t, "pct")} onChange={(e) => set(ym, t, "pct", e.target.value)} placeholder="0"
                             aria-label={`${t} ${monthName(ym)} percent of Basic`} className={input} />
-                          <span className="text-xs text-slate-400">%</span>
+                          <span className="text-xs text-slate-600">%</span>
                         </span>
                         <span className="inline-flex items-center gap-0.5">
-                          <span className="text-xs text-slate-400">£</span>
+                          <span className="text-xs text-slate-600">£</span>
                           <input inputMode="decimal" value={valueOf(ym, t, "amount")} onChange={(e) => set(ym, t, "amount", e.target.value)} placeholder="0"
                             aria-label={`${t} ${monthName(ym)} pounds per unit`} className={`${input} w-20`} />
                         </span>
                       </div>
                       {!monthBlank(ym) && (
-                        <div className="mt-0.5 text-center text-[10px] text-slate-400">
+                        <div className="mt-0.5 text-center text-[10px] text-slate-600">
                           {rateText({ pct: num(valueOf(ym, t, "pct")), amount: num(valueOf(ym, t, "amount")) })}
                         </div>
                       )}

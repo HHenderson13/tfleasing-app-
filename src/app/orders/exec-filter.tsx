@@ -20,7 +20,7 @@ export function ExecFilter({
   }
 
   return (
-    <label className="flex items-center gap-2 text-xs text-slate-500">
+    <label className="flex items-center gap-2 text-xs text-slate-600">
       <span className="font-medium text-[12.5px]">Sales exec</span>
       <select
         value={value}

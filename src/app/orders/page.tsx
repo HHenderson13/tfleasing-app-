@@ -150,7 +150,7 @@ export default async function OrdersActionsPage({
                 customCount={customCount}
                 right={
                   <div className="text-right">
-                    <div className="text-xs text-slate-500">{remaining === 0 ? "Ready to move" : `${remaining} step${remaining === 1 ? "" : "s"} left`}</div>
+                    <div className="text-xs text-slate-600">{remaining === 0 ? "Ready to move" : `${remaining} step${remaining === 1 ? "" : "s"} left`}</div>
                     <CountdownBadge days={days} />
                   </div>
                 }

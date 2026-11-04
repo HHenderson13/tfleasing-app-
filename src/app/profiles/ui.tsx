@@ -129,7 +129,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       <div className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl ${wide ? "sm:max-w-xl" : "sm:max-w-md"}`}>
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
           <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900">
             <Icon name="x" />
           </button>
         </div>

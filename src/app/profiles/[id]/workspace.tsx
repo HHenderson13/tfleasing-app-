@@ -216,7 +216,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
       {/* ── Top bar ── */}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1360px] items-center gap-3 px-4 sm:px-6">
-          <Link href="/profiles" className="flex shrink-0 items-center gap-1 text-[14px] font-medium text-slate-500 transition hover:text-slate-900"
+          <Link href="/profiles" className="flex shrink-0 items-center gap-1 text-[14px] font-medium text-slate-600 transition hover:text-slate-900"
             onClick={(e) => { e.preventDefault(); void go("/profiles"); }}>
             <Icon name="back" />Customers
           </Link>
@@ -241,13 +241,13 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
       <div className="mx-auto max-w-[1360px] px-4 pt-5 sm:px-6 sm:pt-6">
         {!canEdit && (
           <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-sky-50 px-4 py-3 text-[13.5px] text-sky-900 ring-1 ring-inset ring-sky-200">
-            <Icon name="person" className="h-4 w-4 shrink-0 text-sky-600" />
+            <Icon name="person" className="h-4 w-4 shrink-0 text-sky-700" />
             {`This is ${initial.ownerName}'s customer. You can read everything here; only ${initial.ownerName} or a manager can change it.`}
           </div>
         )}
         {canEdit && !mine && (
           <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-slate-100 px-4 py-3 text-[13.5px] text-slate-700">
-            <Icon name="person" className="h-4 w-4 shrink-0 text-slate-500" />
+            <Icon name="person" className="h-4 w-4 shrink-0 text-slate-600" />
             {`${initial.ownerName}'s customer. You're editing as a manager.`}
           </div>
         )}
@@ -284,7 +284,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
                     ))}
                   </div>
                   <input value={model} onChange={(e) => setModelText(e.target.value)} list="ford-models-ws" aria-label="Model they're interested in" placeholder="Model"
-                    className="h-8 w-40 rounded-lg border border-slate-200 bg-white px-2.5 text-[13.5px] font-medium text-slate-900 placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10" />
+                    className="h-8 w-40 rounded-lg border border-slate-200 bg-white px-2.5 text-[13.5px] font-medium text-slate-900 placeholder:font-normal placeholder:text-slate-500 hover:border-slate-300 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10" />
                   <datalist id="ford-models-ws">{FORD_MODELS.map((m) => <option key={m} value={m} />)}</datalist>
                   <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" />
                   <div className="flex gap-1">
@@ -300,7 +300,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
               {status === "live" && (
                 <div className="flex shrink-0 gap-2">
                   <button type="button" onClick={() => setModal("ordered")}
-                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-[13.5px] font-semibold text-white shadow-sm transition hover:bg-emerald-700 md:flex-none">
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 text-[13.5px] font-semibold text-white shadow-sm transition hover:bg-emerald-700 md:flex-none">
                     <Icon name="check" />Ordered
                   </button>
                   <button type="button" onClick={() => setModal("lost")}
@@ -332,7 +332,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
             </div>
             {canEdit && (
               <div className="mt-6 flex justify-center">
-                <button type="button" onClick={() => setModal("delete")} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] text-slate-400 transition hover:bg-rose-50 hover:text-rose-700">
+                <button type="button" onClick={() => setModal("delete")} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] text-slate-600 transition hover:bg-rose-50 hover:text-rose-700">
                   <Icon name="trash" className="h-3.5 w-3.5" />Delete this profile
                 </button>
               </div>
@@ -378,7 +378,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
       )}
       {preview != null && (
         <Modal title="Notes for the CRM" onClose={() => setPreview(null)} wide>
-          <p className="mb-3 text-[13px] text-slate-500">{`Everything except their name, personal or business, and the model, which the CRM already has.`}</p>
+          <p className="mb-3 text-[13px] text-slate-600">{`Everything except their name, personal or business, and the model, which the CRM already has.`}</p>
           <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-4 font-sans text-[13.5px] leading-6 text-slate-800 ring-1 ring-inset ring-slate-200">{preview}</pre>
           <button type="button" onClick={async () => { if (await copyText(preview)) { setPreview(null); setToast({ text: "Copied" }); } }}
             className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-[14px] font-semibold text-white hover:bg-slate-800">
@@ -389,7 +389,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
       {modal === "ordered" && (
         <Modal title="Mark as ordered?" onClose={() => setModal(null)}>
           <p className="text-[14px] leading-6 text-slate-600">{`${name} moves to Ordered and off your live list. You can move it back at any time.`}</p>
-          <button type="button" onClick={() => void setTo("ordered")} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-[14px] font-semibold text-white hover:bg-emerald-700">
+          <button type="button" onClick={() => void setTo("ordered")} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 text-[14px] font-semibold text-white hover:bg-emerald-700">
             <Icon name="check" />Mark as ordered
           </button>
         </Modal>
@@ -412,11 +412,11 @@ const isHeading = (l: string, kind: ProfileKind) =>
   ["Part exchange", "Documents"].includes(l) || sectionsFor(kind).some((s) => titleOf(s, kind) === l);
 
 function SaveBadge({ state }: { state: SaveState | null }) {
-  if (!state) return <span className="hidden items-center gap-1.5 text-[12.5px] text-slate-500 sm:flex">Read only</span>;
+  if (!state) return <span className="hidden items-center gap-1.5 text-[12.5px] text-slate-600 sm:flex">Read only</span>;
   const s = {
-    saved: { t: "Saved", c: "text-slate-500", dot: "bg-emerald-500" },
-    pending: { t: "Saving", c: "text-slate-500", dot: "bg-amber-400" },
-    saving: { t: "Saving", c: "text-slate-500", dot: "bg-amber-400 animate-pulse" },
+    saved: { t: "Saved", c: "text-slate-600", dot: "bg-emerald-500" },
+    pending: { t: "Saving", c: "text-slate-600", dot: "bg-amber-400" },
+    saving: { t: "Saving", c: "text-slate-600", dot: "bg-amber-400 animate-pulse" },
     error: { t: "Not saved, retrying", c: "text-rose-700", dot: "bg-rose-500" },
   }[state];
   return <span className={`flex items-center gap-1.5 text-[12.5px] font-medium ${s.c}`} aria-live="polite"><span className={`h-2 w-2 rounded-full ${s.dot}`} /><span className={state === "error" ? "" : "hidden sm:inline"}>{s.t}</span></span>;
@@ -452,7 +452,7 @@ function NextContact({ data, today, u, set }: { data: ProfileData; today: string
         {!showPicker && said ? (
           <>
             <span className={`text-[15px] font-semibold ${overdue ? "text-rose-800" : "text-slate-900"}`}>{said}{overdue ? ", overdue" : ""}</span>
-            <button type="button" onClick={() => setEditing(true)} className="text-[12.5px] font-medium text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">Change</button>
+            <button type="button" onClick={() => setEditing(true)} className="text-[12.5px] font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">Change</button>
           </>
         ) : (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -468,7 +468,7 @@ function NextContact({ data, today, u, set }: { data: ProfileData; today: string
         )}
         {(how || day || time) && (
           <button type="button" onClick={() => { set("contactBy", ""); set("callbackDate", ""); set("callbackTime", ""); setEditing(false); }}
-            className="ml-auto text-[12.5px] font-medium text-slate-400 hover:text-slate-900">Clear</button>
+            className="ml-auto text-[12.5px] font-medium text-slate-600 hover:text-slate-900">Clear</button>
         )}
       </div>
     </div>
@@ -494,15 +494,15 @@ function Tile({ s, c, today, on, onOpen }: { s: SectionDef; c: Ctx; today: strin
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px] leading-5">
             {sum.rows.map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="max-w-[8rem] truncate text-slate-500">{k}</dt>
+                <dt className="max-w-[8rem] truncate text-slate-600">{k}</dt>
                 <dd className="truncate font-medium text-slate-900">{v}</dd>
               </div>
             ))}
           </dl>
-          {sum.more > 0 && <div className="mt-1 text-[12.5px] font-medium text-slate-400">{`+${sum.more} more`}</div>}
+          {sum.more > 0 && <div className="mt-1 text-[12.5px] font-medium text-slate-600">{`+${sum.more} more`}</div>}
         </div>
       ) : (
-        <p className="mt-3 text-[13px] leading-5 text-slate-400">{sum.ask.join(" · ")}</p>
+        <p className="mt-3 text-[13px] leading-5 text-slate-600">{sum.ask.join(" · ")}</p>
       )}
     </button>
   );
@@ -511,7 +511,7 @@ function Tile({ s, c, today, on, onOpen }: { s: SectionDef; c: Ctx; today: strin
 /** How much of a topic is answered: "2/5", the same width everywhere so nothing beside it moves. */
 function Count({ answered, total }: { answered: number; total: number }) {
   return (
-    <span className={`w-9 shrink-0 text-right text-[12px] font-semibold tabular-nums ${total && answered === total ? "text-emerald-600" : answered ? "text-slate-600" : "text-slate-300"}`}
+    <span className={`w-9 shrink-0 text-right text-[12px] font-semibold tabular-nums ${total && answered === total ? "text-emerald-700" : answered ? "text-slate-600" : "text-slate-500"}`}
       aria-label={`${answered} of ${total} answered`}>
       {answered}/{total}
     </span>
@@ -528,7 +528,7 @@ function PxTile({ data, today, on, appraisal, onOpen }: { data: ProfileData; tod
         <h3 className="flex-1 text-[14.5px] font-semibold text-slate-900">Part exchange</h3>
         {appraisal && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11.5px] font-semibold text-teal-700">Appraisal in</span>}
       </div>
-      <p className={`mt-3 text-[13px] leading-5 ${text ? "font-medium text-slate-900" : "text-slate-400"}`}>{text ?? "Do they have one? Reg, mileage, CitNOW appraisal"}</p>
+      <p className={`mt-3 text-[13px] leading-5 ${text ? "font-medium text-slate-900" : "text-slate-600"}`}>{text ?? "Do they have one? Reg, mileage, CitNOW appraisal"}</p>
     </button>
   );
 }
@@ -547,12 +547,12 @@ function ToolTile({ title, icon, tone, about, docs, today, onOpen }: {
           {docs.slice(0, 2).map((d) => (
             <li key={d.id} className="flex items-center gap-2 text-[13px] leading-5">
               <a href={d.href} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-medium text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-900">{d.detail ?? d.title}</a>
-              <span className="shrink-0 text-[12px] text-slate-400">{fmtDate(dateOfSec(d.createdAt), today)}</span>
+              <span className="shrink-0 text-[12px] text-slate-600">{fmtDate(dateOfSec(d.createdAt), today)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-[13px] leading-5 text-slate-400">{about}</p>
+        <p className="mt-3 text-[13px] leading-5 text-slate-600">{about}</p>
       )}
       <div className="mt-auto pt-3">
         <button type="button" onClick={onOpen}
@@ -637,7 +637,7 @@ function CopyButton({ onClick, disabled }: { onClick: () => void; disabled?: boo
     <span role="button" tabIndex={disabled ? -1 : 0} aria-label="Copy this for the CRM" aria-disabled={disabled} title="Copy this for the CRM"
       onClick={() => { if (!disabled) onClick(); }}
       onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !disabled) { e.preventDefault(); onClick(); } }}
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${disabled ? "text-slate-300" : "cursor-pointer text-slate-400 hover:bg-slate-100 hover:text-slate-900"}`}>
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${disabled ? "text-slate-500" : "cursor-pointer text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
       <Icon name="copy" />
     </span>
   );
@@ -663,11 +663,11 @@ function DocList({ docs, today, onRemove, canEdit }: { docs: ProfileDoc[]; today
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600"><Icon name="doc" /></span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13.5px] font-medium text-slate-900">{d.detail ?? d.title}</div>
-            <div className="text-[12px] text-slate-500">{fmtDate(dateOfSec(d.createdAt), today)}</div>
+            <div className="text-[12px] text-slate-600">{fmtDate(dateOfSec(d.createdAt), today)}</div>
           </div>
           <a href={d.href} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Open</a>
           {onRemove && canEdit && (
-            <button type="button" onClick={() => onRemove(d)} aria-label={`Remove ${d.filename}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700">
+            <button type="button" onClick={() => onRemove(d)} aria-label={`Remove ${d.filename}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-rose-50 hover:text-rose-700">
               <Icon name="trash" className="h-3.5 w-3.5" />
             </button>
           )}
@@ -720,7 +720,7 @@ function PartExchange({ profileId, data, set, kind, today, appraisals, canEdit, 
 
   const step = (n: number, done: boolean, title: string, body: ReactNode) => (
     <li className="relative flex gap-3 pb-5 last:pb-0">
-      <span className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold ${done ? "bg-teal-600 text-white" : "bg-white text-slate-500 ring-1 ring-inset ring-slate-300"}`}>
+      <span className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold ${done ? "bg-teal-700 text-white" : "bg-white text-slate-600 ring-1 ring-inset ring-slate-300"}`}>
         {done ? <Icon name="check" className="h-3.5 w-3.5" /> : n}
       </span>
       <div className="min-w-0 flex-1">
@@ -811,7 +811,7 @@ function LostModal({ name, onClose, onSave }: { name: string; onClose: () => voi
         {LOST_REASONS.map((r) => <Pill key={r} on={reason === r} onClick={() => setReason(reason === r ? "" : r)}>{r}</Pill>)}
       </div>
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Anything worth remembering (optional)"
-        className="mt-4 w-full resize-none rounded-xl border border-slate-300 px-3.5 py-2.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14px]" />
+        className="mt-4 w-full resize-none rounded-xl border border-slate-300 px-3.5 py-2.5 text-base text-slate-900 placeholder:text-slate-500 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[14px]" />
       <button type="button" disabled={!reason} onClick={() => onSave(reason, note)}
         className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-[14px] font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
         Move to Lost sales

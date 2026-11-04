@@ -133,7 +133,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
             </div>
           </div>
         )}
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-slate-600">
           Showing <strong>{view === "ytd" ? `${year} year to date` : formatMonthLabel(yearMonth)}</strong>.
           {!snapshot.hasAnyData && " No reports uploaded yet."}
         </p>
@@ -211,7 +211,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
         <h2 className="mt-8 font-semibold text-[17px] tracking-tight text-slate-900">Total points</h2>
         <div className="mt-2 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-left font-medium text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Exec</th>
@@ -239,7 +239,7 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                         {r.photoUrl ? (
                           <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
                         ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600">
                             {initials(r.name)}
                           </div>
                         )}
@@ -256,12 +256,12 @@ export default async function SalesLeaderboardPage({ searchParams }: { searchPar
                 );
               })}
               {snapshot.rows.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-500">No participants yet. Admin can add execs on the Manage page.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-600">No participants yet. Admin can add execs on the Manage page.</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-slate-400">
+        <p className="mt-2 text-[11px] text-slate-600">
           Scoring: 🏆 3 pts · 🥈 2 pts · 🥉 1 pt, per metric, per period. Response Time is the average working minutes from a
           MotorComplete lead reaching the exec to their first contact: fastest wins; scored from October 2026.
         </p>
@@ -294,7 +294,7 @@ function Cell({ n, pts }: { n: number | string; pts: number }) {
   return (
     <td className="px-2 py-3 text-right tabular-nums">
       <div className="text-slate-900">{n}</div>
-      {pts > 0 && <div className="text-[10px] font-semibold text-amber-600">+{pts}</div>}
+      {pts > 0 && <div className="text-[10px] font-semibold text-amber-700">+{pts}</div>}
     </td>
   );
 }
@@ -306,13 +306,13 @@ function MetricCard({ meta, leaders, teamTotal }: { meta: { key: LeaderboardMetr
       <div className="flex items-end justify-between border-b border-slate-100 px-4 py-3">
         <div className="text-[15px] font-semibold tracking-tight text-slate-900">{meta.label}</div>
         <div className="text-right">
-          <div className="text-[12.5px] text-slate-500">Team</div>
+          <div className="text-[12.5px] text-slate-600">Team</div>
           <div className="text-base font-semibold tabular-nums text-slate-900">{teamTotal}</div>
         </div>
       </div>
       <div className="divide-y divide-slate-100">
         {leaders.length === 0 && (
-          <div className="px-4 py-6 text-center text-xs text-slate-500">No data yet</div>
+          <div className="px-4 py-6 text-center text-xs text-slate-600">No data yet</div>
         )}
         {leaders.map((r) => {
           const rank = r.metricRanks[meta.key];
@@ -322,7 +322,7 @@ function MetricCard({ meta, leaders, teamTotal }: { meta: { key: LeaderboardMetr
               {r.photoUrl ? (
                 <Image src={r.photoUrl} alt={r.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
               ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-500">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600">
                   {initials(r.name)}
                 </div>
               )}
@@ -392,9 +392,9 @@ function ScoreLine({ label, n, rank, sub }: { label: string; n: number | string;
   return (
     <div className="flex items-center justify-between">
       <div>
-        <div className="font-semibold text-slate-500 text-[12.5px]">{label}</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">{label}</div>
         <div className="text-base font-semibold tabular-nums text-slate-900">{n}</div>
-        {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
+        {sub && <div className="text-[10px] text-slate-600">{sub}</div>}
       </div>
       {rank !== null && rank <= 3 && (
         <div className="text-lg leading-none">{TROPHIES[rank as 1 | 2 | 3]}</div>
@@ -412,7 +412,7 @@ function ArchiveTile({ entry, isCurrent }: { entry: ChampionEntry; isCurrent: bo
   return (
     <div className={`flex-none w-44 rounded-2xl border bg-white px-3 py-3 shadow-sm ${isCurrent ? "border-amber-300 ring-2 ring-amber-200" : "border-slate-200"}`}>
       <div className="flex items-center justify-between">
-        <div className="font-semibold text-slate-500 text-[12.5px]">{label}</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">{label}</div>
         <span className="text-base">👑</span>
       </div>
       {entry.champion ? (
@@ -426,11 +426,11 @@ function ArchiveTile({ entry, isCurrent }: { entry: ChampionEntry; isCurrent: bo
           )}
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-slate-900">{entry.champion.name}</div>
-            <div className="text-[11px] text-slate-500">{entry.champion.points} pts</div>
+            <div className="text-[11px] text-slate-600">{entry.champion.points} pts</div>
           </div>
         </div>
       ) : (
-        <div className="mt-2 text-xs text-slate-400">No data yet</div>
+        <div className="mt-2 text-xs text-slate-600">No data yet</div>
       )}
     </div>
   );

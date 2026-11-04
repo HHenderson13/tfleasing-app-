@@ -111,16 +111,16 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
 
       {view === "tracker" ? (
         filtered.length === 0 ? (
-          <div className="mt-4 rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+          <div className="mt-4 rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-600">
             No deals waiting on delivery. {execFilter ? "Try clearing the exec filter." : "You're all caught up."}
           </div>
         ) : (
           <div className="mt-4 space-y-6">
             {trackerBuckets.sortedKeys.map((key) => (
               <section key={key}>
-                <h2 className="mb-2 font-semibold text-slate-500 text-[12.5px]">
+                <h2 className="mb-2 font-semibold text-slate-600 text-[12.5px]">
                   {bucketLabel(key)}
-                  <span className="ml-2 text-slate-400">({trackerBuckets.groups.get(key)!.length})</span>
+                  <span className="ml-2 text-slate-600">({trackerBuckets.groups.get(key)!.length})</span>
                 </h2>
                 <div className="space-y-2">
                   {trackerBuckets.groups.get(key)!.map((it) => (
@@ -135,7 +135,7 @@ export function AwaitingClient({ items, execs, defaultExecId, myExecId, addDealH
         <div className="mt-4 space-y-3">
           <DeliveryCalendar entries={calendarEntries} />
           {calendarMissing > 0 && (
-            <p className="text-[11px] italic text-slate-500">
+            <p className="text-[11px] italic text-slate-600">
               {calendarMissing} deal{calendarMissing === 1 ? "" : "s"} on the tracker without a confirmed delivery date. Set one on the Tracker tab to show them here here.
             </p>
           )}

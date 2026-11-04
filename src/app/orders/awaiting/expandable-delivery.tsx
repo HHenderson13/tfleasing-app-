@@ -28,7 +28,7 @@ export function ExpandableDelivery({
           <div className="text-right">
             <Link
               href={`/orders/${orderId}`}
-              className="text-[11px] text-slate-400 hover:text-slate-700 hover:underline"
+              className="text-[11px] text-slate-600 hover:text-slate-700 hover:underline"
             >
               open full order →
             </Link>

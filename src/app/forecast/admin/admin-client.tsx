@@ -101,7 +101,7 @@ export function AdminClient({ tab, sheet, month, config, actuals, vehicles, bonu
             </button>
           ))}
         </nav>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-600">
           {TABS.find((t) => t.key === tab)?.description}
         </p>
 
@@ -210,7 +210,7 @@ function MathTab({
     <div className="space-y-6">
       <AddConfigCard pending={pending} onError={onError} onAdded={onRefresh} />
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-slate-600">
         Percentages (Guarantee B, Stocking Credits, DPA etc.) live on the
         <strong> Vehicles</strong> tab: they're per-vehicle. Edits to either tab only affect
         forecasts on <strong>new uploads</strong>; existing months stay frozen at the settings
@@ -226,7 +226,7 @@ function MathTab({
               <h3 className="text-sm font-semibold text-slate-900">{CATEGORY_LABELS[cat] ?? cat}</h3>
             </div>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+              <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
                 <tr>
                   <th className="px-6 py-2.5 text-left font-medium w-1/4">Description</th>
                   <th className="px-3 py-2.5 text-left font-medium w-32">Type</th>
@@ -242,7 +242,7 @@ function MathTab({
                     <tr key={c.key} className={`border-t border-slate-100 ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
                       <td className="px-6 py-2">
                         <div className="text-sm text-slate-800">{c.description ?? c.key}</div>
-                        <div className="font-mono text-[10px] text-slate-400">{c.key}</div>
+                        <div className="font-mono text-[10px] text-slate-600">{c.key}</div>
                       </td>
                       <td className="px-3 py-2">
                         {isSpecial ? (
@@ -264,7 +264,7 @@ function MathTab({
                       </td>
                       <td className="px-3 py-2 text-xs">
                         {isSpecial ? (
-                          <span className="text-slate-400">referenced by formula</span>
+                          <span className="text-slate-600">referenced by formula</span>
                         ) : (
                           <select
                             value={c.appliesToLineKey ?? ""}
@@ -291,7 +291,7 @@ function MathTab({
                       </td>
                       <td className="px-6 py-2 text-right">
                         {isSpecial ? (
-                          <span className="text-[11px] text-slate-300">locked</span>
+                          <span className="text-[11px] text-slate-500">locked</span>
                         ) : (
                           <button
                             type="button" disabled={pending} onClick={() => remove(c.key)}
@@ -330,7 +330,7 @@ function AddConfigCard({
     <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50 to-transparent px-6 py-3">
         <h3 className="text-sm font-semibold text-slate-900">Add a new cost</h3>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-slate-600">
           Nominal £ cost: pick whether it's <strong>per unit</strong> (multiplied by total
           units on the sheet) or <strong>per month</strong> (flat monthly figure), and which
           line it lands on.
@@ -434,7 +434,7 @@ function DataTab({
     <div className="space-y-5">
       <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="border-b border-slate-200 px-5 py-3">
-          <div className="font-medium text-slate-500 text-[12.5px]">
+          <div className="font-medium text-slate-600 text-[12.5px]">
             Sheet
           </div>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -455,7 +455,7 @@ function DataTab({
           </div>
         </div>
 
-        <div className="border-b border-slate-200 px-5 py-2.5 text-[11px] text-slate-500">
+        <div className="border-b border-slate-200 px-5 py-2.5 text-[11px] text-slate-600">
           {tab === "baselines"
             ? "Key budget figures for each line: these drive the variance column on the monthly view."
             : "Once the official accounts publish, key the final figures here. They'll overwrite that month's forecast on the monthly + quarterly views."}
@@ -463,7 +463,7 @@ function DataTab({
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Line</th>
                 <th className="px-5 py-3 text-right font-medium">
@@ -485,8 +485,8 @@ function DataTab({
                 if (l.kind === "total" || l.kind === "perUnit") {
                   return (
                     <tr key={l.key} className="border-t border-slate-100 bg-slate-50/60">
-                      <td className="px-5 py-2 text-slate-500 font-semibold">{l.label}</td>
-                      <td className="px-5 py-2 text-right text-slate-300">auto</td>
+                      <td className="px-5 py-2 text-slate-600 font-semibold">{l.label}</td>
+                      <td className="px-5 py-2 text-right text-slate-500">auto</td>
                     </tr>
                   );
                 }
@@ -505,7 +505,7 @@ function DataTab({
         </div>
       </section>
 
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-slate-600">
         Working in <strong>{SHEET_LABELS[sheet]}</strong>. Editing here only affects {month};
         switch month with the picker above, or sheet with the buttons. Total / per-unit rows derive
         themselves on the Monthly view: you only need to key the source lines.
@@ -637,7 +637,7 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
     <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 bg-gradient-to-r from-sky-50 to-transparent px-6 py-3">
         <h3 className="text-sm font-semibold text-slate-900">Test the classifier</h3>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-slate-600">
           Paste a Dealbook "Model" string to confirm it lands on the right vehicle. Longest matching
           keyword wins: that's how "Puma Gen-E" beats plain "Puma" and "Kuga PHEV" beats "Kuga".
         </p>
@@ -655,14 +655,14 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
               {result.vehicleId ? (
                 <>
-                  <span className="text-xs text-slate-500">Picked → </span>
+                  <span className="text-xs text-slate-600">Picked → </span>
                   <span className="font-semibold text-slate-900">
                     {parsed.find((v) => v.id === result.vehicleId)?.name ?? result.vehicleId}
                   </span>
                   <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800 text-[12.5px]">
                     {result.kind}
                   </span>
-                  <span className="ml-2 text-xs text-slate-500">
+                  <span className="ml-2 text-xs text-slate-600">
                     matched <code className="rounded bg-white px-1">{result.matchedKeyword}</code>
                   </span>
                 </>
@@ -671,13 +671,13 @@ function ClassifierTester({ vehicles }: { vehicles: VehiclePayload[] }) {
               )}
             </div>
             {otherMatches.length > 1 && (
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-600">
                 <div className="mb-1 font-medium text-slate-600">Other keywords that matched (sorted longest first):</div>
                 <ul className="space-y-0.5">
                   {otherMatches.map((m, i) => (
                     <li key={i} className={m.winner ? "text-emerald-700" : ""}>
                       <code className="rounded bg-slate-100 px-1">{m.keyword}</code>
-                      <span className="text-slate-400"> ({m.length} chars)</span>
+                      <span className="text-slate-600"> ({m.length} chars)</span>
                       {" → "}{m.vehicleName}
                       {m.winner && <span className="ml-1 text-[10px] font-semibold text-emerald-700">WINNER</span>}
                     </li>
@@ -740,7 +740,7 @@ function VehicleSection({
         <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`} />
         <div className="px-5 py-4">
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-600">
             Keywords match against the Dealbook "Model" column. Add the bonus rates so per-vehicle
             money math can fold them in automatically.
           </p>
@@ -748,11 +748,11 @@ function VehicleSection({
       </div>
 
       {vehicles.length === 0 ? (
-        <div className="px-5 py-8 text-sm text-slate-400">No {title.toLowerCase()} yet. Add one above.</div>
+        <div className="px-5 py-8 text-sm text-slate-600">No {title.toLowerCase()} yet. Add one above.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-5 py-3 text-left font-medium w-1/5">Vehicle</th>
                 <th className="px-3 py-3 text-left font-medium w-24">Powertrain</th>
@@ -849,7 +849,7 @@ function VehicleRow({
     <tr className={`border-t border-slate-100 ${stripe}`}>
       <td className="px-5 py-2 align-top">
         <div className="font-semibold text-slate-900">{vehicle.name}</div>
-        <div className="text-[10px] font-mono text-slate-400">{vehicle.id}</div>
+        <div className="text-[10px] font-mono text-slate-600">{vehicle.id}</div>
         {betterMatches.length > 0 && (
           <div
             className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 ring-1 ring-amber-200"
@@ -865,7 +865,7 @@ function VehicleRow({
             type="button"
             onClick={() => commitFuel("ice")}
             disabled={pending}
-            className={`px-2 py-1 ${vehicle.fuelType === "ice" ? "bg-amber-600 text-white" : "bg-white text-slate-500 hover:bg-amber-50"}`}
+            className={`px-2 py-1 ${vehicle.fuelType === "ice" ? "bg-amber-700 text-white" : "bg-white text-slate-600 hover:bg-amber-50"}`}
           >
             ICE
           </button>
@@ -873,7 +873,7 @@ function VehicleRow({
             type="button"
             onClick={() => commitFuel("bev")}
             disabled={pending}
-            className={`px-2 py-1 ${vehicle.fuelType === "bev" ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-emerald-50"}`}
+            className={`px-2 py-1 ${vehicle.fuelType === "bev" ? "bg-emerald-700 text-white" : "bg-white text-slate-600 hover:bg-emerald-50"}`}
           >
             BEV
           </button>
@@ -942,7 +942,7 @@ function AddVehicleCard({
     <section className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50 to-transparent px-6 py-3">
         <h3 className="text-sm font-semibold text-slate-900">Add a new vehicle</h3>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-slate-600">
           Keywords are substrings the classifier looks for in the Dealbook "Model" column —
           more specific phrases like <code className="rounded bg-slate-100 px-1">Puma Gen-E</code>
           take priority over plain <code className="rounded bg-slate-100 px-1">Puma</code>.

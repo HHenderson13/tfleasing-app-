@@ -9,10 +9,10 @@
   --fc-accent-hover: #1e293b;
   --fc-accent-glow: rgba(15,23,42,0.05);
   --fc-text: #0f172a;
-  --fc-text2: #475569;
-  --fc-text3: #94a3b8;
+  --fc-text2: #334155;
+  --fc-text3: #475569;
   --fc-red: #be123c;
-  --fc-amber: #d97706;
+  --fc-amber: #b45309;
   --fc-green: #047857;
   --fc-radius: 12px;
   --fc-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.07);
@@ -138,7 +138,7 @@
 .fc td.mname { font-weight: 600; color: var(--fc-text); }
 
 .fc .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
-.fc .pill-best   { background: rgba(22,163,74,0.12); color: #15803d; border: 1px solid rgba(22,163,74,0.3); }
+.fc .pill-best   { background: rgba(22,163,74,0.12); color: #166534; border: 1px solid rgba(22,163,74,0.3); }
 .fc .pill-mid    { background: rgba(217,119,6,0.10); color: #b45309; border: 1px solid rgba(217,119,6,0.3); }
 .fc .pill-bad    { background: rgba(220,38,38,0.08); color: #b91c1c; border: 1px solid rgba(220,38,38,0.25); }
 .fc .pill-none   { background: var(--fc-surface2); color: var(--fc-text3); border: 1px solid var(--fc-border2); }
@@ -175,7 +175,7 @@
 
 /* ── The site's one look (src/components/ui.tsx): bar, title, tabs, cards ── */
 .fc header { height: 56px; padding: 0 24px; background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(226,232,240,0.8); }
-.fc .back-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: #64748b; padding: 0; border: none; background: transparent; }
+.fc .back-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: #475569; padding: 0; border: none; background: transparent; }
 .fc .back-btn:hover { color: var(--fc-text); background: transparent; }
 .fc .back-btn svg { width: 16px; height: 16px; }
 .fc .page-head { padding: 28px 28px 16px; }
@@ -187,10 +187,10 @@
 .fc .subnav-tab:hover { background: transparent; color: var(--fc-text); }
 .fc .subnav-tab.active { background: #fff; color: var(--fc-text); border: none; box-shadow: 0 1px 2px rgba(15,23,42,0.08); font-weight: 500; }
 .fc .filter-bar { margin: 0 28px; border: none; border-radius: 16px; box-shadow: var(--fc-shadow); }
-.fc .filter-label { color: #64748b; font-weight: 500; font-size: 12.5px; }
+.fc .filter-label { color: #475569; font-weight: 500; font-size: 12.5px; }
 .fc .sum-card, .fc .table-card { border: none; }
 .fc .sum-val { color: var(--fc-text); font-weight: 600; font-size: 26px; }
-.fc .sum-lbl { color: #64748b; font-weight: 500; font-size: 12.5px; }
+.fc .sum-lbl { color: #475569; font-weight: 500; font-size: 12.5px; }
 .fc .table-card-title { font-size: 17px; letter-spacing: -0.01em; }
 .fc select { border-radius: 12px; background: #fff; border-color: #cbd5e1; padding: 7px 10px; }
 .fc .chip.active { background: var(--fc-text); border-color: var(--fc-text); }

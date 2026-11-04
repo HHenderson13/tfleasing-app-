@@ -254,7 +254,7 @@ export function RangerCalculator({ preparedBy, today, profile }: { preparedBy: s
                   <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" /></svg>
                   Add a Ranger
                 </button>
-              ) : <span className="text-[13px] text-slate-500">Four is the most a comparison takes.</span>}
+              ) : <span className="text-[13px] text-slate-600">Four is the most a comparison takes.</span>}
             </div>
             {funding === "hire" && picked.length > 0 && (
               <div className="mt-4">
@@ -281,7 +281,7 @@ export function RangerCalculator({ preparedBy, today, profile }: { preparedBy: s
           <section className="rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
             <header className="px-5 pt-5 sm:px-6 sm:pt-6">
               <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">Why each is taxed this way</h2>
-              <p className="mt-0.5 text-[13px] text-slate-500">HMRC&apos;s rules for pick-ups, {rates.label}.</p>
+              <p className="mt-0.5 text-[13px] text-slate-600">HMRC&apos;s rules for pick-ups, {rates.label}.</p>
             </header>
             <div className="grid gap-x-6 gap-y-4 px-5 pb-5 pt-4 sm:grid-cols-2 sm:px-6 sm:pb-6">
               {rules.map((r) => (
@@ -297,9 +297,9 @@ export function RangerCalculator({ preparedBy, today, profile }: { preparedBy: s
               className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left sm:px-6">
               <div>
                 <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">The workings</h2>
-                <p className="mt-0.5 text-[13px] text-slate-500">Every step from the price list to the answer, so it can be checked by hand.</p>
+                <p className="mt-0.5 text-[13px] text-slate-600">Every step from the price list to the answer, so it can be checked by hand.</p>
               </div>
-              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className={`h-5 w-5 shrink-0 text-slate-400 transition ${showWorkings ? "rotate-180" : ""}`}>
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className={`h-5 w-5 shrink-0 text-slate-500 transition ${showWorkings ? "rotate-180" : ""}`}>
                 <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
               </svg>
             </button>
@@ -310,18 +310,18 @@ export function RangerCalculator({ preparedBy, today, profile }: { preparedBy: s
                     <li key={s.title} className={`min-w-0 ${s.title === "The difference" ? "md:col-span-2" : ""}`}>
                       <div className="text-[14px] font-semibold text-slate-900">{s.title}</div>
                       <div className="mt-2 space-y-1 break-words font-mono text-[12.5px] leading-5 text-slate-800">
-                        {s.lines.map((l, j) => <div key={j} className={l.startsWith("  ") ? "pl-4 text-slate-500" : ""}>{l.trim()}</div>)}
+                        {s.lines.map((l, j) => <div key={j} className={l.startsWith("  ") ? "pl-4 text-slate-600" : ""}>{l.trim()}</div>)}
                       </div>
                     </li>
                   ))}
                 </ol>
-                <p className="mt-6 text-[12.5px] leading-5 text-slate-500">
+                <p className="mt-6 text-[12.5px] leading-5 text-slate-600">
                   Rates: {sources.map((x) => `${x.label}, ${x.detail}`).join(". ")}.
                 </p>
               </div>
             )}
           </section>
-          <p className="px-1 text-[12px] leading-5 text-slate-500">
+          <p className="px-1 text-[12px] leading-5 text-slate-600">
             {/* One string: the React Compiler drops a space after {value} in JSX text holding an &apos; entity. */}
             {`For comparison only, and not tax advice. Figures use HMRC's ${rates.label} rates and Ford's list prices, worked at the rates entered. The driver's and the business's own circumstances decide what they actually pay, and rates change each April. Over the term is at ${rates.label} rates.`}
           </p>
@@ -338,7 +338,7 @@ export function RangerCalculator({ preparedBy, today, profile }: { preparedBy: s
                   <div className="truncate text-[12px] font-medium text-emerald-300">The {c!.vehicles[b].name} saves</div>
                   <div className="text-[13px] leading-5 text-slate-300 tabular-nums">
                     Driver <b className="text-[16px] font-semibold text-white">{pounds(c!.split[b].driver.monthly)}</b> a month
-                    <span className="mx-1.5 text-slate-500">·</span>
+                    <span className="mx-1.5 text-slate-400">·</span>
                     Business <b className="text-[16px] font-semibold text-white">{pounds(c!.split[b].business.annual)}</b> a year
                   </div>
                 </>
@@ -420,7 +420,7 @@ function RangerSlot({ slot, index, result, funding, canRemove, onChange, onRemov
               <Segmented label={`Ranger ${index + 1} seats`} value={String(slot.seats) as "5" | "2"} onChange={(s) => onChange({ seats: Number(s) as Seats })}
                 options={[["5", "5 seats"], ["2", "2-Seat"]]} />
             ) : (
-              <div className="flex h-11 items-center rounded-xl bg-slate-100 px-3.5 text-[13px] text-slate-500">
+              <div className="flex h-11 items-center rounded-xl bg-slate-100 px-3.5 text-[13px] text-slate-600">
                 {v ? `5 seats, no 2-Seat ${v.trim}` : "5 seats"}
               </div>
             )}
@@ -443,8 +443,8 @@ function RangerSlot({ slot, index, result, funding, canRemove, onChange, onRemov
             {!van && (
               <div className="shrink-0 text-right">
                 <div className="text-[24px] font-semibold leading-8 tracking-tight tabular-nums text-slate-900">{pounds(result.p11d)}</div>
-                <div className="text-[12px] font-medium text-slate-500">P11D value</div>
-                {optionsTotal > 0 && <div className="mt-0.5 text-[12px] text-slate-500 tabular-nums">incl. {pounds(optionsTotal)} options</div>}
+                <div className="text-[12px] font-medium text-slate-600">P11D value</div>
+                {optionsTotal > 0 && <div className="mt-0.5 text-[12px] text-slate-600 tabular-nums">incl. {pounds(optionsTotal)} options</div>}
               </div>
             )}
           </div>
@@ -465,7 +465,7 @@ function RangerSlot({ slot, index, result, funding, canRemove, onChange, onRemov
               </Field>
             )}
           </div>
-          <p className="mt-3 text-[12.5px] leading-5 text-slate-500">
+          <p className="mt-3 text-[12.5px] leading-5 text-slate-600">
             {v.source}.
             {van ? " The 2-Seat conversion is £0 on Ford's list." : v.payloadKg ? ` Payload ${v.payloadKg.toLocaleString("en-GB")} kg.` : v.payloadUnderTonne ? " Payload under one tonne." : ""}
           </p>
@@ -495,7 +495,7 @@ function OptionsPicker({ slot, v, total, onChange }: { slot: Slot; v: RangerVers
         className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left">
         <div className="min-w-0">
           <div className="text-[14px] font-medium text-slate-900">Factory options</div>
-          <div className="text-[12.5px] text-slate-500">
+          <div className="text-[12.5px] text-slate-600">
             {count ? `${count} chosen, ${pounds(total)} at list price, added to the P11D value` : "Colour, wheels, canopies and packs. Each adds its list price to the P11D value."}
           </div>
         </div>
@@ -521,7 +521,7 @@ function OptionsPicker({ slot, v, total, onChange }: { slot: Slot; v: RangerVers
               <div key={g.key}>
                 <div className="mb-1 flex items-baseline justify-between gap-3">
                   <span className="text-[13px] font-medium text-slate-700">{g.label}</span>
-                  {g.one && list.length > 1 && <span className="text-[12px] text-slate-400">Choose one</span>}
+                  {g.one && list.length > 1 && <span className="text-[12px] text-slate-600">Choose one</span>}
                 </div>
                 <ul className="divide-y divide-slate-100 rounded-lg ring-1 ring-inset ring-slate-200/70">
                   {list.map((o) => (
@@ -531,7 +531,7 @@ function OptionsPicker({ slot, v, total, onChange }: { slot: Slot; v: RangerVers
                           className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-slate-900" />
                         <span className="min-w-0 flex-1">
                           <span className="block text-[14px] leading-5 text-slate-900">{o.name}</span>
-                          <span className="block text-[12px] leading-4 text-slate-400">{o.code}{o.note ? `. ${o.note}` : ""}</span>
+                          <span className="block text-[12px] leading-4 text-slate-600">{o.code}{o.note ? `. ${o.note}` : ""}</span>
                         </span>
                         <span className="shrink-0 text-[14px] font-medium tabular-nums text-slate-700">{pounds(o.incVat)}</span>
                       </label>
@@ -544,7 +544,7 @@ function OptionsPicker({ slot, v, total, onChange }: { slot: Slot; v: RangerVers
           <Field label="Anything else" hint="Dealer-fit accessories fitted before delivery count too, at list price with fitting.">
             <UnitInput value={slot.other} onChange={(o) => onChange({ other: o.slice(0, 7) })} unit="£ list price" label="Other options, pounds at list price" placeholder="0" />
           </Field>
-          <p className="text-[12px] leading-5 text-slate-500">Ford&apos;s list prices including VAT, which is what the P11D value takes.</p>
+          <p className="text-[12px] leading-5 text-slate-600">Ford&apos;s list prices including VAT, which is what the P11D value takes.</p>
         </div>
       )}
     </div>
@@ -630,12 +630,12 @@ function Answer({ c, numbers, missing, rates, termMonths, customerName, onExport
                     <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: v.taxClass === "car" ? CAR_FILL : VAN_FILL }} />
                     <span className="min-w-0">{numbers[i]}. {v.name}</span>
                   </span>
-                  <span className="shrink-0 text-[14px] tabular-nums text-slate-500"><b className="font-semibold text-slate-900">{pounds(v.together.annual)}</b> a year</span>
+                  <span className="shrink-0 text-[14px] tabular-nums text-slate-600"><b className="font-semibold text-slate-900">{pounds(v.together.annual)}</b> a year</span>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.max(2, (v.together.annual / max) * 100)}%`, background: v.taxClass === "car" ? CAR_FILL : VAN_FILL }} />
                 </div>
-                <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 text-[12px] tabular-nums text-slate-500">
+                <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 text-[12px] tabular-nums text-slate-600">
                   <span>Driver {pounds(v.driver.monthly)} · business {pounds(v.business.monthly)} a month</span>
                   {i > 0 && (Math.abs(c.savings[i]) < 0.5
                     ? <span>The same</span>
@@ -645,10 +645,10 @@ function Answer({ c, numbers, missing, rates, termMonths, customerName, onExport
                 </div>
               </div>
             ))}
-            {!ready && <p className="text-[13px] text-slate-500">Choose a Ranger to compare it with.</p>}
+            {!ready && <p className="text-[13px] text-slate-600">Choose a Ranger to compare it with.</p>}
           </div>
         ) : (
-          <p className="text-[13px] leading-5 text-slate-500">Each Ranger&apos;s tax, the driver&apos;s and the business&apos;s, shows here as you pick them.</p>
+          <p className="text-[13px] leading-5 text-slate-600">Each Ranger&apos;s tax, the driver&apos;s and the business&apos;s, shows here as you pick them.</p>
         )}
 
         <button type="button" onClick={onExport} disabled={!ready || exporting}
@@ -672,7 +672,7 @@ function FullPicture({ c, numbers, sections }: { c: Comparison; numbers: number[
     <section className="rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <header className="px-5 pt-5 sm:px-6 sm:pt-6">
         <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">The full picture</h2>
-        <p className="mt-0.5 text-[13px] text-slate-500">Every figure for each Ranger, and who saves what. The business&apos;s tax is net of the relief it gets on it.</p>
+        <p className="mt-0.5 text-[13px] text-slate-600">Every figure for each Ranger, and who saves what. The business&apos;s tax is net of the relief it gets on it.</p>
       </header>
 
       <div className="hidden px-6 pb-6 pt-4 md:block">
@@ -690,11 +690,11 @@ function FullPicture({ c, numbers, sections }: { c: Comparison; numbers: number[
           </thead>
           {sections.map((sec) => (
             <tbody key={sec.title}>
-              <tr><td colSpan={c.vehicles.length + 1} className={`border-b border-slate-200 pb-1.5 pt-4 text-[12px] font-semibold uppercase tracking-wide ${savingSection(sec) ? "text-emerald-700" : "text-slate-500"}`}>{sec.title}</td></tr>
+              <tr><td colSpan={c.vehicles.length + 1} className={`border-b border-slate-200 pb-1.5 pt-4 text-[12px] font-semibold uppercase tracking-wide ${savingSection(sec) ? "text-emerald-700" : "text-slate-600"}`}>{sec.title}</td></tr>
               {sec.rows.map((r) => (
                 <tr key={r.label} className="border-b border-slate-100 last:border-0">
                   <td className={`py-2 pr-3 ${r.strong ? "font-semibold text-slate-900" : "text-slate-600"}`}>
-                    {r.label}{r.hint && <span className="block text-[11.5px] font-normal text-slate-400">{r.hint}</span>}
+                    {r.label}{r.hint && <span className="block text-[11.5px] font-normal text-slate-600">{r.hint}</span>}
                   </td>
                   {r.values.map((x, i) => (
                     <td key={i} className={`py-2 pl-3 text-right ${valueClass(x, r.strong)}`}>{x}</td>
@@ -715,7 +715,7 @@ function FullPicture({ c, numbers, sections }: { c: Comparison; numbers: number[
             </div>
             {sections.map((sec) => (
               <div key={sec.title} className="mt-3">
-                <div className={`border-b border-slate-200 pb-1 text-[11.5px] font-semibold uppercase tracking-wide ${savingSection(sec) ? "text-emerald-700" : "text-slate-500"}`}>{sec.title}</div>
+                <div className={`border-b border-slate-200 pb-1 text-[11.5px] font-semibold uppercase tracking-wide ${savingSection(sec) ? "text-emerald-700" : "text-slate-600"}`}>{sec.title}</div>
                 <dl className="text-[13px] tabular-nums">
                   {sec.rows.map((r) => (
                     <div key={r.label} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-1.5 last:border-0">

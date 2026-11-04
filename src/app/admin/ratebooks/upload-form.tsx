@@ -176,7 +176,7 @@ export function UploadForm({
     <div className="space-y-6">
       <form onSubmit={submitManual} className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex min-w-40 flex-col text-xs text-slate-500">
+          <label className="flex min-w-40 flex-col text-xs text-slate-600">
             Funder
             <select
               value={manualFunderId}
@@ -188,7 +188,7 @@ export function UploadForm({
               ))}
             </select>
           </label>
-          <label className="flex min-w-48 flex-col text-xs text-slate-500">
+          <label className="flex min-w-48 flex-col text-xs text-slate-600">
             Maintenance
             <select
               value={manualMaintained ? "true" : "false"}
@@ -199,7 +199,7 @@ export function UploadForm({
               <option value="true">Maintained</option>
             </select>
           </label>
-          <label className="flex min-w-72 flex-1 flex-col text-xs text-slate-500">
+          <label className="flex min-w-72 flex-1 flex-col text-xs text-slate-600">
             File (.xlsx, .xls or .csv)
             <input
               key={fileInputKey}
@@ -217,7 +217,7 @@ export function UploadForm({
             {pendingManual ? "Uploading..." : "Upload via blob"}
           </button>
         </div>
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-slate-600">
           Large ratebooks are staged in Blob first, then parsed into the database, so the browser post size is no longer the bottleneck.
         </p>
         {manualStatus && (
@@ -231,10 +231,10 @@ export function UploadForm({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Remote ratebook source</h3>
-            <p className="mt-1 text-xs text-slate-500">Store the connection details once, test them, then pull a ratebook straight from the remote file path.</p>
+            <p className="mt-1 text-xs text-slate-600">Store the connection details once, test them, then pull a ratebook straight from the remote file path.</p>
           </div>
           {remote.updatedAt && (
-            <div className="text-right text-xs text-slate-400">
+            <div className="text-right text-xs text-slate-600">
               Saved
               <div className="font-medium text-slate-600">{new Date(remote.updatedAt).toLocaleString()}</div>
             </div>
@@ -242,7 +242,7 @@ export function UploadForm({
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <label className="flex flex-col text-xs text-slate-500">
+          <label className="flex flex-col text-xs text-slate-600">
             Protocol
             <select
               value={remote.protocol}
@@ -254,7 +254,7 @@ export function UploadForm({
               ))}
             </select>
           </label>
-          <label className="flex flex-col text-xs text-slate-500">
+          <label className="flex flex-col text-xs text-slate-600">
             Host
             <input
               value={remote.host}
@@ -263,7 +263,7 @@ export function UploadForm({
               className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
             />
           </label>
-          <label className="flex flex-col text-xs text-slate-500">
+          <label className="flex flex-col text-xs text-slate-600">
             Port
             <input
               value={remote.port}
@@ -273,7 +273,7 @@ export function UploadForm({
               className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
             />
           </label>
-          <label className="flex flex-col text-xs text-slate-500">
+          <label className="flex flex-col text-xs text-slate-600">
             Username
             <input
               value={remote.username}
@@ -281,7 +281,7 @@ export function UploadForm({
               className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
             />
           </label>
-          <label className="flex flex-col text-xs text-slate-500">
+          <label className="flex flex-col text-xs text-slate-600">
             Password
             <input
               type="password"
@@ -290,7 +290,7 @@ export function UploadForm({
               className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
             />
           </label>
-          <label className="flex flex-col text-xs text-slate-500 md:col-span-2 xl:col-span-3">
+          <label className="flex flex-col text-xs text-slate-600 md:col-span-2 xl:col-span-3">
             Remote path / filename
             <input
               value={remote.remotePath}
@@ -303,7 +303,7 @@ export function UploadForm({
 
         <div className="mt-5 border-t border-slate-100 pt-5">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <label className="flex flex-col text-xs text-slate-500">
+            <label className="flex flex-col text-xs text-slate-600">
               Import into funder
               <select
                 value={remoteFunderId}
@@ -315,7 +315,7 @@ export function UploadForm({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col text-xs text-slate-500">
+            <label className="flex flex-col text-xs text-slate-600">
               Maintenance slice
               <select
                 value={remoteMaintained ? "true" : "false"}
@@ -364,7 +364,7 @@ export function UploadForm({
 
         {diag && (
           <div className="mt-4">
-            <button onClick={() => setShowDiag((value) => !value)} className="text-xs text-slate-400 underline hover:text-slate-700">
+            <button onClick={() => setShowDiag((value) => !value)} className="text-xs text-slate-600 underline hover:text-slate-700">
               {showDiag ? "Hide" : "Show"} column diagnostics
             </button>
             {showDiag && (
@@ -372,15 +372,15 @@ export function UploadForm({
                 <div className="font-semibold text-slate-800">Sheet: {diag.sheetName} | {diag.totalRows} data rows</div>
                 <div className="pt-1 font-semibold text-slate-700">Headers at expected column letters:</div>
                 {Object.entries(diag.headersAtExpectedCols).map(([col, value]) => (
-                  <div key={col}><span className="text-slate-500">{col}:</span> {value ?? <span className="text-red-500">EMPTY</span>}</div>
+                  <div key={col}><span className="text-slate-600">{col}:</span> {value ?? <span className="text-red-700">EMPTY</span>}</div>
                 ))}
                 <div className="pt-1 font-semibold text-slate-700">Where header-name search found columns:</div>
                 {Object.entries(diag.headerIdxFoundAt).map(([name, index]) => (
-                  <div key={name}><span className="text-slate-500">{name}:</span> {index >= 0 ? `col ${index}` : <span className="text-amber-600">not found</span>}</div>
+                  <div key={name}><span className="text-slate-600">{name}:</span> {index >= 0 ? `col ${index}` : <span className="text-amber-700">not found</span>}</div>
                 ))}
                 <div className="pt-1 font-semibold text-slate-700">First data row values:</div>
                 {Object.entries(diag.firstDataRowSample).map(([col, value]) => (
-                  <div key={col}><span className="text-slate-500">{col}:</span> {value ?? <span className="text-red-500">null</span>}</div>
+                  <div key={col}><span className="text-slate-600">{col}:</span> {value ?? <span className="text-red-700">null</span>}</div>
                 ))}
               </div>
             )}

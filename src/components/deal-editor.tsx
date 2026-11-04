@@ -56,7 +56,7 @@ export function DealEditor({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-[11px] font-medium text-slate-500 hover:text-slate-900 hover:underline"
+        className="text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:underline"
       >
         Edit deal
       </button>
@@ -68,27 +68,27 @@ export function DealEditor({
     <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Model</span>
+          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-600">Model</span>
           <input className={inp} value={model} onChange={(e) => setModel(e.target.value)} />
         </label>
         <label className="block">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Derivative</span>
+          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-600">Derivative</span>
           <input className={inp} value={derivative} onChange={(e) => setDerivative(e.target.value)} />
         </label>
         {showVehicleIds && (
           <>
             <label className="block">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Order number</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-600">Order number</span>
               <input className={inp} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
             </label>
             <label className="block">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">VIN</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-600">VIN</span>
               <input className={inp} value={vin} onChange={(e) => setVin(e.target.value)} />
             </label>
           </>
         )}
         <label className="col-span-2 block">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Finance Proposal #</span>
+          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-600">Finance Proposal #</span>
           <input
             className={inp}
             value={financeProposalNumber}

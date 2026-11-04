@@ -43,7 +43,7 @@ export default async function AdminBrokersPage() {
         <h2 className="mb-2 text-sm font-medium text-slate-700">Existing brokers</h2>
         <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Broker</th>
                 <th className="px-4 py-3 text-right font-medium">Users</th>
@@ -59,7 +59,7 @@ export default async function AdminBrokersPage() {
                     <Link href={`/admin/brokers/${r.id}`} className="hover:underline">{r.name}</Link>
                   </td>
                   <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{Number(r.user_count)}</td>
-                  <td className="px-4 py-3 text-right text-xs text-slate-500">
+                  <td className="px-4 py-3 text-right text-xs text-slate-600">
                     {new Date(Number(r.created_at) * 1000).toLocaleDateString("en-GB")}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -78,7 +78,7 @@ export default async function AdminBrokersPage() {
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No brokers yet. Add one above.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-600">No brokers yet. Add one above.</td></tr>
               )}
             </tbody>
           </table>

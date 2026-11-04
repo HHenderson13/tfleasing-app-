@@ -137,7 +137,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
     <div>
       <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-4 py-3 text-left font-medium">User</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -151,7 +151,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
               <tr key={u.id} className={confirming === u.id ? "bg-red-50/60" : undefined}>
                 <td className="px-4 py-3">
                   <div className="font-medium text-slate-900">{u.name}</div>
-                  <div className="text-xs text-slate-500">{u.email}</div>
+                  <div className="text-xs text-slate-600">{u.email}</div>
                 </td>
                 <td className="px-4 py-3">
                   {u.active ? (
@@ -167,7 +167,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
                     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200">Not set up</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-[11px] text-slate-500">
+                <td className="px-4 py-3 text-right text-[11px] text-slate-600">
                   {u.hasSetupToken ? "Link outstanding" : "Set"}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -195,7 +195,7 @@ export function BrokerUsersTable({ brokerId, users }: { brokerId: string; users:
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">No users yet. Add one above.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-600">No users yet. Add one above.</td></tr>
             )}
           </tbody>
         </table>

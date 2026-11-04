@@ -211,11 +211,11 @@ export default async function ReportsPage({
                   href={setSourceHref(range, s.key)}
                   className={`rounded-2xl bg-white p-4 transition ${active ? "shadow-[0_0_0_2px_rgba(15,23,42,0.9)]" : "shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)] hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.18)]"}`}
                 >
-                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500">
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-600">
                     <span className={`h-1.5 w-1.5 rounded-full ${DOT[s.tone.match(/from-(\w+)-/)?.[1] ?? "slate"] ?? "bg-slate-400"}`} />{s.label}{active ? ", selected" : ""}
                   </div>
                   <div className="mt-1.5 text-[24px] font-semibold leading-none tabular-nums text-slate-900">{s.submitted}</div>
-                  <div className="mt-1 text-[12.5px] text-slate-500">{s.accepted} accepted · {rate}%</div>
+                  <div className="mt-1 text-[12.5px] text-slate-600">{s.accepted} accepted · {rate}%</div>
                 </Link>
               );
             })}
@@ -367,7 +367,7 @@ export default async function ReportsPage({
 
         <Card title="Top derivatives" gradient="from-slate-50 to-white" accent="slate">
           <table className="w-full text-sm">
-            <thead className="text-slate-500 text-[12.5px]">
+            <thead className="text-slate-600 text-[12.5px]">
               <tr><th className="py-1 text-left">Model</th><th className="py-1 text-left">Derivative</th><th className="text-right">Count</th><th className="text-right">Share</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -376,10 +376,10 @@ export default async function ReportsPage({
                   <td className="py-1.5 text-slate-700">{d.model}</td>
                   <td className="py-1.5 font-medium text-slate-800">{d.derivative}</td>
                   <td className="text-right tabular-nums text-slate-600">{d.count}</td>
-                  <td className="text-right tabular-nums text-slate-500">{d.pct}%</td>
+                  <td className="text-right tabular-nums text-slate-600">{d.pct}%</td>
                 </tr>
               ))}
-              {r.derivativeSplit.length === 0 && <tr><td colSpan={4} className="py-3 text-center text-xs text-slate-400">No data</td></tr>}
+              {r.derivativeSplit.length === 0 && <tr><td colSpan={4} className="py-3 text-center text-xs text-slate-600">No data</td></tr>}
             </tbody>
           </table>
         </Card>
@@ -412,7 +412,7 @@ export default async function ReportsPage({
             </div>
             {r.evByModel.length > 0 && (
               <table className="mt-4 w-full text-sm">
-                <thead className="text-slate-500 text-[12.5px]">
+                <thead className="text-slate-600 text-[12.5px]">
                   <tr><th className="py-1 text-left">Model</th><th className="text-right">Total</th><th className="text-right">Wallbox</th><th className="text-right">Saving</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -432,7 +432,7 @@ export default async function ReportsPage({
 
         <Card title="Sales exec leaderboard" desc="Rate = accepted ÷ decided · pending shown separately" gradient="from-emerald-50 to-white" accent="emerald">
           <table className="w-full text-sm">
-            <thead className="text-slate-500 text-[12.5px]">
+            <thead className="text-slate-600 text-[12.5px]">
               <tr>
                 <th className="py-1 text-left">Exec</th>
                 <th className="text-right">Submitted</th>
@@ -455,7 +455,7 @@ export default async function ReportsPage({
                   <td className="text-right tabular-nums font-medium text-emerald-700">{e.rate}%</td>
                 </tr>
               ))}
-              {r.execLeaderboard.length === 0 && <tr><td colSpan={5} className="py-3 text-center text-xs text-slate-400">No data</td></tr>}
+              {r.execLeaderboard.length === 0 && <tr><td colSpan={5} className="py-3 text-center text-xs text-slate-600">No data</td></tr>}
             </tbody>
           </table>
         </Card>
@@ -508,16 +508,16 @@ function HeroTile({ gradient, label, value, sub, href, delta }: {
   const inner = (
     <div className={`h-full p-5 ${href ? CARD_LINK : CARD}`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500">
+        <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-600">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[dot] ?? "bg-slate-400"}`} />{label}
         </div>
-        {href && <span className="text-[12px] font-medium text-slate-400">Drill in</span>}
+        {href && <span className="text-[12px] font-medium text-slate-600">Drill in</span>}
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <div className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">{value}</div>
         {delta && <DeltaChip {...delta} />}
       </div>
-      {sub && <div className="mt-1.5 text-[13px] text-slate-500">{sub}</div>}
+      {sub && <div className="mt-1.5 text-[13px] text-slate-600">{sub}</div>}
     </div>
   );
   return href ? <Link href={href} className="block">{inner}</Link> : inner;
@@ -537,7 +537,7 @@ function Card({
     <section className={`mt-6 overflow-hidden ${CARD}`}>
       <div className="px-5 pt-5">
         <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">{title}</h2>
-        {desc && <p className="mt-0.5 text-[13px] text-slate-500">{desc}</p>}
+        {desc && <p className="mt-0.5 text-[13px] text-slate-600">{desc}</p>}
       </div>
       <div className="p-5">{children}</div>
     </section>
@@ -562,7 +562,7 @@ function BarList({
   hidePct?: boolean;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
-  if (rows.length === 0) return <div className="py-3 text-center text-xs text-slate-400">{empty}</div>;
+  if (rows.length === 0) return <div className="py-3 text-center text-xs text-slate-600">{empty}</div>;
   return (
     <ul className="space-y-1.5">
       {rows.map((r) => {
@@ -576,7 +576,7 @@ function BarList({
               />
               <span className="relative z-10 ml-2 text-[11px] font-medium leading-6 text-slate-800 tabular-nums">{r.count}</span>
             </div>
-            {!hidePct && <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-500">{r.pct}%</span>}
+            {!hidePct && <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-600">{r.pct}%</span>}
           </div>
         );
         return (
@@ -600,7 +600,7 @@ function RateList({
   // visible at a glance.
   benchmark?: number;
 }) {
-  if (rows.length === 0) return <div className="py-3 text-center text-xs text-slate-400">{empty}</div>;
+  if (rows.length === 0) return <div className="py-3 text-center text-xs text-slate-600">{empty}</div>;
   return (
     <ul className="space-y-2">
       {rows.map((r) => {
@@ -622,7 +622,7 @@ function RateList({
               )}
               <span className="relative z-10 ml-2 text-xs font-semibold leading-7 text-slate-900 tabular-nums">{r.rate}%</span>
             </div>
-            <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{r.sub}</span>
+            <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-slate-600">{r.sub}</span>
           </div>
         );
         return (
@@ -645,7 +645,7 @@ function DonutSplit({
   rows, palette,
 }: { rows: { label: string; count: number; pct: number; href?: string }[]; palette: string[] }) {
   const total = rows.reduce((a, b) => a + b.count, 0);
-  if (total === 0) return <div className="py-3 text-center text-xs text-slate-400">No data</div>;
+  if (total === 0) return <div className="py-3 text-center text-xs text-slate-600">No data</div>;
   const colours = palette.flatMap((p) => DONUT_PALETTE[p] ?? ["#64748b"]);
   let cumulative = 0;
   const segments = rows.map((r, i) => {
@@ -679,7 +679,7 @@ function DonutSplit({
             <span className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-sm" style={{ background: s.colour }} />
               <span className="font-medium text-slate-700">{s.label}</span>
-              <span className="text-slate-500 tabular-nums">{s.count} · {s.pct}%</span>
+              <span className="text-slate-600 tabular-nums">{s.count} · {s.pct}%</span>
             </span>
           );
           return <li key={s.label}>{s.href ? <Link href={s.href} className="hover:underline">{inner}</Link> : inner}</li>;
@@ -698,16 +698,16 @@ const MINI_STAT_BG: Record<string, string> = {
 function MiniStat({ label, value, sub, colour, href }: { label: string; value: string; sub?: string; colour: string; href?: string }) {
   const inner = (
     <div className={`rounded-xl p-3 ring-1 ring-inset ring-white/40 ${MINI_STAT_BG[colour]}`}>
-      <div className="font-semibold opacity-70 text-[12.5px]">{label}</div>
+      <div className="font-semibold text-[12.5px]">{label}</div>
       <div className="mt-0.5 text-2xl font-bold tabular-nums">{value}</div>
-      {sub && <div className="text-[11px] opacity-70">{sub}</div>}
+      {sub && <div className="text-[11px]">{sub}</div>}
     </div>
   );
   return href ? <Link href={href} className="block transition hover:scale-[1.02]">{inner}</Link> : inner;
 }
 
 function Sparkline({ points }: { points: { label: string; submitted: number; accepted: number }[] }) {
-  if (points.length < 2) return <div className="py-3 text-center text-xs text-slate-400">Not enough data yet</div>;
+  if (points.length < 2) return <div className="py-3 text-center text-xs text-slate-600">Not enough data yet</div>;
   const max = Math.max(1, ...points.map((p) => p.submitted));
   const w = 600, h = 120, pad = 16;
   const xStep = (w - pad * 2) / (points.length - 1);
@@ -731,7 +731,7 @@ function Sparkline({ points }: { points: { label: string; submitted: number; acc
         <path d={path("submitted")} fill="none" stroke="#0ea5e9" strokeWidth="2" />
         <path d={path("accepted")} fill="none" stroke="#10b981" strokeWidth="2" strokeDasharray="4 3" />
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+      <div className="mt-1 flex justify-between text-[10px] text-slate-600">
         <span>{points[0].label}</span>
         <span className="flex gap-3">
           <span><span className="mr-1 inline-block h-2 w-3 rounded-sm bg-sky-500" />Submitted</span>
@@ -760,7 +760,7 @@ function DrilldownPanel({
         <div>
           <div className="font-semibold text-sky-700 text-[12.5px]">Drilldown · {kind}</div>
           <div className="text-base font-semibold text-slate-900">{headline}</div>
-          <div className="text-xs text-slate-500">{rows.length} {rows.length === 1 ? "proposal" : "proposals"} · {RANGE_LABELS[range]}</div>
+          <div className="text-xs text-slate-600">{rows.length} {rows.length === 1 ? "proposal" : "proposals"} · {RANGE_LABELS[range]}</div>
         </div>
         <Link href={clearDrillHref(range, source)} className="rounded-md border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50">
           Close
@@ -768,7 +768,7 @@ function DrilldownPanel({
       </div>
       <div className="max-h-[420px] overflow-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white/95 text-slate-500 backdrop-blur text-[12.5px]">
+          <thead className="sticky top-0 bg-white/95 text-slate-600 backdrop-blur text-[12.5px]">
             <tr>
               <th className="px-4 py-2 text-left">Customer</th>
               <th className="px-4 py-2 text-left">Vehicle</th>
@@ -797,12 +797,12 @@ function DrilldownPanel({
                     </span>
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums text-slate-700">£{row.monthly.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-slate-500">{row.execName ?? "—"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-[11px] text-slate-400">{new Date(row.createdAt).toLocaleDateString("en-GB")}</td>
+                  <td className="px-4 py-2 text-slate-600">{row.execName ?? "—"}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-[11px] text-slate-600">{new Date(row.createdAt).toLocaleDateString("en-GB")}</td>
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={7} className="py-6 text-center text-xs text-slate-400">No proposals match this drilldown</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={7} className="py-6 text-center text-xs text-slate-600">No proposals match this drilldown</td></tr>}
           </tbody>
         </table>
       </div>
@@ -815,10 +815,10 @@ function DrilldownPanel({
 // (high). Cells with no decided proposals stay neutral.
 function SourceFunderHeatmap({ matrix }: { matrix: { funders: { funderId: string; funderName: string }[]; rows: { source: string; label: string; cells: { funderId: string; accepted: number; decided: number; rate: number }[] }[] } }) {
   if (matrix.funders.length === 0) {
-    return <p className="py-3 text-center text-xs text-slate-400">No 1st-string decided proposals in this period</p>;
+    return <p className="py-3 text-center text-xs text-slate-600">No 1st-string decided proposals in this period</p>;
   }
   function cellClass(rate: number, decided: number): string {
-    if (decided === 0) return "bg-slate-50 text-slate-400";
+    if (decided === 0) return "bg-slate-50 text-slate-600";
     if (rate >= 75) return "bg-emerald-200 text-emerald-900";
     if (rate >= 50) return "bg-emerald-100 text-emerald-800";
     if (rate >= 30) return "bg-amber-100 text-amber-800";
@@ -829,7 +829,7 @@ function SourceFunderHeatmap({ matrix }: { matrix: { funders: { funderId: string
       <table className="w-full text-xs">
         <thead>
           <tr>
-            <th className="px-2 py-1.5 text-left font-semibold text-slate-500"></th>
+            <th className="px-2 py-1.5 text-left font-semibold text-slate-600"></th>
             {matrix.funders.map((f) => (
               <th key={f.funderId} className="px-2 py-1.5 text-center font-semibold text-slate-700">{f.funderName}</th>
             ))}
@@ -845,7 +845,7 @@ function SourceFunderHeatmap({ matrix }: { matrix: { funders: { funderId: string
                     {c.decided > 0 ? (
                       <>
                         <div className="font-semibold tabular-nums">{c.rate}%</div>
-                        <div className="text-[10px] opacity-70 tabular-nums">{c.accepted}/{c.decided}</div>
+                        <div className="text-[11px] tabular-nums">{c.accepted}/{c.decided}</div>
                       </>
                     ) : (
                       <div className="text-[10px]">—</div>

@@ -99,7 +99,7 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
 
       <div>
         <h3 className="font-semibold text-[17px] tracking-tight text-slate-900">Coaching focus</h3>
-        <p className="mt-1 text-xs text-slate-500">Who&apos;s at the bottom of each metric this month: useful starting point for one-to-ones.</p>
+        <p className="mt-1 text-xs text-slate-600">Who&apos;s at the bottom of each metric this month: useful starting point for one-to-ones.</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {dashboard.coachingFocus.map((c) => (
             <CoachingCard key={c.metric} focus={c} />
@@ -111,7 +111,7 @@ function DashboardTab({ dashboard }: { dashboard: DeptDashboard }) {
         <h3 className="font-semibold text-[17px] tracking-tight text-slate-900">6-month trend</h3>
         <div className="mt-2 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-left font-medium text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3">Month</th>
                 <th className="px-2 py-3 text-right">Orders</th>
@@ -157,10 +157,10 @@ function KpiTile({ kpi }: { kpi: DeptDashboard["kpis"][number] }) {
   // Response Time improves as it falls.
   const better = kpi.lowerIsBetter ? delta < 0 : delta > 0;
   const worse = kpi.lowerIsBetter ? delta > 0 : delta < 0;
-  const tone = better ? "text-emerald-600" : worse ? "text-red-600" : "text-slate-400";
+  const tone = better ? "text-emerald-700" : worse ? "text-red-600" : "text-slate-600";
   return (
     <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
-      <div className="font-semibold text-slate-500 text-[12.5px]">{kpi.label}</div>
+      <div className="font-semibold text-slate-600 text-[12.5px]">{kpi.label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{fmt(kpi.current)}</div>
       <div className={`mt-1 text-xs font-medium ${tone}`}>
         {kpi.empty || (kpi.previous === 0 && kpi.current === 0) ? "—" : kpi.previous === 0 && kpi.format === "mins" ? "first month measured" : `${deltaText} vs last month`}
@@ -172,7 +172,7 @@ function KpiTile({ kpi }: { kpi: DeptDashboard["kpis"][number] }) {
 function CoachingCard({ focus }: { focus: DeptDashboard["coachingFocus"][number] }) {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
-      <div className="font-semibold text-slate-500 text-[12.5px]">{focus.metricLabel}</div>
+      <div className="font-semibold text-slate-600 text-[12.5px]">{focus.metricLabel}</div>
       {focus.bottom && focus.top ? (
         <div className="mt-2 space-y-2 text-sm">
           <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ function CoachingCard({ focus }: { focus: DeptDashboard["coachingFocus"][number]
           </div>
         </div>
       ) : (
-        <div className="mt-2 text-xs text-slate-500">Not enough data for this metric yet.</div>
+        <div className="mt-2 text-xs text-slate-600">Not enough data for this metric yet.</div>
       )}
     </div>
   );
@@ -206,7 +206,7 @@ function PersonChip({ name, photoUrl }: { name: string; photoUrl: string | null 
       {photoUrl ? (
         <Image src={photoUrl} alt={name} width={20} height={20} className="h-5 w-5 rounded-full object-cover" />
       ) : (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-semibold text-slate-500">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-semibold text-slate-600">
           {name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}
         </span>
       )}
@@ -234,7 +234,7 @@ function ParticipantsTab({ execs }: { execs: AdminExec[] }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
+        <thead className="bg-slate-50 text-left font-medium text-slate-600 text-[12.5px]">
           <tr>
             <th className="px-4 py-3">Exec</th>
             <th className="px-4 py-3">Photo</th>
@@ -247,7 +247,7 @@ function ParticipantsTab({ execs }: { execs: AdminExec[] }) {
           ))}
           {execs.length === 0 && (
             <tr>
-              <td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-500">
+              <td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-600">
                 No sales execs found. Add some in the user admin first.
               </td>
             </tr>
@@ -304,7 +304,7 @@ function ParticipantRow({ exec }: { exec: AdminExec }) {
     <tr>
       <td className="px-4 py-3">
         <div className="font-medium text-slate-900">{exec.name}</div>
-        <div className="text-xs text-slate-500">{exec.email}</div>
+        <div className="text-xs text-slate-600">{exec.email}</div>
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
@@ -318,7 +318,7 @@ function ParticipantRow({ exec }: { exec: AdminExec }) {
 
             />
           ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
               {initials(exec.name)}
             </div>
           )}
@@ -340,7 +340,7 @@ function ParticipantRow({ exec }: { exec: AdminExec }) {
             <button
               onClick={clearPhoto}
               disabled={pending}
-              className="text-xs text-slate-500 hover:text-red-600"
+              className="text-xs text-slate-600 hover:text-red-600"
             >
               Clear
             </button>
@@ -403,7 +403,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
     <div className="space-y-4">
       <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h3 className="text-sm font-semibold text-slate-900">Add a mapping</h3>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-600">
           Report codes like <span className="font-mono">GaSh</span> appear in column B of the Dealerweb exports. Map them onto the salesperson on this system.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -441,7 +441,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-left font-medium text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-4 py-3">Report code</th>
               <th className="px-4 py-3">Maps to</th>
@@ -457,7 +457,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
                   <button
                     onClick={() => remove(m.reportCode)}
                     disabled={pending}
-                    className="text-xs text-slate-500 hover:text-red-600"
+                    className="text-xs text-slate-600 hover:text-red-600"
                   >
                     Remove
                   </button>
@@ -465,7 +465,7 @@ function NameMapTab({ execs, nameMap }: { execs: AdminExec[]; nameMap: AdminName
               </tr>
             ))}
             {nameMap.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-500">No mappings yet.</td></tr>
+              <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-600">No mappings yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -533,7 +533,7 @@ function UploadsTab({ initialYearMonth, lastUploads }: { initialYearMonth: strin
           <select value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} className="rounded-xl border border-slate-300 px-2 py-2 text-sm">
             {months.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
-          <span className="text-xs text-slate-500">{fed ? "Built from 10 at 10." : "History: from uploads made here before 10 at 10."}</span>
+          <span className="text-xs text-slate-600">{fed ? "Built from 10 at 10." : "History: from uploads made here before 10 at 10."}</span>
         </label>
         <ReprocessButton />
       </div>
@@ -551,7 +551,7 @@ function ReprocessButton() {
   const [msg, setMsg] = useState<string | null>(null);
   return (
     <div className="flex items-center gap-2">
-      {msg && <span className="text-xs text-slate-500">{msg}</span>}
+      {msg && <span className="text-xs text-slate-600">{msg}</span>}
       <button
         onClick={() => start(async () => {
           setMsg(null);
@@ -602,10 +602,10 @@ function SourceCard({
     <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900">{report.label} <span className="font-normal text-slate-500">· from {report.file}</span></h3>
-          <p className="mt-1 max-w-2xl text-xs text-slate-500">{report.note}</p>
+          <h3 className="text-sm font-semibold text-slate-900">{report.label} <span className="font-normal text-slate-600">· from {report.file}</span></h3>
+          <p className="mt-1 max-w-2xl text-xs text-slate-600">{report.note}</p>
         </div>
-        <div className="text-right text-xs text-slate-500">
+        <div className="text-right text-xs text-slate-600">
           {last ? (
             <>
               <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${last.source === "ten-at-ten" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-700"}`}>
@@ -640,8 +640,8 @@ function SourceCard({
           ) : (
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-slate-500 text-[12.5px]">Attribution for this month</h4>
-                <button onClick={() => setDetailOpen(false)} className="text-xs text-slate-500 hover:text-slate-800">Hide</button>
+                <h4 className="font-semibold text-slate-600 text-[12.5px]">Attribution for this month</h4>
+                <button onClick={() => setDetailOpen(false)} className="text-xs text-slate-600 hover:text-slate-800">Hide</button>
               </div>
               {detail && <UploadDetailTable detail={detail} />}
             </div>
@@ -657,7 +657,7 @@ function UploadDetailTable({ detail }: { detail: UploadDetail }) {
   return (
     <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-left font-medium text-slate-500 text-[12.5px]">
+        <thead className="bg-slate-50 text-left font-medium text-slate-600 text-[12.5px]">
           <tr>
             <th className="px-3 py-2">Report code</th>
             <th className="px-3 py-2">Attributed to</th>
@@ -670,7 +670,7 @@ function UploadDetailTable({ detail }: { detail: UploadDetail }) {
           {detail.rows.map((r) => (
             <tr key={r.reportCode}>
               <td className="px-3 py-2 font-mono text-[11px]">{r.reportCode}</td>
-              <td className="px-3 py-2">{r.attributedExecName ?? <span className="text-slate-400">—</span>}</td>
+              <td className="px-3 py-2">{r.attributedExecName ?? <span className="text-slate-600">—</span>}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.primary}</td>
               {detail.secondaryLabel && <td className="px-3 py-2 text-right tabular-nums">{r.secondary ?? 0}</td>}
               <td className="px-3 py-2">

@@ -123,8 +123,8 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text} ring-1 ${c.ring}`}>
             {statusLabel(status)}
           </span>
-          <span className="text-xs text-slate-400">Funder #{proposal.funderRank}</span>
-          {proposal.financeProposalNumber && <span className="font-mono text-[11px] text-slate-500">FP {proposal.financeProposalNumber}</span>}
+          <span className="text-xs text-slate-600">Funder #{proposal.funderRank}</span>
+          {proposal.financeProposalNumber && <span className="font-mono text-[11px] text-slate-600">FP {proposal.financeProposalNumber}</span>}
           {proposal.isEv && (
             proposal.wallboxIncluded ? (
               <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">EV · Wallbox</span>
@@ -147,7 +147,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
             <CancelDealButton proposalId={proposal.id} currentStatus={proposal.status} />
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-slate-500 md:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-slate-600 md:grid-cols-3">
           <div><div className="text-[12.5px]">Funder</div><div className="mt-0.5 text-sm text-slate-900">{proposal.funderName}</div></div>
           {proposal.isEv && (
             <div>
@@ -166,14 +166,14 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
             {isBq ? (
               <>
                 <div className="mt-0.5 text-sm text-slate-900">Group BQ Deal</div>
-                {proposal.groupSiteName && <div className="text-[11px] text-slate-400">{proposal.groupSiteName}</div>}
+                {proposal.groupSiteName && <div className="text-[11px] text-slate-600">{proposal.groupSiteName}</div>}
               </>
             ) : (
               <>
                 <div className="mt-0.5">
                   <SalesExecPicker proposalId={proposal.id} execs={execs} currentId={exec?.id ?? null} />
                 </div>
-                {exec && <div className="mt-0.5 text-[11px] text-slate-400">{exec.email}</div>}
+                {exec && <div className="mt-0.5 text-[11px] text-slate-600">{exec.email}</div>}
               </>
             )}
           </div>
@@ -182,7 +182,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
 
       <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Order checks</h2>
-        <p className="mt-0.5 text-xs text-slate-500">All required items must be confirmed before moving to awaiting delivery.</p>
+        <p className="mt-0.5 text-xs text-slate-600">All required items must be confirmed before moving to awaiting delivery.</p>
 
         <div className="mt-4 space-y-2">
           {isNovuna && (
@@ -222,11 +222,11 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
       {!isBq && (
       <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Vehicle details</h2>
-        <p className="mt-0.5 text-xs text-slate-500">Enter an order number and/or VIN. At least one is required to move to awaiting delivery.</p>
+        <p className="mt-0.5 text-xs text-slate-600">Enter an order number and/or VIN. At least one is required to move to awaiting delivery.</p>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Order number</span>
+            <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Order number</span>
             <input
               value={orderNumber}
               onChange={(e) => setOrderNumber(e.target.value)}
@@ -235,7 +235,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">VIN</span>
+            <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">VIN</span>
             <input
               value={vin}
               onChange={(e) => setVin(e.target.value)}
@@ -252,7 +252,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
             Save vehicle details
           </button>
           {(proposal.orderNumber || proposal.vin) && (
-            <span className="text-[11px] text-slate-500">Saved: {proposal.orderNumber ? `Order ${proposal.orderNumber}` : ""}{proposal.orderNumber && proposal.vin ? " · " : ""}{proposal.vin ? `VIN ${proposal.vin}` : ""}</span>
+            <span className="text-[11px] text-slate-600">Saved: {proposal.orderNumber ? `Order ${proposal.orderNumber}` : ""}{proposal.orderNumber && proposal.vin ? " · " : ""}{proposal.vin ? `VIN ${proposal.vin}` : ""}</span>
           )}
         </div>
       </div>
@@ -261,7 +261,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
       {(proposal.isBroker || isBq) && (
         <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <h2 className="text-sm font-semibold text-slate-900">Deal source</h2>
-          <div className="mt-3 grid gap-3 text-xs text-slate-500 sm:grid-cols-2">
+          <div className="mt-3 grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
             {isBq && (
               <div>
                 <div className="text-[12.5px]">Group BQ site</div>
@@ -272,7 +272,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
               <div>
                 <div className="text-[12.5px]">Broker</div>
                 <div className="mt-0.5 text-sm text-slate-900">{proposal.brokerName ?? "—"}</div>
-                {proposal.brokerEmail && <div className="text-[11px] text-slate-400">{proposal.brokerEmail}</div>}
+                {proposal.brokerEmail && <div className="text-[11px] text-slate-600">{proposal.brokerEmail}</div>}
               </div>
             )}
           </div>
@@ -285,7 +285,7 @@ export function OrderDetail({ proposal, exec, execs, customChecks }: { proposal:
         <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <div>
             <div className="text-sm font-medium text-slate-900">Ready to move to awaiting delivery?</div>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-slate-600">
               {readyForDelivery ? "All checks complete." : "Complete all checks and vehicle details above first."}
             </div>
           </div>
@@ -326,7 +326,7 @@ function CheckRow({
       />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-slate-900">{label}</div>
-        {hint && <div className="mt-0.5 text-xs text-slate-500">{hint}</div>}
+        {hint && <div className="mt-0.5 text-xs text-slate-600">{hint}</div>}
       </div>
     </label>
   );

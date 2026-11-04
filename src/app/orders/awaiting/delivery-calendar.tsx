@@ -77,13 +77,13 @@ export function DeliveryCalendar({ entries }: { entries: CalendarEntry[] }) {
           </button>
         </div>
         <div className="text-base font-semibold text-slate-900">{monthLabel}</div>
-        <div className="text-[11px] text-slate-500">
+        <div className="text-[11px] text-slate-600">
           {entries.length} booking{entries.length === 1 ? "" : "s"} on tracker
         </div>
       </div>
 
       {/* Weekday header — Mon–Sun (UK convention) */}
-      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50 text-center font-semibold text-slate-500 text-[12.5px]">
+      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50 text-center font-semibold text-slate-600 text-[12.5px]">
         {WEEKDAY_LABELS.map((w) => (
           <div key={w} className="px-1 py-1.5">{w}</div>
         ))}
@@ -101,11 +101,11 @@ export function DeliveryCalendar({ entries }: { entries: CalendarEntry[] }) {
               type="button"
               onClick={() => setSelectedIso(d.iso)}
               className={`relative min-h-[68px] border-b border-r border-slate-100 px-1.5 py-1 text-left transition sm:min-h-[88px] ${
-                d.thisMonth ? "bg-white" : "bg-slate-50/60 text-slate-400"
+                d.thisMonth ? "bg-white" : "bg-slate-50/60 text-slate-600"
               } ${isSelected ? "ring-2 ring-inset ring-emerald-500" : "hover:bg-emerald-50/30"}`}
             >
               <div className="flex items-baseline justify-between">
-                <span className={`text-[11px] font-semibold ${isToday ? "rounded-full bg-emerald-600 px-1.5 py-0.5 text-white" : "text-slate-700"}`}>
+                <span className={`text-[11px] font-semibold ${isToday ? "rounded-full bg-emerald-700 px-1.5 py-0.5 text-white" : "text-slate-700"}`}>
                   {d.day}
                 </span>
                 {bookings.length > 0 && (
@@ -120,7 +120,7 @@ export function DeliveryCalendar({ entries }: { entries: CalendarEntry[] }) {
                   </div>
                 ))}
                 {bookings.length > 2 && (
-                  <div className="text-[9px] italic text-slate-500">+{bookings.length - 2} more</div>
+                  <div className="text-[9px] italic text-slate-600">+{bookings.length - 2} more</div>
                 )}
               </div>
             </button>
@@ -137,7 +137,7 @@ export function DeliveryCalendar({ entries }: { entries: CalendarEntry[] }) {
 function DetailPanel({ iso, entries }: { iso: string | null; entries: CalendarEntry[] }) {
   if (!iso) {
     return (
-      <div className="border-t border-slate-200 bg-slate-50/40 px-4 py-3 text-xs text-slate-500">
+      <div className="border-t border-slate-200 bg-slate-50/40 px-4 py-3 text-xs text-slate-600">
         Tap a day to see the deliveries booked.
       </div>
     );
@@ -149,10 +149,10 @@ function DetailPanel({ iso, entries }: { iso: string | null; entries: CalendarEn
     <div className="border-t border-slate-200 bg-slate-50/40 px-4 py-3">
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-sm font-semibold text-slate-900">{label}</div>
-        <div className="text-[11px] text-slate-500">{entries.length} booking{entries.length === 1 ? "" : "s"}</div>
+        <div className="text-[11px] text-slate-600">{entries.length} booking{entries.length === 1 ? "" : "s"}</div>
       </div>
       {entries.length === 0 ? (
-        <p className="mt-2 text-xs italic text-slate-500">No deliveries booked for this day.</p>
+        <p className="mt-2 text-xs italic text-slate-600">No deliveries booked for this day.</p>
       ) : (
         <ul className="mt-2 space-y-1">
           {entries.map((e) => (
@@ -172,7 +172,7 @@ function DetailPanel({ iso, entries }: { iso: string | null; entries: CalendarEn
                     {e.execName && <> · {e.execName}</>}
                   </div>
                 </div>
-                <span className="shrink-0 text-[10px] text-slate-400">View →</span>
+                <span className="shrink-0 text-[10px] text-slate-600">View →</span>
               </Link>
             </li>
           ))}

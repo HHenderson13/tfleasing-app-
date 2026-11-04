@@ -182,7 +182,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
           <div className="flex items-center gap-2 text-sm">
             <input type="date" value={custom.from} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))}
               className="rounded-xl border border-slate-300 px-2 py-2" />
-            <span className="text-slate-400">to</span>
+            <span className="text-slate-600">to</span>
             <input type="date" value={custom.to} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))}
               className="rounded-xl border border-slate-300 px-2 py-2" />
           </div>
@@ -259,7 +259,7 @@ function ExportPdfButton({ label, input }: { label: string; input: () => PdfRepo
 // ─── Shared pieces ─────────────────────────────────────────────────────────
 
 function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">{children}</div>;
+  return <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-600">{children}</div>;
 }
 
 function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
@@ -268,7 +268,7 @@ function Card({ title, note, children }: { title: string; note?: string; childre
     <section className="min-w-0 rounded-2xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-        {note && <span className="text-[11px] text-slate-400">{note}</span>}
+        {note && <span className="text-[11px] text-slate-600">{note}</span>}
       </div>
       <div className="mt-3">{children}</div>
     </section>
@@ -284,7 +284,7 @@ function Tiles({ tiles }: { tiles: { label: string; value: string; sub?: string;
     <div className={`grid grid-cols-2 gap-3 ${TILE_COLS[tiles.length] ?? "sm:grid-cols-2 lg:grid-cols-4"}`}>
       {tiles.map((t) => (
         <div key={t.label} className={`min-w-0 rounded-2xl border px-4 py-3 shadow-sm ${t.hero ? "border-indigo-900 bg-indigo-950 text-white" : "border-slate-200 bg-white"}`}>
-          <div className={`font-semibold ${t.hero ? "text-indigo-200" : "text-slate-500"} text-[12.5px]`}>{t.label}</div>
+          <div className={`font-semibold ${t.hero ? "text-indigo-200" : "text-slate-600"} text-[12.5px]`}>{t.label}</div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={`text-xl font-bold tabular-nums min-[380px]:text-2xl sm:text-3xl ${t.hero ? "text-white" : t.tone === "good" ? "text-emerald-700" : t.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{t.value}</span>
             {/* The highlighted tile keeps its white figure; on/off target shows as a badge. */}
@@ -294,7 +294,7 @@ function Tiles({ tiles }: { tiles: { label: string; value: string; sub?: string;
               </span>
             )}
           </div>
-          {t.sub && <div className={`mt-0.5 text-xs ${t.hero ? "text-indigo-200" : "text-slate-500"}`}>{t.sub}</div>}
+          {t.sub && <div className={`mt-0.5 text-xs ${t.hero ? "text-indigo-200" : "text-slate-600"}`}>{t.sub}</div>}
         </div>
       ))}
     </div>
@@ -350,7 +350,7 @@ function ShareCell({ share }: { share: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="h-1.5 w-16 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-slate-400" style={{ width: `${Math.min(100, share)}%` }} /></div>
-      <span className="w-10 text-right text-xs tabular-nums text-slate-500">{share.toFixed(1)}%</span>
+      <span className="w-10 text-right text-xs tabular-nums text-slate-600">{share.toFixed(1)}%</span>
     </div>
   );
 }
@@ -390,7 +390,7 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
         onClick={expandable ? () => toggle(g.key) : undefined}>
         <td className={`px-1.5 py-1.5 [overflow-wrap:anywhere] @md:px-2 ${depth > 0 ? "pl-8 text-xs" : "font-medium text-slate-900"}`}>
           <span className="inline-flex items-center gap-2">
-            {expandable ? <span className="w-3 text-slate-400">{open.has(g.key) ? "▾" : "▸"}</span> : depth === 0 && anyExpandable && <span className="w-3" />}
+            {expandable ? <span className="w-3 text-slate-600">{open.has(g.key) ? "▾" : "▸"}</span> : depth === 0 && anyExpandable && <span className="w-3" />}
             {depth === 0 && swatches?.[g.label] && <span className="h-2.5 w-2.5 rounded-sm" style={{ background: swatches[g.label] }} />}
             {g.label}
           </span>
@@ -404,7 +404,7 @@ function GroupTable<S, R = unknown>({ groups, dimTitle, cols, sort, onSort, limi
   return (
     <div className="@container overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="text-slate-500 text-[12.5px]">
+        <thead className="text-slate-600 text-[12.5px]">
           <tr className="border-b border-slate-200">
             {head("label", dimTitle, true)}
             {cols.map((c) => head(c.key, c.label, c.left, c.show))}
@@ -444,17 +444,17 @@ function BuilderCard<D extends string>({ dims, first, second, setFirst, setSecon
     <section className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <h2 className="mr-2 text-sm font-semibold text-slate-900">Build a breakdown</h2>
-        <span className="text-xs text-slate-500">By</span>
+        <span className="text-xs text-slate-600">By</span>
         <select value={first} onChange={(e) => setFirst(e.target.value as D)} className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-[13px]">
           {dims.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
-        <span className="text-xs text-slate-500">then by</span>
+        <span className="text-xs text-slate-600">then by</span>
         <select value={second} onChange={(e) => setSecond(e.target.value as D | "")} className="rounded-xl border border-slate-300 bg-white px-2 py-2 text-[13px]">
           <option value="">Nothing</option>
           {dims.filter((d) => d.key !== first).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </select>
         {second && second !== first && (
-          <span className="text-[11px] text-slate-400">Click a {labelOf(first).toLowerCase()} to see its {labelOf(second as D).toLowerCase()} mix.</span>
+          <span className="text-[11px] text-slate-600">Click a {labelOf(first).toLowerCase()} to see its {labelOf(second as D).toLowerCase()} mix.</span>
         )}
       </div>
       <div className="mt-3">{children}</div>
@@ -473,8 +473,8 @@ const ENQ_COLS: Col<Stats>[] = [
   { key: "inbound", label: "Inbound conv.", render: (g) => pct(inboundPct(g.stats)) },
   { key: "broker", label: "Broker conv.", render: (g) => pct(brokerPct(g.stats)) },
   { key: "conversion", label: "Overall conv.", strong: true, render: (g) => pct(conversionPct(g.stats)) },
-  { key: "live", label: "Live", render: (g) => <span className="text-slate-500">{int(g.stats.live)}</span> },
-  { key: "lost", label: "Lost", render: (g) => <span className="text-slate-500">{int(g.stats.lost)}</span> },
+  { key: "live", label: "Live", render: (g) => <span className="text-slate-600">{int(g.stats.live)}</span> },
+  { key: "lost", label: "Lost", render: (g) => <span className="text-slate-600">{int(g.stats.lost)}</span> },
 ];
 
 // By source, each source is wholly inbound or wholly broker, so one rate says it.
@@ -504,7 +504,7 @@ function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
+        <span className="font-semibold text-slate-600 text-[12.5px]">Filter</span>
         <Chips options={SOURCES} selected={sources} onChange={setSources} colours={SOURCE_COLOURS} />
         <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
         <Select value={model} onChange={setModel} all="All models" options={modelOptions} />
@@ -545,10 +545,10 @@ function ConversionPanel({ s }: { s: Stats }) {
     <div className="grid gap-3 sm:grid-cols-3">
       {cards.map((c) => (
         <div key={c.title} className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${c.colour}` }}>
-          <div className="font-semibold text-slate-500 text-[12.5px]">{c.title}</div>
+          <div className="font-semibold text-slate-600 text-[12.5px]">{c.title}</div>
           <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{pct(c.rate)}</div>
           <div className="mt-0.5 text-xs text-slate-600">{int(c.orders)} orders of {int(c.enquiries)} enquiries</div>
-          <div className="mt-1 text-[11px] text-slate-400">{c.what}</div>
+          <div className="mt-1 text-[11px] text-slate-600">{c.what}</div>
         </div>
       ))}
       <div className="rounded-2xl border border-indigo-900 bg-indigo-950 p-4 text-white shadow-sm">
@@ -595,14 +595,14 @@ function EnquiryBreakdown({ title, note, rows, dims, customers }: { title: strin
   );
 }
 
-const OUTCOME_TONE: Record<string, string> = { order: "text-emerald-700 font-semibold", live: "text-slate-700", lost: "text-slate-400" };
+const OUTCOME_TONE: Record<string, string> = { order: "text-emerald-700 font-semibold", live: "text-slate-700", lost: "text-slate-600" };
 
 // One line per enquiry, newest first: who, from where, for what, and where it got to.
 function EnquiryList({ rows }: { rows: ReportRow[] }) {
   const sorted = useMemo(() => [...rows].sort((a, b) => b.day.localeCompare(a.day) || a.customer.localeCompare(b.customer)), [rows]);
   return (
     <table className="w-full text-xs">
-      <thead className="text-slate-500 text-[12.5px]">
+      <thead className="text-slate-600 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Source</th>
@@ -650,7 +650,7 @@ function Money({ n }: { n: number | null }) {
 
 // A bonus of nothing reads £0, quietly.
 function BonusMoney({ n }: { n: number }) {
-  return n === 0 ? <span className="text-slate-400">£0</span> : <Money n={n} />;
+  return n === 0 ? <span className="text-slate-600">£0</span> : <Money n={n} />;
 }
 
 // The count column reads "Orders" or "Deliveries" to match the tab. Profit
@@ -665,7 +665,7 @@ const orderCols = (unit: string): Col<OrderStats>[] => [
   { key: "bonus", label: "Bonuses", show: "lg", render: (g) => <BonusMoney n={g.stats.bonus} /> },
   { key: "total", label: "Total profit", render: (g) => <Money n={totalProfit(g.stats)} /> },
   { key: "avg", label: "Avg per unit", strong: true, render: (g) => <Money n={avgProfit(g.stats)} /> },
-  { key: "loss", label: "Loss-making", show: "2xl", render: (g) => <span className={g.stats.loss ? "text-rose-700" : "text-slate-400"}>{int(g.stats.loss)}</span> },
+  { key: "loss", label: "Loss-making", show: "2xl", render: (g) => <span className={g.stats.loss ? "text-rose-700" : "text-slate-600"}>{int(g.stats.loss)}</span> },
 ];
 const ORDER_COLS = orderCols("Orders");
 const DELIVERY_COLS = orderCols("Deliveries");
@@ -734,7 +734,7 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, r
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
+        <span className="font-semibold text-slate-600 text-[12.5px]">Filter</span>
         <Chips options={SEGMENTS} selected={segments} onChange={setSegments} colours={SEGMENT_COLOURS} />
         {isDel && <Chips options={STATUSES} selected={statuses} onChange={setStatuses} colours={STATUS_COLOURS} />}
         <Select value={exec} onChange={setExec} all="All execs" options={options.exec} />
@@ -824,13 +824,13 @@ function BudgetCard({ title, colour, line, pace }: { title: string; colour: stri
     <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${colour}` }}>
       <div className="flex items-baseline justify-between">
         <div className="text-sm font-semibold text-slate-900">{title}</div>
-        <div className="text-xs text-slate-500">{budget == null ? "No budget set" : `Budget ${int(budget)}`}</div>
+        <div className="text-xs text-slate-600">{budget == null ? "No budget set" : `Budget ${int(budget)}`}</div>
       </div>
 
-      <div className="mt-2 font-semibold text-slate-500 text-[12.5px]">Going vs budget</div>
+      <div className="mt-2 font-semibold text-slate-600 text-[12.5px]">Going vs budget</div>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-bold tabular-nums text-slate-900">{int(going)}</span>
-        {budget != null && <span className="text-sm text-slate-500">of {int(budget)} · {ofBudget}%</span>}
+        {budget != null && <span className="text-sm text-slate-600">of {int(budget)} · {ofBudget}%</span>}
       </div>
       {budget != null && (
         <>
@@ -845,10 +845,10 @@ function BudgetCard({ title, colour, line, pace }: { title: string; colour: stri
       {missing.length > 0 && budget != null && <div className="text-xs text-amber-700">No budget set for {missing.join(", ")}</div>}
 
       <div className="mt-3 border-t border-slate-100 pt-2">
-        <div className="font-semibold text-slate-500 text-[12.5px]">Delivered of what&apos;s going</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">Delivered of what&apos;s going</div>
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-bold tabular-nums text-slate-900">{deliveredPct == null ? "—" : `${deliveredPct}%`}</span>
-          <span className="text-xs text-slate-500">{int(delivered)} of {int(going)} delivered</span>
+          <span className="text-xs text-slate-600">{int(delivered)} of {int(going)} delivered</span>
         </div>
         {/* The marker is how far through the period today is — delivered
             share against time gone is the pace check. */}
@@ -858,13 +858,13 @@ function BudgetCard({ title, colour, line, pace }: { title: string; colour: stri
         </div>
         {deliveredPct != null && (
           <div className="mt-1 text-xs text-slate-600">
-            vs <b>{pace.pct.toFixed(0)}%</b> through the {pace.word} <span className="text-slate-400">(day {pace.day} of {pace.days})</span> —{" "}
+            vs <b>{pace.pct.toFixed(0)}%</b> through the {pace.word} <span className="text-slate-600">(day {pace.day} of {pace.days})</span> —{" "}
             <b className={deliveredPct >= Math.round(pace.pct) ? "text-emerald-700" : "text-rose-700"}>
               {deliveredPct >= Math.round(pace.pct) ? `${deliveredPct - Math.round(pace.pct)} pts ahead of pace` : `${Math.round(pace.pct) - deliveredPct} pts behind pace`}
             </b>
           </div>
         )}
-        <div className="mt-0.5 text-xs text-slate-500">{int(arrived + due)} still to deliver · {int(arrived)} arrived · {int(due)} due</div>
+        <div className="mt-0.5 text-xs text-slate-600">{int(arrived + due)} still to deliver · {int(arrived)} arrived · {int(due)} due</div>
       </div>
     </div>
   );
@@ -890,9 +890,9 @@ function TypeCards({ rows, noun }: { rows: OrderRow[]; noun: string }) {
           <div key={t} className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${meta.colour}` }}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-2">
               <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
-              <div className="text-xs text-slate-500">{g ? `${int(g.stats.orders)} units · ${g.share.toFixed(0)}% of ${noun}` : `No ${noun}`}</div>
+              <div className="text-xs text-slate-600">{g ? `${int(g.stats.orders)} units · ${g.share.toFixed(0)}% of ${noun}` : `No ${noun}`}</div>
             </div>
-            <div className="mt-2 font-semibold text-slate-500 text-[12.5px]">Avg profit per unit</div>
+            <div className="mt-2 font-semibold text-slate-600 text-[12.5px]">Avg profit per unit</div>
             <div className={`text-3xl font-bold tabular-nums ${avg != null && avg < 0 ? "text-rose-700" : "text-slate-900"}`}>{gbp(avg)}</div>
             <div className="mt-2 flex flex-wrap justify-between gap-x-3 border-t border-slate-100 pt-2 text-xs text-slate-600">
               <span>Invoice <b className="tabular-nums">{st ? gbp(invoiceProfit(st)) : "—"}</b> · bonuses <b className="tabular-nums">{st ? gbp(st.bonus) : "—"}</b></span>
@@ -925,8 +925,8 @@ function OrderBreakdown({ title, note, rows, dims, defaultSort = "orders", custo
 // "no scheme" is said in words, so it never reads as a deal that didn't map.
 function BonusCell({ r }: { r: OrderRow }) {
   const month = r.bonusDay ? monthsText([r.bonusDay.slice(0, 7)]) : null;
-  if (r.bonusFlag === "noScheme") return <span className="text-[11px] text-slate-400" title={`No bonus scheme set for ${month}`}>no scheme · {month}</span>;
-  if (r.bonusFlag === "noDate") return <span className="text-[11px] text-slate-400" title="No delivery date in Dealerweb">no delivery date</span>;
+  if (r.bonusFlag === "noScheme") return <span className="text-[11px] text-slate-600" title={`No bonus scheme set for ${month}`}>no scheme · {month}</span>;
+  if (r.bonusFlag === "noDate") return <span className="text-[11px] text-slate-600" title="No delivery date in Dealerweb">no delivery date</span>;
   return (
     <span title={`${r.bonusType}, delivering ${month}`}>
       <BonusMoney n={r.bonus} />
@@ -950,7 +950,7 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
   return (
     <div className="@container">
       <table className="w-full text-xs">
-        <thead className="text-slate-500 text-[12.5px]">
+        <thead className="text-slate-600 text-[12.5px]">
           <tr>
             {th("Customer · vehicle")}
             {showExec && th("Exec", false, "2xl")}
@@ -968,14 +968,14 @@ function OrderList({ rows, by, showExec = true, dateLabel = "Ordered", statusLab
             <tr key={i} className="border-t border-slate-100 align-top">
               <td className="px-1.5 py-1 [overflow-wrap:anywhere] @md:px-2">
                 <div className="font-medium text-slate-800">{r.customer}</div>
-                <div className="text-[11px] text-slate-500">{r.derivative.replace(" (model only)", "")}</div>
+                <div className="text-[11px] text-slate-600">{r.derivative.replace(" (model only)", "")}</div>
               </td>
               {showExec && <td className={`whitespace-nowrap px-2 py-1 text-slate-600 ${showAt("2xl")}`}>{r.exec}</td>}
               <td className="whitespace-nowrap px-1.5 py-1 text-slate-600 @md:px-2">{shortDate(r.day)}</td>
               <td className={`whitespace-nowrap px-2 py-1 text-slate-600 ${showAt("3xl")}`}>{r.funder}</td>
               <td className={`whitespace-nowrap px-2 py-1 text-slate-600 ${showAt("xl")}`}>{r.delivery}</td>
-              <td className={`whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-500 ${showAt("2xl")}`}>
-                {r.basic != null ? gbp(r.basic) : <span className="text-[11px] text-slate-400" title="No Dealbook Extract line found for this deal">not found</span>}
+              <td className={`whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-600 ${showAt("2xl")}`}>
+                {r.basic != null ? gbp(r.basic) : <span className="text-[11px] text-slate-600" title="No Dealbook Extract line found for this deal">not found</span>}
               </td>
               <td className={`px-2 py-1 text-right tabular-nums text-slate-600 ${showAt("lg")}`}><Money n={r.profit} /></td>
               <td className={`whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-600 ${showAt("md")}`}><BonusCell r={r} /></td>
@@ -995,20 +995,20 @@ function BestWorst({ rows, title = "Most and least profitable orders" }: { rows:
   const n = Math.min(5, Math.floor(priced.length / 2));
   const list = (title: string, items: OrderRow[]) => (
     <div>
-      <div className="font-semibold text-slate-500 text-[12.5px]">{title}</div>
+      <div className="font-semibold text-slate-600 text-[12.5px]">{title}</div>
       <table className="mt-2 w-full text-sm">
         <tbody>
           {items.map((r, i) => (
             <tr key={i} className="border-b border-slate-100">
               <td className="py-1.5 pr-2">
                 <div className="font-medium text-slate-900">{r.customer}</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-slate-600">
                   {r.derivative.replace(" (model only)", "")} · {r.exec} · {shortDate(r.day)}
                 </div>
               </td>
               <td className="py-1.5 text-right tabular-nums">
                 <div className="font-semibold"><Money n={r.total} /></div>
-                <div className="whitespace-nowrap text-[11px] text-slate-500">{gbp(r.profit)} + {gbp(r.bonus)} bonus</div>
+                <div className="whitespace-nowrap text-[11px] text-slate-600">{gbp(r.profit)} + {gbp(r.bonus)} bonus</div>
               </td>
             </tr>
           ))}
@@ -1103,9 +1103,9 @@ function ResponseSection({ all, range, reportHorizon }: { all: EnquiryRow[]; ran
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
+        <span className="font-semibold text-slate-600 text-[12.5px]">Filter</span>
         <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
-        <span className="text-[11px] text-slate-400">Working hours only: Mon–Fri 09:00–17:30.</span>
+        <span className="text-[11px] text-slate-600">Working hours only: Mon–Fri 09:00–17:30.</span>
       </div>
       {held.length > 0 && (
         <HeldNote rows={held} />
@@ -1142,12 +1142,12 @@ const focusFor = (label: string): Focus =>
     : label.startsWith("Missed same day") ? "sameday" : "contact";
 
 const ATTENTION_COLS: Col<ResponseSummary, EnquiryRow>[] = [
-  { key: "count", label: "Enquiries", render: (g) => <span className={g.rows.length ? "font-semibold text-rose-700" : "text-slate-400"}>{int(g.rows.length)}</span> },
+  { key: "count", label: "Enquiries", render: (g) => <span className={g.rows.length ? "font-semibold text-rose-700" : "text-slate-600"}>{int(g.rows.length)}</span> },
   { key: "share", label: "Of all judged", left: true, render: (g) => <ShareCell share={g.share} /> },
 ];
 
 const minsCell = (avg: number | null, target: number) => (
-  <span className={`font-semibold ${avg == null ? "text-slate-400" : avg <= target ? "text-emerald-700" : "text-rose-700"}`}>{formatMins(avg)}</span>
+  <span className={`font-semibold ${avg == null ? "text-slate-600" : avg <= target ? "text-emerald-700" : "text-rose-700"}`}>{formatMins(avg)}</span>
 );
 
 // Each exec is judged only on what reached them in time; the Sales Support
@@ -1156,14 +1156,14 @@ const isSupport = (g: { key: string }) => g.key === SALES_SUPPORT;
 const EXEC_RESPONSE_COLS: Col<ResponseSummary, EnquiryRow>[] = [
   { key: "total", label: "Enquiries", render: (g) => int(g.stats.total) },
   { key: "avg", label: "Avg response", render: (g) => (isSupport(g) ? minsCell(g.stats.allocAvg, ALLOCATION_TARGET_MINS) : minsCell(g.stats.contactAvg, CONTACT_TARGET_MINS)) },
-  { key: "over", label: "Over target", render: (g) => { const n = isSupport(g) ? g.stats.allocMissed : g.stats.contactMissed; return <span className={n ? "text-rose-700" : "text-slate-400"}>{int(n)}</span>; } },
+  { key: "over", label: "Over target", render: (g) => { const n = isSupport(g) ? g.stats.allocMissed : g.stats.contactMissed; return <span className={n ? "text-rose-700" : "text-slate-600"}>{int(n)}</span>; } },
   { key: "sameday", label: "Missed same day", strong: true, render: (g) => { const n = isSupport(g) ? g.stats.sameDayMissedSupport : g.stats.sameDayMissedExec; return <span className={n ? "text-rose-700" : "text-emerald-700"}>{int(n)}</span>; } },
-  { key: "never", label: "Never contacted", render: (g) => { const n = isSupport(g) ? g.stats.noTransfer : g.stats.neverContactedExec; return <span className={n ? "text-rose-700" : "text-slate-400"}>{int(n)}</span>; } },
+  { key: "never", label: "Never contacted", render: (g) => { const n = isSupport(g) ? g.stats.noTransfer : g.stats.neverContactedExec; return <span className={n ? "text-rose-700" : "text-slate-600"}>{int(n)}</span>; } },
 ];
 
 const DAY_COLS: Col<ResponseSummary, EnquiryRow>[] = [
   { key: "total", label: "Enquiries", render: (g) => int(g.stats.total) },
-  { key: "scope", label: "In scope", render: (g) => <span className="text-slate-500">{int(g.stats.sameDayExpected)}</span> },
+  { key: "scope", label: "In scope", render: (g) => <span className="text-slate-600">{int(g.stats.sameDayExpected)}</span> },
   { key: "missed", label: "Missed same day", strong: true, render: (g) => <span className={g.stats.sameDayMissed ? "text-rose-700" : "text-emerald-700"}>{int(g.stats.sameDayMissed)}</span> },
   { key: "pct", label: "Same day", render: (g) => (g.stats.sameDayExpected ? `${Math.round((g.stats.sameDayMet / g.stats.sameDayExpected) * 100)}%` : "—") },
   { key: "avg", label: `Avg response (${CONTACT_TARGET_MINS}m)`, render: (g) => minsCell(g.stats.contactAvg, CONTACT_TARGET_MINS) },
@@ -1198,7 +1198,7 @@ function ResponseList({ rows, focus }: { rows: EnquiryRow[]; focus: Focus }) {
   const target = focus === "alloc" ? ALLOCATION_TARGET_MINS : CONTACT_TARGET_MINS;
   return (
     <table className="w-full text-xs">
-      <thead className="text-slate-500 text-[12.5px]">
+      <thead className="text-slate-600 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Exec</th>
@@ -1215,14 +1215,14 @@ function ResponseList({ rows, focus }: { rows: EnquiryRow[]; focus: Focus }) {
             <tr key={r.id} className="border-t border-slate-100 align-top">
               <td className="px-2 py-1">
                 <div className="font-medium text-slate-800">{r.customer}</div>
-                {r.source && <div className="text-[10px] text-slate-400">{r.source}</div>}
+                {r.source && <div className="text-[10px] text-slate-600">{r.source}</div>}
               </td>
               <td className="px-2 py-1 text-slate-600">{r.salesExec}</td>
               <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-slate-600">{formatWall(r.enquiryAt)}</td>
-              <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-slate-500">{formatWall(r.transferredAt)}</td>
-              <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-slate-500">{formatWall(r.contactedAt)}</td>
+              <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-slate-600">{formatWall(r.transferredAt)}</td>
+              <td className="whitespace-nowrap px-2 py-1 font-mono text-[11px] text-slate-600">{formatWall(r.contactedAt)}</td>
               <td className="px-2 py-1 text-right">
-                <span className={`rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${mins == null ? "bg-slate-100 text-slate-400" : mins <= target ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"}`}>
+                <span className={`rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${mins == null ? "bg-slate-100 text-slate-600" : mins <= target ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"}`}>
                   {formatMins(mins)}
                 </span>
                 {isSameDayReportable(r) && !r.sameDayMet && <div className="mt-0.5 font-bold text-rose-600 text-[12.5px]">Not same day</div>}
@@ -1266,10 +1266,10 @@ function cGroups(rows: CancellationView[], keyOf: (c: CancellationView) => strin
 }
 
 const CANCEL_COLS: Col<CancelStats, CancellationView>[] = [
-  { key: "proper", label: "Cancellations", strong: true, render: (g) => <span className={g.stats.proper ? "text-rose-700" : "text-slate-400"}>{int(g.stats.proper)}</span> },
+  { key: "proper", label: "Cancellations", strong: true, render: (g) => <span className={g.stats.proper ? "text-rose-700" : "text-slate-600"}>{int(g.stats.proper)}</span> },
   { key: "share", label: "Share", left: true, render: (g) => <ShareCell share={g.share} /> },
-  { key: "rewrites", label: "Re-Writes", render: (g) => <span className="text-slate-500">{int(g.stats.rewrites)}</span> },
-  { key: "unexplained", label: "Reason to add", render: (g) => <span className={g.stats.unexplained ? "font-semibold text-amber-700" : "text-slate-400"}>{int(g.stats.unexplained)}</span> },
+  { key: "rewrites", label: "Re-Writes", render: (g) => <span className="text-slate-600">{int(g.stats.rewrites)}</span> },
+  { key: "unexplained", label: "Reason to add", render: (g) => <span className={g.stats.unexplained ? "font-semibold text-amber-700" : "text-slate-600"}>{int(g.stats.unexplained)}</span> },
 ];
 
 const daysLabel = (n: number) => (n === 0 ? "same day" : `${n} day${n === 1 ? "" : "s"} later`);
@@ -1304,12 +1304,12 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-semibold text-slate-500 text-[12.5px]">Filter</span>
+        <span className="font-semibold text-slate-600 text-[12.5px]">Filter</span>
         <Chips options={SEGMENTS} selected={segments} onChange={setSegments} colours={SEGMENT_COLOURS} />
         <Select value={exec} onChange={setExec} all="All execs" options={execOptions} />
         <Select value={model} onChange={setModel} all="All models" options={modelOptions} />
         {filtersOn && <button onClick={() => { setSegments(new Set()); setExec(""); setModel(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
-        <span className="text-[11px] text-slate-400">Counted on the day it was cancelled.</span>
+        <span className="text-[11px] text-slate-600">Counted on the day it was cancelled.</span>
       </div>
       <Tiles tiles={[
         { label: "Cancellations", value: int(proper.length), sub: "cancelled and not re-ordered", hero: true },
@@ -1323,11 +1323,11 @@ function CancellationsSection({ all, range }: { all: CancellationView[]; range: 
         <>
           <Card title="Cancellations" note="The manager's reason for each">
             {proper.length === 0
-              ? <p className="text-sm text-slate-500">None: everything cancelled in {range.label} was ordered again.</p>
+              ? <p className="text-sm text-slate-600">None: everything cancelled in {range.label} was ordered again.</p>
               : <div className="divide-y divide-slate-100">{proper.map((c) => <CancellationItem key={c.id} c={c} />)}</div>}
           </Card>
           <Card title="Re-Writes" note="Cancelled and ordered again · shown, not counted as cancellations">
-            {rewrites.length === 0 ? <p className="text-sm text-slate-500">None in {range.label}.</p> : <RewriteList rows={rewrites} />}
+            {rewrites.length === 0 ? <p className="text-sm text-slate-600">None in {range.label}.</p> : <RewriteList rows={rewrites} />}
           </Card>
           <Card title="By exec" note="Click an exec for their cancellations">
             <GroupTable groups={byExec} dimTitle="Exec" cols={CANCEL_COLS} limit={12} detail={(g) => <CancellationList rows={g.rows} showExec={false} />} />
@@ -1382,9 +1382,9 @@ function CancellationItem({ c }: { c: CancellationView }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-medium text-slate-900">{c.customer}</div>
-          <div className="max-w-[640px] truncate text-xs text-slate-500" title={c.vehicle}>{c.vehicle}</div>
+          <div className="max-w-[640px] truncate text-xs text-slate-600" title={c.vehicle}>{c.vehicle}</div>
           <div className="mt-0.5 text-xs text-slate-600">
-            {c.exec} · ordered {shortDate(c.orderDay)} · cancelled {shortDate(c.day)} <span className="text-slate-400">({daysLabel(daysToCancel(c))})</span>
+            {c.exec} · ordered {shortDate(c.orderDay)} · cancelled {shortDate(c.day)} <span className="text-slate-600">({daysLabel(daysToCancel(c))})</span>
             {c.registration && <> · {c.registration}</>}
             {c.orderProfit != null && <> · profit on the order <b><Money n={c.orderProfit} /></b></>}
           </div>
@@ -1400,7 +1400,7 @@ function CancellationItem({ c }: { c: CancellationView }) {
       {!canManage ? (
         <div className={`mt-2 rounded-lg px-3 py-2 text-sm ${c.note ? "bg-slate-50 text-slate-800" : "bg-amber-50 font-semibold text-amber-800"}`}>
           {c.note || "Reason needed: a manager adds it"}
-          {c.note && c.noteBy && <div className="mt-0.5 text-[11px] font-normal text-slate-400">{c.noteBy} · {c.noteAt}</div>}
+          {c.note && c.noteBy && <div className="mt-0.5 text-[11px] font-normal text-slate-600">{c.noteBy} · {c.noteAt}</div>}
         </div>
       ) : (<>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
@@ -1415,8 +1415,8 @@ function CancellationItem({ c }: { c: CancellationView }) {
       <div className="mt-1 text-[11px]">
         {re.error ? <span className="text-rose-700">{re.error}</span>
           : msg && !msg.ok ? <span className="text-rose-700">{msg.text}</span>
-          : dirty ? <span className="text-slate-400">Not saved yet</span>
-          : c.note ? <span className="text-slate-400">Saved by {c.noteBy ?? "—"} · {c.noteAt}</span>
+          : dirty ? <span className="text-slate-600">Not saved yet</span>
+          : c.note ? <span className="text-slate-600">Saved by {c.noteBy ?? "—"} · {c.noteAt}</span>
           : <span className="font-semibold text-amber-700">Reason needed</span>}
       </div>
       </>)}
@@ -1444,7 +1444,7 @@ function RewriteList({ rows }: { rows: CancellationView[] }) {
   return (
     <div className="overflow-x-auto">
     <table className="w-full text-xs">
-      <thead className="text-slate-500 text-[12.5px]">
+      <thead className="text-slate-600 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Exec</th>
@@ -1459,7 +1459,7 @@ function RewriteList({ rows }: { rows: CancellationView[] }) {
           <tr key={c.id} className="border-t border-slate-100 align-top">
             <td className="px-2 py-1.5">
               <div className="font-medium text-slate-800">{c.customer}</div>
-              <div className="max-w-[360px] truncate text-[11px] text-slate-500" title={c.vehicle}>{c.vehicle}</div>
+              <div className="max-w-[360px] truncate text-[11px] text-slate-600" title={c.vehicle}>{c.vehicle}</div>
             </td>
             <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{c.exec}</td>
             <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{shortDate(c.orderDay)}</td>
@@ -1470,10 +1470,10 @@ function RewriteList({ rows }: { rows: CancellationView[] }) {
                   <span className="font-semibold">{shortDate(c.reorder.orderDay)}</span>
                   {nameKey(c.reorder.customer) !== nameKey(c.customer) && <> · as {c.reorder.customer}</>}
                   {c.reorder.registration && <> · {c.reorder.registration}</>}
-                  <div className="text-[10px] text-slate-400">matched on {c.reorder.on === "registration" ? "the same registration" : "the same customer and model"}</div>
+                  <div className="text-[10px] text-slate-600">matched on {c.reorder.on === "registration" ? "the same registration" : "the same customer and model"}</div>
                 </>
               ) : (
-                <span className="text-slate-500">Marked a Re-Write by a manager</span>
+                <span className="text-slate-600">Marked a Re-Write by a manager</span>
               )}
             </td>
             <td className="px-2 py-1.5"><RewriteAction c={c} /></td>
@@ -1490,7 +1490,7 @@ function CancellationList({ rows, showExec = true }: { rows: CancellationView[];
   const sorted = useMemo(() => [...rows].sort((a, b) => Number(isProper(b)) - Number(isProper(a)) || b.day.localeCompare(a.day)), [rows]);
   return (
     <table className="w-full text-xs">
-      <thead className="text-slate-500 text-[12.5px]">
+      <thead className="text-slate-600 text-[12.5px]">
         <tr>
           <th className="px-2 py-1 text-left font-semibold">Customer</th>
           <th className="px-2 py-1 text-left font-semibold">Vehicle</th>
@@ -1510,10 +1510,10 @@ function CancellationList({ rows, showExec = true }: { rows: CancellationView[];
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(c.orderDay)}</td>
             <td className="whitespace-nowrap px-2 py-1 text-slate-600">{shortDate(c.day)}</td>
             <td className="max-w-[320px] truncate px-2 py-1 text-slate-600" title={c.note}>
-              {isProper(c) ? (c.note || <span className="font-semibold text-amber-700">Reason needed</span>) : <span className="text-slate-400">—</span>}
+              {isProper(c) ? (c.note || <span className="font-semibold text-amber-700">Reason needed</span>) : <span className="text-slate-600">—</span>}
             </td>
             <td className="whitespace-nowrap px-2 py-1 text-right">
-              {isProper(c) ? <span className="font-semibold text-rose-700">Cancellation</span> : <span className="text-slate-500">Re-Write</span>}
+              {isProper(c) ? <span className="font-semibold text-rose-700">Cancellation</span> : <span className="text-slate-600">Re-Write</span>}
             </td>
           </tr>
         ))}
@@ -1542,14 +1542,14 @@ function SummaryCard({ title, onOpen, stats, note, children }: { title: string; 
       <div className={`mt-3 grid grid-cols-2 gap-x-4 gap-y-3 ${stats.length >= 4 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         {stats.map((st) => (
           <div key={st.label} className="min-w-0">
-            <div className="font-semibold text-slate-500 text-[12.5px]">{st.label}</div>
+            <div className="font-semibold text-slate-600 text-[12.5px]">{st.label}</div>
             <div className={`text-xl font-bold tabular-nums sm:text-2xl ${st.tone === "good" ? "text-emerald-700" : st.tone === "bad" ? "text-rose-700" : "text-slate-900"}`}>{st.value}</div>
-            {st.sub && <div className="text-[11px] leading-snug text-slate-500">{st.sub}</div>}
+            {st.sub && <div className="text-[11px] leading-snug text-slate-600">{st.sub}</div>}
           </div>
         ))}
       </div>
       {children && <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">{children}</div>}
-      {note && <div className="mt-auto pt-3 text-[11px] text-slate-400">{note}</div>}
+      {note && <div className="mt-auto pt-3 text-[11px] text-slate-600">{note}</div>}
     </section>
   );
 }
@@ -1558,7 +1558,7 @@ function SummaryCard({ title, onOpen, stats, note, children }: { title: string; 
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2">
-      <span className="w-28 shrink-0 pt-px font-semibold text-slate-500 text-[12.5px]">{label}</span>
+      <span className="w-28 shrink-0 pt-px font-semibold text-slate-600 text-[12.5px]">{label}</span>
       <span className="min-w-0">{children}</span>
     </div>
   );
@@ -1662,7 +1662,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
               {eTop.length ? eTop.map((g, i) => (
                 <Fragment key={g.key}>
                   {i > 0 && " · "}<b className="text-slate-800">{g.label}</b> {pct(inboundPct(g.stats), 0)}{" "}
-                  <span className="text-slate-400">({int(g.stats.inboundOrders)} of {int(g.stats.inboundEnquiries)})</span>
+                  <span className="text-slate-600">({int(g.stats.inboundOrders)} of {int(g.stats.inboundEnquiries)})</span>
                 </Fragment>
               )) : "No inbound orders yet"}
             </Line>
@@ -1702,7 +1702,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
                 const avg = g ? avgProfit(g.stats) : null;
                 return (
                   <div key={seg} className="rounded-lg bg-slate-50 px-2 py-1.5" style={{ borderLeft: `3px solid ${SEGMENT_META[seg].colour}` }}>
-                    <div className="font-semibold text-slate-500 text-[12.5px]">{SEGMENT_META[seg].title}</div>
+                    <div className="font-semibold text-slate-600 text-[12.5px]">{SEGMENT_META[seg].title}</div>
                     <div><b className="tabular-nums text-slate-800">{int(g?.stats.orders ?? 0)}</b> · <span className="tabular-nums"><Money n={avg} /></span> avg</div>
                   </div>
                 );
@@ -1762,7 +1762,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
                 </span>
               </div>
             ))}
-            {proper > 3 && <div className="text-slate-400">and {int(proper - 3)} more</div>}
+            {proper > 3 && <div className="text-slate-600">and {int(proper - 3)} more</div>}
           </>
         )}
       </SummaryCard>
@@ -1802,7 +1802,7 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
 
 // Green cheaper, amber within £20, red more than £20 dearer — the Trends tab's bands.
 const gapTone = (gap: number | null) =>
-  gap == null ? "text-slate-400" : gap <= 0 ? "text-emerald-700" : gap <= 20 ? "text-amber-700" : "text-rose-700";
+  gap == null ? "text-slate-600" : gap <= 0 ? "text-emerald-700" : gap <= 20 ? "text-amber-700" : "text-rose-700";
 
 const gapCell = (gap: number | null) => (
   <span className={`whitespace-nowrap font-semibold ${gapTone(gap)}`}>
@@ -1861,9 +1861,9 @@ function MarketColumn({ s }: { s: MarketSegmentView }) {
       <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${meta.colour}` }}>
         <div className="flex items-baseline justify-between">
           <div className="text-sm font-semibold text-slate-900">{meta.title}</div>
-          <div className="text-xs text-slate-500">{int(o.compared)} deals compared</div>
+          <div className="text-xs text-slate-600">{int(o.compared)} deals compared</div>
         </div>
-        <div className="mt-2 font-semibold text-slate-500 text-[12.5px]">We&apos;re cheapest on</div>
+        <div className="mt-2 font-semibold text-slate-600 text-[12.5px]">We&apos;re cheapest on</div>
         <div className="text-3xl font-bold tabular-nums text-slate-900">{pct(share(o.cheapest, o.compared), 0)}</div>
         <div className={`mt-1 text-sm font-semibold ${gapTone(o.gap)}`}>{gapText(o.gap)}</div>
         <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
@@ -1882,10 +1882,10 @@ function MarketColumn({ s }: { s: MarketSegmentView }) {
 }
 
 function CompetitorList({ rows }: { rows: CompetitorRow[] }) {
-  if (rows.length === 0) return <p className="text-sm text-slate-500">Nobody undercuts us on these deals.</p>;
+  if (rows.length === 0) return <p className="text-sm text-slate-600">Nobody undercuts us on these deals.</p>;
   return (
     <table className="w-full text-sm">
-      <thead className="text-slate-500 text-[12.5px]">
+      <thead className="text-slate-600 text-[12.5px]">
         <tr className="border-b border-slate-200">
           <th className="px-2 py-2 text-left font-semibold">Broker</th>
           <th className="px-2 py-2 text-right font-semibold">Head to head</th>
@@ -1900,7 +1900,7 @@ function CompetitorList({ rows }: { rows: CompetitorRow[] }) {
             <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{int(r.headToHead)}</td>
             <td className="px-2 py-1.5 text-right tabular-nums">
               <span className="font-semibold text-rose-700">{int(r.undercuts)}</span>
-              <span className="ml-1 text-xs text-slate-500">({pct(share(r.undercuts, r.headToHead), 0)})</span>
+              <span className="ml-1 text-xs text-slate-600">({pct(share(r.undercuts, r.headToHead), 0)})</span>
             </td>
             <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{r.avgUndercut == null ? "—" : `£${Math.round(r.avgUndercut)}/mo`}</td>
           </tr>

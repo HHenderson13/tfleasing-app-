@@ -16,7 +16,7 @@ export default async function BrokerLoginPage({
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-900">Broker portal</h1>
-        <p className="mt-1 text-sm text-slate-500">Sign in to view available stock.</p>
+        <p className="mt-1 text-sm text-slate-600">Sign in to view available stock.</p>
         {timeout && (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
             You were signed out after a period of inactivity.
@@ -34,7 +34,7 @@ export default async function BrokerLoginPage({
           </p>
         )}
         <BrokerLoginForm />
-        <p className="mt-4 text-[11px] text-slate-400">
+        <p className="mt-4 text-[11px] text-slate-600">
           Looking for the staff app? <a href="/login" className="text-slate-600 underline">Sign in here</a>.
         </p>
       </div>

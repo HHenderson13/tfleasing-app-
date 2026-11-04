@@ -63,7 +63,7 @@ function Rule({ rule }: { rule: RuleRow }) {
           onClick={() => { const n = !enabled; setEnabled(n); save(n); }}
           disabled={pending}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
-            enabled ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+            enabled ? "bg-emerald-700 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
           }`}
         >
           {enabled ? "On" : "Off"}
@@ -77,30 +77,30 @@ function Rule({ rule }: { rule: RuleRow }) {
             {pending ? "Saving…" : "Save"}
           </button>
         )}
-        <button onClick={remove} disabled={pending} className="ml-auto text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50">
+        <button onClick={remove} disabled={pending} className="ml-auto text-xs font-medium text-slate-600 hover:text-red-600 disabled:opacity-50">
           Delete
         </button>
       </div>
       <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
         <div>
-          <dt className="inline text-slate-500">On the stock list because of this rule: </dt>
+          <dt className="inline text-slate-600">On the stock list because of this rule: </dt>
           <dd className="inline font-semibold tabular-nums text-slate-900">{rule.pulledIn.toLocaleString()}</dd>
-          <span className="ml-1 text-slate-400">
+          <span className="ml-1 text-slate-600">
             (filter the stock list by <span className="font-medium">Included by → Availability rule</span> to see these)
           </span>
         </div>
         {rule.outOfRange > 0 && (
           <div>
-            <dt className="inline text-slate-500">Matched but out of range: </dt>
+            <dt className="inline text-slate-600">Matched but out of range: </dt>
             <dd className="inline font-semibold tabular-nums text-slate-700">{rule.outOfRange.toLocaleString()}</dd>
-            <span className="ml-1 text-slate-400">(a model we don&apos;t sell, or an excluded branch)</span>
+            <span className="ml-1 text-slate-600">(a model we don&apos;t sell, or an excluded branch)</span>
           </div>
         )}
         {rule.notSellable > 0 && (
           <div>
-            <dt className="inline text-slate-500">Matched but skipped: </dt>
+            <dt className="inline text-slate-600">Matched but skipped: </dt>
             <dd className="inline font-semibold tabular-nums text-amber-700">{rule.notSellable.toLocaleString()}</dd>
-            <span className="ml-1 text-slate-400">(no VIN and no ETA)</span>
+            <span className="ml-1 text-slate-600">(no VIN and no ETA)</span>
           </div>
         )}
       </dl>
@@ -159,14 +159,14 @@ export function AvailabilityRules({ rules, hidden }: { rules: RuleRow[]; hidden:
   return (
     <section className="mt-10">
       <h2 className="text-sm font-medium text-slate-700">Availability rules</h2>
-      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+      <p className="mt-1 max-w-3xl text-xs text-slate-600">
         Column H decides whether a vehicle is ours to sell. <span className="font-medium">Blank</span> is available (unless the
         report names a customer or fleet). <span className="font-medium">Any code</span> in it is not, unless a rule below names
         that code, with the column E value it needs if it needs one, or a column F rule further down brings it in. Models we don&apos;t sell, excluded branches, and vehicles
         with neither a VIN nor an ETA stay off the list whatever column H says. This applies to the TF stock list and the broker
         portal.
       </p>
-      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+      <p className="mt-1 max-w-3xl text-xs text-slate-600">
         A rule decides whether a vehicle <span className="font-medium">appears</span>. It does not change its status: a
         vehicle still reads as in stock or as an ETA according to its location column. Vehicles a rule makes available carry a
         <span className="mx-1 rounded bg-amber-100 px-1 font-medium text-amber-800">Rule</span> tag on the TF stock list.
@@ -176,15 +176,15 @@ export function AvailabilityRules({ rules, hidden }: { rules: RuleRow[]; hidden:
         {rules.map((r) => <Rule key={`${r.id}-${r.hCode}-${r.eValue}-${r.enabled}`} rule={r} />)}
         <AddRule />
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-slate-600">
         {on.length === 0
           ? "All rules are off: only vehicles with an empty column H appear."
           : `${total.toLocaleString()} vehicle${total === 1 ? "" : "s"} on the stock list because of ${on.length === 1 ? "this rule" : "these rules"}.`}
       </p>
       {hiddenTotal > 0 && (
-        <p className="mt-1 max-w-3xl text-xs text-slate-500">
+        <p className="mt-1 max-w-3xl text-xs text-slate-600">
           Kept off by a column H code no rule names: <span className="font-semibold text-slate-700">{hiddenTotal.toLocaleString()}</span>{" "}
-          <span className="text-slate-400">
+          <span className="text-slate-600">
             ({hidden.slice(0, 12).map((h) => `${h.code} ${h.count.toLocaleString()}`).join(" · ")}{hidden.length > 12 ? " · …" : ""})
           </span>
         </p>
@@ -253,7 +253,7 @@ function FRule({ rule }: { rule: FRuleRow }) {
           onClick={() => { const n = !enabled; setEnabled(n); save(n); }}
           disabled={pending}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
-            enabled ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+            enabled ? "bg-emerald-700 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
           }`}
         >
           {enabled ? "On" : "Off"}
@@ -264,30 +264,30 @@ function FRule({ rule }: { rule: FRuleRow }) {
             {pending ? "Saving…" : "Save"}
           </button>
         )}
-        <button onClick={remove} disabled={pending} className="ml-auto text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50">
+        <button onClick={remove} disabled={pending} className="ml-auto text-xs font-medium text-slate-600 hover:text-red-600 disabled:opacity-50">
           Delete
         </button>
       </div>
       <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
         <div>
-          <dt className="inline text-slate-500">On the stock list because of this rule: </dt>
+          <dt className="inline text-slate-600">On the stock list because of this rule: </dt>
           <dd className="inline font-semibold tabular-nums text-slate-900">{rule.pulledIn.toLocaleString()}</dd>
           {rule.pulledIn === 0 && rule.outOfRange === 0 && rule.notSellable === 0 && (
-            <span className="ml-1 text-slate-400">(nothing in the latest upload matches yet)</span>
+            <span className="ml-1 text-slate-600">(nothing in the latest upload matches yet)</span>
           )}
         </div>
         {rule.outOfRange > 0 && (
           <div>
-            <dt className="inline text-slate-500">Matched but out of range: </dt>
+            <dt className="inline text-slate-600">Matched but out of range: </dt>
             <dd className="inline font-semibold tabular-nums text-slate-700">{rule.outOfRange.toLocaleString()}</dd>
-            <span className="ml-1 text-slate-400">(a model we don&apos;t sell, or an excluded branch)</span>
+            <span className="ml-1 text-slate-600">(a model we don&apos;t sell, or an excluded branch)</span>
           </div>
         )}
         {rule.notSellable > 0 && (
           <div>
-            <dt className="inline text-slate-500">Matched but skipped: </dt>
+            <dt className="inline text-slate-600">Matched but skipped: </dt>
             <dd className="inline font-semibold tabular-nums text-amber-700">{rule.notSellable.toLocaleString()}</dd>
-            <span className="ml-1 text-slate-400">(no VIN and no ETA)</span>
+            <span className="ml-1 text-slate-600">(no VIN and no ETA)</span>
           </div>
         )}
       </dl>
@@ -342,7 +342,7 @@ export function ColumnFRules({ rules }: { rules: FRuleRow[] }) {
   return (
     <section className="mt-8">
       <h2 className="text-sm font-medium text-slate-700">Column F rules</h2>
-      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+      <p className="mt-1 max-w-3xl text-xs text-slate-600">
         As well as the column H rules above. A vehicle whose column F (CUST2_SURNAME) reads the value below, on that dealer code if
         one is given, is available whatever column H says and whoever is named on it. Capitals, spaces and the style of dash
         don&apos;t matter; the dealer code must match exactly. Models we don&apos;t sell, excluded branches, and vehicles with
@@ -353,7 +353,7 @@ export function ColumnFRules({ rules }: { rules: FRuleRow[] }) {
         {rules.map((r) => <FRule key={`${r.id}-${r.fValue}-${r.dealerCode}-${r.enabled}`} rule={r} />)}
         <AddFRule />
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-slate-600">
         {on.length === 0
           ? "All column F rules are off."
           : `${total.toLocaleString()} vehicle${total === 1 ? "" : "s"} on the stock list because of ${on.length === 1 ? "this rule" : "these rules"}.`}

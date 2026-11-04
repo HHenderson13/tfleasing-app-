@@ -58,7 +58,7 @@ function PricesSection({ prices }: { prices: FuelPrice[] }) {
       )}
       <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-600">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Price</th>
               <th className="px-3 py-2 text-right font-semibold">In use</th>
@@ -71,7 +71,7 @@ function PricesSection({ prices }: { prices: FuelPrice[] }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[11px] text-slate-500">
+      <p className="mt-2 text-[11px] text-slate-600">
         Prices are stored as each source publishes them: fuel, home and public charging include VAT; the depot figure (DESNZ
         non-domestic, small business, including Climate Change Levy) excludes it. The calculator adds or removes VAT for private and business customers.
       </p>
@@ -95,7 +95,7 @@ function PriceRow({ k, p }: { k: PriceKey; p: FuelPrice | undefined }) {
     <tr className="align-top">
       <td className="px-4 py-3">
         <div className="font-medium text-slate-900">{PRICE_META[k].label}</div>
-        <div className="text-[11px] text-slate-400">Source publishes {CADENCE[k]}</div>
+        <div className="text-[11px] text-slate-600">Source publishes {CADENCE[k]}</div>
       </td>
       <td className="px-3 py-3 text-right tabular-nums">
         <div className="text-base font-semibold text-slate-900">{p ? `${p.value.toFixed(2)}${unit}` : "Not set"}</div>
@@ -106,8 +106,8 @@ function PriceRow({ k, p }: { k: PriceKey; p: FuelPrice | undefined }) {
         {p ? (
           <>
             <div><b className="tabular-nums text-slate-800">{p.sourceValue.toFixed(2)}{unit}</b>{p.period ? ` · ${p.period}` : ""}</div>
-            <div className="text-slate-500">{p.sourceUrl ? <a href={p.sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-slate-300 underline-offset-2 hover:text-slate-800">{p.source}</a> : p.source}</div>
-            <div className="text-[11px] text-slate-400">Checked {when(p.checkedAt)}</div>
+            <div className="text-slate-600">{p.sourceUrl ? <a href={p.sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-slate-300 underline-offset-2 hover:text-slate-800">{p.source}</a> : p.source}</div>
+            <div className="text-[11px] text-slate-600">Checked {when(p.checkedAt)}</div>
             {p.lastError && <div className="mt-0.5 text-[11px] text-rose-700">Last check failed: {p.lastError}</div>}
           </>
         ) : "Not fetched yet"}
@@ -116,12 +116,12 @@ function PriceRow({ k, p }: { k: PriceKey; p: FuelPrice | undefined }) {
         <div className="flex items-center gap-1.5">
           <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))} placeholder="Your price"
             className="w-24 rounded-md border border-slate-300 px-2 py-1 text-right text-sm tabular-nums focus:border-slate-500 focus:outline-none" aria-label={`Your own ${PRICE_META[k].label} price`} />
-          <span className="text-xs text-slate-400">{unit}</span>
+          <span className="text-xs text-slate-600">{unit}</span>
           <button disabled={pending || !value || Number(value) <= 0} onClick={() => save(Number(value))}
             className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40">Save</button>
           {p?.override && <button disabled={pending} onClick={() => save(null)} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Use source</button>}
         </div>
-        {p?.override && <div className="mt-1 text-[11px] text-slate-400">Set by {p.override.by ?? "an admin"}{p.override.at ? ` · ${when(p.override.at)}` : ""}</div>}
+        {p?.override && <div className="mt-1 text-[11px] text-slate-600">Set by {p.override.by ?? "an admin"}{p.override.at ? ` · ${when(p.override.at)}` : ""}</div>}
         {msg && <div className="mt-1 text-[11px] text-rose-700">{msg}</div>}
       </td>
     </tr>
@@ -144,7 +144,7 @@ function VehiclesSection({ vehicles }: { vehicles: FuelVehicle[] }) {
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {([["ev", "Electric"], ["ice", "Petrol and diesel"]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === k ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"}`}>
-            {label} <span className={`text-xs ${tab === k ? "text-slate-300" : "text-slate-400"}`}>{counts(k)}</span>
+            {label} <span className={`text-xs ${tab === k ? "text-slate-300" : "text-slate-600"}`}>{counts(k)}</span>
           </button>
         ))}
         <select value={segment} onChange={(e) => setSegment(e.target.value as typeof segment)} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm">
@@ -154,7 +154,7 @@ function VehiclesSection({ vehicles }: { vehicles: FuelVehicle[] }) {
       <AddVehicles powertrain={tab} />
       <div className="mt-3 max-h-[480px] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+          <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-600">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Vehicle</th>
               <th className="px-3 py-2 text-left font-semibold">Type</th>
@@ -167,7 +167,7 @@ function VehiclesSection({ vehicles }: { vehicles: FuelVehicle[] }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {list.map((v) => <VehicleRow key={v.id} v={v} />)}
-            {list.length === 0 && <tr><td colSpan={tab === "ev" ? 7 : 5} className="px-4 py-6 text-center text-sm text-slate-500">None yet. Paste them in above.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={tab === "ev" ? 7 : 5} className="px-4 py-6 text-center text-sm text-slate-600">None yet. Paste them in above.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -191,10 +191,10 @@ function VehicleRow({ v }: { v: FuelVehicle }) {
       {v.powertrain === "ev" && (
         <td className="whitespace-nowrap px-3 py-1.5 text-right text-xs tabular-nums text-slate-600">{v.dcMinutes ? `${v.dcMinutes} min${v.dcKw ? `, ${v.dcKw} kW` : ""}` : "Not published"}</td>
       )}
-      <td className="max-w-[220px] truncate px-3 py-1.5 text-[11px] text-slate-500" title={v.source ?? ""}>{v.source}</td>
+      <td className="max-w-[220px] truncate px-3 py-1.5 text-[11px] text-slate-600" title={v.source ?? ""}>{v.source}</td>
       <td className="px-3 py-1.5 text-right">
         <button disabled={pending} onClick={() => { if (confirm(`Remove ${v.make} ${v.model} ${v.derivative}?`)) start(async () => { await deleteFuelVehicleAction(v.id); router.refresh(); }); }}
-          className="text-xs text-slate-400 hover:text-rose-700" aria-label="Remove">Remove</button>
+          className="text-xs text-slate-600 hover:text-rose-700" aria-label="Remove">Remove</button>
       </td>
     </tr>
   );
@@ -211,7 +211,7 @@ function AddVehicles({ powertrain }: { powertrain: "ev" | "ice" }) {
   return (
     <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-sm font-semibold text-slate-900">Add or update {powertrain === "ev" ? "electric" : "petrol and diesel"} vehicles</div>
-      <p className="mt-0.5 text-xs text-slate-500">
+      <p className="mt-0.5 text-xs text-slate-600">
         Paste rows from Excel with the columns <b>{columns}</b>. A header row is fine. A vehicle already in the list is updated, not doubled.
         Use the official WLTP {powertrain === "ev" ? "miles per kWh (not kWh per 100 miles)" : "combined MPG"} so every comparison is like for like.
         {powertrain === "ev" && <> For the charging picture, five more columns can follow: <b>usable battery kWh · range miles · motorway range miles · rapid kW · rapid 10 to 80% minutes</b>. Leave any blank that isn&apos;t published.</>}
@@ -233,7 +233,7 @@ function AddVehicles({ powertrain }: { powertrain: "ev" | "ice" }) {
       {result && !result.ok && (
         <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
           <div className="font-semibold">{result.error}</div>
-          {result.parsed?.errors.slice(0, 12).map((e) => <div key={e.line}>Row {e.line}: {e.message} <span className="text-rose-500">({e.text})</span></div>)}
+          {result.parsed?.errors.slice(0, 12).map((e) => <div key={e.line}>Row {e.line}: {e.message} <span className="text-rose-700">({e.text})</span></div>)}
           {(result.parsed?.errors.length ?? 0) > 12 && <div>and {result.parsed!.errors.length - 12} more</div>}
         </div>
       )}

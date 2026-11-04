@@ -163,12 +163,12 @@ export default async function SearchPage({
                     <Link href={`/customers/${c.id}`} className="block px-4 py-2 text-sm hover:bg-slate-50">
                       <div className="font-medium text-slate-900">{c.name}</div>
                       {c.businessName && (
-                        <div className="text-[11px] text-slate-500">{c.businessName}</div>
+                        <div className="text-[11px] text-slate-600">{c.businessName}</div>
                       )}
                     </Link>
                   </li>
                 ))}
-                {custResults.length === 0 && <li className="px-4 py-3 text-xs text-slate-400">No customers</li>}
+                {custResults.length === 0 && <li className="px-4 py-3 text-xs text-slate-600">No customers</li>}
               </ul>
             </section>
 
@@ -186,10 +186,10 @@ export default async function SearchPage({
                         <div className="min-w-0 flex-1">
                           <div className="font-medium text-slate-900">
                             {p.customerName}
-                            {p.businessName && <span className="ml-1.5 text-[11px] font-normal text-slate-500">· {p.businessName}</span>}
+                            {p.businessName && <span className="ml-1.5 text-[11px] font-normal text-slate-600">· {p.businessName}</span>}
                           </div>
                           <div className="text-xs text-slate-600">{p.model} {p.derivative} · {p.funderName}</div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-600">
                             {p.financeProposalNumber && <>FP: {p.financeProposalNumber} · </>}
                             {p.orderNumber && <>Order: {p.orderNumber} · </>}
                             {p.vin && <>VIN: {p.vin} · </>}
@@ -197,19 +197,19 @@ export default async function SearchPage({
                             {p.brokerName && <>Broker: {p.brokerName}</>}
                           </div>
                         </div>
-                        <span className="shrink-0 text-[11px] text-slate-400">{p.execName ?? "—"}</span>
+                        <span className="shrink-0 text-[11px] text-slate-600">{p.execName ?? "—"}</span>
                       </Link>
                     </li>
                   );
                 })}
-                {propResults.length === 0 && <li className="px-4 py-3 text-xs text-slate-400">No proposals</li>}
+                {propResults.length === 0 && <li className="px-4 py-3 text-xs text-slate-600">No proposals</li>}
               </ul>
             </section>
           </div>
         )}
 
         {!q && (
-          <p className="mt-6 text-sm text-slate-500">
+          <p className="mt-6 text-sm text-slate-600">
             Search across every stage of the pipeline: proposals, in-order, awaiting delivery, delivered.
             Matches on customer name, business name, finance proposal #, VIN, order #, reg, broker, and vehicle model.
           </p>

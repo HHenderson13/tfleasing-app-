@@ -19,12 +19,12 @@ export function BrokerHeader({ me, pathname }: { me: CurrentBrokerUser; pathname
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 text-sm sm:px-6">
         <div className="flex items-center gap-3">
           <Link href="/broker" className="text-base font-semibold text-slate-900">{me.brokerName}</Link>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">Broker portal</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">Broker portal</span>
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500">
+        <div className="flex items-center gap-3 text-xs text-slate-600">
           <div className="text-right hidden sm:block">
             <div className="font-medium text-slate-700">{me.name}</div>
-            <div className="text-[11px] text-slate-400">{me.email}</div>
+            <div className="text-[11px] text-slate-600">{me.email}</div>
           </div>
           <form action={brokerSignOutAction}>
             <button className="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
@@ -41,7 +41,7 @@ export function BrokerHeader({ me, pathname }: { me: CurrentBrokerUser; pathname
               key={t.href}
               href={t.href}
               className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition ${
-                active ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"
+                active ? "border-slate-900 text-slate-900" : "border-transparent text-slate-600 hover:text-slate-700"
               }`}
             >
               {t.label}

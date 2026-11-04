@@ -115,7 +115,7 @@ export function UploadClient() {
         <div className="text-sm font-medium text-slate-800">
           {queued.length > 0 ? `${queued.length} file${queued.length === 1 ? "" : "s"} ready: ${queued.map((f) => f.name).join(", ")}` : "Drop Enquiry Tracker, Enquiry Log, Dealbook, Cancelled Orders or Dealbook Extract files here, or click to choose"}
         </div>
-        <div className="mt-1 text-xs text-slate-500">.xlsx, or .csv for the Dealbook Extract · several at once is fine. They&apos;re merged in the order chosen</div>
+        <div className="mt-1 text-xs text-slate-600">.xlsx, or .csv for the Dealbook Extract · several at once is fine. They&apos;re merged in the order chosen</div>
       </label>
 
       <div className="mt-3 flex items-center gap-3">
@@ -126,7 +126,7 @@ export function UploadClient() {
         >
           {pending ? "Uploading…" : "Upload"}
         </button>
-        {progress && <span className="text-xs text-slate-500">{progress}</span>}
+        {progress && <span className="text-xs text-slate-600">{progress}</span>}
       </div>
 
       {undecided.map((file) => (

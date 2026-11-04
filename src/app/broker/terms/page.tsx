@@ -71,7 +71,7 @@ export default async function BrokerTermsPage() {
               </button>
             </form>
           )}
-          <p className="mt-4 text-[11px] text-slate-400">Version {BROKER_TERMS_VERSION}</p>
+          <p className="mt-4 text-[11px] text-slate-600">Version {BROKER_TERMS_VERSION}</p>
         </div>
       </main>
     </div>

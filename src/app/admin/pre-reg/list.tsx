@@ -32,13 +32,13 @@ function Row({ v }: { v: PreRegRow }) {
     <tr className={sold ? "bg-slate-50/70" : undefined}>
       <td className="px-4 py-3">
         <div className="font-medium text-slate-900">
-          {v.bucket} {v.variant} {v.derivative && <span className="text-slate-500">{v.derivative}</span>}
+          {v.bucket} {v.variant} {v.derivative && <span className="text-slate-600">{v.derivative}</span>}
         </div>
-        <div className="text-xs text-slate-500">{v.colour}{v.engine ? ` · ${v.engine}` : ""}</div>
+        <div className="text-xs text-slate-600">{v.colour}{v.engine ? ` · ${v.engine}` : ""}</div>
       </td>
       <td className="px-4 py-3 font-mono text-sm text-slate-800">{v.regNumber}</td>
       <td className="px-4 py-3 text-sm text-slate-700 tabular-nums">{fmt(v.registeredAt)}</td>
-      <td className="px-4 py-3 text-xs text-slate-500">{v.dealer ?? "—"}</td>
+      <td className="px-4 py-3 text-xs text-slate-600">{v.dealer ?? "—"}</td>
       <td className="px-4 py-3">
         {sold ? (
           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200">
@@ -89,7 +89,7 @@ export function PreRegList({ vehicles }: { vehicles: PreRegRow[] }) {
   const table = (rows: PreRegRow[], empty: string) => (
     <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+        <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
           <tr>
             <th className="px-4 py-3 text-left font-medium">Vehicle</th>
             <th className="px-4 py-3 text-left font-medium">Reg</th>
@@ -102,7 +102,7 @@ export function PreRegList({ vehicles }: { vehicles: PreRegRow[] }) {
         <tbody className="divide-y divide-slate-100">
           {rows.map((v) => <Row key={v.id} v={v} />)}
           {rows.length === 0 && (
-            <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-500">{empty}</td></tr>
+            <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-600">{empty}</td></tr>
           )}
         </tbody>
       </table>
@@ -113,16 +113,16 @@ export function PreRegList({ vehicles }: { vehicles: PreRegRow[] }) {
     <>
       <section className="mt-8">
         <h2 className="mb-2 text-sm font-medium text-slate-700">
-          On the stock list <span className="font-normal text-slate-400">({live.length})</span>
+          On the stock list <span className="font-normal text-slate-600">({live.length})</span>
         </h2>
         {table(live, "No pre-registered vehicles yet. Add one above.")}
       </section>
 
       <section className="mt-8">
         <h2 className="mb-1 text-sm font-medium text-slate-700">
-          Sold <span className="font-normal text-slate-400">({sold.length})</span>
+          Sold <span className="font-normal text-slate-600">({sold.length})</span>
         </h2>
-        <p className="mb-2 text-xs text-slate-500">
+        <p className="mb-2 text-xs text-slate-600">
           Off both stock lists, but kept here: sales fall through, and putting one back should not mean typing it
           again. Marking it invoiced deletes it for good.
         </p>

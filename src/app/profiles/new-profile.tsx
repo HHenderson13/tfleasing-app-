@@ -40,7 +40,7 @@ export function NewProfile({ onClose }: { onClose: () => void }) {
         <label className="block">
           <span className="mb-1.5 block text-[13px] font-medium text-slate-700">Customer name</span>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sarah Jones, or Smith Plumbing Ltd"
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]" />
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 placeholder:text-slate-500 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]" />
         </label>
 
         <div>
@@ -49,9 +49,9 @@ export function NewProfile({ onClose }: { onClose: () => void }) {
             {([["personal", "Personal", "Personal contract hire", "person"], ["business", "Business", "Business contract hire", "building"]] as const).map(([k, title, sub, icon]) => (
               <button key={k} type="button" onClick={() => setWho(k)} aria-pressed={who === k}
                 className={`rounded-xl px-4 py-3.5 text-left ring-1 ring-inset transition ${who === k ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-900 ring-slate-300 hover:ring-slate-400"}`}>
-                <Icon name={icon} className={`h-5 w-5 ${who === k ? "text-white" : "text-slate-400"}`} />
+                <Icon name={icon} className={`h-5 w-5 ${who === k ? "text-white" : "text-slate-500"}`} />
                 <div className="mt-2 text-[15px] font-semibold">{title}</div>
-                <div className={`text-[12.5px] ${who === k ? "text-slate-300" : "text-slate-500"}`}>{sub}</div>
+                <div className={`text-[12.5px] ${who === k ? "text-slate-300" : "text-slate-600"}`}>{sub}</div>
               </button>
             ))}
           </div>
@@ -60,7 +60,7 @@ export function NewProfile({ onClose }: { onClose: () => void }) {
         <div>
           <label htmlFor="np-model" className="mb-1.5 block text-[13px] font-medium text-slate-700">Model they&apos;re interested in</label>
           <input id="np-model" value={model} onChange={(e) => setModelSuggest(e.target.value)} list="ford-models" placeholder="e.g. Kuga"
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]" />
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 placeholder:text-slate-500 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]" />
           <datalist id="ford-models">{FORD_MODELS.map((m) => <option key={m} value={m} />)}</datalist>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {QUICK.map((m) => (

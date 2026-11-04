@@ -23,7 +23,7 @@ export interface ChartPoint {
 const PAD = { top: 14, right: 58, bottom: 26, left: 52 };
 const SURFACE = "#ffffff";
 const GRID = "#e2e8f0";
-const AXIS_TEXT = "#94a3b8";
+const AXIS_TEXT = "#475569"; // slate-600, readable on any monitor
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function niceStep(span: number, target: number): number {

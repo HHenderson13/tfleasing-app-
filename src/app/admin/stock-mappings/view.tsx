@@ -84,7 +84,7 @@ export function StockMappingsView({
       {/* Bucket filter (per-model) */}
       {bucketApplicable && (
         <div className="flex flex-wrap items-center gap-1.5 bg-white p-2 text-xs rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
-          <span className="mr-1 px-1 font-semibold text-slate-500 text-[12.5px]">Model:</span>
+          <span className="mr-1 px-1 font-semibold text-slate-600 text-[12.5px]">Model:</span>
           <BucketPill label="All" active={bucketFilter === null} onClick={() => setBucketFilter(null)} />
           {allBuckets.map((b) => (
             <BucketPill key={b} label={b} active={bucketFilter === b} onClick={() => setBucketFilter(b)} />
@@ -177,7 +177,7 @@ function Section({ title, children, tint }: { title: string; children: React.Rea
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="px-4 py-6 text-center text-sm text-slate-400">{text}</div>;
+  return <div className="px-4 py-6 text-center text-sm text-slate-600">{text}</div>;
 }
 
 function Buckets({ buckets }: { buckets: string[] }) {
@@ -218,8 +218,8 @@ function UnmappedRow({
   return (
     <li className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
       <div className="min-w-[260px] flex-1">
-        <div className="font-mono text-xs text-slate-500">{raw}</div>
-        <div className="text-[11px] text-slate-400">{count.toLocaleString()} vehicle{count === 1 ? "" : "s"}</div>
+        <div className="font-mono text-xs text-slate-600">{raw}</div>
+        <div className="text-[11px] text-slate-600">{count.toLocaleString()} vehicle{count === 1 ? "" : "s"}</div>
         <Buckets buckets={buckets} />
       </div>
       <input
@@ -228,7 +228,7 @@ function UnmappedRow({
         placeholder="Display name"
         className="w-64 rounded-xl border border-slate-300 px-2 py-2 text-sm"
       />
-      <label className="inline-flex items-center gap-1 text-xs text-slate-500">
+      <label className="inline-flex items-center gap-1 text-xs text-slate-600">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300" />
         Hide
       </label>
@@ -270,8 +270,8 @@ function MappedRow({
   return (
     <li className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
       <div className="min-w-[260px] flex-1">
-        <div className="font-mono text-xs text-slate-400">{mapping.rawKey}</div>
-        <div className="text-[11px] text-slate-400">{count.toLocaleString()} vehicle{count === 1 ? "" : "s"}</div>
+        <div className="font-mono text-xs text-slate-600">{mapping.rawKey}</div>
+        <div className="text-[11px] text-slate-600">{count.toLocaleString()} vehicle{count === 1 ? "" : "s"}</div>
         <Buckets buckets={buckets} />
       </div>
       <input
@@ -280,7 +280,7 @@ function MappedRow({
         onBlur={() => save()}
         className="w-64 rounded-xl border border-slate-300 px-2 py-2 text-sm"
       />
-      <label className="inline-flex items-center gap-1 text-xs text-slate-500">
+      <label className="inline-flex items-center gap-1 text-xs text-slate-600">
         <input
           type="checkbox"
           checked={hidden}
@@ -300,7 +300,7 @@ function MappedRow({
           Use as variant
         </label>
       )}
-      <button onClick={remove} className="text-slate-300 hover:text-red-500">×</button>
+      <button onClick={remove} className="text-slate-500 hover:text-red-700">×</button>
     </li>
   );
 }

@@ -82,7 +82,7 @@ export function StockUploadView({
 
       <section className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <h2 className="text-sm font-semibold text-slate-900">Workbook password</h2>
-        <p className="mt-1 text-xs text-slate-500">Ford protect the workbook with a password. Default is <span className="font-mono">Ftru</span>. Update here if they change it.</p>
+        <p className="mt-1 text-xs text-slate-600">Ford protect the workbook with a password. Default is <span className="font-mono">Ftru</span>. Update here if they change it.</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <input
             type="text"
@@ -98,7 +98,7 @@ export function StockUploadView({
           >
             {pwSaving ? "Saving…" : "Save password"}
           </button>
-          {pwMsg && <span className={`text-xs ${pwMsg === "Saved." ? "text-emerald-600" : "text-red-600"}`}>{pwMsg}</span>}
+          {pwMsg && <span className={`text-xs ${pwMsg === "Saved." ? "text-emerald-700" : "text-red-600"}`}>{pwMsg}</span>}
         </div>
       </section>
 
@@ -115,14 +115,14 @@ export function StockUploadView({
                   .map((r) => (
                     <span key={r.sheet} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                       <span className="font-medium">{r.sheet}</span>
-                      <span className="tabular-nums text-slate-500">{r.count.toLocaleString()}</span>
+                      <span className="tabular-nums text-slate-600">{r.count.toLocaleString()}</span>
                     </span>
                   ))}
               </div>
             )}
           </div>
         ) : (
-          <div className="mt-2 text-sm text-slate-500">No stock uploaded yet.</div>
+          <div className="mt-2 text-sm text-slate-600">No stock uploaded yet.</div>
         )}
       </section>
     </div>

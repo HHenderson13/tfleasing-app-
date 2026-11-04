@@ -196,7 +196,7 @@ function CoverageOverview({
                         <div style={{ fontWeight: 600 }}>
                           {s.covered}/{m.totalDerivatives}
                         </div>
-                        <div style={{ fontSize: 10, opacity: 0.7 }}>
+                        <div style={{ fontSize: 11 }}>
                           {s.status === "full" ? "full" : s.status === "none" ? "missing" : `${s.missing} gap`}
                         </div>
                       </td>

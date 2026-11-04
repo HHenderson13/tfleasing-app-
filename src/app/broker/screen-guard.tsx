@@ -335,7 +335,7 @@ export function ScreenGuard({
             <p className="mt-2 text-xs leading-relaxed text-slate-300">
               Stock details are hidden while this window is inactive. Click anywhere to continue.
             </p>
-            <p className="mt-4 text-[11px] text-slate-500">
+            <p className="mt-4 text-[11px] text-slate-400">
               This page is watermarked with your name, and attempts to capture it are recorded.
             </p>
           </div>

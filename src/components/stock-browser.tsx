@@ -531,7 +531,7 @@ export function StockBrowser({
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10"
               />
               {q && (
-                <button onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search">×</button>
+                <button onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-600" aria-label="Clear search">×</button>
               )}
             </div>
             <button
@@ -575,14 +575,14 @@ export function StockBrowser({
                   className="group inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs text-slate-700 hover:border-slate-400"
                 >
                   {c.label}
-                  <span className="text-slate-400 group-hover:text-slate-600">×</span>
+                  <span className="text-slate-600 group-hover:text-slate-600">×</span>
                 </button>
               ))}
-              <button onClick={resetAll} className="ml-1 text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline">Clear all</button>
+              <button onClick={resetAll} className="ml-1 text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-800 hover:underline">Clear all</button>
             </div>
           )}
 
-          <div className="mt-2 text-xs text-slate-500">
+          <div className="mt-2 text-xs text-slate-600">
             <span className="font-medium text-slate-700">{filtered.length.toLocaleString()}</span> {filtered.length === 1 ? "vehicle" : "vehicles"}
             {filtered.length !== rows.length && <> of {rows.length.toLocaleString()}</>}
           </div>
@@ -615,7 +615,7 @@ export function StockBrowser({
                 className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-400"
               >
                 Load {Math.min(60, filtered.length - visible.length)} more
-                <span className="ml-2 text-xs text-slate-400">({(filtered.length - visible.length).toLocaleString()} remaining)</span>
+                <span className="ml-2 text-xs text-slate-600">({(filtered.length - visible.length).toLocaleString()} remaining)</span>
               </button>
             </div>
           )}
@@ -682,7 +682,7 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
             )}
             <div className="mt-1 text-sm">
               <span className="font-medium text-slate-800">{r.colour}</span>
-              {specBits.length > 0 && <span className="text-slate-500"> · {specBits.join(" · ")}</span>}
+              {specBits.length > 0 && <span className="text-slate-600"> · {specBits.join(" · ")}</span>}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
@@ -722,14 +722,14 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
         {!isBroker && (
           <div className="mt-2 text-xs text-slate-600">
             <span className="font-medium">{r.dealer}</span>
-            {r.destination && r.destination !== r.dealer && <span className="text-slate-400"> · {r.destination}</span>}
+            {r.destination && r.destination !== r.dealer && <span className="text-slate-600"> · {r.destination}</span>}
           </div>
         )}
 
         {/* Row 3: factory options front-and-centre */}
         {r.options.length > 0 && (
           <div className="mt-3">
-            <div className="mb-1 font-semibold text-slate-500 text-[12.5px]">Factory options</div>
+            <div className="mb-1 font-semibold text-slate-600 text-[12.5px]">Factory options</div>
             <div className="flex flex-wrap gap-1">
               {r.options.map((o, i) => (
                 <span key={i} className="inline-block rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-800 ring-1 ring-violet-100">{o}</span>
@@ -740,13 +740,13 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
 
         {/* Row 4: footer. The reference is the broker's only handle on a
             vehicle, so it leads; TF keeps VIN and order number alongside. */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
           <span>
-            <span className="font-mono text-slate-500">{r.ref}</span>
+            <span className="font-mono text-slate-600">{r.ref}</span>
             {!isBroker && r.vin && <span className="ml-2 font-mono">{r.vin}</span>}
             {!isBroker && r.orderNo && <span className="ml-2">Order #{r.orderNo}</span>}
           </span>
-          <span className="text-slate-500">{open ? "Hide details ▾" : "More details ▸"}</span>
+          <span className="text-slate-600">{open ? "Hide details ▾" : "More details ▸"}</span>
         </div>
       </button>
 
@@ -788,7 +788,7 @@ function Card({ row: r, audience, open, onToggle, enquiryFrom }: {
             <Pair k="Series"        v={r.series ?? "—"} />
           </div>
           {isBroker && (
-            <p className="mt-3 border-t border-slate-200 pt-2 text-[11px] text-slate-500">
+            <p className="mt-3 border-t border-slate-200 pt-2 text-[11px] text-slate-600">
               Quote reference <span className="font-mono font-medium text-slate-700">{r.ref}</span> when you enquire about this vehicle.
             </p>
           )}
@@ -838,11 +838,11 @@ function FacetGroup({
             // go on, so say how much is behind each one — "Derivative" hiding
             // three options is a different proposition from forty.
             !open && unioned.length > 0 && (
-              <span className="text-[10px] tabular-nums text-slate-400">{unioned.length}</span>
+              <span className="text-[10px] tabular-nums text-slate-600">{unioned.length}</span>
             )
           )}
         </div>
-        <span className="text-xs text-slate-400">{open ? "▾" : "▸"}</span>
+        <span className="text-xs text-slate-600">{open ? "▾" : "▸"}</span>
       </button>
 
       {open && (
@@ -865,22 +865,22 @@ function FacetGroup({
                     className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs transition ${active ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
                   >
                     <span className="truncate" title={v}>{v}</span>
-                    <span className={`tabular-nums text-[10px] ${active ? "text-slate-300" : "text-slate-400"}`}>{n || "—"}</span>
+                    <span className={`tabular-nums text-[10px] ${active ? "text-slate-300" : "text-slate-600"}`}>{n || "—"}</span>
                   </button>
                 </li>
               );
             })}
             {shown.length === 0 && (
-              <li className="px-2 py-1 text-[11px] text-slate-400">No matches</li>
+              <li className="px-2 py-1 text-[11px] text-slate-600">No matches</li>
             )}
           </ul>
           {hiddenCount > 0 && !expanded && (
-            <button onClick={() => setExpanded(true)} className="mt-1 text-[11px] font-medium text-slate-500 hover:text-slate-800">
+            <button onClick={() => setExpanded(true)} className="mt-1 text-[11px] font-medium text-slate-600 hover:text-slate-800">
               Show {hiddenCount} more
             </button>
           )}
           {expanded && filtered.length > initiallyShown && (
-            <button onClick={() => setExpanded(false)} className="mt-1 text-[11px] font-medium text-slate-500 hover:text-slate-800">
+            <button onClick={() => setExpanded(false)} className="mt-1 text-[11px] font-medium text-slate-600 hover:text-slate-800">
               Show less
             </button>
           )}
@@ -1058,14 +1058,14 @@ function EtaBadge({ etaLabel, etaDays, hasEta }: { etaLabel: string | null; etaD
   if (!hasEta || !etaLabel) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-white px-2.5 py-1.5 text-right">
-        <div className="font-semibold text-slate-500 text-[12.5px]">ETA</div>
-        <div className="text-xs font-medium text-slate-400">Not set</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">ETA</div>
+        <div className="text-xs font-medium text-slate-600">Not set</div>
       </div>
     );
   }
   // Tone by urgency: overdue → red, ≤7d → amber, ≤30d → sky, later → slate.
   let cls = "border-slate-200 bg-slate-50 text-slate-700";
-  let labelCls = "text-slate-500";
+  let labelCls = "text-slate-600";
   if (etaDays !== null) {
     if (etaDays < 0)       { cls = "border-red-200 bg-red-50 text-red-800";       labelCls = "text-red-600"; }
     else if (etaDays <= 7) { cls = "border-amber-200 bg-amber-50 text-amber-800"; labelCls = "text-amber-700"; }
@@ -1089,7 +1089,7 @@ function EtaBadge({ etaLabel, etaDays, hasEta }: { etaLabel: string | null; etaD
 function Pair({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div>
-      <div className="font-semibold text-slate-500 text-[12.5px]">{k}</div>
+      <div className="font-semibold text-slate-600 text-[12.5px]">{k}</div>
       <div className="mt-0.5 text-slate-800">{v}</div>
     </div>
   );

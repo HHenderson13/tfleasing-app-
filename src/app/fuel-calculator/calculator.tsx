@@ -280,7 +280,7 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage, profil
                 <Segmented label="Customer" value={customer} onChange={setCustomer} options={[["private", "Private"], ["business", "Business"]]} />
               </Field>
             </div>
-            <p className="-mt-2 text-[12.5px] leading-5 text-slate-500">
+            <p className="-mt-2 text-[12.5px] leading-5 text-slate-600">
               {customer === "business"
                 ? "Business prices leave out the VAT a VAT-registered business reclaims on fuel, depot and public charging. Home electricity keeps its 5% VAT, as it isn't reclaimable on a domestic bill."
                 : "Every price includes VAT, as a private customer pays it."}
@@ -375,7 +375,7 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage, profil
                 <TextInput value={iceName} onChange={setIceName} placeholder="e.g. 2017 Ford Transit Custom 2.0 TDCi" label="Vehicle name" />
               </Field>
               <VehicleCard title={iceName.trim() || `Their ${manualFuel} ${segment}`} subtitle={co2Mpg ? `${num(co2)} g/km CO₂, ${cycle.toUpperCase()} test` : "Enter the CO₂ to work out the MPG"}
-                figure={<div className="text-right"><div className="text-[28px] font-semibold leading-9 tracking-tight tabular-nums text-slate-900">{co2Mpg ? co2Mpg.toFixed(1) : "0.0"}</div><div className="mt-0.5 text-[12px] font-medium text-slate-500">MPG</div></div>}
+                figure={<div className="text-right"><div className="text-[28px] font-semibold leading-9 tracking-tight tabular-nums text-slate-900">{co2Mpg ? co2Mpg.toFixed(1) : "0.0"}</div><div className="mt-0.5 text-[12px] font-medium text-slate-600">MPG</div></div>}
                 foot="Worked back from the CO₂, the way the official MPG is calculated." />
               {co2Mpg && cycle === "nedc" ? <NedcNote segment={segment} /> : null}
             </div>
@@ -467,13 +467,13 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage, profil
               ))}
             </div>
             <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px]">
-              <span className={mixTotal === 100 ? "text-slate-500" : "font-medium text-amber-700"}>
+              <span className={mixTotal === 100 ? "text-slate-600" : "font-medium text-amber-700"}>
                 {mixTotal === 100 ? "Shares add to 100%" : `Shares add to ${mixTotal}%, so they're scaled to 100%`}
               </span>
-              <span className="text-slate-500">Blended <b className="font-semibold tabular-nums text-slate-900">{fmtPence(r.ev.blendedPence, 2)}</b> a kWh</span>
+              <span className="text-slate-600">Blended <b className="font-semibold tabular-nums text-slate-900">{fmtPence(r.ev.blendedPence, 2)}</b> a kWh</span>
             </div>
           </div>
-          <div className="mt-5 hidden grid-cols-[minmax(0,1fr)_9rem_6rem] gap-3 border-b border-slate-100 pb-2 text-[12px] font-medium text-slate-500 sm:grid">
+          <div className="mt-5 hidden grid-cols-[minmax(0,1fr)_9rem_6rem] gap-3 border-b border-slate-100 pb-2 text-[12px] font-medium text-slate-600 sm:grid">
             <span>Source</span><span className="text-right">Price</span><span className="text-right">Share</span>
           </div>
           <div className="divide-y divide-slate-100">
@@ -498,9 +498,9 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage, profil
             className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left sm:px-6">
             <div>
               <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">The workings</h2>
-              <p className="mt-0.5 text-[13px] text-slate-500">Every step from the figures above to the answer, so it can be checked by hand.</p>
+              <p className="mt-0.5 text-[13px] text-slate-600">Every step from the figures above to the answer, so it can be checked by hand.</p>
             </div>
-            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className={`h-5 w-5 shrink-0 text-slate-400 transition ${showWorkings ? "rotate-180" : ""}`}>
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className={`h-5 w-5 shrink-0 text-slate-500 transition ${showWorkings ? "rotate-180" : ""}`}>
               <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
             </svg>
           </button>
@@ -515,18 +515,18 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage, profil
                         <span className="text-[14px] font-semibold text-slate-900">{s.title}</span>
                       </div>
                       <div className="space-y-1 break-words font-mono text-[12.5px] leading-5 text-slate-800">
-                        {s.lines.map((l, j) => <div key={j} className={l.startsWith("  ") ? "pl-4 text-slate-500" : ""}>{l.trim()}</div>)}
+                        {s.lines.map((l, j) => <div key={j} className={l.startsWith("  ") ? "pl-4 text-slate-600" : ""}>{l.trim()}</div>)}
                       </div>
                     </li>
                   ))}
                 </ol>
               ) : (
-                <p className="text-[14px] text-slate-500">The workings appear once both vehicles and the mileage are in.</p>
+                <p className="text-[14px] text-slate-600">The workings appear once both vehicles and the mileage are in.</p>
               )}
             </div>
           )}
         </section>
-        <p className="px-1 text-[12px] leading-5 text-slate-500">
+        <p className="px-1 text-[12px] leading-5 text-slate-600">
           For comparison only, and not a formal quotation. Figures are estimates from official efficiency figures and UK average prices.
           Real running costs vary with driving style, journey type, load, weather, battery age and the prices actually paid.
           {" "}{customer === "private" ? "Prices include VAT." : "Business prices exclude reclaimable VAT; home electricity includes VAT."}
@@ -599,7 +599,7 @@ function VehicleCard({ title, subtitle, tags, figure, foot }: { title: string; s
         </div>
         <div className="shrink-0">{figure}</div>
       </div>
-      <p className="mt-3 border-t border-slate-200/70 pt-3 text-[12.5px] leading-5 text-slate-500">{foot}</p>
+      <p className="mt-3 border-t border-slate-200/70 pt-3 text-[12.5px] leading-5 text-slate-600">{foot}</p>
     </div>
   );
 }
@@ -614,7 +614,7 @@ function VehicleSearch({ list, segment, query, setQuery, status, onPick }: {
   return (
     <div className="relative">
       <div className="relative">
-        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500">
           <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
         </svg>
         <input value={query} role="combobox" aria-expanded={show} aria-controls="vehicle-results" aria-label="Search for their vehicle"
@@ -628,12 +628,12 @@ function VehicleSearch({ list, segment, query, setQuery, status, onPick }: {
             else if (e.key === "Enter") { e.preventDefault(); onPick(results[active]); setOpen(false); }
             else if (e.key === "Escape") setOpen(false);
           }}
-          className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3.5 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]" />
+          className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3.5 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-500 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]" />
       </div>
       {show && (
         <div id="vehicle-results" role="listbox" className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl bg-white shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/10">
           {results.length === 0 ? (
-            <div className="px-4 py-3.5 text-[14px] text-slate-500">
+            <div className="px-4 py-3.5 text-[14px] text-slate-600">
               {status === "loading" ? "Still loading the vehicle list…" : "Nothing matches. Try fewer words, or the make and model alone."}
             </div>
           ) : (
@@ -644,12 +644,12 @@ function VehicleSearch({ list, segment, query, setQuery, status, onPick }: {
                     className={`flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left ${i === active ? "bg-slate-50" : ""}`}>
                     <div className="min-w-0">
                       <div className="truncate text-[14px] font-medium text-slate-900">{x.make} {x.model}</div>
-                      <div className="truncate text-[13px] text-slate-500">{x.version}</div>
-                      <div className="text-[12px] text-slate-400">{engineText(engineLabel(x))} · {yearsOf(x)}</div>
+                      <div className="truncate text-[13px] text-slate-600">{x.version}</div>
+                      <div className="text-[12px] text-slate-600">{engineText(engineLabel(x))} · {yearsOf(x)}</div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-[15px] font-semibold tabular-nums text-slate-900">{x.mpg.toFixed(1)}</div>
-                      <div className="text-[11px] font-medium text-slate-400">MPG {x.cycle.toUpperCase()}</div>
+                      <div className="text-[11px] font-medium text-slate-600">MPG {x.cycle.toUpperCase()}</div>
                     </div>
                   </button>
                 </li>
@@ -658,7 +658,7 @@ function VehicleSearch({ list, segment, query, setQuery, status, onPick }: {
           )}
         </div>
       )}
-      <p className="mt-1.5 text-[12.5px] text-slate-500">
+      <p className="mt-1.5 text-[12.5px] text-slate-600">
         Search every car and van sold new in the UK 2012 to 2020 and Ireland 2021 to 2022, plus current Ford models. Or choose below.
       </p>
     </div>
@@ -682,13 +682,13 @@ function PriceRow(p: PriceProps & { name: string }) {
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <div className="text-[14px] font-medium text-slate-900">{p.name}</div>
-        <div className="mt-0.5 text-[12.5px] leading-5 text-slate-500">
+        <div className="mt-0.5 text-[12.5px] leading-5 text-slate-600">
           UK average. {t.source}{p.published?.stale && !t.edited && <span className="font-medium text-amber-700">. May be out of date</span>}
         </div>
       </div>
       <div className="shrink-0 sm:w-44">
         <UnitInput value={t.edited ? p.value! : String(p.published?.value ?? "")} onChange={p.onChange} unit={unit} label={`${p.name}, pence per ${PRICE_META[p.k].unit}`} edited={t.edited} />
-        <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-slate-500 sm:justify-end">
+        <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-slate-600 sm:justify-end">
           {t.differs && <span>Pays <b className="font-semibold tabular-nums text-slate-700">{t.paid.toFixed(2)}p</b> {t.vat}</span>}
           {t.edited && <LinkButton onClick={p.onReset}>Reset</LinkButton>}
         </div>
@@ -706,7 +706,7 @@ function ChargeRow(p: PriceProps & { share: string; onShare: (s: string) => void
         <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: CHARGE_COLOUR[k] }} />
         <div className="min-w-0">
           <div className="text-[14px] font-medium text-slate-900">{CHARGE_NAME[k]}</div>
-          <div className="mt-0.5 text-[12.5px] leading-5 text-slate-500">
+          <div className="mt-0.5 text-[12.5px] leading-5 text-slate-600">
             {t.source}{p.published?.stale && !t.edited && <span className="font-medium text-amber-700">. May be out of date</span>}
           </div>
         </div>
@@ -714,7 +714,7 @@ function ChargeRow(p: PriceProps & { share: string; onShare: (s: string) => void
       <div>
         <UnitInput value={t.edited ? p.value! : String(p.published?.value ?? "")} onChange={p.onChange} unit="p/kWh" label={`${CHARGE_NAME[k]} price, pence per kWh`} edited={t.edited} />
         {(t.differs || t.edited) && (
-          <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-slate-500">
+          <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-slate-600">
             {t.differs ? <span>Pays <b className="font-semibold tabular-nums text-slate-700">{t.paid.toFixed(2)}p</b> {t.vat}</span> : <span />}
             {t.edited && <LinkButton onClick={p.onReset}>Reset</LinkButton>}
           </div>
@@ -730,13 +730,13 @@ function ChargingCard({ c, ev, shares, annualMiles }: { c: ChargingInsight | nul
     <section className="rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <header className="px-5 pt-5 sm:px-6 sm:pt-6">
         <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">Charging it</h2>
-        <p className="mt-0.5 text-[13px] leading-5 text-slate-500">
+        <p className="mt-0.5 text-[13px] leading-5 text-slate-600">
           {c ? `What ${annualMiles.toLocaleString("en-GB")} miles a year means each week, from the official figures.` : "How often it needs charging, and how long that takes."}
         </p>
       </header>
       <div className="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
         {!c ? (
-          <p className="text-[14px] text-slate-500">This appears once the electric vehicle and the mileage are in.</p>
+          <p className="text-[14px] text-slate-600">This appears once the electric vehicle and the mileage are in.</p>
         ) : (
           <>
             <div className="flex flex-col gap-4 rounded-xl bg-emerald-50 p-4 ring-1 ring-inset ring-emerald-100 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -752,8 +752,8 @@ function ChargingCard({ c, ev, shares, annualMiles }: { c: ChargingInsight | nul
                 </div>
               </div>
               <div className="flex shrink-0 gap-6 sm:text-right">
-                <div><div className="text-[12px] text-slate-500">A week</div><div className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-900">{Math.round(c.weeklyMiles)} miles</div></div>
-                <div><div className="text-[12px] text-slate-500">Energy</div><div className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-900">{Math.round(c.weeklyKwh)} kWh</div></div>
+                <div><div className="text-[12px] text-slate-600">A week</div><div className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-900">{Math.round(c.weeklyMiles)} miles</div></div>
+                <div><div className="text-[12px] text-slate-600">Energy</div><div className="whitespace-nowrap text-[17px] font-semibold tabular-nums text-slate-900">{Math.round(c.weeklyKwh)} kWh</div></div>
               </div>
             </div>
 
@@ -769,7 +769,7 @@ function ChargingCard({ c, ev, shares, annualMiles }: { c: ChargingInsight | nul
                   ? `Adds about ${Math.round(c.rapid.milesAdded)} miles. ${howOften(c.rapid.stopsPerWeek)} if it were the only way to charge.`
                   : ev.rangeMiles ? "Ford's price list gives no rapid charging time for this vehicle." : "Needs the official range and charging time."} />
             </div>
-            <p className="mt-4 text-[12.5px] leading-5 text-slate-500">
+            <p className="mt-4 text-[12.5px] leading-5 text-slate-600">
               Official ranges are tested at 23°C. Expect fewer miles in cold weather and at motorway speeds, so a little more charging in winter.
             </p>
           </>
@@ -786,14 +786,14 @@ function ChargeWay({ colour, title, spec, share, value, unit, note }: { colour: 
       <div className="flex items-center gap-2 whitespace-nowrap text-[14px] font-medium text-slate-900">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />{title}
       </div>
-      <div className="mt-0.5 text-[12.5px] text-slate-500">{spec}</div>
+      <div className="mt-0.5 text-[12.5px] text-slate-600">{spec}</div>
       <div className="mt-3 flex flex-wrap items-baseline gap-x-1.5">
         <span className="whitespace-nowrap text-[22px] font-semibold leading-7 tracking-tight tabular-nums text-slate-900">{value}</span>
-        {unit && <span className="whitespace-nowrap text-[13px] text-slate-500">{unit}</span>}
+        {unit && <span className="whitespace-nowrap text-[13px] text-slate-600">{unit}</span>}
       </div>
-      <p className="mt-1.5 text-[12.5px] leading-5 text-slate-500">{note}</p>
+      <p className="mt-1.5 text-[12.5px] leading-5 text-slate-600">{note}</p>
       <div className="mt-auto pt-3">
-        <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-medium ${used ? "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200" : "bg-slate-100 text-slate-500"}`}>
+        <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-medium ${used ? "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200" : "bg-slate-100 text-slate-600"}`}>
           {used ? `${Math.round(share * 100)}% of charging` : "Not in the mix"}
         </span>
       </div>
@@ -848,7 +848,7 @@ function Answer({ r, tone, valid, missing, fuelName, termMonths, customerName, o
         {valid && (
           <table className="mt-5 w-full text-[13px] tabular-nums">
             <thead>
-              <tr className="border-b border-slate-100 text-[12px] text-slate-500">
+              <tr className="border-b border-slate-100 text-[12px] text-slate-600">
                 <th className="pb-2 text-left font-medium" />
                 <th className="pb-2 text-right font-medium">{fuelName}</th>
                 <th className="pb-2 text-right font-medium">Electric</th>
@@ -863,7 +863,7 @@ function Answer({ r, tone, valid, missing, fuelName, termMonths, customerName, o
                 [`${termMonths} months`, fmtPounds(r.ice.overTerm), fmtPounds(r.ev.overTerm), fmtPounds(Math.abs(r.saving.overTerm))],
               ] as const).map(([label, a, b, c]) => (
                 <tr key={label} className="border-b border-slate-100 last:border-0">
-                  <td className="py-2 text-slate-500">{label}</td>
+                  <td className="py-2 text-slate-600">{label}</td>
                   <td className="py-2 text-right">{a}</td>
                   <td className="py-2 text-right">{b}</td>
                   <td className={`py-2 text-right font-semibold ${tone === "cost" ? "text-amber-700" : "text-emerald-700"}`}>{c}</td>
@@ -895,14 +895,14 @@ function Bar({ label, colour, monthly, perMile, max, ok }: { label: string; colo
         <span className="flex items-center gap-2 text-[14px] font-medium text-slate-900">
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: colour }} />{label}
         </span>
-        <span className="text-[14px] tabular-nums text-slate-500">
+        <span className="text-[14px] tabular-nums text-slate-600">
           {ok ? <><b className="font-semibold text-slate-900">{fmtPounds(monthly)}</b> a month</> : "Not yet"}
         </span>
       </div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
         <div className="h-full rounded-full transition-all duration-300" style={{ width: ok ? `${Math.max(2, (monthly / max) * 100)}%` : "0%", background: colour }} />
       </div>
-      {ok && <div className="mt-1 text-[12px] tabular-nums text-slate-500">{fmtPence(perMile)} a mile</div>}
+      {ok && <div className="mt-1 text-[12px] tabular-nums text-slate-600">{fmtPence(perMile)} a mile</div>}
     </div>
   );
 }

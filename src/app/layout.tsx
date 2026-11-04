@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
@@ -24,6 +24,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TrustFord Leasing",
+};
+
+// Light only, whatever the computer is set to: see the note in globals.css.
+export const viewport: Viewport = {
+  colorScheme: "only light",
 };
 
 export default function RootLayout({

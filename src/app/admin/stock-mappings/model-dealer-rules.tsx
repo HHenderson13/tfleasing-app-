@@ -67,7 +67,7 @@ function Rule({ rule, isNew }: { rule: ModelDealerRuleRow; isNew?: boolean }) {
           onClick={() => { const n = { ...v, enabled: !v.enabled }; setV(n); if (!isNew) save(n); }}
           disabled={pending}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
-            v.enabled ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+            v.enabled ? "bg-emerald-700 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
           }`}
         >
           {v.enabled ? "On" : "Off"}
@@ -103,7 +103,7 @@ function Rule({ rule, isNew }: { rule: ModelDealerRuleRow; isNew?: boolean }) {
           )
         )}
         {!isNew && (
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-600">
             {rule.matchedCount.toLocaleString()} vehicle{rule.matchedCount === 1 ? "" : "s"} in the current upload match
           </span>
         )}
@@ -120,12 +120,12 @@ export function ModelDealerRules({ rules }: { rules: ModelDealerRuleRow[] }) {
   return (
     <section className="mt-10">
       <h2 className="text-sm font-medium text-slate-700">Model overrides by dealer</h2>
-      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+      <p className="mt-1 max-w-3xl text-xs text-slate-600">
         Some vehicles are a different model from what Ford&rsquo;s feed calls them, and only the dealer says so: an
         Explorer on a van site is an Explorer Van. A matching vehicle is renamed everywhere, including in the Model
         filter, and carries a warning on both stock lists.
       </p>
-      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+      <p className="mt-1 max-w-3xl text-xs text-slate-600">
         The two warnings are deliberately separate: TF staff are told to check with Fleet, brokers to check with the
         dealer. A broker never sees the TF wording.
       </p>

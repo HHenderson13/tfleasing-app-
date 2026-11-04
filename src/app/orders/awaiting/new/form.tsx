@@ -79,7 +79,7 @@ export function AddDealForm({ execs }: { execs: { id: string; name: string }[] }
           <input className={inp} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
         </div>
       </div>
-      <p className="text-[11px] text-slate-500">VIN or order number required. The ETA and location fill in from the next stock upload, or can be edited later on the awaiting list.</p>
+      <p className="text-[11px] text-slate-600">VIN or order number required. The ETA and location fill in from the next stock upload, or can be edited later on the awaiting list.</p>
       <div>
         <label className={lbl}>Allocate to exec</label>
         <select className={inp} value={salesExecId} onChange={(e) => setSalesExecId(e.target.value)} required>

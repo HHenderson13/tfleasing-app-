@@ -29,7 +29,7 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
     <div className="space-y-3">
       <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-4 py-3 text-left font-medium">Name</th>
               <th className="px-4 py-3 text-left font-medium">Email</th>
@@ -55,12 +55,12 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
                   />
                 </td>
                 <td className="px-2 py-2 text-right">
-                  <button onClick={() => remove(r.id, r.name)} className="text-slate-300 hover:text-red-500">×</button>
+                  <button onClick={() => remove(r.id, r.name)} className="text-slate-500 hover:text-red-700">×</button>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-400">No sales execs yet.</td></tr>
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-600">No sales execs yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -72,14 +72,14 @@ export function SalesExecsView({ rows }: { rows: Row[] }) {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@tfleasing.co.uk" className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={add} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white">Add</button>
-            <button onClick={() => { setAdding(false); setError(null); }} className="text-sm text-slate-400">Cancel</button>
+            <button onClick={() => { setAdding(false); setError(null); }} className="text-sm text-slate-600">Cancel</button>
           </div>
           {error && <div className="text-xs text-red-600">{error}</div>}
         </div>
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-500 hover:border-slate-400 hover:text-slate-900"
+          className="flex w-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900"
         >
           + Add sales exec
         </button>

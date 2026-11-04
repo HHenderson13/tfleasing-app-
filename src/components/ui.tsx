@@ -27,7 +27,7 @@ export const BTN = {
 };
 
 export const INPUT =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]";
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-500 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10 sm:text-[15px]";
 export const LABEL = "mb-1.5 block text-[13px] font-medium text-slate-700";
 
 const WIDTH = { "2xl": "max-w-2xl", "3xl": "max-w-3xl", "4xl": "max-w-4xl", "5xl": "max-w-5xl", "6xl": "max-w-6xl", "7xl": "max-w-7xl", wide: "max-w-[1440px]" } as const;
@@ -46,7 +46,7 @@ export function AppBar({ back = "/", backLabel = "Home", width = "6xl", children
   return (
     <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur">
       <div className={`mx-auto flex h-14 ${WIDTH[width]} items-center justify-between gap-3 px-4 text-sm sm:px-6`}>
-        <Link href={back} className="flex shrink-0 items-center gap-1.5 font-medium text-slate-500 transition hover:text-slate-900">
+        <Link href={back} className="flex shrink-0 items-center gap-1.5 font-medium text-slate-600 transition hover:text-slate-900">
           <Chevron />{backLabel}
         </Link>
         {children && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{children}</div>}
@@ -116,7 +116,7 @@ export function Tabs<T extends string>({ items, value, onChange, size = "md", la
         const inner = (
           <>
             {it.label}
-            {it.count != null && <span className={`rounded-full px-1.5 text-[12px] tabular-nums ${on ? "bg-slate-100 text-slate-700" : "text-slate-500"}`}>{it.count}</span>}
+            {it.count != null && <span className={`rounded-full px-1.5 text-[12px] tabular-nums ${on ? "bg-slate-100 text-slate-700" : "text-slate-600"}`}>{it.count}</span>}
           </>
         );
         return it.href
@@ -133,7 +133,7 @@ export function CardTitle({ title, hint, aside }: { title: ReactNode; hint?: Rea
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <h2 className="text-[17px] font-semibold leading-6 tracking-tight text-slate-900">{title}</h2>
-        {hint && <p className="mt-0.5 text-[13px] leading-5 text-slate-500">{hint}</p>}
+        {hint && <p className="mt-0.5 text-[13px] leading-5 text-slate-600">{hint}</p>}
       </div>
       {aside && <div className="shrink-0">{aside}</div>}
     </div>

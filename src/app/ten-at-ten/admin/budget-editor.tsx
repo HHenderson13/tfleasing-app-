@@ -52,7 +52,7 @@ export function BudgetEditor({ budgets, initialYear }: { budgets: Budgets; initi
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Delivery budgets</h2>
-          <p className="text-xs text-slate-500">Monthly units the Deliveries tab measures against. Combined is Car + CV.</p>
+          <p className="text-xs text-slate-600">Monthly units the Deliveries tab measures against. Combined is Car + CV.</p>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => setYear((y) => y - 1)} className="rounded-xl bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-100 ring-1 ring-inset ring-slate-300" aria-label="Previous year">‹</button>
@@ -62,7 +62,7 @@ export function BudgetEditor({ budgets, initialYear }: { budgets: Budgets; initi
       </div>
       <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-4 py-2 text-left font-semibold">Month</th>
               <th className="px-3 py-2 text-right font-semibold">Car</th>

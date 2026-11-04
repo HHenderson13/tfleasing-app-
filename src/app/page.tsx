@@ -49,7 +49,7 @@ export default async function Home() {
           <div className="flex items-center gap-3">
             <div className="hidden text-right leading-tight sm:block">
               <div className="text-[13px] font-medium text-slate-800">{user.name}</div>
-              <div className="text-[11.5px] text-slate-500">{user.roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(", ") || "No role"}</div>
+              <div className="text-[11.5px] text-slate-600">{user.roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(", ") || "No role"}</div>
             </div>
             <form action={signOutAction}>
               <button className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 hover:text-slate-900">
@@ -64,7 +64,7 @@ export default async function Home() {
 
         {canSeeProposals(user) && (
           <form action="/search" className="relative -mt-2 mb-8">
-            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500">
               <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
             </svg>
             <input name="q" placeholder="Search customers, FP numbers, VINs, orders, models" aria-label="Search" className={`${INPUT} pl-10`} />
@@ -77,7 +77,7 @@ export default async function Home() {
               <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${t.tone}`} />
               <div className="text-[16px] font-semibold tracking-tight text-slate-900">{t.title}</div>
               <p className="mt-1.5 flex-1 text-[13.5px] leading-5 text-slate-600">{t.desc}</p>
-              <div className="mt-3 flex items-center gap-1 text-[13px] font-medium text-slate-400 transition group-hover:text-slate-900">
+              <div className="mt-3 flex items-center gap-1 text-[13px] font-medium text-slate-600 transition group-hover:text-slate-900">
                 Open
                 <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4"><path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" /></svg>
               </div>
@@ -108,7 +108,7 @@ async function DashboardData({ user }: { user: CurrentUser }) {
     <>
       {recentlyDelivered.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">Just delivered <span className="font-normal text-slate-500">· last 7 days</span></h2>
+          <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">Just delivered <span className="font-normal text-slate-600">· last 7 days</span></h2>
           <ul className={`mt-3 divide-y divide-slate-100 overflow-hidden ${CARD}`}>
             {recentlyDelivered.map((d) => (
               <li key={d.proposalId}>
@@ -121,9 +121,9 @@ async function DashboardData({ user }: { user: CurrentUser }) {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="font-medium text-slate-900">{d.customerName}</span>
-                    <span className="text-slate-400"> · {d.model} {d.derivative}</span>
+                    <span className="text-slate-600"> · {d.model} {d.derivative}</span>
                   </span>
-                  <span className="shrink-0 text-[12.5px] text-slate-500">
+                  <span className="shrink-0 text-[12.5px] text-slate-600">
                     {new Date(d.deliveredAt).toLocaleDateString("en-GB", { timeZone: "Europe/London" })} · {d.execName ?? "No exec"}
                   </span>
                 </Link>
@@ -159,17 +159,17 @@ async function DashboardData({ user }: { user: CurrentUser }) {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="font-medium text-slate-900">{a.customerName}</span>
-                      <span className="text-slate-400"> · {a.model} {a.derivative}</span>
+                      <span className="text-slate-600"> · {a.model} {a.derivative}</span>
                       <div className="text-[13px] text-slate-600">{a.message}</div>
                     </span>
-                    <span className="shrink-0 text-[12.5px] text-slate-500">{a.execName ?? "No exec"}</span>
+                    <span className="shrink-0 text-[12.5px] text-slate-600">{a.execName ?? "No exec"}</span>
                   </Link>
                 </li>
               );
             })}
           </ul>
           {alerts.length > 20 && (
-            <div className="mt-2 text-right text-[13px] text-slate-500">{`${alerts.length - 20} more`}</div>
+            <div className="mt-2 text-right text-[13px] text-slate-600">{`${alerts.length - 20} more`}</div>
           )}
         </section>
       )}

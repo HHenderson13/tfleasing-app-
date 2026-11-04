@@ -122,7 +122,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
           <input name="registeredAt" type="date" required className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="flex flex-col text-xs font-medium text-slate-700">
-          Notes <span className="font-normal text-slate-400">(internal)</span>
+          Notes <span className="font-normal text-slate-600">(internal)</span>
           <input name="notes" className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
         </label>
       </div>
@@ -130,7 +130,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col text-xs font-medium text-slate-700">
           Registration numbers<span className="text-red-600"> *</span>{" "}
-          <span className="font-normal text-slate-400">— one per line</span>
+          <span className="font-normal text-slate-600">— one per line</span>
           <textarea
             name="regNumbers"
             required
@@ -142,7 +142,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
           />
         </label>
         <label className="flex flex-col text-xs font-medium text-slate-700">
-          VINs <span className="font-normal text-slate-400">— optional, one per line, same order as the registrations</span>
+          VINs <span className="font-normal text-slate-600">— optional, one per line, same order as the registrations</span>
           <textarea
             name="vins"
             rows={6}
@@ -158,11 +158,11 @@ export function PreRegForm({ choices }: { choices: Choices }) {
           typing: a mismatch found after submitting is a mismatch that has
           already put VINs on the wrong cars in someone's head. */}
       <div className="mt-2 text-[11px]">
-        <span className="text-slate-500">
+        <span className="text-slate-600">
           {parsed.vehicles.length === 0
             ? "No registrations entered yet."
             : `${parsed.vehicles.length} registration${parsed.vehicles.length === 1 ? "" : "s"}`}
-          {vinList.vins.length > 0 && <span className="text-slate-500">{` · ${vinList.vins.length} VIN${vinList.vins.length === 1 ? "" : "s"}`}</span>}
+          {vinList.vins.length > 0 && <span className="text-slate-600">{` · ${vinList.vins.length} VIN${vinList.vins.length === 1 ? "" : "s"}`}</span>}
         </span>
         {!pairing.ok && <span className="ml-1 font-medium text-red-600">{pairing.reason}</span>}
         {pairing.ok && parsed.vehicles.length > 0 && (
@@ -184,7 +184,7 @@ export function PreRegForm({ choices }: { choices: Choices }) {
       </div>
 
       <label className="mt-3 flex flex-col text-xs font-medium text-slate-700">
-        Factory options <span className="font-normal text-slate-400">(one per line)</span>
+        Factory options <span className="font-normal text-slate-600">(one per line)</span>
         <textarea name="options" rows={3} className="mt-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
       </label>
 

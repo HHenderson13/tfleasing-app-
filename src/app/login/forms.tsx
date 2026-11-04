@@ -26,7 +26,7 @@ export function LoginForm() {
         {pending ? "Signing in…" : "Sign in"}
       </button>
       <p className="pt-1 text-right text-xs">
-        <Link href="/forgot-password" className="text-slate-500 hover:text-slate-800 hover:underline">
+        <Link href="/forgot-password" className="text-slate-600 hover:text-slate-800 hover:underline">
           Forgot password?
         </Link>
       </p>
@@ -83,7 +83,7 @@ export function PasswordIndicator({ value }: { value: string }) {
   return (
     <ul className="space-y-1 rounded-md bg-slate-50 p-2 text-[11px] ring-1 ring-slate-200">
       {checks.map((c) => (
-        <li key={c.label} className={c.passed ? "text-emerald-700" : "text-slate-500"}>
+        <li key={c.label} className={c.passed ? "text-emerald-700" : "text-slate-600"}>
           <span className="mr-1">{c.passed ? "✓" : "•"}</span>{c.label}
         </li>
       ))}

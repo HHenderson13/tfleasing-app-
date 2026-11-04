@@ -37,7 +37,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 text-sm sm:px-6">
-          <Link href="/" className="flex items-center gap-1.5 font-medium text-slate-500 transition hover:text-slate-900">
+          <Link href="/" className="flex items-center gap-1.5 font-medium text-slate-600 transition hover:text-slate-900">
             <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4">
               <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
             </svg>

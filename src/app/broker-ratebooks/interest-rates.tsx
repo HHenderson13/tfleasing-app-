@@ -113,7 +113,7 @@ export function InterestRatesSection({ snapshots }: { snapshots: FunderRateSnaps
                 <StatusDot solved={isSolved} />
                 <div className="text-base font-semibold text-slate-900">{f.funderName}</div>
               </div>
-              <div className="font-mono text-[12px] font-medium uppercase text-slate-500">{f.funderId}</div>
+              <div className="font-mono text-[12px] font-medium uppercase text-slate-600">{f.funderId}</div>
             </div>
 
             <div className="divide-y divide-slate-100">
@@ -127,7 +127,7 @@ export function InterestRatesSection({ snapshots }: { snapshots: FunderRateSnaps
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
-              <div className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
+              <div className="min-w-0 flex-1 truncate text-[11px] text-slate-600">
                 {f.status === "error" ? (
                   <span className="text-red-600">{f.message}</span>
                 ) : f.message ? (
@@ -167,7 +167,7 @@ function TermRow({ row, onChange }: { row: RowState; onChange: (patch: Partial<R
         <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
           {termChip(row.termFollowOns)}
         </span>
-        <span className="font-mono text-[10px] text-slate-400">
+        <span className="font-mono text-[10px] text-slate-600">
           1+{row.termFollowOns} / 12+{row.termFollowOns}
         </span>
       </div>
@@ -197,7 +197,7 @@ function CurrencyInput({
 }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">£</span>
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-600">£</span>
       <input
         type="number"
         step="0.01"
@@ -205,7 +205,7 @@ function CurrencyInput({
         value={value}
         placeholder={placeholder ?? "—"}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-6 pr-2 text-sm tabular-nums text-slate-900 placeholder:text-slate-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10"
+        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-6 pr-2 text-sm tabular-nums text-slate-900 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10"
       />
     </div>
   );
@@ -232,7 +232,7 @@ function RateDisplay({
   }
   if (value === null) {
     return (
-      <span className="inline-flex min-w-[68px] justify-end text-xs text-slate-300">
+      <span className="inline-flex min-w-[68px] justify-end text-xs text-slate-500">
         {savingPerMonth ? `−£${savingPerMonth.toFixed(2)}/mo` : "—"}
       </span>
     );

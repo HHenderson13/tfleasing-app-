@@ -56,12 +56,12 @@ export default async function PreRegPage() {
   return (
     <div>
       <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">Pre-registered vehicles</h1>
-      <p className="mt-1 max-w-3xl text-sm text-slate-500">
+      <p className="mt-1 max-w-3xl text-sm text-slate-600">
         Entered by hand and merged into both stock lists, tagged{" "}
         <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800">Pre-registered</span>.
         They live outside the uploaded stock, so a stock upload never wipes them.
       </p>
-      <p className="mt-1 max-w-3xl text-xs text-slate-500">
+      <p className="mt-1 max-w-3xl text-xs text-slate-600">
         Every dropdown is built from what the current stock actually contains, so a pre-reg groups and filters with
         everything else. Pick <span className="font-medium">Other</span> on any of them to type a value that is not
         there yet. Brokers see the registration date but never the reg number or VIN.

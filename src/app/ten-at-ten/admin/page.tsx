@@ -121,14 +121,14 @@ export default async function TenAtTenAdminPage() {
             return (
               <div key={f.kind} className="flex flex-col rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
                 <div className="text-base font-semibold text-slate-900">{KIND_LABEL[f.kind]}</div>
-                <div className="text-xs text-slate-500">{f.from} · feeds <span className="font-medium text-slate-700">{f.feeds}</span></div>
-                <div className="mt-3 font-semibold text-slate-500 text-[12.5px]">Has the columns</div>
+                <div className="text-xs text-slate-600">{f.from} · feeds <span className="font-medium text-slate-700">{f.feeds}</span></div>
+                <div className="mt-3 font-semibold text-slate-600 text-[12.5px]">Has the columns</div>
                 <div className="mt-0.5 text-xs text-slate-600">{f.columns}</div>
                 <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-slate-600">
                   {f.rules.map((r) => <li key={r}>{r}</li>)}
                   <li>Each line is matched on {f.matched}.</li>
                 </ul>
-                <div className="mt-auto border-t border-slate-100 pt-2 text-xs text-slate-500">
+                <div className="mt-auto border-t border-slate-100 pt-2 text-xs text-slate-600">
                   {h.rows > 0 ? (
                     <><span className="font-semibold text-slate-800">{h.rows.toLocaleString("en-GB")}</span> held · {fmtDay(h.firstDay)} to {fmtDay(h.lastDay)}</>
                   ) : "Nothing held yet"}
@@ -163,11 +163,11 @@ export default async function TenAtTenAdminPage() {
         <section className="mt-10">
           <h2 className="text-sm font-semibold text-slate-900">Recent uploads</h2>
           {uploads.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">Nothing uploaded yet.</p>
+            <p className="mt-2 text-sm text-slate-600">Nothing uploaded yet.</p>
           ) : (
             <div className="mt-3 overflow-x-auto rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+                <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
                   <tr>
                     <th className="px-4 py-2 text-left font-semibold">File</th>
                     <th className="px-3 py-2 text-left font-semibold">Type</th>
@@ -189,9 +189,9 @@ export default async function TenAtTenAdminPage() {
                       <td className="px-3 py-2 text-right font-mono text-xs text-slate-600">{u.rowsInFile}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-emerald-700">+{u.inserted}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-sky-700">{u.updated}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-slate-400">{u.unchanged}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-slate-400">{u.excluded}{u.removed > 0 ? ` (−${u.removed})` : ""}</td>
-                      <td className="px-3 py-2 text-right text-[11px] text-slate-500">
+                      <td className="px-3 py-2 text-right font-mono text-xs text-slate-600">{u.unchanged}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-slate-600">{u.excluded}{u.removed > 0 ? ` (−${u.removed})` : ""}</td>
+                      <td className="px-3 py-2 text-right text-[11px] text-slate-600">
                         {u.uploadedAt.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                       </td>
                     </tr>

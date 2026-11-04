@@ -18,11 +18,11 @@ export default async function BrokerVerifyPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-900">Enter your code</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Open your authenticator app and enter the current 6-digit code for <strong>{user.email}</strong>.
         </p>
         <VerifyForm />
-        <p className="mt-4 text-[11px] text-slate-400">
+        <p className="mt-4 text-[11px] text-slate-600">
           The code changes every 30 seconds. Lost your phone? Ask your account manager to reset it.
         </p>
       </div>

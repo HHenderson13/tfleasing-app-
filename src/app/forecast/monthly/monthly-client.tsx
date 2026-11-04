@@ -288,13 +288,13 @@ export function MonthlyClient({
                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-sm"
               }`}
             >
-              <div className="opacity-70 text-[12.5px]">{t.sub}</div>
+              <div className="text-[12.5px]">{t.sub}</div>
               <div className="mt-1 text-lg font-semibold">{t.label}</div>
             </button>
           ))}
         </section>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
           <span>
             {uploadCount === 0
               ? "No uploads yet: head to Uploads to drop a dealbook CSV."

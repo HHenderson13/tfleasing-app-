@@ -129,9 +129,9 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text} ring-1 ${c.ring}`}>
               {statusLabel(status)}
             </span>
-            <span className="text-xs text-slate-400">Funder rank #{p.funderRank} of 3</span>
+            <span className="text-xs text-slate-600">Funder rank #{p.funderRank} of 3</span>
             {p.financeProposalNumber && (
-              <span className="font-mono text-[11px] text-slate-500">FP {p.financeProposalNumber}</span>
+              <span className="font-mono text-[11px] text-slate-600">FP {p.financeProposalNumber}</span>
             )}
             {(status === "in_order" || status === "awaiting_delivery") && (
               <Link href={`/orders/${p.id}`} className="text-[11px] font-medium text-blue-600 hover:underline">
@@ -140,7 +140,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             )}
           </div>
           <div className="mt-1.5 text-base font-semibold text-slate-900">{p.model} {p.derivative}</div>
-          <div className="mt-0.5 text-xs text-slate-500">
+          <div className="mt-0.5 text-xs text-slate-600">
             {p.funderName} · £{p.monthlyRental.toFixed(2)}/mo · {p.contract} {p.maintenance === "maintained" ? "maintained" : "customer maint."} · {p.termMonths}m / {p.annualMileage.toLocaleString()}mi / {p.initialRentalMultiplier}×
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -156,17 +156,17 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             {!isTerminal && <CancelDealButton proposalId={p.id} currentStatus={p.status} />}
           </div>
         </div>
-        <div className="text-right text-xs text-slate-500">
+        <div className="text-right text-xs text-slate-600">
           <div>Assigned to</div>
           {p.isGroupBq ? (
             <>
               <div className="font-medium text-slate-700">Group BQ Deal</div>
-              {groupSite && <div className="text-slate-400">{groupSite.name}</div>}
+              {groupSite && <div className="text-slate-600">{groupSite.name}</div>}
             </>
           ) : (
             <>
               <SalesExecPicker proposalId={p.id} execs={execs} currentId={exec?.id ?? null} />
-              {exec && <div className="mt-0.5 text-slate-400">{exec.email}</div>}
+              {exec && <div className="mt-0.5 text-slate-600">{exec.email}</div>}
             </>
           )}
           {p.isBroker && (
@@ -263,10 +263,10 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             />
           </label>
           <div className="flex gap-2">
-            <button onClick={submitReferDealer} className="rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700">
+            <button onClick={submitReferDealer} className="rounded-md bg-amber-700 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700">
               Refer to dealer
             </button>
-            <button onClick={() => { setShowReferDealer(false); setUnderwritingNote(""); setError(null); }} className="text-xs text-slate-500 hover:text-slate-900">
+            <button onClick={() => { setShowReferDealer(false); setUnderwritingNote(""); setError(null); }} className="text-xs text-slate-600 hover:text-slate-900">
               Cancel
             </button>
           </div>
@@ -286,10 +286,10 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             />
           </label>
           <div className="flex gap-2">
-            <button onClick={submitNotEligible} className="rounded-md bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700">
+            <button onClick={submitNotEligible} className="rounded-md bg-orange-700 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700">
               Mark not eligible
             </button>
-            <button onClick={() => { setShowNotEligible(false); setNotEligibleNote(""); setError(null); }} className="text-xs text-slate-500 hover:text-slate-900">
+            <button onClick={() => { setShowNotEligible(false); setNotEligibleNote(""); setError(null); }} className="text-xs text-slate-600 hover:text-slate-900">
               Cancel
             </button>
           </div>
@@ -312,7 +312,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             <button onClick={submitLostSale} className="rounded-md bg-slate-800 px-3 py-1 text-xs font-medium text-white hover:bg-slate-900">
               Mark lost sale
             </button>
-            <button onClick={() => { setShowLostSale(false); setLostSaleNote(""); setError(null); }} className="text-xs text-slate-500 hover:text-slate-900">
+            <button onClick={() => { setShowLostSale(false); setLostSaleNote(""); setError(null); }} className="text-xs text-slate-600 hover:text-slate-900">
               Cancel
             </button>
           </div>
@@ -367,7 +367,7 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
             >
               Confirm and move to order
             </button>
-            <button onClick={() => { setShowEvConfirm(false); setError(null); }} className="text-xs text-slate-500 hover:text-slate-900">
+            <button onClick={() => { setShowEvConfirm(false); setError(null); }} className="text-xs text-slate-600 hover:text-slate-900">
               Cancel
             </button>
           </div>
@@ -377,22 +377,22 @@ function ProposalCard({ item, declinedCount, execs }: { item: Item; declinedCoun
       {error && <div className="border-t border-red-100 bg-red-50 px-5 py-2 text-xs text-red-700">{error}</div>}
 
       <div className="border-t border-slate-100 px-5 py-3">
-        <div className="font-semibold text-slate-500 text-[12.5px]">Timeline</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">Timeline</div>
         <ol className="mt-2 space-y-1.5">
           {events.map((e) => (
             <li key={e.id} className="flex gap-3 text-xs">
-              <span className="w-32 shrink-0 text-slate-400">{new Date(e.createdAt).toLocaleString()}</span>
+              <span className="w-32 shrink-0 text-slate-600">{new Date(e.createdAt).toLocaleString()}</span>
               <span className="flex-1">
                 {e.kind === "created" && <span className="text-slate-700">Proposal created</span>}
                 {e.kind === "status_change" && (
                   <span className="text-slate-700">
                     {e.fromStatus ? statusLabel(e.fromStatus) : "—"}
-                    <span className="mx-1 text-slate-400">→</span>
+                    <span className="mx-1 text-slate-600">→</span>
                     <span className="font-medium">{e.toStatus ? statusLabel(e.toStatus) : "—"}</span>
                   </span>
                 )}
                 {e.kind === "note" && <span className="text-slate-700">Note</span>}
-                {e.note && <div className="mt-0.5 text-slate-500">{e.note}</div>}
+                {e.note && <div className="mt-0.5 text-slate-600">{e.note}</div>}
               </span>
             </li>
           ))}
@@ -468,14 +468,14 @@ function ReproposeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-slate-500 text-[12.5px]">Log proposal with another funder</div>
-          <div className="mt-0.5 text-xs text-slate-500">Attempt #{nextRank} of 3</div>
+          <div className="text-slate-600 text-[12.5px]">Log proposal with another funder</div>
+          <div className="mt-0.5 text-xs text-slate-600">Attempt #{nextRank} of 3</div>
         </div>
         <div className="space-y-3 px-5 py-4">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Funder</span>
+            <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Funder</span>
             {funders === null ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-400">Loading…</div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">Loading…</div>
             ) : funders.length === 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 No other funders configured.
@@ -495,9 +495,9 @@ function ReproposeModal({
 
           {needsManual && (
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Manual monthly rental (£)</span>
+              <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Manual monthly rental (£)</span>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">£</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-600">£</span>
                 <input
                   inputMode="decimal"
                   value={manualMonthly}
@@ -511,7 +511,7 @@ function ReproposeModal({
           )}
 
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Finance Proposal Number</span>
+            <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Finance Proposal Number</span>
             <input
               value={fpn}
               onChange={(e) => setFpn(e.target.value)}
@@ -523,7 +523,7 @@ function ReproposeModal({
           {localError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{localError}</div>}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
-          <button onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-slate-500 hover:text-slate-900">Cancel</button>
+          <button onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
           <button
             onClick={submit}
             disabled={pending || funders === null || funders.length === 0}

@@ -53,7 +53,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
               <input type="checkbox" name={`role_${r}`} className="mt-0.5" />
               <span>
                 <span className="font-medium text-slate-800 capitalize">{r}</span>
-                <span className="block text-[11px] text-slate-500">{ROLE_DESCRIPTIONS[r]}</span>
+                <span className="block text-[11px] text-slate-600">{ROLE_DESCRIPTIONS[r]}</span>
               </span>
             </label>
           ))}
@@ -68,7 +68,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
             <option key={e.id} value={e.id}>{e.name}</option>
           ))}
         </select>
-        <span className="mt-1 block text-[11px] text-slate-500">
+        <span className="mt-1 block text-[11px] text-slate-600">
           Pick &ldquo;Create new&rdquo; if there&apos;s no sales exec record yet for this person.
         </span>
       </label>
@@ -76,7 +76,7 @@ export function NewUserForm({ execs }: { execs: { id: string; name: string }[] }
         <div className="sm:col-span-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">{state.error}</div>
       )}
       <div className="sm:col-span-2">
-        <p className="mb-2 text-[11px] text-slate-500">
+        <p className="mb-2 text-[11px] text-slate-600">
           The user will set their own password via a one-time setup link. No password is needed here.
         </p>
         <button

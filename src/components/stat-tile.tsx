@@ -44,7 +44,7 @@ export function StatTile({
     : "shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]";
   const inner = (
     <>
-      <div className="flex items-center gap-1.5 text-[12.5px] font-medium leading-4 text-slate-500">
+      <div className="flex items-center gap-1.5 text-[12.5px] font-medium leading-4 text-slate-600">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[tone]}`} />
         <span className="min-w-0">{label}</span>
       </div>

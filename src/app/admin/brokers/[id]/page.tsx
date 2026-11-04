@@ -30,7 +30,7 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/admin/brokers" className="text-xs text-slate-500 hover:text-slate-900">← All brokers</Link>
+        <Link href="/admin/brokers" className="text-xs text-slate-600 hover:text-slate-900">← All brokers</Link>
         <div className="mt-2 flex items-end justify-between gap-4">
           <div>
             <h1 className="font-semibold text-slate-900 text-[28px] leading-tight tracking-tight sm:text-[34px]">{broker.name}</h1>
@@ -43,7 +43,7 @@ export default async function AdminBrokerDetailPage({ params }: { params: Promis
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-700">Add a user</h2>
-        <p className="mb-2 text-xs text-slate-500">
+        <p className="mb-2 text-xs text-slate-600">
           We&apos;ll generate a one-time setup link valid for 7 days. Paste it into Teams / email so they can choose their
           password. Brokers can&apos;t add their own colleagues: every account on this list is one we created.
         </p>

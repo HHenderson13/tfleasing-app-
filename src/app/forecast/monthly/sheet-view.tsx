@@ -61,7 +61,7 @@ export function SheetView({ sheet, lines, dealbookValues, forecastValues, foreca
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-5 py-3 text-left font-medium">Line</th>
               <th className="px-3 py-3 text-right font-medium">Budget</th>
@@ -93,13 +93,13 @@ export function SheetView({ sheet, lines, dealbookValues, forecastValues, foreca
               return (
                 <tr key={l.key} className={`border-t border-slate-100 ${stripe} ${totalClass}`}>
                   <td className="px-5 py-2 text-slate-800">{l.label}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{formatNumber(bud, l.kind)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{formatNumber(db, l.kind)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatNumber(bud, l.kind)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatNumber(db, l.kind)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{formatNumber(fc, l.kind)}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${tone(vsB)}`}>
                     {formatNumber(vsB, l.kind === "unit" ? "unit" : "money")}
                   </td>
-                  <td className="px-5 py-2 text-[11px] text-slate-500 align-top">
+                  <td className="px-5 py-2 text-[11px] text-slate-600 align-top">
                     {lineNotes.length === 0 ? null : (
                       <ul className="space-y-0.5">
                         {lineNotes.map((n, i) => <li key={i}>{n}</li>)}
@@ -117,7 +117,7 @@ export function SheetView({ sheet, lines, dealbookValues, forecastValues, foreca
 }
 
 function tone(v: number): string {
-  if (Math.abs(v) < 0.005) return "text-slate-300";
+  if (Math.abs(v) < 0.005) return "text-slate-500";
   return v > 0 ? "text-emerald-700" : "text-rose-700";
 }
 

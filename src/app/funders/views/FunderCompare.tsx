@@ -541,7 +541,7 @@ function DerivativeDetail({
                       >
                         <div style={{ fontWeight: 600 }}>{fmtMoney(s.myRental, 0)}</div>
                         {!s.isWinner && (
-                          <div style={{ fontSize: 10, opacity: 0.75 }}>{fmtGap(s.gap)}</div>
+                          <div style={{ fontSize: 11 }}>{fmtGap(s.gap)}</div>
                         )}
                       </td>
                     );

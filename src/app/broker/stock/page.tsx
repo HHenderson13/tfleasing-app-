@@ -26,11 +26,11 @@ export default async function BrokerStockPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold text-slate-900">Available stock</h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-600">
                 {out.length.toLocaleString()} vehicles. Filter by availability to see what&rsquo;s in stock now or
                 landing in a given month.
                 {latestUploadedAt && (
-                  <> · <span className="text-slate-400">Updated {new Date(latestUploadedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></>
+                  <> · <span className="text-slate-600">Updated {new Date(latestUploadedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></>
                 )}
               </p>
             </div>

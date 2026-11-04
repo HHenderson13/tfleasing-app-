@@ -94,7 +94,7 @@ function Card({
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-baseline justify-between">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          <span className="font-medium text-slate-500 text-[12.5px]">{format}</span>
+          <span className="font-medium text-slate-600 text-[12.5px]">{format}</span>
         </div>
         <p className="mt-1.5 text-sm text-slate-600">{desc}</p>
         <div className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 ring-1 ring-amber-100">

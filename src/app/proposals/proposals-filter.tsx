@@ -53,7 +53,7 @@ export function ProposalsFilter({
   return (
     <div className="flex flex-wrap items-end gap-3">
       <form onSubmit={onSubmitQuery} className="flex items-center gap-2">
-        <label className="flex flex-col gap-1 text-xs text-slate-500">
+        <label className="flex flex-col gap-1 text-xs text-slate-600">
           <span className="font-medium text-[12.5px]">Search customer</span>
           <input
             value={q}
@@ -63,7 +63,7 @@ export function ProposalsFilter({
           />
         </label>
       </form>
-      <label className="flex flex-col gap-1 text-xs text-slate-500">
+      <label className="flex flex-col gap-1 text-xs text-slate-600">
         <span className="font-medium text-[12.5px]">Range</span>
         <select
           value={range}
@@ -75,7 +75,7 @@ export function ProposalsFilter({
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-xs text-slate-500">
+      <label className="flex flex-col gap-1 text-xs text-slate-600">
         <span className="font-medium text-[12.5px]">Sales exec</span>
         <select
           value={execValue}

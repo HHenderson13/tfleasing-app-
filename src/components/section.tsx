@@ -18,7 +18,7 @@ export function Section({
       <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">{title}</h2>
       <div className="mt-3 space-y-2">
         {hasItems ? children : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-8 text-center text-[14px] text-slate-500">{empty}</div>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-8 text-center text-[14px] text-slate-600">{empty}</div>
         )}
       </div>
     </section>

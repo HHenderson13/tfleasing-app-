@@ -100,7 +100,7 @@ export function QuoteForm({ models }: { models: string[] }) {
           <PillPicker label="Term (months)" value={term} options={TERMS} onChange={setTerm} />
           <PillPicker label="Mileage per year" value={mileage} options={MILEAGES} onChange={setMileage} format={(v) => v.toLocaleString()} />
           <PillPicker label="Initial rental (months)" value={upfront} options={UPFRONTS} onChange={setUpfront} />
-          <div className="text-[11px] text-slate-400">Funders ranked at 6× upfront; your selection is saved on the proposal.</div>
+          <div className="text-[11px] text-slate-600">Funders ranked at 6× upfront; your selection is saved on the proposal.</div>
         </div>
 
         {result?.wallboxAvailable && (
@@ -122,12 +122,12 @@ export function QuoteForm({ models }: { models: string[] }) {
             commission represents of the list price. */}
         <div className="rounded-xl border border-slate-100 bg-violet-50/40 p-3">
           <div className="font-medium text-violet-700 text-[12.5px]">Broker commission</div>
-          <p className="mt-0.5 text-[11px] text-slate-500">
+          <p className="mt-0.5 text-[11px] text-slate-600">
             Only applies on broker deals. Reduces each funder&apos;s discount by{" "}
             <code className="rounded bg-white px-1 text-[10px]">£ / list price</code>.
           </p>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">£</span>
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-600">£</span>
             <input
               type="number"
               min={0}
@@ -140,7 +140,7 @@ export function QuoteForm({ models }: { models: string[] }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-slate-600">
           <span className={`h-1.5 w-1.5 rounded-full ${pending ? "animate-pulse bg-amber-400" : "bg-emerald-400"}`} />
           {pending ? "Updating…" : "Live: changes apply instantly"}
         </div>
@@ -189,8 +189,8 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
   if (!result) {
     return (
       <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white/50 p-8 text-center">
-        <div className="text-sm font-medium text-slate-500">No quote yet</div>
-        <div className="text-xs text-slate-400">Pick a vehicle and press &ldquo;Rank funders&rdquo; to see monthly rentals across all funders.</div>
+        <div className="text-sm font-medium text-slate-600">No quote yet</div>
+        <div className="text-xs text-slate-600">Pick a vehicle and press &ldquo;Rank funders&rdquo; to see monthly rentals across all funders.</div>
       </div>
     );
   }
@@ -240,7 +240,7 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
       <div className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-slate-500 text-[12.5px]">{result.model}</div>
+            <div className="text-slate-600 text-[12.5px]">{result.model}</div>
             <div className="text-lg font-semibold text-slate-900">{result.derivative}</div>
             {result.discountLabel && (
               <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
@@ -248,11 +248,11 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
               </div>
             )}
           </div>
-          <div className="text-right text-xs text-slate-500">
+          <div className="text-right text-xs text-slate-600">
             {typeof result.listPriceNet === "number" && (
-              <div className="text-slate-400">List <span className="font-medium text-slate-700">£{result.listPriceNet.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+              <div className="text-slate-600">List <span className="font-medium text-slate-700">£{result.listPriceNet.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
             )}
-            {result.grantText && <div className="text-emerald-600">{result.grantText}</div>}
+            {result.grantText && <div className="text-emerald-700">{result.grantText}</div>}
             {result.wallboxIncluded ? (
               <div className="font-medium text-emerald-700">Wallbox Included</div>
             ) : typeof result.customerSavingGbp === "number" && (
@@ -263,12 +263,12 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
 
         <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
           <div>
-            <div className="font-medium text-slate-500 text-[12.5px]">Best funder</div>
+            <div className="font-medium text-slate-600 text-[12.5px]">Best funder</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{best.funderName}</div>
           </div>
           {result.funders.length > 1 && (
-            <div className="text-right text-xs text-slate-500">
-              <div className="text-slate-400">{result.funders.length} funders returned rates</div>
+            <div className="text-right text-xs text-slate-600">
+              <div className="text-slate-600">{result.funders.length} funders returned rates</div>
             </div>
           )}
         </div>
@@ -285,7 +285,7 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
               }`}
             >
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-                isBest ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600"
+                isBest ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600"
               }`}>
                 {f.rank}
               </div>
@@ -299,12 +299,12 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
                     </span>
                   )}
                 </div>
-                <div className="mt-0.5 text-xs text-slate-500">
+                <div className="mt-0.5 text-xs text-slate-600">
                   {f.discountPct != null ? (
                     commissionDiscountPct > 0 ? (
                       <>
-                        <span className="line-through text-slate-400">{(f.discountPct * 100).toFixed(2)}%</span>
-                        <span className="mx-1 text-slate-300">→</span>
+                        <span className="line-through text-slate-600">{(f.discountPct * 100).toFixed(2)}%</span>
+                        <span className="mx-1 text-slate-500">→</span>
                         <span className="font-semibold text-violet-700">
                           {(f.discountPct * 100 - commissionDiscountPct).toFixed(2)}% discount
                         </span>
@@ -314,7 +314,7 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
                       <>{(f.discountPct * 100).toFixed(2)}% discount</>
                     )
                   ) : "discount n/a"}
-                  <span className="mx-1.5 text-slate-300">·</span>
+                  <span className="mx-1.5 text-slate-500">·</span>
                   £{f.commissionGbp} commission
                 </div>
               </div>
@@ -323,12 +323,12 @@ function Results({ result, pending, brokerCommissionGbp, config }: { result: Quo
                   {isBest ? (
                     <>
                       <div className="text-lg font-semibold tabular-nums text-emerald-700">Cheapest</div>
-                      <div className="text-slate-500 text-[12.5px]">Ranked first</div>
+                      <div className="text-slate-600 text-[12.5px]">Ranked first</div>
                     </>
                   ) : (
                     <>
                       <div className="text-lg font-semibold tabular-nums text-slate-900">+£{(f.totalMonthly - best.totalMonthly).toFixed(2)}</div>
-                      <div className="text-slate-500 text-[12.5px]">a month more than the cheapest</div>
+                      <div className="text-slate-600 text-[12.5px]">a month more than the cheapest</div>
                     </>
                   )}
                 </div>
@@ -460,16 +460,16 @@ function SaveProposalModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-slate-500 text-[12.5px]">Save proposal</div>
+          <div className="text-slate-600 text-[12.5px]">Save proposal</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">{result.model} {result.derivative}</div>
-          <div className="mt-0.5 text-xs text-slate-500">
+          <div className="mt-0.5 text-xs text-slate-600">
             {funder.funderName} (rank #{funder.rank}) · £{funder.monthlyRental.toFixed(2)}/mo · {config.contract} {config.maintenance === "maintained" ? "maintained" : "customer maint."} · {config.termMonths}m / {config.annualMileage.toLocaleString()}mi / {config.initialRentalMultiplier}×
           </div>
         </div>
 
         <div className="space-y-3 px-5 py-4">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Customer name</span>
+            <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Customer name</span>
             <input
               autoFocus
               value={customerName}
@@ -480,7 +480,7 @@ function SaveProposalModal({
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Finance Proposal Number</span>
+            <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Finance Proposal Number</span>
             <input
               value={financeProposalNumber}
               onChange={(e) => setFinanceProposalNumber(e.target.value)}
@@ -493,11 +493,11 @@ function SaveProposalModal({
           {isBroker && (
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Broker name</span>
+                <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Broker name</span>
                 <input value={brokerName} onChange={(e) => setBrokerName(e.target.value)} placeholder="e.g. Acme Broker Ltd" className={inputCls} />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Broker email</span>
+                <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Broker email</span>
                 <input type="email" value={brokerEmail} onChange={(e) => setBrokerEmail(e.target.value)} placeholder="deals@acmebroker.com" className={inputCls} />
               </label>
             </div>
@@ -508,14 +508,14 @@ function SaveProposalModal({
           {isGroupBq ? (
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <div>
-                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Site type</span>
+                <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Site type</span>
                 <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 text-xs">
                   {(["car", "cv"] as const).map((k) => (
                     <button
                       key={k}
                       type="button"
                       onClick={() => setBqKind(k)}
-                      className={`rounded-lg px-3 py-1 font-medium ${bqKind === k ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"}`}
+                      className={`rounded-lg px-3 py-1 font-medium ${bqKind === k ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"}`}
                     >
                       {k === "car" ? "Car" : "CV"}
                     </button>
@@ -523,9 +523,9 @@ function SaveProposalModal({
                 </div>
               </div>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{bqKind === "car" ? "Car" : "CV"} site</span>
+                <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">{bqKind === "car" ? "Car" : "CV"} site</span>
                 {sitesForKind === null ? (
-                  <div className="bg-white px-3 py-2 text-xs text-slate-400 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">Loading…</div>
+                  <div className="bg-white px-3 py-2 text-xs text-slate-600 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">Loading…</div>
                 ) : noSites ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     No {bqKind === "car" ? "car" : "CV"} sites yet. <Link href="/admin/group-sites" className="font-medium underline">Add one →</Link>
@@ -535,14 +535,14 @@ function SaveProposalModal({
                     {sitesForKind.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
-                <span className="mt-1 block text-[11px] text-slate-400">Auto-assigned to Group BQ Deal: no sales exec.</span>
+                <span className="mt-1 block text-[11px] text-slate-600">Auto-assigned to Group BQ Deal: no sales exec.</span>
               </label>
             </div>
           ) : (
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">Assign to sales exec</span>
+              <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">Assign to sales exec</span>
               {execs === null ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-400">Loading…</div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">Loading…</div>
               ) : noExecs ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   No sales execs yet. <Link href="/admin/sales-execs" className="font-medium underline">Add one →</Link>
@@ -559,7 +559,7 @@ function SaveProposalModal({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
-          <button onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-slate-500 hover:text-slate-900">Cancel</button>
+          <button onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
           <button
             onClick={submit}
             disabled={pending || execs === null || sites === null || (isGroupBq ? noSites : noExecs)}
@@ -602,10 +602,10 @@ function MissingFundersList({
                     {m.discountPct != null ? (
                       <>Target discount <span className="font-semibold tabular-nums text-slate-900">{(m.discountPct * 100).toFixed(2)}%</span></>
                     ) : (
-                      <span className="text-slate-400">discount n/a</span>
+                      <span className="text-slate-600">discount n/a</span>
                     )}
                   </span>
-                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">·</span>
                   <span className="text-slate-600">£{m.commissionGbp} comm.</span>
                 </div>
                 {!open && (
@@ -621,7 +621,7 @@ function MissingFundersList({
               {open && (
                 <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-amber-100 pt-2">
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">£</span>
+                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-600">£</span>
                     <input
                       autoFocus
                       inputMode="decimal"
@@ -634,7 +634,7 @@ function MissingFundersList({
                   <button
                     type="button"
                     onClick={() => setOpenId(null)}
-                    className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:text-slate-900"
+                    className="rounded-md px-2 py-1 text-[11px] text-slate-600 hover:text-slate-900"
                   >
                     Cancel
                   </button>
@@ -659,7 +659,7 @@ function MissingFundersList({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
+      <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">{label}</span>
       {children}
     </label>
   );
@@ -675,7 +675,7 @@ function Segmented<T extends string>({
 }) {
   return (
     <div>
-      {label && <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>}
+      {label && <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">{label}</span>}
       <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
         {options.map((o) => (
           <button
@@ -683,11 +683,11 @@ function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(o.value)}
             className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
-              value === o.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              value === o.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-700"
             }`}
           >
             {o.label}
-            {o.hint && <span className={`ml-1 text-[10px] ${value === o.value ? "text-slate-400" : "text-slate-400"}`}>{o.hint}</span>}
+            {o.hint && <span className={`ml-1 text-[10px] ${value === o.value ? "text-slate-600" : "text-slate-600"}`}>{o.hint}</span>}
           </button>
         ))}
       </div>
@@ -706,7 +706,7 @@ function PillPicker<T extends number>({
 }) {
   return (
     <div>
-      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
+      <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => (
           <button
@@ -730,7 +730,7 @@ function PillPicker<T extends number>({
 function YesNo({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div>
-      <span className="mb-1 block font-medium text-slate-500 text-[12.5px]">{label}</span>
+      <span className="mb-1 block font-medium text-slate-600 text-[12.5px]">{label}</span>
       <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
         {[
           { v: false, label: "No" },
@@ -741,7 +741,7 @@ function YesNo({ label, value, onChange }: { label: string; value: boolean; onCh
             type="button"
             onClick={() => onChange(o.v)}
             className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
-              value === o.v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              value === o.v ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-700"
             }`}
           >
             {o.label}

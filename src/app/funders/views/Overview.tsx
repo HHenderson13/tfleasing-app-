@@ -187,7 +187,7 @@ export function Overview({
                         title={`${s.wins} wins / ${s.slotsCovered} covered · avg gap ${fmtGap(s.avgGap)}/mo`}
                       >
                         <div style={{ fontWeight: 600 }}>{s.wins}</div>
-                        <div style={{ fontSize: 10, opacity: 0.7 }}>
+                        <div style={{ fontSize: 11 }}>
                           /{s.slotsCovered}
                         </div>
                       </td>

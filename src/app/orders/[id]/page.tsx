@@ -31,7 +31,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">{p.model} {p.derivative}</p>
           </div>
           {ctx.customer && (
-            <Link href={`/customers/${ctx.customer.id}`} className="text-xs font-medium text-slate-500 hover:text-slate-900">
+            <Link href={`/customers/${ctx.customer.id}`} className="text-xs font-medium text-slate-600 hover:text-slate-900">
               View full timeline →
             </Link>
           )}

@@ -20,8 +20,8 @@
   /* Foreground */
   --fg-strong:       #0f172a; /* slate-900 */
   --fg-default:      #1e293b; /* slate-800 */
-  --fg-muted:        #64748b; /* slate-500 */
-  --fg-subtle:       #94a3b8; /* slate-400 */
+  --fg-muted:        #475569; /* slate-600: the lightest text anywhere, 7.6:1 on white */
+  --fg-subtle:       #64748b; /* slate-500: icons and placeholders only, never text */
   --fg-on-dark:      #ffffff;
 
   /* Interactive */
@@ -83,7 +83,7 @@
 
   /* Light mode base */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a; /* slate-900 */
 }
 
 @theme inline {
@@ -93,11 +93,13 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* The site is light only. A computer set to dark mode used to flip the default
+   text to near-white (#ededed) while every card stayed white, so any text
+   without its own colour all but vanished for those users (user, 2026-11-04:
+   "the font colour on some people's monitors is too light"). `only light` also
+   stops Chrome's auto dark mode repainting the pages. */
+:root {
+  color-scheme: only light;
 }
 
 /* ── Base styles ─────────────────────────────────────────────────────────── */

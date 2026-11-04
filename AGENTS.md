@@ -112,6 +112,20 @@ When you touch either of these, run `npm test` before pushing.
   Analysis and Funder Comparison style through their own stylesheets
   (`scraper.css`, `funders.css`), whose unlayered reset beats Tailwind
   utilities, so change them there.
+- **Readable on any monitor** (user, 2026-11-04: "the font colour on some
+  people's monitors is too light, they can't read it"). On a light
+  background the lightest text is **slate-600** (7.6:1); slate-500 is for
+  icons, placeholders and deliberately faded zeros and separators only, and
+  slate-400 / 300 are never text. Coloured text is the 700 shade (amber,
+  emerald, green, sky and the like fail at 600), white text sits on a 700
+  colour, and text is never faded with `opacity`. On a dark panel the
+  darkest grey text is slate-400. **The site is light only**:
+  `color-scheme: only light` in `globals.css` and the root `viewport`.
+  There used to be a dark-mode rule that turned the default text near-white
+  while every card stayed white, so on a computer set to dark mode any text
+  without its own colour all but vanished. Don't add dark mode back without
+  restyling every page for it. Checked by measuring every piece of text on
+  25 pages in light and dark mode: no text below 4.5:1.
 - `<StatTile />` — `src/components/stat-tile.tsx`. Used on every dashboard
   page (orders/awaiting/delivered/proposals). Pass `tone`; optionally
   `href` (becomes a Link with active ring). Don't reimplement.

@@ -39,7 +39,7 @@ export function CommissionsGrid({ funders, rows }: { funders: Funder[]; rows: Ro
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+        <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
           <tr>
             <th className="px-4 py-3 text-left font-medium">Funder</th>
             {COMBOS.map((c) => <th key={c.label} className="px-4 py-3 text-right font-medium">{c.label}</th>)}
@@ -54,7 +54,7 @@ export function CommissionsGrid({ funders, rows }: { funders: Funder[]; rows: Ro
                 return (
                   <td key={c.label} className="px-4 py-2 text-right">
                     <div className="inline-flex items-center gap-1">
-                      <span className="text-xs text-slate-400">£</span>
+                      <span className="text-xs text-slate-600">£</span>
                       <input
                         type="number"
                         step="1"

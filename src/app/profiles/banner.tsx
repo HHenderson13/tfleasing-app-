@@ -12,7 +12,7 @@ export function ProfileBanner({ id, name, save }: { id: string; name: string; sa
         </span>
         <div className="min-w-0">
           <div className="truncate text-[14px] font-semibold text-slate-900">{`For ${name}`}</div>
-          <div className={`text-[12.5px] ${save === "failed" ? "text-rose-700" : save === "saved" ? "text-emerald-700" : "text-slate-500"}`}>
+          <div className={`text-[12.5px] ${save === "failed" ? "text-rose-700" : save === "saved" ? "text-emerald-700" : "text-slate-600"}`}>
             {save === "saving" ? "Saving the PDF to their profile" : save === "saved" ? "PDF saved to their profile" : save === "failed" ? "The PDF downloaded but didn't save to their profile. Try exporting again." : "Filled in from their profile. Export the PDF and it's saved there too."}
           </div>
         </div>

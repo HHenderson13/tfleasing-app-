@@ -79,7 +79,7 @@ export function VehiclesView({ rows }: { rows: Row[] }) {
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+          <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
             <tr>
               <th className="px-3 py-3 text-left font-medium">Model</th>
               <th className="px-3 py-3 text-left font-medium">Derivative</th>
@@ -95,7 +95,7 @@ export function VehiclesView({ rows }: { rows: Row[] }) {
                 <td className="px-3 py-2 text-slate-900">{r.model}</td>
                 <td className="px-3 py-2 text-slate-700">{r.derivative}</td>
                 <td className="px-3 py-2 text-slate-600">{r.fuelType ?? "—"}</td>
-                <td className="px-3 py-2 font-mono text-xs text-slate-500">{r.capCode}</td>
+                <td className="px-3 py-2 font-mono text-xs text-slate-600">{r.capCode}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {r.listPriceNet != null ? `£${r.listPriceNet.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"}
                 </td>
@@ -110,7 +110,7 @@ export function VehiclesView({ rows }: { rows: Row[] }) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-400">No vehicles match.</td>
+                <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-600">No vehicles match.</td>
               </tr>
             )}
           </tbody>

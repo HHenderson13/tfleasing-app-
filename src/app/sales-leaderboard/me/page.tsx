@@ -178,7 +178,7 @@ export default async function MyScorecardPage() {
         })}
       </div>
 
-      <p className="mt-6 text-xs text-slate-500">
+      <p className="mt-6 text-xs text-slate-600">
         Want to see how the whole team stacks up? <Link href="/sales-leaderboard" className="font-medium text-rose-700 hover:text-rose-900">Go to the full leaderboard →</Link>
       </p>
 
@@ -191,14 +191,14 @@ function OvertakeCard({ target, closest }: { target: OvertakeTarget; closest: bo
   return (
     <div className={`overflow-hidden rounded-2xl border bg-white p-4 ${closest ? "border-rose-300 ring-2 ring-rose-100" : "border-slate-200"}`}>
       <div className="flex items-center justify-between">
-        <div className="font-semibold text-slate-500 text-[12.5px]">{target.metricLabel}</div>
+        <div className="font-semibold text-slate-600 text-[12.5px]">{target.metricLabel}</div>
         {closest && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Closest</span>}
       </div>
       <div className="mt-2 flex items-center gap-3">
         {target.target.photoUrl ? (
           <Image src={target.target.photoUrl} alt={target.target.name} width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
             {initials(target.target.name)}
           </div>
         )}
@@ -241,11 +241,11 @@ function AchievementsCard({ title, subtitle, badges }: { title: string; subtitle
     <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
       <div className="border-b border-slate-100 px-4 py-3">
         <div className="text-sm font-semibold text-slate-900">{title}</div>
-        <div className="text-xs text-slate-500">{subtitle}</div>
+        <div className="text-xs text-slate-600">{subtitle}</div>
       </div>
       <div className="px-4 py-3">
         {badges.length === 0 ? (
-          <p className="py-3 text-center text-xs text-slate-500">No badges yet: keep going! 💪</p>
+          <p className="py-3 text-center text-xs text-slate-600">No badges yet: keep going! 💪</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {badges.map((b) => (
@@ -311,7 +311,7 @@ function MetricBreakdownCard({
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-slate-900" style={{ width: `${pct}%` }} />
         </div>
-        <div className="mt-2 flex justify-between text-slate-500">
+        <div className="mt-2 flex justify-between text-slate-600">
           <span>Dept avg <span className="font-medium text-slate-700 tabular-nums">{avgLabel}</span></span>
           <span>{topWord} <span className="font-medium text-slate-700 tabular-nums">{topLabel}</span></span>
         </div>
@@ -331,7 +331,7 @@ function Shell({ title, children }: { userName?: string; title: string; children
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-8 text-center text-[14px] text-slate-500">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-8 text-center text-[14px] text-slate-600">
       {children}
     </div>
   );

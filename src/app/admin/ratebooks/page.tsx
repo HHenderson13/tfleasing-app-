@@ -36,7 +36,7 @@ export default async function RatebooksPage() {
         <h2 className="mb-2 text-sm font-medium text-slate-700">Currently loaded</h2>
         <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-[12.5px]">
+            <thead className="bg-slate-50 text-slate-600 text-[12.5px]">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Funder</th>
                 <th className="px-4 py-3 text-right font-medium">Customer Maintained</th>
@@ -75,7 +75,7 @@ export default async function RatebooksPage() {
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-700">Recent uploads</h2>
         {recent.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-400">None yet.</div>
+          <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-600">None yet.</div>
         ) : (
           <ul className="space-y-1 text-sm">
             {recent.map((u) => (
@@ -83,7 +83,7 @@ export default async function RatebooksPage() {
                 <span className="text-slate-700">
                   <span className="font-medium">{u.funderId}</span> · {u.isMaintained ? "Maintained" : "Customer Maint."} · {u.filename}
                 </span>
-                <span className="text-xs text-slate-500">{u.rowCount} rows · {new Date(u.uploadedAt).toLocaleString()}</span>
+                <span className="text-xs text-slate-600">{u.rowCount} rows · {new Date(u.uploadedAt).toLocaleString()}</span>
               </li>
             ))}
           </ul>

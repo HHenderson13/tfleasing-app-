@@ -111,9 +111,9 @@ export default async function BrokerRatebooksPage() {
                   <li key={f.id} className="space-y-1.5">
                     <div className="flex items-baseline justify-between text-sm">
                       <span className="font-medium text-slate-800">{f.name}</span>
-                      <span className="font-mono text-xs text-slate-500">
+                      <span className="font-mono text-xs text-slate-600">
                         {n.toLocaleString()}{" "}
-                        <span className="text-slate-400">· {pct.toFixed(1)}%</span>
+                        <span className="text-slate-600">· {pct.toFixed(1)}%</span>
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -131,7 +131,7 @@ export default async function BrokerRatebooksPage() {
 
         {/* Methodology — compact footnote */}
         <section className="mt-10 mb-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-5 text-xs text-slate-600">
-          <h3 className="font-semibold tracking-[0.18em] text-slate-500 text-[12.5px]">Methodology</h3>
+          <h3 className="font-semibold tracking-[0.18em] text-slate-600 text-[12.5px]">Methodology</h3>
           <p className="mt-2">
             Source ratebooks carry the 6× upfront. Other upfronts hold total contract cost constant
             for the bare lease; commission is amortised on top with annuity-due interest at the
@@ -158,7 +158,7 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
   return (
     <div className="mb-3 flex items-baseline justify-between gap-4">
       <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
-      <p className="hidden text-xs text-slate-500 sm:block">{subtitle}</p>
+      <p className="hidden text-xs text-slate-600 sm:block">{subtitle}</p>
     </div>
   );
 }
@@ -166,7 +166,7 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 function Pill({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-6 py-4">
-      <div className="text-[12.5px] font-medium text-slate-500">{label}</div>
+      <div className="text-[12.5px] font-medium text-slate-600">{label}</div>
       <div className="mt-1 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">{value}</div>
     </div>
   );

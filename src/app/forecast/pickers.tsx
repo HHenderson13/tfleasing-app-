@@ -73,7 +73,7 @@ export function MonthPicker({ value }: { value: string; label?: string }) {
         type="button"
         onClick={() => go(today.getMonth() + 1, today.getFullYear())}
         disabled={pending}
-        className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+        className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
       >
         Today
       </button>
@@ -108,7 +108,7 @@ export function PeriodPicker({
 
   return (
     <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-1.5 text-sm rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]">
-      <span className="text-slate-500 text-[12.5px]">Period</span>
+      <span className="text-slate-600 text-[12.5px]">Period</span>
       <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
         {quarters.map((p) => (
           <button
@@ -150,7 +150,7 @@ export function PeriodPicker({
           go(`Q${cq.quarter}` as ForecastPeriod, cq.year);
         }}
         disabled={pending}
-        className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+        className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
       >
         This Q
       </button>

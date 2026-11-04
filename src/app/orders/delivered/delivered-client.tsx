@@ -99,7 +99,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
           can spot whose deal is whose). Admins see exactly the same three
           options. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-slate-500">Show:</span>
+        <span className="text-xs text-slate-600">Show:</span>
         <nav className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/60 p-1 text-sm">
           <ScopeButton active={scope === "mine"} onClick={() => setScope("mine")} disabled={!myExecId}>
             {myExecName ?? "Mine"}
@@ -108,7 +108,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
           <ScopeButton active={scope === "others"} onClick={() => setScope("others")} disabled={!myExecId}>Others</ScopeButton>
         </nav>
         {isAdmin && (
-          <span className="text-[11px] text-slate-400">(admin, so every exec is visible)</span>
+          <span className="text-[11px] text-slate-600">(admin, so every exec is visible)</span>
         )}
       </div>
 
@@ -134,7 +134,7 @@ export function DeliveredClient({ items, myExecId, myExecName, isAdmin }: Props)
       {/* List */}
       <div className="mt-4">
         {sortedItems.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+          <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-600">
             No deliveries to show for {monthLabel(activeMonth)}{scope !== "all" ? ` (${scopeLabel.toLowerCase()})` : ""}.
           </div>
         ) : (
@@ -195,10 +195,10 @@ function DeliveredRow({ item, highlight }: { item: DeliveredItem; highlight: boo
           className={`block text-sm font-semibold ${highlight ? "text-emerald-800" : "text-slate-900"} hover:underline`}
         >
           {item.customerName}
-          {item.businessName && <span className="ml-1 text-xs font-normal text-slate-500">({item.businessName})</span>}
+          {item.businessName && <span className="ml-1 text-xs font-normal text-slate-600">({item.businessName})</span>}
         </Link>
         <div className="mt-0.5 text-sm text-slate-700">{item.model} {item.derivative}</div>
-        <div className="mt-0.5 text-[11px] text-slate-500">
+        <div className="mt-0.5 text-[11px] text-slate-600">
           {execLabel} · {item.funderName}
           {item.regNumber && <> · {item.regNumber}</>}
           {item.vin && <> · VIN {item.vin}</>}
@@ -210,7 +210,7 @@ function DeliveredRow({ item, highlight }: { item: DeliveredItem; highlight: boo
       </div>
       <div className="text-right">
         <div className="text-xs font-medium text-slate-700">{dateLabel}</div>
-        <div className="text-[10px] text-slate-400">handed over</div>
+        <div className="text-[10px] text-slate-600">handed over</div>
       </div>
     </div>
   );
