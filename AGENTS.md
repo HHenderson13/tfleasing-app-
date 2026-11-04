@@ -36,6 +36,8 @@ explicitly — see `daily-summary/route.ts`.
 | `/fuel-calculator/admin`           | `requireAdmin` (vehicle library + price overrides) |
 | `/fuel-calculator/exports`, `/fuel-calculator/exports/[id]` | `requireUser` (every exported PDF, searchable; the route serves the stored PDF) |
 | `/api/cron/fuel-prices`            | `CRON_SECRET` only — no bypass header |
+| `/ranger-bik`                      | `requireUser` (everyone signed in, like the fuel calculator; tile keyed `everyone`) |
+| `/ranger-bik/exports`, `/ranger-bik/exports/[id]` | `requireUser` (every exported Ranger PDF, searchable; the route serves the stored PDF) |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |
 | `/orders`, `/orders/awaiting`, `/orders/delivered`, `/orders/[id]`, `/customers/[id]` | `requireOrdersAccess` |
@@ -1332,6 +1334,59 @@ word against customer, exec and vehicles.
   of something else, or it spills to a third page. **Never set `lineHeight` on the `<Page>`
   style**: it silently drops the `fixed` footer from every page. Set it on
   the text that needs it.
+
+## Ranger BIK Calculator (`/ranger-bik`)
+
+Every Ranger side by side, taxed as a car or a van, as a PDF for the
+customer (user, 2026-11-04). Same look, building blocks
+(`fuel-calculator/ui.tsx`), save-every-export and Geist PDF as the Fuel Cost
+Calculator. The maths, the range and the rates are pure and tested in
+`lib/ranger-tax.ts`; page and PDF both print its `breakdown()` rows and
+`workings()`, so they can never disagree.
+
+- **Why a Ranger is a car or a van** (HMRC EIM23151, CA23511): since 6 April
+  2025 (1 April for corporation tax) a double cab pick-up is a car for BIK,
+  capital allowances and the lease restriction, whatever its payload. The
+  **2-Seat** (XLT and Wildtrak, 3.0 diesel and 2.3 PHEV, user's information:
+  same list price and CO2 as the 5-seat, not on the Feb 2026 lists) has no
+  second row of seats, so it stays a van. **VAT and VED are unchanged** by the
+  2025 rule: a double cab with 1 tonne+ payload is still commercial for VAT.
+- **The Raptor is a car for VAT too**, its payload being under one tonne
+  (user; the Raptor list gives no payload figure). Half the VAT on a car lease
+  and all of it on a purchase can't be reclaimed (Notice 700/64).
+- **2026/27 rates, every one checked against HMRC 2026-11-04**: car % from
+  EIM24705 (PHEV 70-74 g/km is **21%**, the price list's 20% was 2025/26;
+  diesels and Raptor 37%, the maximum, so the diesel supplement can't move
+  them), van £4,170, van fuel £798, car fuel multiplier £29,200 (EIM25580),
+  Class 1A 15%, lease restriction 15% over 50 g/km **including VAT that can't
+  be reclaimed, excluding separately itemised maintenance** (BIM47740),
+  special rate allowances 6%. Held in `RATES_2026_27`; **add the next year to
+  `TAX_YEARS` each April**. `ratesFor(today)` uses the latest held year and
+  the page header turns amber when today's year isn't there.
+- **P11D = list incl. VAT + £1,104 delivery + £25 plates + options** (ITEPA
+  s123: the list price includes delivery). Ford's own Raptor list prints BIK
+  on £62,005, leaving delivery out; the tests show the maths matches Ford's
+  £382.36 / £764.73 a month to the penny on that base.
+- **A van used only for commuting** (restricted private use condition) has
+  no van benefit and no van fuel benefit; a car is taxed in full either way.
+- **The business's tax is net of relief**: Class 1A + VAT it can't reclaim +
+  tax lost to the lease restriction, less tax relief at the business rate on
+  the NI and VAT. That is exactly the after-tax cost the tax treatment adds,
+  with the rental itself left out. The lease rows only appear once **every**
+  Ranger has a rental, so the comparison stays like for like.
+- **Bought or HP** adds "Buying it": van 100% in year one, car 6% a year on
+  the price after VAT (VAT kept on the Raptor goes into the cost). Year-one
+  relief only, never added to the yearly total: it is timing, not a saving.
+- **Money is worked in pence-rounded steps** (`r2`) so every workings line
+  multiplies out exactly as printed. The monthly saving is the difference of
+  the two monthly totals, so the printed months add up; headline figures are
+  those rounded to whole pounds.
+- Prices are hard-coded from Ford's 26.5MY lists (effective 5 Feb 2026) in
+  `RANGERS`; a new price list means updating that array (the tests check each
+  row adds up to Ford's OTR).
+- Exports live in `ranger_exports` (`lib/ranger-exports.ts`), listed at
+  `/ranger-bik/exports`. No em or en dashes anywhere a customer reads; a test
+  pins it.
 
 ## Sales leaderboard (Pole Position)
 

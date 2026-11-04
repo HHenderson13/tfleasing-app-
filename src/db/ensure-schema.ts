@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 63;
+const SCHEMA_VERSION = 64;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -123,6 +123,7 @@ async function runEnsureAppSchema() {
   await ensureEnquiryTables();
   await ensureTenAtTenTables();
   await ensureFuelCalculatorTables();
+  await ensureRangerBikTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await seedSeriesMappings();
@@ -1152,6 +1153,26 @@ async function ensureTenAtTenTables() {
   await db.run(sql.raw(`DELETE FROM ten_at_ten_orders WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_deliveries WHERE lower(exec) IN ('hahe', 'joru')`));
   await db.run(sql.raw(`DELETE FROM ten_at_ten_cancellations WHERE lower(exec) IN ('harry henderson', 'joseph rustigini')`));
+}
+
+// Ranger BIK Calculator (user, 2026-11-04): every exported comparison, PDF
+// and all, so it can be found again, as the Fuel Cost Calculator keeps its.
+async function ensureRangerBikTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS ranger_exports (
+      id TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      customer_name TEXT NOT NULL,
+      exec_name TEXT NOT NULL,
+      vehicles TEXT NOT NULL,
+      best_name TEXT,
+      saving_annual REAL,
+      saving_monthly REAL,
+      filename TEXT NOT NULL,
+      pdf_base64 TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS ranger_exports_created ON ranger_exports (created_at)`));
 }
 
 // Fuel Cost Calculator (user, 2026-10-14). The vehicle library (petrol and
