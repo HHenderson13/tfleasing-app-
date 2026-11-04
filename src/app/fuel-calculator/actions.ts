@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/auth-guard";
 import { saveFuelExport } from "@/lib/fuel-exports";
+import { canWork, getProfile } from "@/lib/customer-profiles-store";
 import { logError } from "@/lib/logger";
 import { deleteFuelVehicle, refreshFuelPrices, setPriceOverride, upsertFuelVehicles, type RefreshReport } from "@/lib/fuel-prices";
 import { parseVehiclePaste, type PasteResult } from "@/lib/fuel-vehicle-paste";
@@ -67,13 +68,16 @@ export async function deleteFuelVehicleAction(id: string): Promise<{ ok: boolean
 
 /** Keep a copy of an exported PDF. Any signed-in user. */
 export async function saveFuelExportAction(input: {
-  filename: string; customerName: string; segment: string; iceName: string; evName: string; savingMonthly: number; pdfBase64: string;
+  filename: string; customerName: string; segment: string; iceName: string; evName: string; savingMonthly: number; pdfBase64: string; profileId?: string | null;
 }): Promise<{ ok: boolean }> {
   const user = await requireUser();
   if (typeof input.pdfBase64 !== "string" || !input.pdfBase64.startsWith("JVBER") || input.pdfBase64.length > 4_000_000) return { ok: false };
   const t = (v: unknown, n = 200) => String(v ?? "").trim().slice(0, n);
   try {
+    // Saved to the Customer Profile it came from, if they can work on that profile.
+    const p = typeof input.profileId === "string" && /^[0-9a-f-]{36}$/.test(input.profileId) ? await getProfile(input.profileId) : null;
     await saveFuelExport({
+      profileId: p && canWork(user, p.ownerId) ? p.id : null,
       filename: t(input.filename), customerName: t(input.customerName), execName: user.name || user.email,
       segment: t(input.segment, 10) || null, iceName: t(input.iceName) || null, evName: t(input.evName) || null,
       savingMonthly: Number.isFinite(input.savingMonthly) ? input.savingMonthly : null, pdfBase64: input.pdfBase64,

@@ -19,11 +19,12 @@ export interface FuelExport {
   filename: string;
 }
 
-export async function saveFuelExport(e: Omit<FuelExport, "id" | "createdAt"> & { pdfBase64: string }): Promise<string> {
+/** `profileId`: the Customer Profile it was made from, so it shows there too. */
+export async function saveFuelExport(e: Omit<FuelExport, "id" | "createdAt"> & { pdfBase64: string; profileId?: string | null }): Promise<string> {
   const id = randomUUID();
   await db.run(sql`
-    INSERT INTO fuel_exports (id, created_at, customer_name, exec_name, segment, ice_name, ev_name, saving_monthly, filename, pdf_base64)
-    VALUES (${id}, ${Math.floor(Date.now() / 1000)}, ${e.customerName}, ${e.execName}, ${e.segment}, ${e.iceName}, ${e.evName}, ${e.savingMonthly}, ${e.filename}, ${e.pdfBase64})
+    INSERT INTO fuel_exports (id, created_at, customer_name, exec_name, segment, ice_name, ev_name, saving_monthly, filename, pdf_base64, profile_id)
+    VALUES (${id}, ${Math.floor(Date.now() / 1000)}, ${e.customerName}, ${e.execName}, ${e.segment}, ${e.iceName}, ${e.evName}, ${e.savingMonthly}, ${e.filename}, ${e.pdfBase64}, ${e.profileId ?? null})
   `);
   return id;
 }

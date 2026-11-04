@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 64;
+const SCHEMA_VERSION = 65;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -124,6 +124,7 @@ async function runEnsureAppSchema() {
   await ensureTenAtTenTables();
   await ensureFuelCalculatorTables();
   await ensureRangerBikTables();
+  await ensureCustomerProfileTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await seedSeriesMappings();
@@ -1173,6 +1174,60 @@ async function ensureRangerBikTables() {
     )
   `));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS ranger_exports_created ON ranger_exports (created_at)`));
+}
+
+// Customer Profiles (user, 2026-11-04): each exec's notes on their live
+// enquiries, answers held as one JSON object per profile. Part exchange
+// appraisals are kept in 2MB pieces (see lib/customer-profiles-store.ts), and
+// the Fuel and Ranger calculators' saved PDFs point back at the profile they
+// were made for.
+async function ensureCustomerProfileTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS customer_profiles (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      owner_name TEXT NOT NULL,
+      customer_name TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'live',
+      lost_reason TEXT,
+      lost_note TEXT,
+      data TEXT NOT NULL DEFAULT '{}',
+      copied TEXT,
+      copied_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      closed_at INTEGER
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS customer_profiles_owner ON customer_profiles (owner_id, status)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS customer_profile_files (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      chunks INTEGER NOT NULL,
+      complete INTEGER NOT NULL DEFAULT 0,
+      uploaded_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS customer_profile_files_profile ON customer_profile_files (profile_id)`));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS customer_profile_file_chunks (
+      file_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      data BLOB NOT NULL,
+      PRIMARY KEY (file_id, seq)
+    )
+  `));
+  await ensureColumns("fuel_exports", [{ name: "profile_id", sqlType: "TEXT" }]);
+  await ensureColumns("ranger_exports", [{ name: "profile_id", sqlType: "TEXT" }]);
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS fuel_exports_profile ON fuel_exports (profile_id)`));
+  await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS ranger_exports_profile ON ranger_exports (profile_id)`));
 }
 
 // Fuel Cost Calculator (user, 2026-10-14). The vehicle library (petrol and

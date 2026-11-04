@@ -38,6 +38,8 @@ explicitly — see `daily-summary/route.ts`.
 | `/api/cron/fuel-prices`            | `CRON_SECRET` only — no bypass header |
 | `/ranger-bik`                      | `requireUser` (everyone signed in, like the fuel calculator; tile keyed `everyone`) |
 | `/ranger-bik/exports`, `/ranger-bik/exports/[id]` | `requireUser` (every exported Ranger PDF, searchable; the route serves the stored PDF) |
+| `/profiles`, `/profiles/[id]`      | `requireUser`. Anyone signed in can open anyone's; an exec starts on Mine, an admin on Everyone (user, 2026-11-04). Changes: the owner or an admin (`canWork`, checked in every action) |
+| `/profiles/[id]/files/[fileId]`    | signed in (a part exchange appraisal PDF, streamed in pieces) |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |
 | `/orders`, `/orders/awaiting`, `/orders/delivered`, `/orders/[id]`, `/customers/[id]` | `requireOrdersAccess` |
@@ -1410,6 +1412,82 @@ Calculator. The maths, the range and the rates are pure and tested in
 - Exports live in `ranger_exports` (`lib/ranger-exports.ts`), listed at
   `/ranger-bik/exports`. No em or en dashes anywhere a customer reads; a test
   pins it.
+
+## Customer Profiles (`/profiles`)
+
+Each exec's notes on their live enquiries, filled in while they're on the
+phone (user, 2026-11-04). **It is not a CRM** (user: "we have one of those
+already"): no reminders, emails, pipelines or manager reporting. Notes, the
+agreed next contact, and getting it all into the real CRM quickly. Not
+scripts either: the three opening call guides
+(personal, business car, business van) with the "say this" lines taken out,
+leaving what to capture. Sections, fields, the list's order, the CRM text and
+the calculator prefills are pure and tested in `lib/customer-profiles.ts`;
+storage in `lib/customer-profiles-store.ts`.
+
+- **Starting one is three things:** name, personal or business (car or van),
+  and the model. A van model (Transit, Explorer Van) suggests van for a
+  business; a Ranger is left as car and the exec can change it.
+- **Every section is on the page at once** so nothing is behind a "next"; the
+  side list (a swipeable strip on phones) jumps anywhere and shows answered /
+  shown per section. Choices are one tap, tap again to clear; numbers have
+  quick picks; dates have Today / Tomorrow. Follow-on questions (`showIf`)
+  appear only once needed and don't count until then.
+- **Answers save themselves** 700ms after typing stops, as a patch merged
+  with `json_patch` (null removes a key), so two quick saves can't undo each
+  other. Unknown keys are refused (`cleanPatch`, `DATA_KEYS`). The page
+  re-reads the profile on opening and when the tab comes back into view,
+  because the browser's back button can show an old copy of the page.
+- **Agreed next contact** ("ring me back tomorrow at 10am", user) sits at the
+  top of every profile, not in a section card: how (Call / Text / Email),
+  day and time, each a tap (Tomorrow, 10am), with a date or time box for
+  anything else. Kept as `contactBy`, `callbackDate`, `callbackTime` (the
+  `next` section, left out of progress). It reads back in words
+  (`nextContactText`: "Call tomorrow at 10am") and is the first line copied
+  for the CRM.
+- **Most important first** (`urgencyOf`, `sortLive`): an overdue next
+  contact, then one due later today, then Hot, then anything with nothing
+  booked, then booked ones soonest first, then Cold. An agreed contact is a
+  promise, so it beats Cold. The list opens on "Up next", the top one. All
+  times are UK wall-clock text (`ukNow`), compared as strings.
+- **Who sees what** (user, 2026-11-04): an exec opens on their own, and can
+  flick to Everyone or one exec (`?view=mine|all|<user id>`); an admin opens
+  on Everyone. Anyone can open any profile and copy its notes; only the owner
+  or an admin can change it (the page puts a read-only notice up and disables
+  the fieldset, the actions check `canWork`). Delete is the owner's or an
+  admin's.
+- **Ordered and Lost sale** take it off the live list and keep it; Lost asks
+  for a reason (`LOST_REASONS`) and an optional note. Both can be moved back
+  to live. Delete is separate and permanent.
+- **Copy for CRM** (`crmText`): plain text, section by section, leaving out
+  what the CRM already has (name, personal or business, model) and how warm
+  the lead is. "Copy what's new" gives only answers changed since the last
+  full copy (the snapshot is `copied` / `copied_at` on the row) plus any
+  document made since. Each section also copies on its own.
+- **Fuel Cost and Ranger BIK open pre-filled** (`?profile=<id>`):
+  `fuelPrefillOf` (name, private / business, car / van, mileage, term, the
+  current vehicle as the search, and the electric model via `matchEvModel`);
+  `rangerPrefillOf` (trim and engine read from what's been typed, 2-Seat only
+  where Ford build one, the driver's tax rate, fuel card, term, and the
+  rental for a business only, being ex VAT). Their exported PDFs carry
+  `profile_id` and show on the profile; the save only links if the exec can
+  work on that profile. The Ranger section only shows for a Ranger.
+- **Part exchange:** reg, mileage, the Vehicle Vision link (`APPRAISAL_URL`)
+  to open or copy for the customer, "Mark as sent", the appraisal PDF, then
+  value, finance to settle and equity (`pxEquity`, to the penny).
+  **Appraisals are stored in our database in 2MB pieces**
+  (`customer_profile_file_chunks`), not the public blob store, because they
+  carry a customer's registration and valuation; pieces because a Vercel
+  function takes at most 4.5MB a request. Up to 30MB; the finish step checks
+  every piece arrived, the sizes add up and it starts `%PDF-`, or deletes it.
+  Half-finished uploads over an hour old are cleared on the next start.
+- **Availability and price links to Stock** ("Check stock for Puma Gen-E",
+  user: a link and nothing more), opening `/stock?q=<model>` in a new tab so
+  the profile stays open on the call. `StockBrowser` takes `initialQuery`
+  for this; only the TF page passes it. Shown only to users with stock access.
+- Wide screens get a right rail: Quick notes (the same answer as Other
+  notes, which hides from the main column there) and At a glance.
+- No em or en dashes in anything an exec reads; a test pins it.
 
 ## Sales leaderboard (Pole Position)
 

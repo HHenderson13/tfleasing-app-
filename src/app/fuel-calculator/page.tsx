@@ -2,14 +2,24 @@ import Link from "next/link";
 import { isAdmin } from "@/lib/auth";
 import { requireUser } from "@/lib/auth-guard";
 import { loadFuelPrices, loadFuelVehicles } from "@/lib/fuel-prices";
+import { fuelPrefillOf, matchEvModel } from "@/lib/customer-profiles";
+import { getProfile } from "@/lib/customer-profiles-store";
 import { FuelCalculator } from "./calculator";
 
 export const dynamic = "force-dynamic";
 
-export default async function FuelCalculatorPage() {
+export default async function FuelCalculatorPage({ searchParams }: { searchParams: Promise<{ profile?: string }> }) {
   // Every signed-in user (user, 2026-10-15): it's a tool for the conversation with the customer.
   const user = await requireUser();
   const [prices, vehicles] = await Promise.all([loadFuelPrices(), loadFuelVehicles()]);
+  // Opened from a Customer Profile: start from what the exec already knows.
+  const pid = String((await searchParams).profile ?? "");
+  const p = /^[0-9a-f-]{36}$/.test(pid) ? await getProfile(pid) : null;
+  const prefill = p ? fuelPrefillOf(p) : null;
+  const profile = p && prefill ? {
+    id: p.id, name: p.customerName, prefill,
+    evKey: matchEvModel(prefill.model, vehicles.filter((v) => v.powertrain === "ev" && v.segment === prefill.segment).map((v) => ({ key: `${v.make}|${v.model}`, model: v.model }))),
+  } : null;
   const lastChecked = prices.reduce<string | null>((a, p) => (!a || p.checkedAt > a ? p.checkedAt : a), null);
   const checked = lastChecked
     ? new Date(lastChecked).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
@@ -50,7 +60,7 @@ export default async function FuelCalculatorPage() {
             </p>
           )}
         </div>
-        <FuelCalculator prices={prices} vehicles={vehicles} preparedBy={user.name} canManage={isAdmin(user)} />
+        <FuelCalculator key={profile?.id ?? "blank"} prices={prices} vehicles={vehicles} preparedBy={user.name} canManage={isAdmin(user)} profile={profile} />
       </main>
     </div>
   );

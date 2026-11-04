@@ -10,6 +10,8 @@ import {
 import { Chip, Field, LinkButton, Note, Segmented, Select, Step, Tag, TextInput, UnitInput } from "../fuel-calculator/ui";
 import type { RangerPdfInput } from "./ranger-pdf";
 import { saveRangerExportAction } from "./actions";
+import type { RangerPrefill } from "@/lib/customer-profiles";
+import { ProfileBanner } from "../profiles/banner";
 
 // The Ranger BIK Calculator. Everything recalculates as it's typed; the maths
 // is lib/ranger-tax.ts, the same code the PDF prints its rows and workings from.
@@ -51,18 +53,25 @@ function optionLines(s: Slot, v: RangerVersion): OptionLine[] {
   return num(s.other) > 0 ? [...lines, { name: "Other options", incVat: num(s.other) }] : lines;
 }
 
-export function RangerCalculator({ preparedBy, today }: { preparedBy: string; today: string }) {
+/** Opened from a Customer Profile: their Ranger and tax details as far as we know them. */
+export interface RangerProfileLink { id: string; name: string; prefill: RangerPrefill }
+
+export function RangerCalculator({ preparedBy, today, profile }: { preparedBy: string; today: string; profile?: RangerProfileLink | null }) {
+  const pre = profile?.prefill;
   const { rates } = ratesFor(today);
 
-  const [customerName, setCustomerName] = useState("");
-  const [taxRate, setTaxRate] = useState("40");
-  const [fuelCard, setFuelCard] = useState<"no" | "yes">("no");
+  const [customerName, setCustomerName] = useState(pre?.customerName ?? "");
+  const [taxRate, setTaxRate] = useState(pre?.taxRate ?? "40");
+  const [fuelCard, setFuelCard] = useState<"no" | "yes">(pre?.fuelCard ?? "no");
   const [privateUse, setPrivateUse] = useState<"full" | "commuting">("full");
   const [funding, setFunding] = useState<"hire" | "buy">("hire");
   const [bizRate, setBizRate] = useState("25");
   const [vatReg, setVatReg] = useState<"yes" | "no">("yes");
-  const [termMonths, setTermMonths] = useState(48);
-  const [slots, setSlots] = useState<Slot[]>(() => [emptySlot(1), emptySlot(2)]);
+  const [termMonths, setTermMonths] = useState(pre?.termMonths ?? 48);
+  const [slots, setSlots] = useState<Slot[]>(() => [
+    pre?.trim ? { ...emptySlot(1), trim: pre.trim, id: pre.versionId ?? "", seats: pre.seats, rental: pre.rental ? String(pre.rental) : "" } : emptySlot(1),
+    emptySlot(2),
+  ]);
   const nextKey = useRef(3);
 
   // Their choice has to be picked first: everything else is measured against it.
@@ -103,6 +112,7 @@ export function RangerCalculator({ preparedBy, today }: { preparedBy: string; to
   const [showWorkings, setShowWorkings] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [profileSave, setProfileSave] = useState<"saving" | "saved" | "failed" | null>(null);
 
   const settingsLine = [
     `Driver pays ${settings.incomeTaxPct}% income tax`,
@@ -127,11 +137,13 @@ export function RangerCalculator({ preparedBy, today }: { preparedBy: string; to
       const blob = await pdf(<RangerComparisonPdf {...data} />).toBlob();
       const filename = `Ranger tax comparison${data.customerName ? ` - ${data.customerName.replace(/[\\/:*?"<>|]/g, "")}` : ""} - ${date}.pdf`;
       // Keep a copy for Saved comparisons; the download never waits on it.
+      if (profile) setProfileSave("saving");
       blobToBase64(blob).then((pdfBase64) => saveRangerExportAction({
         filename, customerName: data.customerName, vehicles: c.vehicles.map((v) => v.name).join(", "),
         bestName: c.best != null ? c.vehicles[c.best].name : null, savingAnnual: c.best != null ? c.savings[c.best] : null,
-        savingMonthly: c.best != null ? c.savingsMonthly[c.best] : null, pdfBase64,
-      })).catch((e) => console.error("Saving the export failed", e));
+        savingMonthly: c.best != null ? c.savingsMonthly[c.best] : null, pdfBase64, profileId: profile?.id ?? null,
+      })).then((res) => { if (profile) setProfileSave(res.ok ? "saved" : "failed"); })
+        .catch((e) => { console.error("Saving the export failed", e); if (profile) setProfileSave("failed"); });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -170,6 +182,7 @@ export function RangerCalculator({ preparedBy, today }: { preparedBy: string; to
 
   return (
     <div className="pb-28 lg:pb-12">
+      {profile && <ProfileBanner id={profile.id} name={profile.name} save={profileSave} />}
       {/* The steps and the answer share a grid of their own, so the sticky answer stops where the steps end
           and never slides over the full picture below. */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">

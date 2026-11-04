@@ -5,8 +5,10 @@ import { loadMappedStock } from "@/lib/stock-list";
 
 export const dynamic = "force-dynamic";
 
-export default async function PublicStockPage() {
+export default async function PublicStockPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireStockAccess();
+  // ?q= starts the search, e.g. from a Customer Profile's "Check stock" link.
+  const q = String((await searchParams).q ?? "").slice(0, 80);
   const { rows, latestUploadedAt } = await loadMappedStock();
   // Mapped rows are the full, unredacted superset StockRow expects — the
   // broker view is the same rows with fields stripped (see
@@ -29,7 +31,7 @@ export default async function PublicStockPage() {
           </div>
         </div>
         <div className="mt-6">
-          <StockBrowser rows={out} audience="tf" />
+          <StockBrowser rows={out} audience="tf" initialQuery={q} />
         </div>
       </main>
     </div>

@@ -17,6 +17,8 @@ import {
 } from "./ui";
 import type { FuelPdfInput } from "./fuel-pdf";
 import { saveFuelExportAction } from "./actions";
+import type { FuelPrefill } from "@/lib/customer-profiles";
+import { ProfileBanner } from "../profiles/banner";
 
 // The Fuel Cost Calculator. Everything recalculates as it's typed; the maths
 // is lib/fuel-calc.ts, the same code the PDF prints its workings from.
@@ -67,14 +69,20 @@ function useReference() {
 interface Pick { make: string; model: string; year: YearChoice; engine: string; versionId: string }
 const NO_PICK: Pick = { make: "", model: "", year: "any", engine: "any", versionId: "" };
 
-export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { prices: FuelPrice[]; vehicles: FuelVehicle[]; preparedBy: string; canManage: boolean }) {
+/** Opened from a Customer Profile: what we already know, and the electric model they're looking at if it's in the range. */
+export interface FuelProfileLink { id: string; name: string; prefill: FuelPrefill; evKey: string | null }
+
+export function FuelCalculator({ prices, vehicles, preparedBy, canManage, profile }: {
+  prices: FuelPrice[]; vehicles: FuelVehicle[]; preparedBy: string; canManage: boolean; profile?: FuelProfileLink | null;
+}) {
+  const pre = profile?.prefill;
   const published = useMemo(() => Object.fromEntries(prices.map((p) => [p.key, p])) as Partial<Record<PriceKey, FuelPrice>>, [prices]);
 
-  const [customerName, setCustomerName] = useState("");
-  const [segment, setSegmentRaw] = useState<Segment>("van");
-  const [customer, setCustomer] = useState<CustomerType>("private");
-  const [annualMiles, setAnnualMiles] = useState("12000");
-  const [termMonths, setTermMonths] = useState(48);
+  const [customerName, setCustomerName] = useState(pre?.customerName ?? "");
+  const [segment, setSegmentRaw] = useState<Segment>(pre?.segment ?? "van");
+  const [customer, setCustomer] = useState<CustomerType>(pre?.customer ?? "private");
+  const [annualMiles, setAnnualMiles] = useState(String(pre?.annualMiles ?? 12000));
+  const [termMonths, setTermMonths] = useState(pre?.termMonths ?? 48);
 
   // Prices: as published, editable for this comparison only.
   const [priceEdits, setPriceEdits] = useState<Partial<Record<PriceKey, string>>>({});
@@ -87,14 +95,14 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
   const catalogue = useMemo(() => [...library, ...reference.vehicles], [library, reference.vehicles]);
   const [iceMode, setIceMode] = useState<"find" | "mpg" | "co2">("find");
   const [pick, setPick] = useState<Pick>(NO_PICK);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(pre?.currentVehicle ?? "");
   const [mpgEdit, setMpgEdit] = useState<string | null>(null);
   const [manualFuel, setManualFuel] = useState<FuelType>("diesel");
   const [manualMpg, setManualMpg] = useState("");
   const [co2, setCo2] = useState("");
   const [firstReg, setFirstReg] = useState("");
   const [cycleChoice, setCycleChoice] = useState<TestCycle | null>(null);
-  const [iceName, setIceName] = useState("");
+  const [iceName, setIceName] = useState(pre?.currentVehicle ?? "");
 
   const filter = { segment, make: pick.make, model: pick.model, year: pick.year, engine: pick.engine };
   const versions = useMemo(() => (pick.model ? versionsFor(catalogue, filter) : []),
@@ -115,7 +123,7 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
   // ── The electric alternative ──
   const evModels = useMemo(() => groupModels(vehicles.filter((v) => v.powertrain === "ev" && v.segment === segment)), [vehicles, segment]);
   const [evMode, setEvMode] = useState<"range" | "manual">("range");
-  const [evKey, setEvKey] = useState("");
+  const [evKey, setEvKey] = useState(profile?.evKey ?? "");
   const [evId, setEvId] = useState("");
   const [evEdit, setEvEdit] = useState<string | null>(null);
   const [manualEff, setManualEff] = useState("");
@@ -130,7 +138,7 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
     ? { batteryKwh: evVehicle!.batteryKwh, rangeMiles: evVehicle!.rangeMiles, motorwayMiles: evVehicle!.motorwayMiles, dcKw: evVehicle!.dcKw, dcMinutes: evVehicle!.dcMinutes }
     : { batteryKwh: num(manualBattery) || null, rangeMiles: num(manualRange) || null, motorwayMiles: null, dcKw: null, dcMinutes: null };
 
-  const [mix, setMix] = useState<ChargeMix>(DEFAULT_MIX.van);
+  const [mix, setMix] = useState<ChargeMix>(DEFAULT_MIX[pre?.segment ?? "van"]);
 
   // ── The comparison ──
   const input: ComparisonInput = {
@@ -175,6 +183,7 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
   const [showWorkings, setShowWorkings] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [profileSave, setProfileSave] = useState<"saving" | "saved" | "failed" | null>(null);
 
   async function exportPdf() {
     setExporting(true);
@@ -208,10 +217,12 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
       const blob = await pdf(<FuelComparisonPdf {...data} />).toBlob();
       const filename = `Fuel comparison${data.customerName ? ` - ${data.customerName.replace(/[\\/:*?"<>|]/g, "")}` : ""} - ${data.date}.pdf`;
       // Keep a copy for Saved comparisons; the download never waits on it.
+      if (profile) setProfileSave("saving");
       blobToBase64(blob).then((pdfBase64) => saveFuelExportAction({
         filename, customerName: data.customerName, segment, iceName: [ice.name, ice.detail].filter(Boolean).join(", "),
-        evName: [ev.name, ev.detail].filter(Boolean).join(", "), savingMonthly: r.saving.monthly, pdfBase64,
-      })).catch((e) => console.error("Saving the export failed", e));
+        evName: [ev.name, ev.detail].filter(Boolean).join(", "), savingMonthly: r.saving.monthly, pdfBase64, profileId: profile?.id ?? null,
+      })).then((res) => { if (profile) setProfileSave(res.ok ? "saved" : "failed"); })
+        .catch((e) => { console.error("Saving the export failed", e); if (profile) setProfileSave("failed"); });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -251,6 +262,8 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
   });
 
   return (
+    <>
+    {profile && <ProfileBanner id={profile.id} name={profile.name} save={profileSave} />}
     <div className="grid gap-5 pb-28 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:pb-12 xl:grid-cols-[minmax(0,1fr)_400px]">
       {/* ── The inputs ── */}
       <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-1">
@@ -540,6 +553,7 @@ export function FuelCalculator({ prices, vehicles, preparedBy, canManage }: { pr
         </div>
       )}
     </div>
+    </>
   );
 }
 

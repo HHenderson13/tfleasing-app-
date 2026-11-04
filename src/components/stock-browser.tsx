@@ -282,9 +282,12 @@ export function StockBrowser({
   rows,
   audience = "tf",
   enquiryFrom,
+  initialQuery = "",
 }: {
   rows: StockRow[];
   audience?: StockAudience;
+  /** Starts the search box with this ("/stock?q=Puma Gen-E"). TF only; the broker page doesn't pass it. */
+  initialQuery?: string;
   // Who the enquiry buttons sign the email from. Broker view only — the TF
   // view has no enquiry buttons, because TF is the other end of them.
   enquiryFrom?: EnquirySender;
@@ -293,7 +296,7 @@ export function StockBrowser({
   const facets = useMemo(() => forAudience(FACETS, audience), [audience]);
   const sorts = useMemo(() => forAudience(SORTS, audience), [audience]);
 
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
   const [sel, setSel] = useState<Record<FacetId, Set<string>>>(() => {
     const o = {} as Record<FacetId, Set<string>>;
     for (const f of FACETS) o[f.id] = new Set();

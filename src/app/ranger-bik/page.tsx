@@ -1,16 +1,22 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth-guard";
 import { ratesFor } from "@/lib/ranger-tax";
+import { rangerPrefillOf } from "@/lib/customer-profiles";
+import { getProfile } from "@/lib/customer-profiles-store";
 import { RangerCalculator } from "./calculator";
 
 export const dynamic = "force-dynamic";
 
-export default async function RangerBikPage() {
+export default async function RangerBikPage({ searchParams }: { searchParams: Promise<{ profile?: string }> }) {
   // Every signed-in user, like the Fuel Cost Calculator: it's for the conversation with the customer.
   const user = await requireUser();
   // Today in the UK, so the tax year is the one the customer is in (and server and browser agree).
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const { rates, current } = ratesFor(today);
+  // Opened from a Customer Profile: start from their Ranger and tax details.
+  const pid = String((await searchParams).profile ?? "");
+  const p = /^[0-9a-f-]{36}$/.test(pid) ? await getProfile(pid) : null;
+  const profile = p ? { id: p.id, name: p.customerName, prefill: rangerPrefillOf(p) } : null;
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur">
@@ -40,7 +46,7 @@ export default async function RangerBikPage() {
               : `Showing ${rates.label} rates: this tax year's rates haven't been added yet`}
           </p>
         </div>
-        <RangerCalculator preparedBy={user.name} today={today} />
+        <RangerCalculator key={profile?.id ?? "blank"} preparedBy={user.name} today={today} profile={profile} />
       </main>
     </div>
   );

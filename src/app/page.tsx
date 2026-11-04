@@ -8,6 +8,7 @@ import { signOutAction } from "./login/actions";
 type Tile = { href: string; title: string; desc: string; tone: string; key: keyof ReturnType<typeof sectionAccess> | "everyone" };
 
 const TILES: Tile[] = [
+  { key: "everyone", href: "/profiles", title: "Customer Profiles", desc: "Your live enquiries, most important first. Notes as you talk, part exchange, and copy it all for the CRM.", tone: "from-teal-600 to-cyan-800" },
   { key: "quote",     href: "/quote",     title: "Quote",     desc: "Rank funders for a vehicle, term and mileage.",  tone: "from-violet-500 to-violet-700" },
   { key: "everyone", href: "/ranger-bik", title: "Ranger BIK Calculator", desc: "Every Ranger side by side, car or van: BIK, fuel card, employer's NI and corporation tax, as a PDF for the customer.", tone: "from-sky-600 to-blue-800" },
   { key: "everyone", href: "/fuel-calculator", title: "Fuel Calculator", desc: "Petrol or diesel against electric: running costs at today's UK prices, as a PDF for the customer.", tone: "from-lime-600 to-emerald-700" },
