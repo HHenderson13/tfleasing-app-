@@ -182,6 +182,26 @@ describe("bonuses on each order and delivery", () => {
     const later = applyBonuses({ orders: [held({ id: "o4", deliveryDay: "2027-01-29" })], deliveries: [], extract: [], rates: Q4, names: new Map() });
     expect(later.orders[0]).toMatchObject({ bonusFlag: "noScheme", bonus: 0 });
   });
+
+  it("matches a Re-Write's delivered line as its re-order", () => {
+    // Live data, 5 Nov 2026. Samliv's van, ordered 19 Oct, was re-ordered on
+    // 5 Nov; the extract now dates it 5 Nov and the delivered list we hold,
+    // exported before the Re-Write, still says 19 Oct. No plate to go on.
+    const van = { exec: "OlMa", customer: "Samliv property services ltd", model: "Explorer Van", segment: "Van", vehicleRaw: "Explorer Van 210kW 79kWh Select Auto RWD 5 Door", profit: -359.93 };
+    const reorder = held({ id: "samliv-new", orderDay: "2026-11-05", deliveryDay: "2026-11-30", ...van });
+    const delivery = held({ id: "samliv-del", orderDay: "2026-10-19", delivery: "Due", deliveryDay: "2026-11-30", ...van });
+    const extract = [extractLine({
+      id: "clitherow", orderDay: "2026-11-05", execName: "Ola Malejczyk", customer: "Mr Jamie Clitherow",
+      vehicle: "Explorer Van Explorer Van 210kW 79kWh Select Auto RWD", profit: -359.93, basic: 36287.5, deliveryDay: "2026-11-30",
+    })];
+    const names = new Map<string, string>();
+    const before = applyBonuses({ orders: [reorder], deliveries: [delivery], extract, rates: Q4, names });
+    expect(before.deliveries[0]).toMatchObject({ basic: null, bonusFlag: "noBasic" });
+    const after = applyBonuses({ orders: [reorder], deliveries: [delivery], extract, rates: Q4, names, standIn: new Map([["samliv-del", "samliv-new"]]) });
+    // BEV Van in November: 2.5% of £36,287.50 = £907.1875, so £907.19.
+    expect(after.deliveries[0]).toMatchObject({ orderDay: "2026-11-30", basic: 36287.5, bonusType: "BEV Van", bonus: 907.19, bonusFlag: "ok" });
+    expect(after.orders[0]).toMatchObject({ id: "samliv-new", basic: 36287.5, bonus: 907.19 });
+  });
 });
 
 // The extract's real header row (Dealbook_Extract_20_10_2026.csv), Basic in BQ.

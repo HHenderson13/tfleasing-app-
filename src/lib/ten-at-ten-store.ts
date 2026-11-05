@@ -7,7 +7,7 @@ import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads }
 import { wallClockFromInstant } from "./business-hours";
 import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
 import {
-  execCodeLookup, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf, staleOrderIds,
+  deliveriesAfterCancellations, execCodeLookup, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf, staleOrderIds,
   type CancellationParse, type CancellationStatus, type DealbookLine, type TenAtTenCancellation,
 } from "./ten-at-ten-cancellations";
 import { BONUS_TYPES, type BonusRate, type BonusRates, type BonusType, type ExtractMatchLine } from "./ten-at-ten-bonus";
@@ -718,13 +718,13 @@ export async function ingestCancellations(parsed: CancellationParse, meta: { fil
 }
 
 const DEALBOOK_LINES = {
-  orders: sql`SELECT id, order_day, exec, customer, model, vehicle_raw, registration, last_seen_at, first_uploaded_at, profit FROM ten_at_ten_orders`,
-  deliveries: sql`SELECT id, order_day, exec, customer, model, vehicle_raw, registration, last_seen_at, first_uploaded_at, profit FROM ten_at_ten_deliveries`,
+  orders: sql`SELECT id, order_day, delivery_day, exec, customer, model, vehicle_raw, registration, last_seen_at, first_uploaded_at, profit FROM ten_at_ten_orders`,
+  deliveries: sql`SELECT id, order_day, delivery_day, exec, customer, model, vehicle_raw, registration, last_seen_at, first_uploaded_at, profit FROM ten_at_ten_deliveries`,
 } as const;
 
 async function loadDealbookLines(source: keyof typeof DEALBOOK_LINES): Promise<DealbookLine[]> {
   const rows = await db.all<{
-    id: string; order_day: string; exec: string; customer: string; model: string; vehicle_raw: string | null;
+    id: string; order_day: string; delivery_day: string | null; exec: string; customer: string; model: string; vehicle_raw: string | null;
     registration: string | null; last_seen_at: number | null; first_uploaded_at: number; profit: number | null;
   }>(DEALBOOK_LINES[source]);
   return rows.map((r) => ({
@@ -735,6 +735,7 @@ async function loadDealbookLines(source: keyof typeof DEALBOOK_LINES): Promise<D
     // were first uploaded — never earlier than the export itself.
     seenAt: r.last_seen_at != null ? Number(r.last_seen_at) : wallClockFromInstant(Number(r.first_uploaded_at) * 1000),
     profit: r.profit == null ? null : Number(r.profit),
+    deliveryDay: r.delivery_day,
   }));
 }
 
@@ -747,9 +748,16 @@ const fmtStamp = (sec: number) =>
  * line Orders leaves out (`leftOutIds`: those, and any old copy Dealerweb's
  * order list no longer carries — `staleOrderIds`); and each Re-Write's
  * re-order with the original order day it is credited to (`creditOrders`).
+ *
+ * For Deliveries, from delivered lists exported before a cancellation
+ * (deliveriesAfterCancellations): the lines cancelled outright
+ * (`cancelledDeliveryIds`), old copies of a Re-Write the delivered list
+ * already holds again (`replacedDeliveryIds`), both left out; and a
+ * Re-Write's line still standing in for its re-order (`deliveryStandIns`).
  */
 export async function loadCancellationsReport(names: Map<string, string>): Promise<{
   views: CancellationView[]; originalIds: Set<string>; leftOutIds: Set<string>; rewriteOrderDays: Map<string, string>;
+  cancelledDeliveryIds: Set<string>; replacedDeliveryIds: Set<string>; deliveryStandIns: Map<string, string>;
 }> {
   const [cancels, notes, orders, deliveries] = await Promise.all([
     db.all<{
@@ -764,7 +772,12 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
     loadDealbookLines("deliveries"),
   ]);
   const stale = staleOrderIds(orders);
-  if (cancels.length === 0) return { views: [], originalIds: new Set(), leftOutIds: stale, rewriteOrderDays: new Map() };
+  if (cancels.length === 0) {
+    return {
+      views: [], originalIds: new Set(), leftOutIds: stale, rewriteOrderDays: new Map(),
+      cancelledDeliveryIds: new Set(), replacedDeliveryIds: new Set(), deliveryStandIns: new Map(),
+    };
+  }
 
   const execCodesOf = execCodeLookup(names);
 
@@ -772,7 +785,7 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
     id: c.id, exec: c.exec, orderDay: c.order_day, cancelledAt: Number(c.cancelled_at), cancelledDay: c.cancelled_day,
     customer: c.customer, model: c.model, registration: plateOf(c.registration),
   }));
-  const { matches, originalIds } = matchCancellations(rows, mergeDealbookLines(orders, deliveries), execCodesOf);
+  const { matches, originalIds } = matchCancellations(rows, mergeDealbookLines(orders, deliveries), execCodesOf, deliveries);
   const noteOf = new Map(notes.map((n) => [n.cancellation_id, n]));
   // A manager's call on Re-Write vs cancellation, where one was made.
   const calls = new Map<string, CancellationStatus>();
@@ -802,7 +815,11 @@ export async function loadCancellationsReport(names: Map<string, string>): Promi
       noteAt: n ? fmtStamp(Number(n.updated_at)) : null,
     };
   });
-  return { views, originalIds, leftOutIds: new Set([...originalIds, ...stale]), rewriteOrderDays: rewriteOrderDaysOf(rows, matches, calls) };
+  const delivered = deliveriesAfterCancellations(rows, matches, calls, deliveries);
+  return {
+    views, originalIds, leftOutIds: new Set([...originalIds, ...stale]), rewriteOrderDays: rewriteOrderDaysOf(rows, matches, calls),
+    cancelledDeliveryIds: delivered.cancelled, replacedDeliveryIds: delivered.replaced, deliveryStandIns: delivered.standIn,
+  };
 }
 
 async function cancellationExists(id: string): Promise<boolean> {

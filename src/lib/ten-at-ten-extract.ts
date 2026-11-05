@@ -222,11 +222,16 @@ export interface DealbookStored {
  *   its own column AK.
  * - Deliveries come back with `orderDay` holding the DELIVERY day and
  *   `delivery` the status, so the Orders views serve both tabs.
+ * - A delivery on a Re-Written order, held from a delivered list exported
+ *   before the Re-Write, is matched as its re-order (`standIn`: delivery
+ *   id to re-order id, from deliveriesAfterCancellations). The extract
+ *   carries the re-order's date, so on its own the line finds nothing.
  */
 export function applyBonuses(input: {
   orders: DealbookStored[]; deliveries: DealbookStored[];
   extract: (ExtractMatchLine & { basic: number | null; deliveryDay: string })[];
   rates: BonusRates; names: Map<string, string>;
+  standIn?: ReadonlyMap<string, string>;
 }): { orders: (OrderStoredRow & { id: string })[]; deliveries: OrderStoredRow[] } {
   const { orders, deliveries, extract, rates } = input;
   const execCodesOf = execCodeLookup(input.names);
@@ -234,7 +239,12 @@ export function applyBonuses(input: {
   const deal = (r: DealbookStored): DealMatchLine => ({
     id: r.id, orderDay: r.orderDay, exec: r.exec, customer: r.customer, vehicle: r.vehicleRaw, registration: r.registration, profit: r.profit,
   });
-  const deliveryMatch = matchExtract(deliveries.map(deal), extract, execCodesOf);
+  const orderById = new Map(orders.map((o) => [o.id, o]));
+  const asDelivered = (d: DealbookStored): DealMatchLine => {
+    const reorder = orderById.get(input.standIn?.get(d.id) ?? "");
+    return reorder ? { ...deal(reorder), id: d.id } : deal(d);
+  };
+  const deliveryMatch = matchExtract(deliveries.map(asDelivered), extract, execCodesOf);
   const orderMatch = matchExtract(orders.map(deal), extract, execCodesOf);
 
   const shape = (r: DealbookStored, day: string, bonusDay: string | null, basic: number | null): OrderStoredRow => {

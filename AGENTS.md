@@ -1085,6 +1085,23 @@ real file follows that. When both sit in one month the uploader is asked
   month as Due for good, inflating "on course for". This is the one place
   an upload removes lines it doesn't contain — so upload the full month,
   never a filtered export. Orders still never remove.
+- **Deliveries hears about a cancellation before the next delivered list
+  does** (user, 2026-11-05). A held delivered-list line whose order the
+  Cancelled Orders export shows cancelled after that list was exported
+  (`deliveryOriginalId` in `matchCancellations`, then
+  `deliveriesAfterCancellations`): cancelled outright, it's left out and the
+  tab says so; a Re-Write, it stays (the vehicle is still going) and is
+  matched to the Dealbook Extract **as its re-order** (`standIn` in
+  `applyBonuses`), unless the delivered list already holds the re-order,
+  when it's an old copy and left out. Why: Dealerweb takes a cancelled
+  order off the extract, and a Re-Write's extract line carries the
+  re-order's date, so such a line could never find its Basic. Live, 5 Nov
+  2026: the November delivered list was exported 08:59; Samliv's Explorer
+  Van was re-written at 11:31 (19 Oct order, re-ordered 5 Nov) and Wren
+  Electrical's Transit Custom cancelled outright at 11:38. November went
+  from 58 lines with 2 lacking Basic to 57 with none; bonuses up £907.19,
+  Samliv's 2.5% of £36,287.50. Pole Position's Deliveries leaves out the
+  same lines.
 - **Budgets** live in `ten_at_ten_budgets` (month × car|cv), edited on the
   upload page; combined is always car + cv. Seeded Q4 2026 with the user's
   figures (Oct 106/40, Nov 78/32, Dec 61/20) via INSERT OR IGNORE. Car = ICE
@@ -1589,7 +1606,8 @@ diagnostics carry on unchanged.
   leaves the fed months altogether. A manager's Re-Write call re-feeds the
   board, as an upload does. Deliveries — every line in the month by
   delivery date (delivered, arrived and due, as the delivered list always
-  counted). Insurance — non-zero W:AC cells, read by 10 at 10's Dealbook
+  counted), less the lines 10 at 10's Deliveries leaves out after a
+  cancellation (user, 2026-11-05; see Deliveries section). Insurance — non-zero W:AC cells, read by 10 at 10's Dealbook
   parser through the shared `countInsuranceProducts`. Inbound Conversion —
   enquiries by the month they were **raised**, where the old upload
   counted every row of the file as the chosen month.

@@ -98,13 +98,15 @@ function UploadHint({ file }: { file: string }) {
     : <> It appears once {file} has been uploaded.</>;
 }
 
-export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, rewriteMoves, market, canManage = false }: {
+export function ReportClient({ payload, orders, deliveries, budgets, responses, reportHorizon, today, cancellations, cancelledOrderDays, cancelledDeliveryDays, rewriteMoves, market, canManage = false }: {
   payload: ReportPayload; orders: OrdersPayload; deliveries: OrdersPayload; budgets: Budgets;
   responses: EnquiryRow[]; reportHorizon: number | null; today: string;
   /** Every cancellation, already classified on the server. */
   cancellations: CancellationView[];
   /** Order days of held orders that were later cancelled — left out of Orders. */
   cancelledOrderDays: string[];
+  /** Delivery days of held deliveries cancelled since the delivered list was exported, left out of Deliveries. */
+  cancelledDeliveryDays: string[];
   /** Re-Writes whose re-order Orders counts on the original order day. */
   rewriteMoves: CreditedReOrder[];
   /** The latest scrape, summarised; null before the first one. */
@@ -210,7 +212,8 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
       {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range}
         cancelledDays={cancelledOrderDays} rewriteMoves={rewriteMoves} onShowCancellations={() => setSection("cancellations")} />}
-      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today} />}
+      {section === "deliveries" && <DealbookSection key="deliveries" variant="deliveries" all={deliveryRows} range={range} budgets={budgets} today={today}
+        cancelledDays={cancelledDeliveryDays} onShowCancellations={() => setSection("cancellations")} />}
       {section === "cancellations" && <CancellationsSection all={cancellations} range={range} />}
       {section === "market" && <MarketSection market={market} />}
     </div>
@@ -745,10 +748,21 @@ function DealbookSection({ all, range, variant, budgets, today, cancelledDays, r
       {isDel && budgets && today && <BudgetPanel rows={periodAll} range={range} budgets={budgets} today={today} />}
       {cancelledHere > 0 && (
         <div className="rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
-          <span className="font-semibold text-slate-900">
-            {cancelledHere} {cancelledHere === 1 ? "order" : "orders"} in {range.label} {cancelledHere === 1 ? "was" : "were"} cancelled afterwards
-          </span>{" "}
-          and {cancelledHere === 1 ? "is" : "are"} left out here, as Dealerweb&apos;s own order list now leaves {cancelledHere === 1 ? "it" : "them"} out.{" "}
+          {isDel ? (
+            <>
+              <span className="font-semibold text-slate-900">
+                {cancelledHere} {cancelledHere === 1 ? "delivery" : "deliveries"} in {range.label} {cancelledHere === 1 ? "was" : "were"} cancelled after the delivered list was last uploaded
+              </span>{" "}
+              and {cancelledHere === 1 ? "is" : "are"} left out here. Dealerweb&apos;s next delivered list will leave {cancelledHere === 1 ? "it" : "them"} out too.{" "}
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-slate-900">
+                {cancelledHere} {cancelledHere === 1 ? "order" : "orders"} in {range.label} {cancelledHere === 1 ? "was" : "were"} cancelled afterwards
+              </span>{" "}
+              and {cancelledHere === 1 ? "is" : "are"} left out here, as Dealerweb&apos;s own order list now leaves {cancelledHere === 1 ? "it" : "them"} out.{" "}
+            </>
+          )}
           {onShowCancellations && <button onClick={onShowCancellations} className="font-semibold text-indigo-600 hover:text-indigo-800">See Cancellations</button>}
         </div>
       )}

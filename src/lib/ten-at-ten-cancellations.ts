@@ -34,7 +34,7 @@ export function execCodeLookup(names: Map<string, string>): (name: string) => st
   }
   return (name: string) => [...(codesByName.get(name.toLowerCase()) ?? []), execCodeFromName(name)];
 }
-import { cancelledHeaderFound, cleanVehicle, exportedAtOf, isCancelledOrdersHeader, plateOf, segmentOf } from "./ten-at-ten-orders";
+import { cancelledHeaderFound, cleanVehicle, exportedAtOf, isCancelledOrdersHeader, makeDeliveryKey, plateOf, segmentOf } from "./ten-at-ten-orders";
 import type { CreditedReOrder, Segment } from "./ten-at-ten-report";
 
 const COL = { exec: 0, orderDate: 1, customer: 2, type: 3, model: 4, registration: 5, cancelledDate: 6 } as const;
@@ -219,6 +219,8 @@ export interface DealbookLine {
   /** Wall clock of the latest export known to list this line. */
   seenAt: number;
   profit: number | null;
+  /** Column AK's date. Only read on delivered-list lines (deliveriesAfterCancellations). */
+  deliveryDay?: string | null;
 }
 
 export type CancellationStatus = "rewrite" | "proper";
@@ -241,6 +243,8 @@ export interface CancellationMatch {
   reorder: ReOrder | null;
   /** The Dealbook line that is the re-order. */
   reorderId: string | null;
+  /** The cancelled order's line on the delivered list we hold, when that list was exported before the cancellation. */
+  deliveryOriginalId: string | null;
 }
 
 type CancelLike = Pick<TenAtTenCancellation, "id" | "exec" | "orderDay" | "cancelledAt" | "cancelledDay" | "customer" | "model" | "registration">;
@@ -297,17 +301,20 @@ export function mergeDealbookLines(orders: DealbookLine[], deliveries: DealbookL
 /**
  * Classify every cancellation and find the held order lines that were
  * cancelled. `execCodesOf` turns the export's full name into the codes the
- * Dealbook uses for that person.
+ * Dealbook uses for that person. `delivered` is every delivered-list line we
+ * hold, all of them, so a cancelled order is found there too even when the
+ * order list holds the same line.
  */
 export function matchCancellations(
   cancels: readonly CancelLike[],
   lines: readonly DealbookLine[],
   execCodesOf: (name: string) => string[] = (n) => [execCodeFromName(n)],
+  delivered: readonly DealbookLine[] = [],
 ): { matches: Map<string, CancellationMatch>; originalIds: Set<string> } {
   const used = new Set<string>();
   const matches = new Map<string, CancellationMatch>();
   const order = [...cancels].sort((a, b) => a.cancelledAt - b.cancelledAt || a.id.localeCompare(b.id));
-  for (const c of order) matches.set(c.id, { status: "proper", originalId: null, originalProfit: null, reorder: null, reorderId: null });
+  for (const c of order) matches.set(c.id, { status: "proper", originalId: null, originalProfit: null, reorder: null, reorderId: null, deliveryOriginalId: null });
 
   const ck = new Map(order.map((c) => [c.id, customerKey(c.customer)]));
   const codes = new Map(order.map((c) => [c.id, new Set(execCodesOf(c.exec).map((x) => x.toLowerCase()).filter(Boolean))]));
@@ -330,6 +337,22 @@ export function matchCancellations(
       const hit = lines.find((l) => l.source === "orders" && !used.has(l.id)
         && l.orderDay === c.orderDay && l.seenAt < c.cancelledAt && test(c, l));
       if (hit) { used.add(hit.id); m.originalId = hit.id; m.originalProfit = hit.profit; }
+    }
+  }
+
+  // The same cancelled orders on the delivered list we hold, where that list
+  // was exported before the cancellation. Samliv and Wren Electrical (5 Nov
+  // 2026) were cancelled at 11:31 and 11:38, after the 08:59 delivered list,
+  // and sat in November's Deliveries with no extract line to take Basic from.
+  // Dealerweb's next delivered list drops them; until it's uploaded,
+  // deliveriesAfterCancellations says what Deliveries does with them.
+  const usedDelivered = new Set<string>();
+  for (const [, test] of tests) {
+    for (const c of order) {
+      const m = matches.get(c.id)!;
+      if (m.deliveryOriginalId) continue;
+      const hit = delivered.find((l) => !usedDelivered.has(l.id) && l.orderDay === c.orderDay && l.seenAt < c.cancelledAt && test(c, l));
+      if (hit) { usedDelivered.add(hit.id); m.deliveryOriginalId = hit.id; }
     }
   }
 
@@ -383,6 +406,56 @@ export function rewriteOrderDaysOf(
     if (m?.reorderId && (manual.get(c.id) ?? m.status) === "rewrite") out.set(m.reorderId, c.orderDay);
   }
   return out;
+}
+
+// ─── Deliveries ────────────────────────────────────────────────────────────
+//
+// Each deliveries upload syncs its month, so a cancelled order leaves
+// Deliveries when the next delivered list is uploaded. Between the two, the
+// Cancelled Orders export already knows. Without this the line sat in
+// Deliveries as going, and with no Basic: Dealerweb takes a cancelled order
+// off the Dealbook Extract, and a Re-Write's extract line carries the
+// re-order's date (Samliv, ordered 19 Oct 2026, re-ordered 5 Nov).
+
+/**
+ * What Deliveries does with a delivered-list line whose order was cancelled
+ * after that list was exported. A manager's call outranks the matching's.
+ *
+ * - Cancelled outright: the vehicle isn't going, so the line is left out
+ *   (`cancelled`).
+ * - A Re-Write: the vehicle is still going under its re-order, so the line
+ *   stays and is matched to the Dealbook Extract as the re-order
+ *   (`standIn`: line id to re-order id). If the delivered list already
+ *   holds the re-order itself, this line is an old copy and is left out
+ *   (`replaced`), so the vehicle counts once.
+ * - "It's a Re-Write" with no re-order found: the line stays as it is.
+ */
+export function deliveriesAfterCancellations(
+  cancels: readonly Pick<CancelLike, "id">[],
+  matches: ReadonlyMap<string, CancellationMatch>,
+  manual: ReadonlyMap<string, CancellationStatus>,
+  delivered: readonly Pick<DealbookLine, "id" | "deliveryDay">[],
+): { cancelled: Set<string>; replaced: Set<string>; standIn: Map<string, string> } {
+  const held = new Set(delivered.map((l) => l.id));
+  const months = [...new Set(delivered.map((l) => l.deliveryDay?.slice(0, 7)).filter((m): m is string => !!m))];
+  // A delivered-list line is keyed on its order's key plus the delivery
+  // month (makeDeliveryKey). Omnia's same-day re-order keys exactly as its
+  // original did, so the original's own line never counts as the re-order's.
+  const reorderDelivered = (reorderId: string, except: string) =>
+    [reorderId, ...months.map((m) => makeDeliveryKey(reorderId, `${m}-01`))].some((id) => id !== except && held.has(id));
+
+  const cancelled = new Set<string>(), replaced = new Set<string>(), standIn = new Map<string, string>();
+  for (const c of cancels) {
+    const m = matches.get(c.id);
+    const line = m?.deliveryOriginalId;
+    if (!m || !line) continue;
+    if ((manual.get(c.id) ?? m.status) === "proper") cancelled.add(line);
+    else if (m.reorderId) {
+      if (reorderDelivered(m.reorderId, line)) replaced.add(line);
+      else standIn.set(line, m.reorderId);
+    }
+  }
+  return { cancelled, replaced, standIn };
 }
 
 /**

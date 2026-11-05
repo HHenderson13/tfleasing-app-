@@ -37,17 +37,25 @@ export default async function TenAtTenPage() {
   // later cancelled, or an old copy of one, is left out — and a Re-Write's
   // re-order counts on the original order day, not the day it was keyed
   // again; the Orders tab says how many.
-  const { views: cancellations, originalIds, leftOutIds, rewriteOrderDays } = await loadCancellationsReport(names);
+  const {
+    views: cancellations, originalIds, leftOutIds, rewriteOrderDays, cancelledDeliveryIds, replacedDeliveryIds, deliveryStandIns,
+  } = await loadCancellationsReport(names);
+  // Deliveries hears about a cancellation before the next delivered list is
+  // uploaded: an order cancelled outright is left out, and a Re-Write's line
+  // stays (the vehicle is still going) and is matched as its re-order.
+  const shownDeliveries = heldDeliveries.filter((d) => !cancelledDeliveryIds.has(d.id) && !replacedDeliveryIds.has(d.id));
   // Ford's quarterly bonus on each deal, by its delivery month, on the Basic
   // from its Dealbook Extract line. Only the orders the tab shows are
   // matched: an old copy of an order (DEA Gate's vans before their
   // description changed) would otherwise take the live copy's extract line.
   // Matched on the real order day, so before a Re-Write is moved below.
   const { orders, deliveries } = applyBonuses({
-    orders: heldOrders.filter((o) => !leftOutIds.has(o.id)), deliveries: heldDeliveries, extract, rates: bonusRates, names,
+    orders: heldOrders.filter((o) => !leftOutIds.has(o.id)), deliveries: shownDeliveries, extract, rates: bonusRates, names,
+    standIn: deliveryStandIns,
   });
   const { lines: liveOrders, moved: rewriteMoves } = creditOrders(orders, leftOutIds, rewriteOrderDays);
   const cancelledOrderDays = heldOrders.filter((o) => originalIds.has(o.id)).map((o) => o.orderDay);
+  const cancelledDeliveryDays = heldDeliveries.filter((d) => cancelledDeliveryIds.has(d.id)).map((d) => d.deliveryDay as string);
   const payload = encodeReport(rows, names);
   const ordersPayload = encodeOrders(liveOrders, names);
   const deliveriesPayload = encodeOrders(deliveries, names);
@@ -67,7 +75,8 @@ export default async function TenAtTenPage() {
         </PageTitle>
         <ReportClient payload={payload} orders={ordersPayload} deliveries={deliveriesPayload} budgets={budgets}
           responses={responses} reportHorizon={reportHorizon} today={today}
-          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} canManage={canManage} />
+          cancellations={cancellations} cancelledOrderDays={cancelledOrderDays} cancelledDeliveryDays={cancelledDeliveryDays}
+          rewriteMoves={rewriteMoves} market={market} canManage={canManage} />
       </main>
     </div>
   );

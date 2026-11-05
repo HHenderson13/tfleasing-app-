@@ -6,6 +6,7 @@ import {
   cleanCustomer,
   creditOrders,
   customerKey,
+  deliveriesAfterCancellations,
   execCodeFromName,
   matchCancellations,
   mergeDealbookLines,
@@ -14,7 +15,7 @@ import {
   staleOrderIds,
   type DealbookLine,
 } from "./ten-at-ten-cancellations";
-import { detectTenAtTenFile, plateOf } from "./ten-at-ten-orders";
+import { detectTenAtTenFile, makeDeliveryKey, plateOf } from "./ten-at-ten-orders";
 
 const HEADER = ["Sales Executive", "Order Date", "Customer", "Type", "Model", "Registration Number", "Cancelled Date"];
 
@@ -262,5 +263,68 @@ describe("Re-Write or cancellation", () => {
     const d = { ...o, id: "d", source: "deliveries" as const };
     const extra = line({ id: "x", source: "deliveries", orderDay: "2026-09-14", customer: "Fleet Co" });
     expect(mergeDealbookLines([o], [d, extra]).map((l) => l.id)).toEqual(["o", "x"]);
+  });
+
+  // Live data, 5 Nov 2026: the November delivered list was exported at 08:59;
+  // Samliv's Explorer Van was cancelled at 11:31 and re-ordered the same day,
+  // and Wren Electrical's Transit Custom cancelled outright at 11:38.
+  describe("Deliveries, after a cancellation the delivered list hasn't caught up with", () => {
+    const DELIVERED_LIST = wall("2026-11-05T08:59");
+    const delivered = (o: Partial<DealbookLine>) => line({ source: "deliveries", seenAt: DELIVERED_LIST, deliveryDay: "2026-11-30", ...o });
+    const wren = cancel("wren", { exec: "Ola Malejczyk", orderDay: "2026-11-02", cancelledAt: "2026-11-05T11:38", customer: "Wren Electrical - Wakefield Ltd", model: "Transit Custom", registration: "MW76EOS" });
+    const samliv = cancel("samliv", { exec: "Ola Malejczyk", orderDay: "2026-10-19", cancelledAt: "2026-11-05T11:31", customer: "Samliv property services ltd", model: "Explorer Van" });
+    const orders = [
+      line({ id: "wren-order", orderDay: "2026-11-02", exec: "OlMa", customer: "Wren Electrical - Wakefield Ltd", registration: "MW76EOS", seenAt: DELIVERED_LIST }),
+      line({ id: "samliv-old", orderDay: "2026-10-19", exec: "OlMa", customer: "Samliv property services ltd", model: "Explorer Van", seenAt: wall("2026-11-03T11:20") }),
+      line({ id: "samliv-new", orderDay: "2026-11-05", exec: "OlMa", customer: "Samliv property services ltd", model: "Explorer Van", seenAt: wall("2026-11-05T12:12") }),
+    ];
+    const wrenDel = delivered({ id: "wren-del", orderDay: "2026-11-02", exec: "OlMa", customer: "Wren Electrical - Wakefield Ltd", registration: "MW76EOS" });
+    const samlivDel = delivered({ id: "samliv-del", orderDay: "2026-10-19", exec: "OlMa", customer: "Samliv property services ltd", model: "Explorer Van" });
+    const run = (deliveries: DealbookLine[], manual = new Map<string, "rewrite" | "proper">()) => {
+      const { matches } = matchCancellations([wren, samliv], mergeDealbookLines(orders, deliveries), (n) => [execCodeFromName(n)], deliveries);
+      return { matches, ...deliveriesAfterCancellations([wren, samliv], matches, manual, deliveries) };
+    };
+
+    it("leaves out an order cancelled outright, and has a Re-Write's line stand in for its re-order", () => {
+      const { matches, cancelled, replaced, standIn } = run([wrenDel, samlivDel]);
+      expect(matches.get("wren")).toMatchObject({ status: "proper", originalId: "wren-order", deliveryOriginalId: "wren-del" });
+      expect(matches.get("samliv")).toMatchObject({ status: "rewrite", originalId: "samliv-old", reorderId: "samliv-new", deliveryOriginalId: "samliv-del" });
+      expect(cancelled).toEqual(new Set(["wren-del"]));
+      expect(replaced.size).toBe(0);
+      expect(standIn).toEqual(new Map([["samliv-del", "samliv-new"]]));
+    });
+
+    it("leaves the old line out once the delivered list holds the re-order itself", () => {
+      const reorderDel = delivered({ id: makeDeliveryKey("samliv-new", "2026-11-30"), orderDay: "2026-11-05", exec: "OlMa", customer: "Samliv property services ltd", model: "Explorer Van", seenAt: wall("2026-11-06T09:00") });
+      const { replaced, standIn } = run([samlivDel, reorderDel]);
+      expect(replaced).toEqual(new Set(["samliv-del"]));
+      expect(standIn.size).toBe(0);
+    });
+
+    it("touches nothing listed after the cancellation", () => {
+      const { matches, cancelled, standIn } = run([{ ...wrenDel, seenAt: wall("2026-11-05T13:00") }, { ...samlivDel, seenAt: wall("2026-11-05T13:00") }]);
+      expect(matches.get("wren")!.deliveryOriginalId).toBeNull();
+      expect(matches.get("samliv")!.deliveryOriginalId).toBeNull();
+      expect(cancelled.size + standIn.size).toBe(0);
+    });
+
+    it("follows a manager's call", () => {
+      // "Not a Re-Write": Samliv's line goes. "It's a Re-Write" with no re-order: Wren's line stays as it is.
+      const { cancelled, standIn } = run([wrenDel, samlivDel], new Map([["samliv", "proper"], ["wren", "rewrite"]]));
+      expect(cancelled).toEqual(new Set(["samliv-del"]));
+      expect(standIn.size).toBe(0);
+    });
+
+    it("never takes a same-day Re-Write's own line for its re-order's", () => {
+      // Omnia: ordered, cancelled and re-ordered the same day, so the re-order
+      // keys exactly as the original did, and so does its delivered line.
+      const omnia = cancel("omnia", { exec: "Douglas James", orderDay: "2026-10-09", cancelledAt: "2026-10-09T12:07", customer: "Omnia", model: "Transit Custom", registration: "MP26VWH" });
+      const order = line({ id: "omnia", orderDay: "2026-10-09", exec: "DoJa", customer: "Omnia", registration: "MP26VWH", seenAt: wall("2026-10-09T12:30") });
+      const del = delivered({ id: makeDeliveryKey("omnia", "2026-10-30"), orderDay: "2026-10-09", exec: "DoJa", customer: "Omnia", registration: "MP26VWH", seenAt: wall("2026-10-09T11:50"), deliveryDay: "2026-10-30" });
+      const { matches } = matchCancellations([omnia], mergeDealbookLines([order], [del]), (n) => [execCodeFromName(n)], [del]);
+      const { replaced, standIn } = deliveriesAfterCancellations([omnia], matches, new Map(), [del]);
+      expect(replaced.size).toBe(0);
+      expect(standIn).toEqual(new Map([[del.id, "omnia"]]));
+    });
   });
 });

@@ -158,15 +158,17 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
   // Re-Write credited to the month of the original order, never the month
   // it was keyed again (creditOrders). A re-order only moves earlier,
   // so one credited before FEED_FROM_MONTH leaves the fed months altogether.
+  // Deliveries is 10 at 10's Deliveries too: a delivered-list line whose
+  // order was cancelled after that list was exported is left out, as is an
+  // old copy of a Re-Write the delivered list already holds again.
+  const report = orderMonths.length || deliveryMonths.length ? await loadExecNames().then(loadCancellationsReport) : null;
+  const deliveriesLeftOut = new Set([...(report?.cancelledDeliveryIds ?? []), ...(report?.replacedDeliveryIds ?? [])]);
   let credited: { id: string; orderDay: string; exec: string; ordered_at: number; vehicle_raw: string | null }[] = [];
-  if (orderMonths.length) {
-    const [{ leftOutIds, rewriteOrderDays }, held] = await Promise.all([
-      loadExecNames().then(loadCancellationsReport),
-      db.all<{ id: string; order_day: string; exec: string; ordered_at: number; vehicle_raw: string | null }>(
-        sql`SELECT id, order_day, exec, ordered_at, vehicle_raw FROM ten_at_ten_orders WHERE order_day >= ${from}`,
-      ),
-    ]);
-    credited = creditOrders(held.map((l) => ({ ...l, orderDay: l.order_day })), leftOutIds, rewriteOrderDays).lines;
+  if (orderMonths.length && report) {
+    const held = await db.all<{ id: string; order_day: string; exec: string; ordered_at: number; vehicle_raw: string | null }>(
+      sql`SELECT id, order_day, exec, ordered_at, vehicle_raw FROM ten_at_ten_orders WHERE order_day >= ${from}`,
+    );
+    credited = creditOrders(held.map((l) => ({ ...l, orderDay: l.order_day })), report.leftOutIds, report.rewriteOrderDays).lines;
   }
 
   const slots: { yearMonth: string; reportType: LeaderboardReportType; rows: ParsedRows | null; lines: number }[] = [];
@@ -181,9 +183,9 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
     slots.push({ yearMonth: m, reportType: "orders", lines: lines.length, rows: orderRowsFrom(lines.map((l) => ({ exec: l.exec, orderedAt: Number(l.ordered_at), vehicle: l.vehicle_raw }))) });
   }
   for (const m of deliveryMonths) {
-    const lines = await db.all<{ exec: string; insurance_count: number | null }>(
-      sql`SELECT exec, insurance_count FROM ten_at_ten_deliveries WHERE substr(delivery_day, 1, 7) = ${m}`,
-    );
+    const lines = (await db.all<{ id: string; exec: string; insurance_count: number | null }>(
+      sql`SELECT id, exec, insurance_count FROM ten_at_ten_deliveries WHERE substr(delivery_day, 1, 7) = ${m}`,
+    )).filter((l) => !deliveriesLeftOut.has(l.id));
     slots.push({ yearMonth: m, reportType: "delivered", lines: lines.length, rows: deliveredRowsFrom(lines.map((l) => ({ exec: l.exec, insuranceCount: l.insurance_count == null ? null : Number(l.insurance_count) }))) });
   }
 
