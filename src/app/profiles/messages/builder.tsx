@@ -10,8 +10,8 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  ANGLES, ANGLE_LABEL, DAY_INFO, EMPTY_INPUT, GAP_RE, MSG_MODELS, QUICK_MODELS, buildMessage, emailChoices, firstWord, msgModel, offerLine, offersFor,
-  questionsFor, smsParts, waStyles, type Angle, type Channel, type Day, type MessageOffer, type MissingKey, type MsgInput, type Sender, type Who,
+  ANGLES, ANGLE_LABEL, DAYS, EMPTY_INPUT, GAP_RE, MSG_MODELS, QUICK_MODELS, buildMessage, emailChoices, fillVars, firstWord, msgModel, offerLine, offersFor,
+  questionsFor, smsParts, waStyles, type Angle, type Channel, type Day, type MessageOffer, type MissingKey, type MessageConfig, type MsgInput, type Sender, type Who,
 } from "@/lib/message-templates";
 import { WHATSAPP_TILE } from "@/lib/whatsapp-icon";
 import { Glyph, Icon } from "../ui";
@@ -27,8 +27,6 @@ export interface BuilderPrefill {
 }
 
 const CHANNELS: { key: Channel; label: string }[] = [{ key: "email", label: "Email" }, { key: "whatsapp", label: "WhatsApp" }, { key: "text", label: "Text" }];
-const CARS = MSG_MODELS.filter((m) => !m.van);
-const VANS = MSG_MODELS.filter((m) => m.van);
 
 const box = "w-full rounded-xl border bg-white px-3.5 text-base text-slate-900 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition placeholder:text-slate-500 focus:outline-none focus:ring-4 sm:text-[14.5px]";
 const okRing = "border-slate-300 hover:border-slate-400 focus:border-slate-900 focus:ring-slate-900/10";
@@ -84,8 +82,11 @@ function WithGaps({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-export function MessageBuilder({ sender: sender0, offers, admin, prefill, today, onClose, onCopied }: {
-  sender: Sender; offers: MessageOffer[]; admin: boolean; prefill?: BuilderPrefill; today: string; onClose: () => void;
+export function MessageBuilder({ sender: sender0, offers, config, admin, prefill, today, onClose, onCopied }: {
+  sender: Sender; offers: MessageOffer[];
+  /** The wording, as admins have it (the standard where they haven't changed it). */
+  config: MessageConfig;
+  admin: boolean; prefill?: BuilderPrefill; today: string; onClose: () => void;
   /** After a copy: the discovery question it asked, so a profile can remember it. */
   onCopied?: (question: string | null) => void;
 }) {
@@ -102,17 +103,18 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
   // A different day has its own openings, endings and styles: start those again.
   const setDay = (day: Day) => up({ day, emailOpening: 0, emailEnding: 0, waStyle: "standard", waEnding: 0 });
 
-  const m = msgModel(input.modelKey);
+  const m = msgModel(input.modelKey, config);
   const day = input.day ?? 1;
-  const built = buildMessage(input, sender, offers, today);
+  const built = buildMessage(input, sender, offers, today, config);
   const miss = (k: MissingKey) => (tried ? built.missing.find((x) => x.key === k)?.text ?? null : null);
-  const questions = m && input.who ? questionsFor(day, input.who, m) : [];
+  const questions = m && input.who ? questionsFor(day, input.who, m, config) : [];
   const live = offersFor(offers, m?.key ?? null, input.who, today);
-  const styles = waStyles(day, input.who, m);
+  const styles = waStyles(day, input.who, m, config);
   const style = styles.find((s) => s.id === input.waStyle) ?? styles[0];
-  const styleAsks = input.channel !== "email" && !!style.ownQuestion;
+  const styleAsks = !built.needsQuestion;
+  const models = MSG_MODELS.map((x) => msgModel(x.key, config)!);
   const vars = { first: input.first.trim() || "them", exec: firstWord(sender.name), model: m?.label ?? "model", van: !!m?.van };
-  const choices = emailChoices(day, vars);
+  const choices = emailChoices(day, vars, config);
   const needDetails = !sender.landline.trim() || !sender.mobile.trim();
 
   useEffect(() => {
@@ -156,6 +158,7 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
             <h2 className="truncate text-[16.5px] font-semibold tracking-tight text-slate-900">{prefill?.customerName ? `Message ${prefill.customerName}` : "Write a message"}</h2>
             <p className="hidden truncate text-[12.5px] text-slate-600 sm:block">Read it through before you send it. The templates are a start, not a script.</p>
           </div>
+          {admin && <Link href="/profiles/templates" className="hidden h-9 items-center rounded-xl px-3 text-[13px] font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 sm:flex">Edit templates</Link>}
           {admin && <Link href="/profiles/offers" className="hidden h-9 items-center rounded-xl px-3 text-[13px] font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 sm:flex">Edit offers</Link>}
           <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"><Icon name="x" /></button>
         </div>
@@ -165,11 +168,11 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
           <div className="min-w-0 space-y-4 p-4 sm:p-6 lg:overflow-y-auto">
             <Step n={1} title="Which day?" done={!!input.day} error={miss("day")}>
               <div className="grid grid-cols-3 gap-2">
-                {([1, 2, 3] as Day[]).map((d) => (
+                {DAYS.map((d) => (
                   <button key={d} type="button" aria-pressed={input.day === d} onClick={() => setDay(d)}
                     className={`rounded-xl px-3 py-2.5 text-left ring-1 ring-inset transition ${input.day === d ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-900 ring-slate-300 hover:ring-slate-400"}`}>
-                    <div className="text-[14.5px] font-semibold">{DAY_INFO[d].title}</div>
-                    <div className={`text-[12px] leading-4 ${input.day === d ? "text-slate-300" : "text-slate-600"}`}>{DAY_INFO[d].aim}</div>
+                    <div className="text-[14.5px] font-semibold">{config.days[d].title}</div>
+                    <div className={`text-[12px] leading-4 ${input.day === d ? "text-slate-300" : "text-slate-600"}`}>{config.days[d].aim}</div>
                   </button>
                 ))}
               </div>
@@ -187,13 +190,13 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
             <Step n={3} title="The model" done={!!m} error={miss("model")}>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_MODELS.map((k) => (
-                  <Chip key={k} on={input.modelKey === k} onClick={() => up({ modelKey: k })}>{msgModel(k)!.label}</Chip>
+                  <Chip key={k} on={input.modelKey === k} onClick={() => up({ modelKey: k })}>{msgModel(k, config)!.label}</Chip>
                 ))}
                 <select value={m && !QUICK_MODELS.includes(m.key) ? m.key : ""} onChange={(e) => up({ modelKey: e.target.value || null })} aria-label="Another model"
                   className={`h-8 rounded-full border bg-white pl-3 pr-7 text-[13px] font-medium text-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-900/10 ${m && !QUICK_MODELS.includes(m.key) ? "border-slate-900 bg-slate-900 text-white" : miss("model") ? "border-rose-400" : "border-slate-300"}`}>
                   <option value="">More models</option>
-                  <optgroup label="Cars">{CARS.filter((x) => !QUICK_MODELS.includes(x.key)).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</optgroup>
-                  <optgroup label="Vans">{VANS.filter((x) => !QUICK_MODELS.includes(x.key)).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</optgroup>
+                  <optgroup label="Cars">{models.filter((x) => !x.van && !QUICK_MODELS.includes(x.key)).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</optgroup>
+                  <optgroup label="Vans">{models.filter((x) => x.van && !QUICK_MODELS.includes(x.key)).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</optgroup>
                 </select>
               </div>
             </Step>
@@ -213,7 +216,7 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
             )}
 
             <Step n={input.day === 1 ? 5 : 4} title="The discovery question" done={styleAsks || !!built.asks}
-              hint={styleAsks ? "This WhatsApp asks its own, so a question here is only for the email." : "One main question, one they can answer quickly. Not one you've asked before."}
+              hint={styleAsks ? (input.channel === "email" ? "This email doesn't ask one." : "This WhatsApp asks its own, so a question here is only for the email.") : "One main question, one they can answer quickly. Not one you've asked before."}
               error={miss("question")}>
               {!m || !input.who ? (
                 <p className="text-[13.5px] text-slate-600">Pick personal or business and the model, and the questions for it show here.</p>
@@ -230,7 +233,7 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
                   {live.map((o) => (
                     <Radio key={o.id} on={input.offerId === o.id} onClick={() => up({ offerId: o.id })} bad={!!miss("offer")}>
                       <div className="text-[14px] font-semibold text-slate-900">{o.title}</div>
-                      <div className="mt-0.5 text-[13px] leading-5 text-slate-700">{offerLine(o, day, m.label)}</div>
+                      <div className="mt-0.5 text-[13px] leading-5 text-slate-700">{offerLine(o, day, m.label, config)}</div>
                       {o.details.trim() && <div className="mt-1.5 whitespace-pre-line rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12.5px] leading-5 text-slate-600"><span className="font-semibold text-slate-700">For you, not them: </span>{o.details}</div>}
                       {o.validUntil && <div className="mt-1 text-[12.5px] text-slate-600">{`Runs until ${o.validUntil.split("-").reverse().join("/")}`}</div>}
                     </Radio>
@@ -287,7 +290,7 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
                     <Choice label="Style" value={Math.max(0, styles.indexOf(style))} onChange={(i) => up({ waStyle: styles[i].id, waEnding: 0 })}
                       options={styles.map((st) => ({ text: st.label, sub: st.hint }))} />
                     {style.endings && style.endings.length > 1 && (
-                      <Choice label="Ending" value={input.waEnding} onChange={(i) => up({ waEnding: i })} options={style.endings.map((e) => ({ text: e.replaceAll("{exec}", vars.exec) }))} />
+                      <Choice label="Ending" value={input.waEnding} onChange={(i) => up({ waEnding: i })} options={style.endings.map((e) => ({ text: fillVars(e, vars) }))} />
                     )}
                   </>
                 )}

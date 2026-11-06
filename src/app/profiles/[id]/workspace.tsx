@@ -9,7 +9,7 @@ import {
   type Ctx, type DocLine, type FieldValue, type Heat, type ProfileData, type ProfileKind, type ProfileStatus, type SectionDef,
 } from "@/lib/customer-profiles";
 import type { ProfileDoc, ProfileSnapshot } from "@/lib/customer-profiles-store";
-import { firstNameGuess, msgModelFor, type MessageOffer, type Sender } from "@/lib/message-templates";
+import { firstNameGuess, msgModelFor, type MessageConfig, type MessageOffer, type Sender } from "@/lib/message-templates";
 import { MessageBuilder } from "../messages/builder";
 import {
   deleteAppraisalAction, deleteProfileAction, finishAppraisalUploadAction, markCopiedAction, refreshProfileAction, saveProfileDataAction,
@@ -33,7 +33,7 @@ const GLYPH: Record<string, string> = { vehicle: "car", why: "chat", business: "
 
 export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, canStock, messages }: {
   initial: ProfileSnapshot; now: string; nowMs: number; canEdit: boolean; mine: boolean; canStock: boolean;
-  messages: { sender: Sender; offers: MessageOffer[]; admin: boolean };
+  messages: { sender: Sender; offers: MessageOffer[]; config: MessageConfig; admin: boolean };
 }) {
   const router = useRouter();
   const id = initial.id;
@@ -411,7 +411,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
         </Modal>
       )}
       {messaging && (
-        <MessageBuilder sender={messages.sender} offers={messages.offers} admin={messages.admin} today={today} onClose={() => setMessaging(false)} onCopied={onAsked}
+        <MessageBuilder sender={messages.sender} offers={messages.offers} config={messages.config} admin={messages.admin} today={today} onClose={() => setMessaging(false)} onCopied={onAsked}
           prefill={{ first: firstNameGuess(name), who: kind === "personal" ? "personal" : "business", modelKey: msgModelFor(model)?.key ?? null, asked: askedBefore, customerName: name }} />
       )}
       {modal === "lost" && <LostModal name={name} onClose={() => setModal(null)} onSave={(r, n) => void setTo("lost", r, n)} />}

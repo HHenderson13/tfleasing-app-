@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 67;
+const SCHEMA_VERSION = 68;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -126,6 +126,7 @@ async function runEnsureAppSchema() {
   await ensureRangerBikTables();
   await ensureCustomerProfileTables();
   await ensureMessageTables();
+  await ensureMessageConfigTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await seedSeriesMappings();
@@ -1280,6 +1281,28 @@ async function ensureMessageTables() {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       updated_by TEXT NOT NULL DEFAULT ''
+    )
+  `));
+}
+
+// The message templates as admins have changed them (/profiles/templates): only
+// the sections that differ from the standard wording in lib/message-config.ts,
+// in one row. Every save is kept in the history too, in case one needs undoing.
+async function ensureMessageConfigTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS message_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      updated_by TEXT NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS message_config_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      data TEXT NOT NULL,
+      saved_at INTEGER NOT NULL,
+      saved_by TEXT NOT NULL
     )
   `));
 }

@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import type { CurrentUser } from "./auth";
 import { MSG_MODELS, type MessageOffer, type Sender } from "./message-templates";
+import { configOverrides, normaliseConfig, type MessageConfig } from "./message-config";
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -65,4 +66,28 @@ export async function saveOffer(id: string | null, o: OfferInput, by: string): P
 
 export async function deleteOffer(id: string): Promise<void> {
   await db.run(sql`DELETE FROM message_offers WHERE id = ${id}`);
+}
+
+// ─── The templates as admins have changed them ───────────────────────────
+
+export interface ConfigState { config: MessageConfig; updatedAt: number | null; updatedBy: string | null; changed: boolean }
+
+/** The wording the builder uses: the standard, with whatever admins have changed laid over it. */
+export async function getMessageConfig(): Promise<ConfigState> {
+  const [r] = await db.all<{ data: string; updated_at: number; updated_by: string }>(sql`SELECT data, updated_at, updated_by FROM message_config WHERE id = 1`);
+  let raw: unknown = {};
+  try { raw = r ? JSON.parse(r.data) : {}; } catch { raw = {}; }
+  const config = normaliseConfig(raw);
+  return { config, updatedAt: r ? Number(r.updated_at) : null, updatedBy: r?.updated_by ?? null, changed: Object.keys(configOverrides(config)).length > 0 };
+}
+
+/** Stores only what differs from the standard, and keeps a copy of every save. */
+export async function saveMessageConfig(config: MessageConfig, by: string): Promise<void> {
+  const data = JSON.stringify(configOverrides(config));
+  const t = nowSec();
+  await db.run(sql`
+    INSERT INTO message_config (id, data, updated_at, updated_by) VALUES (1, ${data}, ${t}, ${by})
+    ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+  `);
+  await db.run(sql`INSERT INTO message_config_history (data, saved_at, saved_by) VALUES (${data}, ${t}, ${by})`);
 }

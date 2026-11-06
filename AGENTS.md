@@ -41,6 +41,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/profiles`, `/profiles/[id]`      | `requireUser`. Anyone signed in can open anyone's; an exec starts on Mine, an admin on Everyone (user, 2026-11-04). Changes: the owner or an admin (`canWork`, checked in every action) |
 | `/profiles/[id]/files/[fileId]`    | signed in (a part exchange appraisal PDF, streamed in pieces) |
 | `/profiles/offers`                 | `requireAdmin` (the bespoke offers the messages mention; `saveOfferAction` / `deleteOfferAction` re-check admin) |
+| `/profiles/templates`              | `requireAdmin` (every word the message builder writes; `saveMessageConfigAction` re-checks admin) |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |
 | `/orders`, `/orders/awaiting`, `/orders/delivered`, `/orders/[id]`, `/customers/[id]` | `requireOrdersAccess` |
@@ -1605,8 +1606,30 @@ CRM text and the calculator prefills are pure and tested in
 
 Day 1, 2 and 3 email, WhatsApp and text for an unanswered enquiry, built from
 the "Day 2 & Day 3 unanswered enquiry follow up" guide and its bespoke offer
-add-on. Templates, questions and the rules are pure and tested in
-`lib/message-templates.ts`; the builder is `app/profiles/messages/builder.tsx`.
+add-on. The wording is `lib/message-config.ts`, the rules that put it together
+`lib/message-templates.ts` (both pure and tested); the builder is
+`app/profiles/messages/builder.tsx`.
+
+- **Admins can change every word** (user, 2026-11-06: "all parts of the
+  templates, questions etc") at `/profiles/templates`: each day's email
+  (subject, layout, openings, endings), the WhatsApp styles and their endings,
+  every discovery question and the suggested one per day, which questions
+  each model gets and how its name reads, the day names, the fleet question
+  and the standard offer lines. Placeholders are square brackets as the
+  guides write them ([First name], [Your name], [Model], [car or van]; a
+  layout also places [Opening], [Offer and extras], [Question], [Fleet
+  question], [Ending]); `configProblems` refuses a save with one it can't
+  fill, an empty item, or an [Ending] with no endings.
+- **Only what's changed is stored** (`configOverrides`, one row in
+  `message_config`, every save also in `message_config_history`), section by
+  section, and `normaliseConfig` lays it over the standard. So a section
+  nobody has touched keeps following the code, including when the code's
+  wording is updated, and a row in the wrong shape falls back to the
+  standard rather than breaking a message. Changing the standard wording in
+  the code doesn't reach a section an admin has already changed.
+- A layout without [Question] doesn't ask one (`needsQuestion`). Anything an
+  exec types goes into a slot in one pass, so it's never read as a
+  placeholder.
 Messages are written here and sent from Outlook, WhatsApp or the phone: nothing
 is sent from the app.
 

@@ -8,7 +8,7 @@ import { CARD, Glyph, HEAT_DOT, Icon, KindBadge, Ring, UrgencyBadge, ago } from 
 import { NewProfile } from "./new-profile";
 import { setProfileStatusAction } from "./actions";
 import { MessageBuilder } from "./messages/builder";
-import type { MessageOffer, Sender } from "@/lib/message-templates";
+import type { MessageConfig, MessageOffer, Sender } from "@/lib/message-templates";
 
 export interface ListRow {
   id: string;
@@ -43,7 +43,7 @@ const dateOf = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-GB",
 
 export function ProfileList({ rows, now, nowMs, whose, showOwner, moved, messages }: {
   rows: ListRow[]; now: string; nowMs: number; whose: string; showOwner: boolean; moved: string | null;
-  messages: { sender: Sender; offers: MessageOffer[]; admin: boolean };
+  messages: { sender: Sender; offers: MessageOffer[]; config: MessageConfig; admin: boolean };
 }) {
   const team = showOwner;
   const theirs = whose === "mine" ? "Your" : whose === "all" ? "Everyone's" : `${whose}'s`;
@@ -179,7 +179,7 @@ export function ProfileList({ rows, now, nowMs, whose, showOwner, moved, message
       </div>
 
       {adding && <NewProfile onClose={() => setAdding(false)} />}
-      {writing && <MessageBuilder sender={messages.sender} offers={messages.offers} admin={messages.admin} today={clock.now.slice(0, 10)} onClose={() => setWriting(false)} />}
+      {writing && <MessageBuilder sender={messages.sender} offers={messages.offers} config={messages.config} admin={messages.admin} today={clock.now.slice(0, 10)} onClose={() => setWriting(false)} />}
       <MovedToast row={moved ? rows.find((r) => r.id === moved && r.status !== "live") ?? null : null} />
     </>
   );

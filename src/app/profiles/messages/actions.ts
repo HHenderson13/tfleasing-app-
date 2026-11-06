@@ -5,7 +5,8 @@ import { isAdmin } from "@/lib/auth";
 import { requireUser } from "@/lib/auth-guard";
 import { logError } from "@/lib/logger";
 import { MSG_MODELS, isUkMobile, isUkPhone, offerProblems, type MessageOffer } from "@/lib/message-templates";
-import { deleteOffer, listOffers, saveContactDetails, saveOffer, senderFor } from "@/lib/message-store";
+import { configProblems, normaliseConfig, type MessageConfig, type Problem } from "@/lib/message-config";
+import { deleteOffer, getMessageConfig, listOffers, saveContactDetails, saveMessageConfig, saveOffer, senderFor } from "@/lib/message-store";
 
 const text = (v: unknown, n: number) => String(v ?? "").replace(/[ \t]+/g, " ").trim().slice(0, n);
 const KEYS = new Set(MSG_MODELS.map((m) => m.key));
@@ -66,4 +67,24 @@ export async function deleteOfferAction(id: string) {
   await deleteOffer(id);
   revalidatePath("/profiles/offers");
   return { ok: true as const, offers: await listOffers() };
+}
+
+/** Save the templates. Admins only; anything that wouldn't read properly is sent back, not saved. */
+export async function saveMessageConfigAction(input: MessageConfig): Promise<
+  { ok: true; config: MessageConfig; updatedAt: number | null; updatedBy: string | null; changed: boolean } | { ok: false; problems: Problem[] }
+> {
+  const user = await requireUser();
+  if (!isAdmin(user)) return { ok: false, problems: [{ tab: "email", where: "Templates", text: "Only a manager can change the templates." }] };
+  const config = normaliseConfig(input);
+  const problems = configProblems(config);
+  if (problems.length) return { ok: false, problems };
+  try {
+    await saveMessageConfig(config, user.name || user.email);
+    revalidatePath("/profiles");
+    revalidatePath("/profiles/templates");
+    return { ok: true, ...(await getMessageConfig()) };
+  } catch (e) {
+    logError("messages/config-save", e);
+    return { ok: false, problems: [{ tab: "email", where: "Templates", text: "Couldn't save the changes. Please try again." }] };
+  }
 }

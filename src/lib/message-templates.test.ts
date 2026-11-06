@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  EMPTY_INPUT, MSG_MODELS, OFFER_LINES, buildMessage, emailChoices, firstNameGuess, forText, isUkMobile, longDate, msgModel, msgModelFor, offerLine,
+  DEFAULT_CONFIG, EMPTY_INPUT, MSG_MODELS, buildMessage, emailChoices, firstNameGuess, forText, isUkMobile, longDate, msgModel, msgModelFor, offerLine,
   offerProblems, offersFor, questionsFor, smsParts, ukNational, waLink, waStyles, type MessageOffer, type MsgInput, type Sender,
 } from "./message-templates";
+import { configOverrides, configProblems, normaliseConfig, unknownTokens, type MessageConfig } from "./message-config";
 
 const TODAY = "2026-11-06";
 const FREDDY: Sender = { name: "Freddy Smith", email: "freddy@trustfordleasing.co.uk", landline: "0113 496 0000", mobile: "07700 900123" };
@@ -275,14 +276,85 @@ describe("the exec and the customer", () => {
 
 describe("the words", () => {
   it("has no em or en dashes anywhere a customer or an exec reads", () => {
-    const all: string[] = [...Object.values(OFFER_LINES)];
+    const all: string[] = [...Object.values(DEFAULT_CONFIG.offers), ...Object.values(DEFAULT_CONFIG.fleet)];
     for (const m of MSG_MODELS) for (const day of [1, 2, 3] as const) for (const who of ["personal", "business"] as const) {
       all.push(...questionsFor(day, who, m).map((q) => q.text));
-      for (const s of waStyles(day, who, m)) all.push(s.label, ...s.blocks, ...(s.endings ?? []));
+      for (const s of waStyles(day, who, m)) all.push(s.label, s.hint, s.text, ...s.endings);
       const c = emailChoices(day, { first: "J", exec: "F", model: m.label, van: m.van });
       all.push(...c.openings.map((o) => o.text), ...c.endings);
     }
     for (const channel of ["email", "whatsapp", "text"] as const) all.push(buildMessage(ready({ channel }), FREDDY, [offer()], TODAY).text);
     expect(all.join(" ")).not.toMatch(/[–—]/);
+  });
+});
+
+describe("the templates admins can change", () => {
+  const edit = (fn: (c: MessageConfig) => void) => { const c = structuredClone(DEFAULT_CONFIG); fn(c); return c; };
+
+  it("has nothing wrong with the standard wording", () => {
+    expect(configProblems(DEFAULT_CONFIG)).toEqual([]);
+    expect(configOverrides(DEFAULT_CONFIG)).toEqual({});
+    expect(normaliseConfig({})).toEqual(DEFAULT_CONFIG);
+  });
+
+  it("stores only the sections that changed, and reads them back over the standard", () => {
+    const c = edit((x) => { x.email[2].subject = "About your [Model]"; x.questions.puma.early.what[1].text = "Would you like it in blue?"; });
+    const o = configOverrides(c);
+    expect(Object.keys(o).sort()).toEqual(["email", "questions"]);
+    expect(Object.keys(o.email as object)).toEqual(["2"]);
+    expect(Object.keys(o.questions as object)).toEqual(["puma"]);
+    expect(normaliseConfig(JSON.parse(JSON.stringify(o)))).toEqual(c);
+  });
+
+  it("uses an admin's wording in the message", () => {
+    const c = edit((x) => {
+      x.email[2].subject = "About your [Model], [First name]";
+      x.email[2].openings[0].text = "It's [Your name] again.\n\nQuick one about the [Model].";
+      x.models.mustang.label = "Ford Mustang";
+    });
+    const q = questionsFor(2, "personal", msgModel("mustang", c)!, c).find((x) => x.suggested)!.text;
+    expect(q).toMatch(/particular Ford Mustang spec/);
+    const b = buildMessage(ready({ modelKey: "mustang", question: q }), FREDDY, [], TODAY, c);
+    expect(b.subject).toBe("About your Ford Mustang, James");
+    expect(b.paras.slice(0, 3)).toEqual(["Hi James,", "It's Freddy again.", "Quick one about the Ford Mustang."]);
+  });
+
+  it("drops the question step when a layout has no [Question]", () => {
+    const c = edit((x) => { x.email[2].template = x.email[2].template.replace("[Question]", ""); });
+    const b = buildMessage(ready({ question: null }), FREDDY, [], TODAY, c);
+    expect(b.missing).toEqual([]);
+    expect(b.needsQuestion).toBe(false);
+  });
+
+  it("never reads what an exec typed as a placeholder", () => {
+    const b = buildMessage(ready({ extra: "Ask me about [Question] or [Model]" }), FREDDY, [], TODAY);
+    expect(b.paras).toContain("Ask me about [Question] or [Model]");
+  });
+
+  it("can send a model to another model's questions, and mark one electric", () => {
+    const c = edit((x) => { x.models.mustang = { label: "Mustang", set: "ev", electric: true }; });
+    expect(questionsFor(1, "personal", msgModel("mustang", c)!, c).find((q) => q.suggested)?.text).toBe("What made you start looking at electric cars?");
+    expect(questionsFor(2, "business", msgModel("mustang", c)!, c).some((q) => /tax benefits/.test(q.text))).toBe(true);
+  });
+
+  it("catches a placeholder it can't fill, an empty question and a missing ending", () => {
+    const c = edit((x) => {
+      x.email[1].openings[0].text = "Hi [Customer]";
+      x.questions.kuga.late.why[0].text = " ";
+      x.whatsapp[2][0].endings = [];
+      x.offers[3] = "Runs until [Valid until]";
+    });
+    const p = configProblems(c);
+    expect(p.map((x) => x.tab)).toEqual(["email", "whatsapp", "questions", "extras"]);
+    expect(p[0].text).toMatch(/^\[Customer\] isn't something it can fill in/);
+    expect(unknownTokens("Hi [ first  NAME ] and [Model]", ["First name", "Model"])).toEqual([]);
+  });
+
+  it("falls back to the standard for anything stored in the wrong shape", () => {
+    const c = normaliseConfig({ email: { 2: { subject: 7, openings: "nope" } }, models: { puma: { set: "nonsense" } }, whatsapp: { 1: [{ id: "a", text: "Hi" }, { id: "a", text: "Yo" }] } });
+    expect(c.email[2].subject).toBe(DEFAULT_CONFIG.email[2].subject);
+    expect(c.email[2].openings).toEqual(DEFAULT_CONFIG.email[2].openings);
+    expect(c.models.puma.set).toBe("puma");
+    expect(c.whatsapp[1].map((s) => s.id)).toEqual(["a", "a-2"]);
   });
 });

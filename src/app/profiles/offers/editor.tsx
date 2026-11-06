@@ -7,14 +7,14 @@
 
 import { useState } from "react";
 import { BTN, CARD, INPUT, LABEL } from "@/components/ui";
-import { MSG_MODELS, OFFER_LINES, isLiveOffer, msgModel, offerLine, offerProblems, type Day, type MessageOffer } from "@/lib/message-templates";
+import { MSG_MODELS, isLiveOffer, msgModel, offerLine, offerProblems, standardOfferLine, type Day, type MessageConfig, type MessageOffer } from "@/lib/message-templates";
 import { deleteOfferAction, saveOfferAction } from "../messages/actions";
 
 type Draft = Omit<MessageOffer, "id" | "updatedAt" | "updatedBy">;
 const BLANK: Draft = { title: "", models: [], who: "both", offer: "", details: "", validUntil: null, day1: "", day2: "", day3: "", active: true };
 const ukDate = (iso: string) => iso.split("-").reverse().join("/");
 
-export function OffersEditor({ initial, today }: { initial: MessageOffer[]; today: string }) {
+export function OffersEditor({ initial, today, config }: { initial: MessageOffer[]; today: string; config: MessageConfig }) {
   const [offers, setOffers] = useState(initial);
   const [editing, setEditing] = useState<{ id: string | null; draft: Draft } | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export function OffersEditor({ initial, today }: { initial: MessageOffer[]; toda
   }
 
   if (editing) {
-    return <OfferForm id={editing.id} start={editing.draft} onCancel={() => setEditing(null)} onSaved={(list) => { setOffers(list); setEditing(null); }} />;
+    return <OfferForm id={editing.id} start={editing.draft} config={config} onCancel={() => setEditing(null)} onSaved={(list) => { setOffers(list); setEditing(null); }} />;
   }
 
   return (
@@ -50,7 +50,7 @@ export function OffersEditor({ initial, today }: { initial: MessageOffer[]; toda
         <ul className="space-y-3">
           {sorted.map((o) => {
             const st = status(o);
-            const first = msgModel(o.models[0]);
+            const first = msgModel(o.models[0], config);
             return (
               <li key={o.id} className={`${CARD} p-4 sm:p-5`}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -62,10 +62,10 @@ export function OffersEditor({ initial, today }: { initial: MessageOffer[]; toda
                       </span>
                     </div>
                     <div className="mt-1 text-[13px] text-slate-600">
-                      {[o.models.map((k) => msgModel(k)?.label ?? k).join(", "), o.who === "both" ? "Personal and business" : o.who === "personal" ? "Personal only" : "Business only",
+                      {[o.models.map((k) => msgModel(k, config)?.label ?? k).join(", "), o.who === "both" ? "Personal and business" : o.who === "personal" ? "Personal only" : "Business only",
                         o.validUntil ? `Last day ${ukDate(o.validUntil)}` : "No end date"].join(" · ")}
                     </div>
-                    {first && <p className="mt-2 text-[13.5px] leading-5 text-slate-800">{offerLine(o, 1, first.label)}</p>}
+                    {first && <p className="mt-2 text-[13.5px] leading-5 text-slate-800">{offerLine(o, 1, first.label, config)}</p>}
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <button type="button" onClick={() => setEditing({ id: o.id, draft: { ...o } })} className={BTN.small}>Edit</button>
@@ -86,13 +86,13 @@ export function OffersEditor({ initial, today }: { initial: MessageOffer[]; toda
   );
 }
 
-function OfferForm({ id, start, onCancel, onSaved }: { id: string | null; start: Draft; onCancel: () => void; onSaved: (offers: MessageOffer[]) => void }) {
+function OfferForm({ id, start, config, onCancel, onSaved }: { id: string | null; start: Draft; config: MessageConfig; onCancel: () => void; onSaved: (offers: MessageOffer[]) => void }) {
   const [d, setD] = useState<Draft>(start);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const up = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
-  const sample = msgModel(d.models[0])?.label ?? "Transit Custom";
-  const preview = (day: Day) => offerLine({ ...d, id: "", updatedAt: 0, updatedBy: "" }, day, sample);
+  const sample = msgModel(d.models[0], config)?.label ?? "Transit Custom";
+  const preview = (day: Day) => offerLine({ ...d, id: "", updatedAt: 0, updatedBy: "" }, day, sample, config);
 
   async function save() {
     const local = offerProblems(d);
@@ -119,7 +119,8 @@ function OfferForm({ id, start, onCancel, onSaved }: { id: string | null; start:
         <div>
           <span className={LABEL}>On which models?</span>
           <div className="flex flex-wrap gap-1.5">
-            {MSG_MODELS.map((m) => {
+            {MSG_MODELS.map((base) => {
+              const m = msgModel(base.key, config)!;
               const on = d.models.includes(m.key);
               return <button key={m.key} type="button" aria-pressed={on} className={pill(on)} onClick={() => up({ models: on ? d.models.filter((k) => k !== m.key) : [...d.models, m.key] })}>{m.label}</button>;
             })}
@@ -167,7 +168,7 @@ function OfferForm({ id, start, onCancel, onSaved }: { id: string | null; start:
                 <div key={day}>
                   <span className={LABEL}>{`Day ${day}`}</span>
                   <textarea value={d[key]} onChange={(e) => up({ [key]: e.target.value })} rows={2} className={area}
-                    placeholder={day === 3 && d.validUntil ? "The offer on the [Model] runs until [Valid until], so it's worth a look if you're still searching." : OFFER_LINES[day]} />
+                    placeholder={standardOfferLine(day, !!d.validUntil, config)} />
                   <p className="mt-1.5 rounded-lg bg-slate-50 px-3 py-2 text-[13px] leading-5 text-slate-800"><span className="font-medium text-slate-600">{`Reads, for the ${sample}: `}</span>{preview(day)}</p>
                 </div>
               );
