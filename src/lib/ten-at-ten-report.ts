@@ -54,8 +54,6 @@ export interface ReportPayload {
   strings: string[];
   /** [dayNumber, exec, source, model, derivative, status, finance, term, mileage, outcome, customer, reopenedFrom] */
   rows: number[][];
-  /** Day numbers of enquiries re-opened later and counted then (StoredRow.reopenedLater): in no figure, only the note. */
-  reopenedLater?: number[];
 }
 
 export interface StoredRow {
@@ -139,10 +137,8 @@ function interner() {
 }
 
 export function encodeReport(all: StoredRow[], execNames: Map<string, string> = new Map()): ReportPayload {
-  // A lead re-opened later is counted once, as its last re-open: here it's
-  // only a day, for the note in the month it came in.
+  // A lead re-opened later is counted once, as its last re-open, so it isn't sent.
   const rows = all.filter((r) => !r.reopenedLater);
-  const reopenedLater = all.filter((r) => r.reopenedLater).map((r) => dayNumber(r.enquiryDay));
   const labelOf = derivativeLabeller(rows);
   const { strings, intern } = interner();
 
@@ -164,12 +160,7 @@ export function encodeReport(all: StoredRow[], execNames: Map<string, string> = 
       intern(r.reopenedFrom ?? ""),
     ];
   });
-  return { strings, rows: out, reopenedLater };
-}
-
-/** The days of enquiries re-opened later and counted then, for the note in the month they came in. */
-export function decodeReopenedLater(p: ReportPayload): string[] {
-  return (p.reopenedLater ?? []).map(dayFromNumber);
+  return { strings, rows: out };
 }
 
 export function decodeReport(p: ReportPayload): ReportRow[] {

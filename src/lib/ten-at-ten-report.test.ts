@@ -3,7 +3,6 @@ import {
   brokerPct,
   conversionPct,
   daysToCancel,
-  decodeReopenedLater,
   decodeReport,
   encodeReport,
   groupRows,
@@ -50,7 +49,6 @@ describe("encode / decode", () => {
     const rows = decodeReport(payload);
     expect(rows.map((r) => [r.day, r.source, r.reopenedFrom])).toEqual([["2026-08-20", "Leasing.com", "Customer"], ["2026-08-21", "TF Lead", ""]]);
     expect(statsOf(rows)).toMatchObject({ enquiries: 2, inboundEnquiries: 2, inboundOrders: 1 });
-    expect(decodeReopenedLater(payload)).toEqual(["2026-07-19"]);
   });
 });
 

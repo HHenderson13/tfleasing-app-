@@ -31,7 +31,6 @@ import {
   conversionPct,
   daysToCancel,
   decodeOrders,
-  decodeReopenedLater,
   decodeReport,
   dimLabel,
   groupOrders,
@@ -118,8 +117,6 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
   canManage?: boolean;
 }) {
   const enquiryRows = useMemo(() => decodeReport(payload), [payload]);
-  // Leads re-opened later count then; these are the days they came in.
-  const reopenedLaterDays = useMemo(() => decodeReopenedLater(payload), [payload]);
   const orderRows = useMemo(() => decodeOrders(orders), [orders]);
   // Deliveries arrive as order rows whose `day` is the DELIVERY day and
   // whose `delivery` is the status (Delivered, Arrived, Due).
@@ -173,7 +170,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         </div>
         <ExportPdfButton label={range.label} input={() => ({
           range, today, exportedAt: new Date().toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-          enquiries: enquiryRows, reopenedLaterDays, responses, reportHorizon, orders: orderRows, deliveries: deliveryRows, budgets,
+          enquiries: enquiryRows, responses, reportHorizon, orders: orderRows, deliveries: deliveryRows, budgets,
           cancellations, cancelledOrderDays, rewriteMoves, market,
         })} />
       </div>
@@ -219,7 +216,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
           cancelledOrderDays={cancelledOrderDays} rewriteMoves={rewriteMoves} market={market} open={setSection} />
       )}
 
-      {section === "enquiries" && <EnquiriesSection all={enquiryRows} reopenedLater={reopenedLaterDays} range={range} />}
+      {section === "enquiries" && <EnquiriesSection all={enquiryRows} range={range} />}
       {section === "response" && <ResponseSection all={responses} range={range} reportHorizon={reportHorizon} />}
       {section === "orders" && <DealbookSection key="orders" variant="orders" all={orderRows} range={range}
         cancelledDays={cancelledOrderDays} rewriteMoves={rewriteMoves} onShowCancellations={() => setSection("cancellations")} />}
@@ -498,7 +495,7 @@ const SOURCE_COLS: Col<Stats>[] = ENQ_COLS
 
 type SourceName = (typeof SOURCES)[number];
 
-function EnquiriesSection({ all, reopenedLater, range }: { all: ReportRow[]; reopenedLater: string[]; range: Range }) {
+function EnquiriesSection({ all, range }: { all: ReportRow[]; range: Range }) {
   const [sources, setSources] = useState<Set<SourceName>>(new Set());
   const [exec, setExec] = useState("");
   const [model, setModel] = useState("");
@@ -525,7 +522,6 @@ function EnquiriesSection({ all, reopenedLater, range }: { all: ReportRow[]; reo
         {filtersOn && <button onClick={() => { setSources(new Set()); setExec(""); setModel(""); }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Clear filters</button>}
       </div>
       <ConversionPanel s={s} />
-      <ReopenedNote rows={rows} countedLater={filtersOn ? 0 : reopenedLater.filter((d) => d >= range.startDay && d <= range.endDay).length} label={range.label} />
       <Tiles tiles={[
         { label: "Enquiries", value: int(s.enquiries), sub: `${int(s.inboundEnquiries)} inbound · ${int(s.enquiries - s.inboundEnquiries)} broker / prospect` },
         { label: "Orders", value: int(s.orders), sub: `${int(s.inboundOrders)} inbound · ${int(s.orders - s.inboundOrders)} broker / prospect` },
@@ -572,37 +568,6 @@ function ConversionPanel({ s }: { s: Stats }) {
         <div className="mt-0.5 text-xs text-indigo-200">{int(s.orders)} orders of {int(s.enquiries)} enquiries</div>
         <div className="mt-1 text-[11px] text-indigo-300">Inbound and broker / prospect together</div>
       </div>
-    </div>
-  );
-}
-
-// Lost MotorComplete leads re-opened under another source count as inbound,
-// once, as their last re-open (user, 2026-11-06). Say how many are in the
-// figures and where they came back in, and how many leads raised in the
-// period count later instead, so nobody wonders why Customer has shrunk or a
-// month's enquiries went down.
-function ReopenedNote({ rows, countedLater, label }: { rows: ReportRow[]; countedLater: number; label: string }) {
-  const reopened = useMemo(() => rows.filter((r) => r.reopenedFrom), [rows]);
-  if (reopened.length === 0 && countedLater === 0) return null;
-  const orders = reopened.filter((r) => r.outcome === "order").length;
-  const from = [...reopened.reduce((m, r) => m.set(r.reopenedFrom, (m.get(r.reopenedFrom) ?? 0) + 1), new Map<string, number>())]
-    .sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${int(n)}`).join(", ");
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-600">
-      {reopened.length > 0 && (
-        <>
-          <span className="font-semibold text-slate-900">
-            Inbound includes {int(reopened.length)} re-opened {reopened.length === 1 ? "lead" : "leads"} ({int(orders)} ordered).
-          </span>{" "}
-          Each is a lost MotorComplete lead the same customer came back on under another source ({from}). It counts once, under the
-          original lead&apos;s source, in the month it was re-opened.{" "}
-        </>
-      )}
-      {countedLater > 0 && (
-        <span className={reopened.length > 0 ? "" : "font-semibold text-slate-900"}>
-          {int(countedLater)} {countedLater === 1 ? "enquiry" : "enquiries"} from {label} {countedLater === 1 ? "was" : "were"} re-opened later and {countedLater === 1 ? "counts" : "count"} in the month of the last re-open instead.
-        </span>
-      )}
     </div>
   );
 }

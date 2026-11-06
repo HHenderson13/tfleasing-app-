@@ -817,8 +817,9 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
   counts **once, as its last re-open**: inbound, under the lead's source,
   in that re-open's month, with its exec and outcome. The lead itself and
   any re-open replaced by a later one (`reopenedLater`) are in no figure;
-  `encodeReport` sends only their days, for the note in the month they came
-  in. Worked out on every read (`loadTenAtTenRows`) from everything held,
+  `encodeReport` leaves them out. No note on the tab or PDF says how many
+  (removed at the user's request, 2026-11-06); each re-opened lead is only
+  marked "re-opened" in the customer lists. Worked out on every read (`loadTenAtTenRows`) from everything held,
   never stored, so each upload follows the rule with nothing to run. Year
   to 6 Nov 2026: 222 leads re-opened (225 re-opens, 168 ordered); inbound
   enquiries unchanged at 9,908, inbound 7.8% to 9.4%, Broker / Prospect
