@@ -1640,14 +1640,22 @@ is sent from the app.
   needs no discovery question for the WhatsApp.
 - **Email copies as formatted text** (`ClipboardItem` with HTML and plain), so
   it pastes into Outlook with the signature (name, both numbers, email) and a
-  "Message me on WhatsApp" button (a table cell, because Outlook keeps a cell's
-  background and drops a link's), linking `wa.me` with the customer's first
-  line written for them. The subject copies on its own.
+  "Message me on WhatsApp" card linking `wa.me` with the customer's first line
+  written for them. The card is tables and cell colours (what Outlook keeps)
+  with the WhatsApp logo as a tile (`lib/whatsapp-icon.ts`, Simple Icons, CC0)
+  inline as a data URI, so it travels with the email instead of being a remote
+  image Outlook blocks until the customer allows it. The subject copies on its
+  own.
 - **Text is the WhatsApp without the emoji** (`forText`) and shows how many
   texts it sends as (`smsParts`).
 - **The exec's details** (landline, mobile, the email it's signed with) are
-  theirs to add in the builder, once, in `user_contact_details`. An email
-  can't copy without both numbers; WhatsApp and text don't need them.
+  saved once against their login in `user_contact_details` (user: "they only
+  have to save it once") and filled in every time after. Until they are, the
+  box opens by itself when the builder opens. An email can't copy without both
+  numbers; WhatsApp and text don't need them.
+- **The opening, ending and style pickers show each choice in full, wrapped**
+  (`Choice` in the builder), not a native select: the openings run to two
+  sentences and a select cut them off (user, 2026-11-06).
 - **Offers** (`message_offers`, admins at `/profiles/offers`): models, personal,
   business or both, the sentence the customer reads ([Offer]), an optional
   last day (hidden after it), notes for the team only, and a line per day

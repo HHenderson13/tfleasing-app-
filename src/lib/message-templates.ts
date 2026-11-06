@@ -11,6 +11,8 @@
 //
 // Pure and client-safe. The builder, the offers page and the tests read from here.
 
+import { WHATSAPP_TILE } from "./whatsapp-icon";
+
 export type Day = 1 | 2 | 3;
 export type Channel = "email" | "whatsapp" | "text";
 export type Who = "personal" | "business";
@@ -1223,8 +1225,17 @@ function emailHtml(paras: string[], signature: string[], waHref: string | null):
   const p = (inner: string) => `<p style="margin:0 0 11pt;${font}">${inner}</p>`;
   const body = paras.map((x) => p(esc(x).replace(/\n/g, "<br>"))).join("");
   const sig = p(signature.map((l, i) => (i === 0 ? `<b>${esc(l)}</b>` : esc(l))).join("<br>"));
+  // A light green card: the WhatsApp tile, then the words, both links. Tables
+  // and cell colours because that's what Outlook keeps; the rounded corners are
+  // a bonus where the reader's email shows them.
+  const href = waHref ? esc(waHref) : "";
   const button = waHref
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td bgcolor="#075E54" style="background:#075E54;border-radius:6px;padding:9px 16px"><a href="${esc(waHref)}" style="color:#ffffff;text-decoration:none;font-weight:bold;${font}">Message me on WhatsApp</a></td></tr></table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;margin:2pt 0 0"><tr>`
+      + `<td bgcolor="#F0FBF4" style="background:#F0FBF4;border:1px solid #C9EED7;border-radius:12px;padding:6px 18px 6px 6px">`
+      + `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
+      + `<td valign="middle" style="padding:0 10px 0 0"><a href="${href}"><img src="${WHATSAPP_TILE}" width="36" height="36" alt="WhatsApp" style="display:block;border:0;width:36px;height:36px"></a></td>`
+      + `<td valign="middle" style="${font}"><a href="${href}" style="color:#111B21;text-decoration:none;font-weight:bold">Message me on WhatsApp</a></td>`
+      + `</tr></table></td></tr></table>`
     : "";
   return `<div style="${font}">${body}${sig}${button}</div>`;
 }

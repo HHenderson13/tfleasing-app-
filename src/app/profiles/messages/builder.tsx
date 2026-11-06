@@ -8,11 +8,12 @@
 // with something missing says what, and marks it.
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ANGLES, ANGLE_LABEL, DAY_INFO, EMPTY_INPUT, GAP_RE, MSG_MODELS, QUICK_MODELS, buildMessage, emailChoices, firstWord, msgModel, offerLine, offersFor,
   questionsFor, smsParts, waStyles, type Angle, type Channel, type Day, type MessageOffer, type MissingKey, type MsgInput, type Sender, type Who,
 } from "@/lib/message-templates";
+import { WHATSAPP_TILE } from "@/lib/whatsapp-icon";
 import { Glyph, Icon } from "../ui";
 import { saveMyDetailsAction } from "./actions";
 
@@ -92,7 +93,9 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
   const [sender, setSender] = useState(sender0);
   const [tried, setTried] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [details, setDetails] = useState(false);
+  // Saved once against their login (user_contact_details), then filled in every
+  // time. Until they are, the box is open from the start so it's done up front.
+  const [details, setDetails] = useState(() => !sender0.landline.trim() || !sender0.mobile.trim());
   const asked = useMemo(() => new Set(prefill?.asked ?? []), [prefill?.asked]);
 
   const up = (p: Partial<MsgInput>) => setInput((s) => ({ ...s, ...p }));
@@ -271,20 +274,20 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
               {details && <Details sender={sender} onSaved={(s) => { setSender(s); setDetails(false); setToast("Your details are saved for every message"); }} onClose={() => setDetails(false)}
                 bad={{ landline: !!miss("landline"), mobile: !!miss("mobile") }} />}
 
-              {/* What it looks like: the dropdowns. */}
-              <div className="grid gap-2.5 sm:grid-cols-2">
+              {/* What it looks like: the dropdowns, each choice in full. */}
+              <div className="space-y-2.5">
                 {input.channel === "email" ? (
                   <>
-                    <Select label="Opening" value={input.emailOpening} onChange={(i) => up({ emailOpening: i })}
-                      options={choices.openings.map((o) => (o.note ? `${o.text} (${o.note})` : o.text))} />
-                    <Select label="Ending" value={input.emailEnding} onChange={(i) => up({ emailEnding: i })} options={choices.endings} />
+                    <Choice label="Opening" value={input.emailOpening} onChange={(i) => up({ emailOpening: i })}
+                      options={choices.openings.map((o) => ({ text: o.text, note: o.note ? `Only if ${o.note.replace(/^only if /, "")}` : undefined }))} />
+                    <Choice label="Ending" value={input.emailEnding} onChange={(i) => up({ emailEnding: i })} options={choices.endings.map((text) => ({ text }))} />
                   </>
                 ) : (
                   <>
-                    <Select label="Style" value={Math.max(0, styles.indexOf(style))} onChange={(i) => up({ waStyle: styles[i].id, waEnding: 0 })}
-                      options={styles.map((s) => (s.hint ? `${s.label} (${s.hint.toLowerCase()})` : s.label))} />
+                    <Choice label="Style" value={Math.max(0, styles.indexOf(style))} onChange={(i) => up({ waStyle: styles[i].id, waEnding: 0 })}
+                      options={styles.map((st) => ({ text: st.label, sub: st.hint }))} />
                     {style.endings && style.endings.length > 1 && (
-                      <Select label="Ending" value={input.waEnding} onChange={(i) => up({ waEnding: i })} options={style.endings.map((e) => e.replaceAll("{exec}", vars.exec))} />
+                      <Choice label="Ending" value={input.waEnding} onChange={(i) => up({ waEnding: i })} options={style.endings.map((e) => ({ text: e.replaceAll("{exec}", vars.exec) }))} />
                     )}
                   </>
                 )}
@@ -305,8 +308,10 @@ export function MessageBuilder({ sender: sender0, offers, admin, prefill, today,
                     <p className="leading-[1.45]">
                       {built.signature?.map((l, i) => <span key={i} className={`block ${i === 0 ? "font-semibold" : ""}`}><WithGaps text={l} /></span>)}
                     </p>
-                    <span className={`inline-flex h-9 items-center rounded-md px-4 text-[14px] font-bold text-white ${built.waHref ? "bg-[#075E54]" : "bg-slate-400"}`}>
-                      Message me on WhatsApp
+                    <span className={`inline-flex items-center gap-2.5 rounded-xl py-1.5 pl-1.5 pr-[18px] ring-1 ring-inset ${built.waHref ? "bg-[#F0FBF4] ring-[#C9EED7]" : "bg-slate-50 ring-slate-200 grayscale"}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- the same inline image the email carries */}
+                      <img src={WHATSAPP_TILE} alt="" width={36} height={36} className="h-9 w-9 shrink-0" />
+                      <span className="text-[14.5px] font-bold text-[#111B21]">Message me on WhatsApp</span>
                     </span>
                     {!built.waHref && <p className="text-[12.5px] text-amber-800">The button needs your mobile.</p>}
                   </div>
@@ -415,15 +420,63 @@ function Radio({ on, onClick, bad, children }: { on: boolean; onClick: () => voi
   );
 }
 
-function Select({ label, value, options, onChange }: { label: string; value: number; options: string[]; onChange: (i: number) => void }) {
+/**
+ * A dropdown that shows each choice in full, wrapped, rather than cut off: the
+ * openings run to a couple of sentences, which a plain select can't show.
+ */
+function Choice({ label, value, options, onChange }: {
+  label: string; value: number; options: { text: string; sub?: string; note?: string }[]; onChange: (i: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const at = Math.min(value, options.length - 1);
+  const cur = options[at];
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    // Escape closes the list, not the whole builder.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey, true);
+    return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey, true); };
+  }, [open]);
+  const standard = (i: number) => i === 0 && options[0].text.toLowerCase() !== "standard";
   return (
-    <label className="block min-w-0">
-      <span className="mb-1 block text-[12.5px] font-medium text-slate-700">{label}</span>
-      <select value={Math.min(value, options.length - 1)} onChange={(e) => onChange(Number(e.target.value))}
-        className="h-10 w-full truncate rounded-xl border border-slate-300 bg-white pl-3 pr-8 text-[13.5px] text-slate-900 hover:border-slate-400 focus:border-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-900/10">
-        {options.map((o, i) => <option key={i} value={i}>{i === 0 && !/^standard$/i.test(o) ? `${o} (standard)` : o}</option>)}
-      </select>
-    </label>
+    <div ref={wrap} className="relative min-w-0">
+      <span id={id} className="mb-1 block text-[12.5px] font-medium text-slate-700">{label}</span>
+      <button type="button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={id} onClick={() => setOpen((o) => !o)}
+        className={`flex w-full items-start gap-2 rounded-xl border bg-white px-3 py-2 text-left text-[13.5px] leading-5 text-slate-900 transition hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-slate-900/10 ${open ? "border-slate-900" : "border-slate-300"}`}>
+        <span className="min-w-0 flex-1">
+          {cur.text}
+          {standard(at) && <span className="text-slate-600"> (standard)</span>}
+          {cur.note && <span className="ml-1.5 inline-block whitespace-nowrap rounded-full bg-amber-50 px-1.5 py-px text-[11.5px] font-medium text-amber-900 ring-1 ring-inset ring-amber-200">{cur.note}</span>}
+          {cur.sub && <span className="block text-[12.5px] text-slate-600">{cur.sub}</span>}
+        </span>
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className={`mt-0.5 h-4 w-4 shrink-0 text-slate-500 transition ${open ? "rotate-180" : ""}`}>
+          <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <ul role="listbox" aria-labelledby={id}
+          className="absolute inset-x-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-xl bg-white p-1 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.3)] ring-1 ring-slate-200">
+          {options.map((o, i) => (
+            <li key={i}>
+              <button type="button" role="option" aria-selected={i === at} onClick={() => { onChange(i); setOpen(false); }}
+                className={`flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] leading-5 transition ${i === at ? "bg-slate-100 text-slate-900" : "text-slate-800 hover:bg-slate-50"}`}>
+                <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center ${i === at ? "text-slate-900" : "text-transparent"}`}><Icon name="check" className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1">
+                  {o.text}
+                  {standard(i) && <span className="ml-1.5 inline-block whitespace-nowrap rounded-full bg-slate-200/70 px-1.5 py-px text-[11.5px] font-medium text-slate-700">Standard</span>}
+                  {o.note && <span className="ml-1.5 inline-block whitespace-nowrap rounded-full bg-amber-50 px-1.5 py-px text-[11.5px] font-medium text-amber-900 ring-1 ring-inset ring-amber-200">{o.note}</span>}
+                  {o.sub && <span className="block text-[12.5px] text-slate-600">{o.sub}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -495,7 +548,7 @@ function Details({ sender, onSaved, onClose, bad }: { sender: Sender; onSaved: (
         <h4 className="flex-1 text-[14px] font-semibold text-slate-900">{`Your details, ${firstWord(sender.name)}`}</h4>
         <button type="button" onClick={onClose} aria-label="Close your details" className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-white"><Icon name="x" className="h-3.5 w-3.5" /></button>
       </div>
-      <p className="mb-3 text-[12.5px] leading-5 text-slate-700">They go at the bottom of every email, and your mobile is the WhatsApp button. Saved once, for every message.</p>
+      <p className="mb-3 text-[12.5px] leading-5 text-slate-700">They go at the bottom of every email, and your mobile is the WhatsApp button. Save them once: they stay with your login and are filled in every time.</p>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {field("Landline", landline, setLandline, "landline", "e.g. 0113 496 0000")}
         {field("Mobile", mobile, setMobile, "mobile", "e.g. 07700 900123")}

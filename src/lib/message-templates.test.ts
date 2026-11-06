@@ -149,6 +149,8 @@ describe("the email", () => {
     expect(b.waHref).toBe(`https://wa.me/447700900123?text=${encodeURIComponent("Hi Freddy, it's James about the Puma.")}`);
     expect(b.html).toContain(`href="https://wa.me/447700900123?text=`);
     expect(b.html).toContain("Message me on WhatsApp");
+    // The WhatsApp tile travels inside the email, not as a link to an image Outlook would block.
+    expect(b.html).toContain(`src="data:image/png;base64,`);
     expect(b.text.endsWith(`Message me on WhatsApp: ${b.waHref}`)).toBe(true);
   });
 
