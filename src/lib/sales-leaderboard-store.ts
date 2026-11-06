@@ -13,7 +13,7 @@ import { loadEnquiries, loadLatestEnquiryUploadAt } from "./enquiries";
 import { partitionByReportability } from "./enquiry-reporting";
 import { logError } from "./logger";
 import {
-  FEED_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, orderRowsFrom, responseRowsFrom, rowsFingerprint,
+  FEED_FROM_MONTH, RESPONSE_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, feedEnquiryLines, orderRowsFrom, responseRowsFrom, rowsFingerprint,
 } from "./pole-position-feed";
 import {
   attributeReportRows,
@@ -143,14 +143,15 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
     months("ten_at_ten_enquiries", "enquiry_day"),
     months("ten_at_ten_orders", "order_day"),
     months("ten_at_ten_deliveries", "delivery_day"),
-    loadEnquiries({ from }),
+    loadEnquiries({ from: `${RESPONSE_FROM_MONTH}-01` }),
     loadLatestEnquiryUploadAt(),
   ]);
   // Response Time judges only what Response times judges: leads that have
   // had a full working day, measured from the latest MotorComplete upload.
   const horizon = latestResponseUpload == null ? null : reportingHorizonFromInstant(latestResponseUpload);
   const judged = horizon == null ? [] : partitionByReportability(responseLines, horizon).reportable;
-  const responseMonths = [...new Set(judged.map((r) => r.enquiryDay.slice(0, 7)))].sort();
+  // Response Time from RESPONSE_FROM_MONTH on, never back-filled (user, 2026-11-06).
+  const responseMonths = [...new Set(judged.map((r) => r.enquiryDay.slice(0, 7)))].filter((m) => m >= RESPONSE_FROM_MONTH).sort();
   if (enquiryMonths.length + orderMonths.length + deliveryMonths.length + responseMonths.length === 0) return [];
 
   // Order Take is 10 at 10's Orders: what Dealerweb's latest order list
@@ -172,11 +173,16 @@ export async function feedPolePositionFromTenAtTen(userId: string): Promise<FedS
   }
 
   const slots: { yearMonth: string; reportType: LeaderboardReportType; rows: ParsedRows | null; lines: number }[] = [];
+  // Inbound Conversion counts as 10 at 10's Enquiries does, re-opened leads
+  // included, so every enquiry held goes in: a lead and its re-open can sit
+  // in different months.
+  const enquiryLines = enquiryMonths.length ? feedEnquiryLines((await db.all<{
+    enquired_at: number; enquiry_day: string; exec: string; customer: string; source: string; source_raw: string | null; status: string | null; outcome: string;
+  }>(sql`SELECT enquired_at, enquiry_day, exec, customer, source, source_raw, status, outcome FROM ten_at_ten_enquiries ORDER BY enquired_at`))
+    .map((r) => ({ enquiredAt: Number(r.enquired_at), enquiryDay: r.enquiry_day, exec: r.exec, customer: r.customer, source: r.source, sourceRaw: r.source_raw, status: r.status, outcome: r.outcome }))) : new Map();
   for (const m of enquiryMonths) {
-    const lines = await db.all<{ exec: string; status: string | null; source_raw: string | null }>(
-      sql`SELECT exec, status, source_raw FROM ten_at_ten_enquiries WHERE substr(enquiry_day, 1, 7) = ${m}`,
-    );
-    slots.push({ yearMonth: m, reportType: "enquiry", lines: lines.length, rows: enquiryRowsFrom(lines.map((l) => ({ exec: l.exec, status: l.status, sourceRaw: l.source_raw }))) });
+    const lines = enquiryLines.get(m) ?? [];
+    slots.push({ yearMonth: m, reportType: "enquiry", lines: lines.length, rows: enquiryRowsFrom(lines) });
   }
   for (const m of orderMonths) {
     const lines = credited.filter((l) => l.orderDay.startsWith(m));

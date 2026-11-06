@@ -81,6 +81,8 @@ export interface Reopens {
   credit: Map<number, SourceName>;
   /** The leads that were re-opened, and re-opens a later one replaced, by index: not counted, so each lead counts once. */
   dropped: Set<number>;
+  /** Each counted re-open's lead, both by index: Pole Position counts the re-open under the lead's own source as uploaded. */
+  leadOf: Map<number, number>;
 }
 
 export function reopenedLeads(rows: readonly ReopenLine[]): Reopens {
@@ -94,12 +96,13 @@ export function reopenedLeads(rows: readonly ReopenLine[]): Reopens {
 
   const credit = new Map<number, SourceName>();
   const dropped = new Set<number>();
+  const leadOf = new Map<number, number>();
   for (const lines of byCustomer.values()) {
     lines.sort((a, b) => rows[a].enquiredAt - rows[b].enquiredAt || a - b);
     let lead: number | null = null; // the lost MotorComplete lead whose chain is open
     let last: number | null = null; // its latest re-open so far
     const close = () => {
-      if (lead != null && last != null) { credit.set(last, rows[lead].source as SourceName); dropped.add(lead); }
+      if (lead != null && last != null) { credit.set(last, rows[lead].source as SourceName); dropped.add(lead); leadOf.set(last, lead); }
       lead = null; last = null;
     };
     for (const i of lines) {
@@ -116,7 +119,7 @@ export function reopenedLeads(rows: readonly ReopenLine[]): Reopens {
     }
     close();
   }
-  return { credit, dropped };
+  return { credit, dropped, leadOf };
 }
 
 // ─── Status ────────────────────────────────────────────────────────────────

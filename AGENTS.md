@@ -823,8 +823,8 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
   never stored, so each upload follows the rule with nothing to run. Year
   to 6 Nov 2026: 222 leads re-opened (225 re-opens, 168 ordered); inbound
   enquiries unchanged at 9,908, inbound 7.8% to 9.4%, Broker / Prospect
-  67.2% to 55.1%. **Pole Position's Inbound Conversion does not count
-  them** (it reads column E as uploaded).
+  67.2% to 55.1%. **Pole Position's Inbound Conversion counts them the
+  same way** (`feedEnquiryLines`, see Pole Position).
 - **HaHe and JoRu are stripped from everything** — duplicates are moved
   onto those codes in Dealerweb. Ingest never stores them, deletes any
   stored enquiry a file shows was moved to them, and ensure-schema sweeps
@@ -1618,11 +1618,25 @@ produced, and each change is stored as a `sales_leaderboard_uploads` row
 with `source = 'ten-at-ten'`, so attribution, Re-process and the
 diagnostics carry on unchanged.
 
-- **History is kept.** `FEED_FROM_MONTH` (2026-10) is the cut-over: earlier
-  months keep the figures their own uploads gave them (`source = 'upload'`)
-  and are never rewritten from 10 at 10 — even where 10 at 10 holds lines
-  for them (the October enquiry log carries 8 late-September enquiries; a
-  fed September would have replaced a whole month with eight rows).
+- **The whole of 2026 is fed from 10 at 10** (user, 2026-11-06: "the new
+  more accurate numbers driving Pole Position, now and historic").
+  `FEED_FROM_MONTH` moved from 2026-10 to 2026-01 once 10 at 10 held the
+  year's enquiry log, order lists, cancellations and delivered lists.
+  Months before it keep the figures their own uploads gave them
+  (`source = 'upload'`). Don't move it earlier than the first month 10 at 10
+  holds a whole file for: the October enquiry log carried 8 late-September
+  enquiries, and a month fed from a few stray lines replaces a whole month
+  with them. Re-process on `/sales-leaderboard/admin` (or any 10 at 10
+  upload) rebuilds every fed month. A month's report 10 at 10 doesn't hold
+  keeps its own figures until it is uploaded there. Preview on 6 Nov 2026,
+  attributed as the board does: Deliveries matched the old uploads in every
+  month; Order Take fell most in May (111 to 75: orders Dealerweb's list
+  has since dropped as cancelled) and Inbound Conversion appeared for
+  January to September.
+- **Response Time goes forward only** (user, 2026-11-06: "I won't be doing
+  retrospective, but do pull from 10 at 10 going forwards"):
+  `RESPONSE_FROM_MONTH` (2026-10) is its own start, never back-filled, even
+  though 10 at 10 holds Enquiry Tracker data from 1 Aug 2026.
 - From the cut-over, a month's report is fed only once 10 at 10 actually
   holds it, so a report not yet uploaded there never zeroes the board.
 - Every 10 at 10 upload except the Enquiry Tracker re-feeds (Cancelled
@@ -1641,7 +1655,11 @@ diagnostics carry on unchanged.
   cancellation (user, 2026-11-05; see Deliveries section). Insurance — non-zero W:AC cells, read by 10 at 10's Dealbook
   parser through the shared `countInsuranceProducts`. Inbound Conversion —
   enquiries by the month they were **raised**, where the old upload
-  counted every row of the file as the chosen month.
+  counted every row of the file as the chosen month, counted exactly as
+  10 at 10's Enquiries does: a re-opened MotorComplete lead is inbound,
+  once, in the month of its last re-open (`feedEnquiryLines`, user,
+  2026-11-06), fed under the lead's own column E so the board's
+  `isInboundSource` reads it as inbound.
 - **Insurance waits for a re-upload.** Dealbook lines stored before
   `insurance_count` existed have none, and a month with any such line is
   not fed (`deliveredRowsFrom` → null) — it keeps its previous figures
@@ -1660,8 +1678,8 @@ exec", which is the check: October 2026 matched exec for exec.
 - Fed from 10 at 10's Enquiry Tracker data (the `enquiries` table), only
   leads already judged (`partitionByReportability` against the latest
   MotorComplete upload), by the month the lead came in, from
-  `FEED_FROM_MONTH`. Earlier months have no Response Time, so their points
-  and champions are unchanged.
+  `RESPONSE_FROM_MONTH` (2026-10), not `FEED_FROM_MONTH`: forward only.
+  Earlier months have no Response Time.
 - MotorComplete names execs in full; `execCodeFromName` turns "Helen Mort"
   into HeMo and the name map attributes it, like every other metric. That
   rule lives in `lib/sales-leaderboard.ts` and Cancellations shares it.

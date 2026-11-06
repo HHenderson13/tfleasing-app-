@@ -167,7 +167,7 @@ describe("re-opened leads", () => {
       enq("2026-07-27T10:00", "Kathryn Lawson", "Broker / Prospect", "lost"),
       enq("2026-08-20T10:00", "Kathryn Lawson", "Broker / Prospect", "order"),
     ];
-    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[2, "Leasing.com"]]), dropped: new Set([0, 1]) });
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[2, "Leasing.com"]]), dropped: new Set([0, 1]), leadOf: new Map([[2, 0]]) });
   });
 
   it("re-opens the latest lost lead; an earlier one stays as it was", () => {
@@ -176,12 +176,12 @@ describe("re-opened leads", () => {
       enq("2026-01-06T16:21", "Mr Andrew Richardson", "Leasing.com", "lost"),
       enq("2026-01-13T11:00", "Mr Andrew Richardson", "Broker / Prospect", "order"),
     ];
-    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[2, "Leasing.com"]]), dropped: new Set([1]) });
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[2, "Leasing.com"]]), dropped: new Set([1]), leadOf: new Map([[2, 1]]) });
   });
 
   it("counts a re-open that was lost again too, so the rate stays like for like", () => {
     const rows = [enq("2026-01-15T10:46", "Mr SHAUN ANTHONY LAWRENCE", "Leasing.com", "lost"), enq("2026-01-19T12:00", "Mr Shaun Anthony Lawrence", "Broker / Prospect", "lost")];
-    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[1, "Leasing.com"]]), dropped: new Set([0]) });
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[1, "Leasing.com"]]), dropped: new Set([0]), leadOf: new Map([[1, 0]]) });
   });
 
   it("treats the customer's next enquiry after an order as a new deal", () => {
@@ -190,11 +190,11 @@ describe("re-opened leads", () => {
       enq("2026-01-10T09:00", "Jo Bloggs", "Broker / Prospect", "order"),
       enq("2026-09-01T09:00", "Jo Bloggs", "Broker / Prospect", "order"),
     ];
-    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[1, "TF Lead"]]), dropped: new Set([0]) });
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[1, "TF Lead"]]), dropped: new Set([0]), leadOf: new Map([[1, 0]]) });
   });
 
   it("needs the same customer, an earlier lost lead, and nothing won from MotorComplete since", () => {
-    const none = { credit: new Map(), dropped: new Set() };
+    const none = { credit: new Map(), dropped: new Set(), leadOf: new Map() };
     // A surname isn't a customer.
     expect(reopenedLeads([enq("2026-01-03T09:00", "David Smith", "Leasing.com", "lost"), enq("2026-01-06T09:00", "Mr Ryan Smith", "Broker / Prospect", "order")])).toEqual(none);
     // The MotorComplete lead came after.

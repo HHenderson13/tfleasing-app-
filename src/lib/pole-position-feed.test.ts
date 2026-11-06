@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import {
-  FEED_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, isFedMonth, orderRowsFrom, responseRowsFrom, rowsFingerprint,
+  FEED_FROM_MONTH, RESPONSE_FROM_MONTH, deliveredRowsFrom, enquiryRowsFrom, feedEnquiryLines, isFedMonth, orderRowsFrom, responseRowsFrom, rowsFingerprint,
 } from "./pole-position-feed";
 import {
   attributeReportRows, countInsuranceProducts, parseDeliveredList, parseEnquiryLog, parseOrderList,
@@ -21,11 +21,36 @@ const codeToExec = new Map([["DeDu", "deniz"], ["MiHo", "minny"], ["LoBa", "lou"
 const participants = new Set(["deniz", "minny", "lou"]);
 
 describe("fed from 10 at 10", () => {
-  it("only feeds months from the cut-over; earlier months are history", () => {
-    expect(FEED_FROM_MONTH).toBe("2026-10");
-    expect(isFedMonth("2026-09")).toBe(false);
-    expect(isFedMonth("2026-10")).toBe(true);
+  it("feeds the whole of 2026 (user, 2026-11-06); 2025 is history", () => {
+    expect(FEED_FROM_MONTH).toBe("2026-01");
+    expect(isFedMonth("2025-12")).toBe(false);
+    expect(isFedMonth("2026-01")).toBe(true);
     expect(isFedMonth("2027-01")).toBe(true);
+    // Response Time goes forward only, from October 2026: never back-filled.
+    expect(RESPONSE_FROM_MONTH).toBe("2026-10");
+  });
+
+  it("counts a re-opened MotorComplete lead in Inbound Conversion once, in its last re-open's month, as 10 at 10 does", () => {
+    // Kathryn Lawson (HeMo): Leasing.com lead lost in July, re-opened under
+    // Customer and lost on 27 July, re-opened and delivered 20 August.
+    const at = (s: string) => Date.parse(`${s}:00Z`);
+    const enq = (when: string, sourceRaw: string, source: string, status: string, outcome: string, customer = "Kathryn Lawson") =>
+      ({ enquiredAt: at(when), enquiryDay: when.slice(0, 10), exec: "HeMo", customer, source, sourceRaw, status, outcome });
+    const byMonth = feedEnquiryLines([
+      enq("2026-07-19T10:00", "MotorComplete - Leasing.com", "Leasing.com", "Lost Sale", "lost"),
+      enq("2026-07-27T10:00", "Customer", "Broker / Prospect", "Lost Sale", "lost"),
+      enq("2026-08-20T10:00", "Customer", "Broker / Prospect", "Delivered", "order"),
+      enq("2026-08-21T10:00", "Customer", "Broker / Prospect", "Delivered", "order", "A Repeat Customer"),
+    ]);
+    // July loses both: the lead, and the re-open replaced by a later one.
+    expect(byMonth.get("2026-07")).toBeUndefined();
+    expect(byMonth.get("2026-08")).toEqual([
+      { exec: "HeMo", status: "Delivered", sourceRaw: "MotorComplete - Leasing.com" },
+      { exec: "HeMo", status: "Delivered", sourceRaw: "Customer" },
+    ]);
+    const [row] = enquiryRowsFrom(byMonth.get("2026-08")!);
+    const { byExec } = attributeReportRows("enquiry", [row], new Map([["HeMo", "helen"]]), new Set(["helen"]));
+    expect(byExec.get("helen")).toMatchObject({ inboundEnquiryCount: 1, inboundSalesCount: 1, enquiryCount: 2, salesCount: 2 });
   });
 
   it("gives the board the same Inbound Conversion as the enquiry log file did", () => {
