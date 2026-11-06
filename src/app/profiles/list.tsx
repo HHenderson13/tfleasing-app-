@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { KIND_LABEL, sortLive, ukNow, urgencyOf, type Heat, type ProfileData, type ProfileKind, type ProfileStatus } from "@/lib/customer-profiles";
-import { CARD, HEAT_DOT, Icon, KindBadge, Ring, UrgencyBadge, ago } from "./ui";
+import { CARD, Glyph, HEAT_DOT, Icon, KindBadge, Ring, UrgencyBadge, ago } from "./ui";
 import { NewProfile } from "./new-profile";
 import { setProfileStatusAction } from "./actions";
+import { MessageBuilder } from "./messages/builder";
+import type { MessageOffer, Sender } from "@/lib/message-templates";
 
 export interface ListRow {
   id: string;
@@ -39,7 +41,10 @@ function useClock(now: string, nowMs: number) {
 
 const dateOf = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
 
-export function ProfileList({ rows, now, nowMs, whose, showOwner, moved }: { rows: ListRow[]; now: string; nowMs: number; whose: string; showOwner: boolean; moved: string | null }) {
+export function ProfileList({ rows, now, nowMs, whose, showOwner, moved, messages }: {
+  rows: ListRow[]; now: string; nowMs: number; whose: string; showOwner: boolean; moved: string | null;
+  messages: { sender: Sender; offers: MessageOffer[]; admin: boolean };
+}) {
   const team = showOwner;
   const theirs = whose === "mine" ? "Your" : whose === "all" ? "Everyone's" : `${whose}'s`;
   const clock = useClock(now, nowMs);
@@ -47,14 +52,17 @@ export function ProfileList({ rows, now, nowMs, whose, showOwner, moved }: { row
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [adding, setAdding] = useState(false);
+  // A message for anyone, without a profile (user, 2026-11-06): nothing filled in.
+  const [writing, setWriting] = useState(false);
 
-  // "n" starts a new customer, unless they're typing somewhere.
+  // "n" starts a new customer and "m" a message, unless they're typing somewhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (e.key.toLowerCase() === "n" && !e.metaKey && !e.ctrlKey && !e.altKey && !["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) && !el.isContentEditable) {
+      const k = e.key.toLowerCase();
+      if ((k === "n" || k === "m") && !e.metaKey && !e.ctrlKey && !e.altKey && !["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) && !el.isContentEditable && !document.querySelector("[role=dialog]")) {
         e.preventDefault();
-        setAdding(true);
+        if (k === "n") setAdding(true); else setWriting(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -106,11 +114,18 @@ export function ProfileList({ rows, now, nowMs, whose, showOwner, moved }: { row
             {`${theirs} live enquiries, most important first. Open one while you're on the phone and fill in whatever comes up, in any order. It saves as you go.`}
           </p>
         </div>
-        <button type="button" onClick={() => setAdding(true)}
-          className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-slate-800">
-          <Icon name="plus" />New customer
-          <kbd className="ml-1 hidden rounded border border-white/20 px-1.5 text-[11px] font-medium text-slate-300 sm:inline">N</kbd>
-        </button>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={() => setWriting(true)} title="Email, WhatsApp or text for Day 1, 2 or 3"
+            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-white px-4 text-[14px] font-semibold text-slate-800 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 sm:flex-none">
+            <Glyph name="chat" className="h-4 w-4" />Write a message
+            <kbd className="ml-1 hidden rounded border border-slate-300 px-1.5 text-[11px] font-medium text-slate-600 sm:inline">M</kbd>
+          </button>
+          <button type="button" onClick={() => setAdding(true)}
+            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-slate-800 sm:flex-none">
+            <Icon name="plus" />New customer
+            <kbd className="ml-1 hidden rounded border border-white/20 px-1.5 text-[11px] font-medium text-slate-300 sm:inline">N</kbd>
+          </button>
+        </div>
       </div>
 
       {counts.live > 0 && (
@@ -164,6 +179,7 @@ export function ProfileList({ rows, now, nowMs, whose, showOwner, moved }: { row
       </div>
 
       {adding && <NewProfile onClose={() => setAdding(false)} />}
+      {writing && <MessageBuilder sender={messages.sender} offers={messages.offers} admin={messages.admin} today={clock.now.slice(0, 10)} onClose={() => setWriting(false)} />}
       <MovedToast row={moved ? rows.find((r) => r.id === moved && r.status !== "live") ?? null : null} />
     </>
   );

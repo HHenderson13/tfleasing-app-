@@ -40,6 +40,7 @@ explicitly — see `daily-summary/route.ts`.
 | `/ranger-bik/exports`, `/ranger-bik/exports/[id]` | `requireUser` (every exported Ranger PDF, searchable; the route serves the stored PDF) |
 | `/profiles`, `/profiles/[id]`      | `requireUser`. Anyone signed in can open anyone's; an exec starts on Mine, an admin on Everyone (user, 2026-11-04). Changes: the owner or an admin (`canWork`, checked in every action) |
 | `/profiles/[id]/files/[fileId]`    | signed in (a part exchange appraisal PDF, streamed in pieces) |
+| `/profiles/offers`                 | `requireAdmin` (the bespoke offers the messages mention; `saveOfferAction` / `deleteOfferAction` re-check admin) |
 | `/stock`, `/admin/stock`           | `requireStockAccess` / `requireAdmin` |
 | `/proposals`, `/search`            | `requireProposalsAccess`       |
 | `/orders`, `/orders/awaiting`, `/orders/delivered`, `/orders/[id]`, `/customers/[id]` | `requireOrdersAccess` |
@@ -1508,7 +1509,8 @@ Calculator. The maths, the range and the rates are pure and tested in
 
 Each exec's notes on their live enquiries, filled in while they're on the
 phone (user, 2026-11-04). **It is not a CRM** (user: "we have one of those
-already"): no reminders, emails, pipelines or manager reporting. Notes, the
+already"): no reminders, pipelines or manager reporting, and nothing is sent
+from here (messages are copied and sent from Outlook or WhatsApp). Notes, the
 agreed next contact, and getting it all into the real CRM quickly. Built from
 the three opening call guides with the scripts, the closing steps and the
 "if not ready today" section taken out (user: "sales calls never follow the
@@ -1598,6 +1600,61 @@ CRM text and the calculator prefills are pure and tested in
   takes `initialQuery` for this; only the TF page passes it. Shown only to
   users with stock access.
 - No em or en dashes in anything an exec reads; a test pins it.
+
+### Messages (user, 2026-11-06)
+
+Day 1, 2 and 3 email, WhatsApp and text for an unanswered enquiry, built from
+the "Day 2 & Day 3 unanswered enquiry follow up" guide and its bespoke offer
+add-on. Templates, questions and the rules are pure and tested in
+`lib/message-templates.ts`; the builder is `app/profiles/messages/builder.tsx`.
+Messages are written here and sent from Outlook, WhatsApp or the phone: nothing
+is sent from the app.
+
+- **Opens from the list or a profile** (user: "the home screen of customer
+  profile needs to be able to do templates as well"). The list's "Write a
+  message" (or M) opens it blank; a profile's Messages tile or top-bar button
+  opens it with the first name (`firstNameGuess`, nothing for a company name),
+  personal or business and the model (`msgModelFor`) filled in.
+- **Steps:** day, first name, personal or business, model, (Day 1 only) did
+  they ask us anything, with "No question asked" or the answer typed, the
+  discovery question, the offer when the model has one, and an optional line
+  of their own. Day 2 and 3 don't ask about answering (user: "we will have done
+  that on day 1").
+- **Nothing copies until it's complete** (user). A copy with anything missing
+  lists what, marks each step in red, and the preview shows each gap
+  highlighted. `buildMessage` returns `missing`; the tests pin it.
+- **Discovery questions are the guide's, word for word**, per model and day
+  (What, Why, When, with its suggestion marked). Business cars share one list.
+  Models the guide doesn't cover use the Puma, Explorer or E-Transit Custom
+  lists with their own name in. A profile remembers the questions it has asked
+  (`msgAsked` in its data, not a section field) and marks them "Asked them
+  before" (the guide: don't repeat a Day 1 question).
+- **Day 1 was drafted, not transcribed.** The Day 1 guide didn't come through
+  with the others, so its email and WhatsApp follow what the Day 2 and 3 guide
+  says Day 1 does, and its Day 1 examples. Replace with the real Day 1 guide's
+  wording when it arrives. Likewise the offer lines for Day 2 and 3: the offer
+  add-on was cut off after Day 1's example line.
+- **Dropdowns for the look:** the guide's alternative email openings and
+  endings, and WhatsApp styles, including the Day 3 easy replies (only those
+  that fit: personal, business car or van). A style that asks its own question
+  needs no discovery question for the WhatsApp.
+- **Email copies as formatted text** (`ClipboardItem` with HTML and plain), so
+  it pastes into Outlook with the signature (name, both numbers, email) and a
+  "Message me on WhatsApp" button (a table cell, because Outlook keeps a cell's
+  background and drops a link's), linking `wa.me` with the customer's first
+  line written for them. The subject copies on its own.
+- **Text is the WhatsApp without the emoji** (`forText`) and shows how many
+  texts it sends as (`smsParts`).
+- **The exec's details** (landline, mobile, the email it's signed with) are
+  theirs to add in the builder, once, in `user_contact_details`. An email
+  can't copy without both numbers; WhatsApp and text don't need them.
+- **Offers** (`message_offers`, admins at `/profiles/offers`): models, personal,
+  business or both, the sentence the customer reads ([Offer]), an optional
+  last day (hidden after it), notes for the team only, and a line per day
+  (blank is the standard: Day 1 introduces, Day 2 explains the value, Day 3 a
+  light reminder, dated only when there's a last day). Mentioning one is a
+  choice every time, never assumed (the guide: only where it applies to what
+  they enquired on).
 
 ## Sales leaderboard (Pole Position)
 

@@ -12,7 +12,7 @@ type TableInfoRow = {
 // the schema_version table — match means we skip ~30 DB round-trips.
 //
 // Keep it monotonically increasing; never reuse a number.
-const SCHEMA_VERSION = 66;
+const SCHEMA_VERSION = 67;
 
 // Cached per Lambda instance — the ensure pipeline runs ~30 idempotent DB
 // ops (PRAGMAs, INSERT OR IGNOREs, UPDATEs); without this cache they'd
@@ -125,6 +125,7 @@ async function runEnsureAppSchema() {
   await ensureFuelCalculatorTables();
   await ensureRangerBikTables();
   await ensureCustomerProfileTables();
+  await ensureMessageTables();
   await seedDefaultDeliveryChecks();
   await seedKugaEngineMappings();
   await seedSeriesMappings();
@@ -1248,6 +1249,39 @@ async function ensureCustomerProfileTables() {
   await ensureColumns("ranger_exports", [{ name: "profile_id", sqlType: "TEXT" }]);
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS fuel_exports_profile ON fuel_exports (profile_id)`));
   await db.run(sql.raw(`CREATE INDEX IF NOT EXISTS ranger_exports_profile ON ranger_exports (profile_id)`));
+}
+
+// Messages on Customer Profiles (user, 2026-11-06): each exec's own landline,
+// mobile and the email their messages are signed with, and the bespoke offers
+// the messages mention, kept up to date by admins at /profiles/offers.
+async function ensureMessageTables() {
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS user_contact_details (
+      user_id TEXT PRIMARY KEY,
+      landline TEXT NOT NULL DEFAULT '',
+      mobile TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL
+    )
+  `));
+  await db.run(sql.raw(`
+    CREATE TABLE IF NOT EXISTS message_offers (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      models TEXT NOT NULL DEFAULT '[]',
+      who TEXT NOT NULL DEFAULT 'both',
+      offer TEXT NOT NULL DEFAULT '',
+      details TEXT NOT NULL DEFAULT '',
+      valid_until TEXT,
+      day1 TEXT NOT NULL DEFAULT '',
+      day2 TEXT NOT NULL DEFAULT '',
+      day3 TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      updated_by TEXT NOT NULL DEFAULT ''
+    )
+  `));
 }
 
 // Fuel Cost Calculator (user, 2026-10-14). The vehicle library (petrol and

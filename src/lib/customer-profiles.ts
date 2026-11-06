@@ -360,7 +360,9 @@ export function panelLayout(fields: FieldDef[], kind: ProfileKind): { f: FieldDe
 }
 
 /** Every key a profile may be sent. Anything else is refused. */
-export const DATA_KEYS = new Set<string>([...SECTIONS.flatMap((s) => s.fields.map((f) => f.id)), ...PX_FIELDS.map((f) => f.id), "heat"]);
+/** Not a question: the discovery questions the message builder has asked from this profile, so it can say "Asked them before". */
+export const MSG_ASKED = "msgAsked";
+export const DATA_KEYS = new Set<string>([...SECTIONS.flatMap((s) => s.fields.map((f) => f.id)), ...PX_FIELDS.map((f) => f.id), "heat", MSG_ASKED]);
 const FIELD_BY_ID = new Map<string, FieldDef>([...SECTIONS.flatMap((s) => s.fields), ...PX_FIELDS].map((f) => [f.id, f]));
 export const fieldById = (id: string) => FIELD_BY_ID.get(id);
 

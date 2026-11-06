@@ -3,6 +3,7 @@ import { isAdmin } from "@/lib/auth";
 import { requireUser } from "@/lib/auth-guard";
 import { progressOf, ukNow } from "@/lib/customer-profiles";
 import { listOwners, listProfileDocs, listProfiles, type ProfileView } from "@/lib/customer-profiles-store";
+import { listOffers, senderFor } from "@/lib/message-store";
 import { ProfileList, type ListRow } from "./list";
 import { WhosePicker } from "./whose";
 
@@ -21,7 +22,7 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
   const owners = await listOwners();
   const chosen = asked === "all" || asked === "mine" ? asked : owners.some((o) => o.id === asked) ? asked : isAdmin(user) ? "all" : "mine";
   const view: ProfileView = chosen === "all" ? "all" : { owner: chosen === "mine" ? user.id : chosen };
-  const rows = await listProfiles(view);
+  const [rows, sender, offers] = await Promise.all([listProfiles(view), senderFor(user), listOffers()]);
   const docs = await listProfileDocs(rows.filter((r) => r.status === "live").map((r) => r.id));
   // Only what the list needs: the notes themselves stay on the server until a profile is opened.
   const keep = ["heat", "contactBy", "callbackDate", "callbackTime", "derivative", "rental", "currentVehicle", "pxReg", "pxValue", "pxHas"];
@@ -43,11 +44,16 @@ export default async function ProfilesPage({ searchParams }: { searchParams: Pro
             </svg>
             Home
           </Link>
-          <WhosePicker value={chosen === user.id ? "mine" : chosen} meId={user.id} owners={owners} />
+          <div className="flex items-center gap-2">
+            {isAdmin(user) && (
+              <Link href="/profiles/offers" className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 hover:text-slate-900">Offers</Link>
+            )}
+            <WhosePicker value={chosen === user.id ? "mine" : chosen} meId={user.id} owners={owners} />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
-        <ProfileList rows={list} now={ukNow()} nowMs={requestTime()} whose={whose} showOwner={chosen === "all"} moved={/^[0-9a-f-]{36}$/.test(String(sp.moved ?? "")) ? String(sp.moved) : null} />
+        <ProfileList rows={list} now={ukNow()} nowMs={requestTime()} whose={whose} showOwner={chosen === "all"} messages={{ sender, offers, admin: isAdmin(user) }} moved={/^[0-9a-f-]{36}$/.test(String(sp.moved ?? "")) ? String(sp.moved) : null} />
       </main>
     </div>
   );

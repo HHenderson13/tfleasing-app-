@@ -9,6 +9,8 @@ import {
   type Ctx, type DocLine, type FieldValue, type Heat, type ProfileData, type ProfileKind, type ProfileStatus, type SectionDef,
 } from "@/lib/customer-profiles";
 import type { ProfileDoc, ProfileSnapshot } from "@/lib/customer-profiles-store";
+import { firstNameGuess, msgModelFor, type MessageOffer, type Sender } from "@/lib/message-templates";
+import { MessageBuilder } from "../messages/builder";
 import {
   deleteAppraisalAction, deleteProfileAction, finishAppraisalUploadAction, markCopiedAction, refreshProfileAction, saveProfileDataAction,
   setProfileStatusAction, startAppraisalUploadAction, updateProfileHeaderAction, uploadAppraisalChunkAction,
@@ -29,8 +31,9 @@ const dateOfSec = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-C
 const num = (v: FieldValue | undefined) => { const n = Number(String(v ?? "").replace(/[^\d.]/g, "")); return typeof v === "string" && v.trim() && Number.isFinite(n) ? n : null; };
 const GLYPH: Record<string, string> = { vehicle: "car", why: "chat", business: "building", needs: "route", spec: "tools", charging: "plug", current: "key", terms: "pound", decision: "people" };
 
-export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, canStock }: {
+export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, canStock, messages }: {
   initial: ProfileSnapshot; now: string; nowMs: number; canEdit: boolean; mine: boolean; canStock: boolean;
+  messages: { sender: Sender; offers: MessageOffer[]; admin: boolean };
 }) {
   const router = useRouter();
   const id = initial.id;
@@ -192,6 +195,14 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
     setToast({ text: `${name} is live again` });
   }
 
+  // ── Messages: the builder, filled in from here, remembering what it has asked ──
+  const [messaging, setMessaging] = useState(false);
+  const askedBefore = Array.isArray(data.msgAsked) ? data.msgAsked : [];
+  const onAsked = (q: string | null) => {
+    if (!q || !canEdit || askedBefore.includes(q)) return;
+    set("msgAsked", [...askedBefore, q].slice(-40));
+  };
+
   const u = status === "live" ? urgencyOf(data, clock.now) : null;
   const heat = data.heat as Heat | undefined;
   const ranger = isRanger(model);
@@ -224,6 +235,10 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
           <span className="min-w-0 truncate text-[14px] font-semibold text-slate-900">{name}</span>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <SaveBadge state={canEdit ? save : null} />
+            <button type="button" onClick={() => setMessaging(true)} title="Email, WhatsApp or text for Day 1, 2 or 3"
+              className="hidden h-9 items-center gap-1.5 rounded-xl px-3 text-[13px] font-medium text-slate-700 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 lg:flex">
+              <Glyph name="chat" className="h-4 w-4" />Message
+            </button>
             {newText != null && newCount > 0 && (
               <button type="button" onClick={() => void copy("new")} title="Only what's new or changed since you last copied"
                 className="hidden h-9 items-center gap-1.5 rounded-xl px-3 text-[13px] font-medium text-slate-700 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 lg:flex">
@@ -323,6 +338,7 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {topics.map((s) => <Tile key={s.id} s={s} c={c} today={today} on={open === s.id} onOpen={() => setOpen(open === s.id ? null : s.id)} />)}
               <PxTile data={data} today={today} on={open === "px"} appraisal={docs.some((d) => d.kind === "appraisal")} onOpen={() => setOpen(open === "px" ? null : "px")} />
+              <MessagesTile asked={askedBefore} onOpen={() => setMessaging(true)} />
               <ToolTile title="Fuel cost" icon="bolt" tone="lime" about="Petrol or diesel against electric, filled in from here." docs={docs.filter((d) => d.kind === "fuel")} today={today}
                 onOpen={() => void go(`/fuel-calculator?profile=${id}`)} />
               {ranger && (
@@ -393,6 +409,10 @@ export function Workspace({ initial, now: now0, nowMs: nowMs0, canEdit, mine, ca
             <Icon name="check" />Mark as ordered
           </button>
         </Modal>
+      )}
+      {messaging && (
+        <MessageBuilder sender={messages.sender} offers={messages.offers} admin={messages.admin} today={today} onClose={() => setMessaging(false)} onCopied={onAsked}
+          prefill={{ first: firstNameGuess(name), who: kind === "personal" ? "personal" : "business", modelKey: msgModelFor(model)?.key ?? null, asked: askedBefore, customerName: name }} />
       )}
       {modal === "lost" && <LostModal name={name} onClose={() => setModal(null)} onSave={(r, n) => void setTo("lost", r, n)} />}
       {modal === "delete" && (
@@ -530,6 +550,29 @@ function PxTile({ data, today, on, appraisal, onOpen }: { data: ProfileData; tod
       </div>
       <p className={`mt-3 text-[13px] leading-5 ${text ? "font-medium text-slate-900" : "text-slate-600"}`}>{text ?? "Do they have one? Reg, mileage, CitNOW appraisal"}</p>
     </button>
+  );
+}
+
+/** Day 1, 2 and 3 messages, filled in from the profile. Shows the last question asked, so the next one is different. */
+function MessagesTile({ asked, onOpen }: { asked: string[]; onOpen: () => void }) {
+  const last = asked[asked.length - 1];
+  return (
+    <div className={`${CARD} flex min-h-[132px] flex-col p-4`}>
+      <div className="flex items-center gap-2.5">
+        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white ${TONE.indigo.solid}`}><Glyph name="chat" className="h-4 w-4" /></span>
+        <h3 className="flex-1 text-[14.5px] font-semibold text-slate-900">Messages</h3>
+        {asked.length > 0 && <span className="text-[12px] font-semibold tabular-nums text-slate-600">{`${asked.length} asked`}</span>}
+      </div>
+      <p className="mt-3 line-clamp-2 text-[13px] leading-5 text-slate-600">
+        {last ? <>Last asked: <span className="font-medium text-slate-900">{last}</span></> : "Email, WhatsApp or text for Day 1, 2 or 3, with their name and model already in."}
+      </p>
+      <div className="mt-auto pt-3">
+        <button type="button" onClick={onOpen}
+          className="flex h-9 items-center justify-center gap-1 rounded-xl px-3 text-[13px] font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50">
+          Write a message<Icon name="chevron" className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
   );
 }
 

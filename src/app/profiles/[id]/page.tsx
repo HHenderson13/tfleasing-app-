@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import { canStock } from "@/lib/auth";
+import { canStock, isAdmin } from "@/lib/auth";
 import { requireUser } from "@/lib/auth-guard";
 import { ukNow } from "@/lib/customer-profiles";
 import { canWork, getProfile, listProfileDocs, snapshotOf } from "@/lib/customer-profiles-store";
+import { listOffers, senderFor } from "@/lib/message-store";
 import { Workspace } from "./workspace";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const p = /^[0-9a-f-]{36}$/.test(id) ? await getProfile(id) : null;
   if (!p) notFound();
-  const docs = (await listProfileDocs([p.id])).get(p.id) ?? [];
-  return <Workspace initial={snapshotOf(p, docs)} now={ukNow()} nowMs={requestTime()} canEdit={canWork(user, p.ownerId)} mine={p.ownerId === user.id} canStock={canStock(user)} />;
+  const [docMap, sender, offers] = await Promise.all([listProfileDocs([p.id]), senderFor(user), listOffers()]);
+  const docs = docMap.get(p.id) ?? [];
+  return (
+    <Workspace initial={snapshotOf(p, docs)} now={ukNow()} nowMs={requestTime()} canEdit={canWork(user, p.ownerId)} mine={p.ownerId === user.id} canStock={canStock(user)}
+      messages={{ sender, offers, admin: isAdmin(user) }} />
+  );
 }
