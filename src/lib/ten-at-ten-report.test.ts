@@ -3,6 +3,7 @@ import {
   brokerPct,
   conversionPct,
   daysToCancel,
+  decodeReopenedLater,
   decodeReport,
   encodeReport,
   groupRows,
@@ -37,6 +38,19 @@ describe("encode / decode", () => {
     expect(new Set(rows.slice(0, 3).map((r) => r.derivative))).toEqual(new Set(["Ford Ranger Diesel Pick Up Double Cab XLT"]));
     expect(rows[2].exec).toBe("MiHo"); // no name known: the code stands
     expect(rows[3]).toMatchObject({ derivative: "Capri (model only)", term: "Not stated", mileage: "Not stated", financeType: "Not stated" });
+  });
+
+  it("counts a re-opened lead once: in its re-open month, never where it came in", () => {
+    // Kathryn Lawson: Leasing.com lead in July, re-opened and delivered in August.
+    const payload = encodeReport([
+      stored({ enquiryDay: "2026-07-19", customer: "Kathryn Lawson", source: "Leasing.com", status: "Lost Sale", outcome: "lost", reopenedLater: true }),
+      stored({ enquiryDay: "2026-08-20", customer: "Kathryn Lawson", source: "Leasing.com", status: "Delivered", outcome: "order", reopenedFrom: "Customer" }),
+      stored({ enquiryDay: "2026-08-21", customer: "Someone Else" }),
+    ]);
+    const rows = decodeReport(payload);
+    expect(rows.map((r) => [r.day, r.source, r.reopenedFrom])).toEqual([["2026-08-20", "Leasing.com", "Customer"], ["2026-08-21", "TF Lead", ""]]);
+    expect(statsOf(rows)).toMatchObject({ enquiries: 2, inboundEnquiries: 2, inboundOrders: 1 });
+    expect(decodeReopenedLater(payload)).toEqual(["2026-07-19"]);
   });
 });
 

@@ -47,6 +47,78 @@ export function sourceName(raw: unknown): SourceName {
   return SOURCE_BY_LETTERS[letters(raw)] ?? "Broker / Prospect";
 }
 
+// ─── Re-opened leads ───────────────────────────────────────────────────────
+//
+// A MotorComplete lead that's lost and then re-opened comes back into the
+// log as a new enquiry under another source, almost always "Customer", so it
+// read as Broker / Prospect (user, 2026-11-06). It's still a MotorComplete
+// lead: it counts as inbound, under the source of the lead it re-opens, in
+// the month it was re-opened, with the exec who re-opened it. The new source
+// tells nothing; the customer does. Same customer means the same name,
+// ignoring a leading title, case, spacing and punctuation ("Mr Peter
+// Welling" is "Peter Welling"); a surname alone is not enough.
+//
+// **A lead counts once** (user, 2026-11-06): as its last re-open. The lost
+// lead itself drops out of the month it came in, and so does a re-open that
+// was lost and re-opened again (Kathryn Lawson: Leasing.com lead lost in
+// July, re-opened and lost on 27 July, re-opened and delivered 20 August,
+// counts once, in August, as an order).
+//
+// Taken a customer at a time, in time order: a lost MotorComplete lead opens
+// a chain; each enquiry after it from any other source re-opens it; a re-open
+// that's lost leaves the chain open for another, anything else (ordered,
+// live) closes it, so a later enquiry from that customer is a new deal. A
+// MotorComplete lead closes any chain and, if lost, opens its own.
+// On the year to 6 Nov 2026: 222 leads re-opened, from 225 re-opens.
+
+const MOTORCOMPLETE_SOURCES = new Set<string>(Object.values(SOURCE_BY_LETTERS));
+const customerMatchKey = (raw: string) => norm(raw).toLowerCase().replace(/^(mr|mrs|ms|miss|mx|dr)\.?\s+/, "").replace(/[^a-z0-9]/g, "");
+
+export interface ReopenLine { enquiredAt: number; customer: string; source: string; outcome: string }
+
+export interface Reopens {
+  /** Each lead's last re-open, by index in the rows, with the source of the MotorComplete lead it re-opens: counted as inbound under it. */
+  credit: Map<number, SourceName>;
+  /** The leads that were re-opened, and re-opens a later one replaced, by index: not counted, so each lead counts once. */
+  dropped: Set<number>;
+}
+
+export function reopenedLeads(rows: readonly ReopenLine[]): Reopens {
+  const byCustomer = new Map<string, number[]>();
+  rows.forEach((r, i) => {
+    const k = customerMatchKey(r.customer);
+    if (!k) return;
+    const list = byCustomer.get(k);
+    if (list) list.push(i); else byCustomer.set(k, [i]);
+  });
+
+  const credit = new Map<number, SourceName>();
+  const dropped = new Set<number>();
+  for (const lines of byCustomer.values()) {
+    lines.sort((a, b) => rows[a].enquiredAt - rows[b].enquiredAt || a - b);
+    let lead: number | null = null; // the lost MotorComplete lead whose chain is open
+    let last: number | null = null; // its latest re-open so far
+    const close = () => {
+      if (lead != null && last != null) { credit.set(last, rows[lead].source as SourceName); dropped.add(lead); }
+      lead = null; last = null;
+    };
+    for (const i of lines) {
+      const r = rows[i];
+      if (MOTORCOMPLETE_SOURCES.has(r.source)) {
+        close();
+        if (r.outcome === "lost") lead = i;
+        continue;
+      }
+      if (lead == null || r.enquiredAt <= rows[lead].enquiredAt) continue;
+      if (last != null) dropped.add(last); // re-opened again: this one replaces it
+      last = i;
+      if (r.outcome !== "lost") close();
+    }
+    close();
+  }
+  return { credit, dropped };
+}
+
 // ─── Status ────────────────────────────────────────────────────────────────
 //
 // Ordered, Delivered and Handover Arranged are all orders: Dealerweb walks

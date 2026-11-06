@@ -5,7 +5,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { salesExecs, salesLeaderboardNameMap, tenAtTenBudgets, tenAtTenUploads } from "@/db/schema";
 import { wallClockFromInstant } from "./business-hours";
-import type { TenAtTenEnquiry, TenAtTenParse } from "./ten-at-ten";
+import { reopenedLeads, type TenAtTenEnquiry, type TenAtTenParse } from "./ten-at-ten";
 import {
   deliveriesAfterCancellations, execCodeLookup, matchCancellations, mergeDealbookLines, rewriteOrderDaysOf, staleOrderIds,
   type CancellationParse, type CancellationStatus, type DealbookLine, type TenAtTenCancellation,
@@ -337,14 +337,23 @@ export async function loadTenAtTenOrders(): Promise<DealbookStored[]> {
 
 export async function loadTenAtTenRows(): Promise<StoredRow[]> {
   const rows = await db.all<{
-    enquiry_day: string; exec: string; customer: string; source: string; model: string; derivative: string | null; derivative_key: string | null;
-    status: string | null; outcome: string; finance_type: string | null; term_months: number | null; annual_mileage: number | null;
-  }>(sql`SELECT enquiry_day, exec, customer, source, model, derivative, derivative_key, status, outcome, finance_type, term_months, annual_mileage
+    enquired_at: number; enquiry_day: string; exec: string; customer: string; source_raw: string | null; source: string; model: string;
+    derivative: string | null; derivative_key: string | null; status: string | null; outcome: string; finance_type: string | null;
+    term_months: number | null; annual_mileage: number | null;
+  }>(sql`SELECT enquired_at, enquiry_day, exec, customer, source_raw, source, model, derivative, derivative_key, status, outcome, finance_type, term_months, annual_mileage
          FROM ten_at_ten_enquiries ORDER BY enquired_at`);
-  return rows.map((r) => ({
-    enquiryDay: r.enquiry_day, exec: r.exec, customer: r.customer, source: r.source, model: r.model, derivative: r.derivative,
+  // A lost MotorComplete lead re-opened under another source counts once, as
+  // inbound under the lead's source, in the month of its last re-open; the
+  // lead itself, and any re-open replaced by a later one, aren't counted
+  // (reopenedLeads). Worked out on every read from everything held, never
+  // stored, so every upload, past or future, follows the rule by itself.
+  const { credit, dropped } = reopenedLeads(rows.map((r) => ({ enquiredAt: Number(r.enquired_at), customer: r.customer, source: r.source, outcome: r.outcome })));
+  return rows.map((r, i) => ({
+    enquiryDay: r.enquiry_day, exec: r.exec, customer: r.customer, source: credit.get(i) ?? r.source, model: r.model, derivative: r.derivative,
     derivativeKey: r.derivative_key, status: r.status, outcome: r.outcome, financeType: r.finance_type,
     termMonths: r.term_months, annualMileage: r.annual_mileage,
+    reopenedFrom: credit.has(i) ? (r.source_raw ?? r.source) : null,
+    reopenedLater: dropped.has(i),
   }));
 }
 

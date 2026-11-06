@@ -804,6 +804,26 @@ E Source, G Model, I First Contact Details, Q Status). Rules in
   three side by side; By exec and the builder carry all three columns.
   The by-source table keeps one rate, each source being wholly one or the
   other. A side with no enquiries reads "—", never 0%.
+- **A re-opened lead is inbound, and counts once** (user, 2026-11-06). A
+  MotorComplete lead that's lost and then re-opened comes back as a new
+  enquiry under another source (Customer, FRoLLeasing.com, FR Website...),
+  so it read as Broker / Prospect. `reopenedLeads` in `lib/ten-at-ten.ts`
+  finds them by the customer alone (name ignoring a leading title, case,
+  spacing, punctuation; never a surname alone, "Ryan Smith" is not "David
+  Smith"), a customer at a time in time order: a lost MotorComplete lead
+  opens a chain, any other source after it re-opens it, a lost re-open
+  leaves the chain open, an ordered or live one closes it (a later enquiry
+  is a new deal), and a MotorComplete lead closes any chain. The lead
+  counts **once, as its last re-open**: inbound, under the lead's source,
+  in that re-open's month, with its exec and outcome. The lead itself and
+  any re-open replaced by a later one (`reopenedLater`) are in no figure;
+  `encodeReport` sends only their days, for the note in the month they came
+  in. Worked out on every read (`loadTenAtTenRows`) from everything held,
+  never stored, so each upload follows the rule with nothing to run. Year
+  to 6 Nov 2026: 222 leads re-opened (225 re-opens, 168 ordered); inbound
+  enquiries unchanged at 9,908, inbound 7.8% to 9.4%, Broker / Prospect
+  67.2% to 55.1%. **Pole Position's Inbound Conversion does not count
+  them** (it reads column E as uploaded).
 - **HaHe and JoRu are stripped from everything** — duplicates are moved
   onto those codes in Dealerweb. Ingest never stores them, deletes any
   stored enquiry a file shows was moved to them, and ensure-schema sweeps

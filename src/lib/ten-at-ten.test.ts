@@ -7,6 +7,7 @@ import {
   outcomeOf,
   parseFirstContact,
   parseTenAtTenWorkbook,
+  reopenedLeads,
   sourceName,
   vehicleOf,
 } from "./ten-at-ten";
@@ -137,5 +138,71 @@ describe("parseTenAtTenWorkbook", () => {
   it("refuses a file with a different column layout", () => {
     expect(() => parseTenAtTenWorkbook(workbook([["Status", "SE", "Sales Type", "Customer", "Order Date"], ["R", "DoJa"]])))
       .toThrow(NotAnEnquiryLogError);
+  });
+});
+
+// Real cases from the enquiry log, 2026 (user, 2026-11-06).
+describe("re-opened leads", () => {
+  const at = (s: string) => Date.parse(`${s}:00Z`);
+  const enq = (when: string, customer: string, source: string, outcome: string) => ({ enquiredAt: at(when), customer, source, outcome });
+
+  it("counts a lost MotorComplete lead once, as its re-open, under the lead's source", () => {
+    const rows = [
+      enq("2026-01-19T10:29", "Mr Gareth Davies", "Leasing.com", "lost"),
+      enq("2026-02-02T09:00", "Mr Gareth Davies", "Broker / Prospect", "order"),
+      // Another exec re-opened it, and the log dropped the title.
+      enq("2026-02-18T09:12", "Peter Welling", "TF Lead", "lost"),
+      enq("2026-02-24T10:00", "Mr Peter Welling", "Broker / Prospect", "order"),
+    ];
+    const { credit, dropped } = reopenedLeads(rows);
+    expect(credit).toEqual(new Map([[1, "Leasing.com"], [3, "TF Lead"]]));
+    // The leads themselves leave January and February.
+    expect(dropped).toEqual(new Set([0, 2]));
+  });
+
+  it("counts a lead re-opened twice once, as the last re-open", () => {
+    // Kathryn Lawson: lost in July, re-opened and lost 27 July, re-opened and delivered 20 August.
+    const rows = [
+      enq("2026-07-19T10:00", "Kathryn Lawson", "Leasing.com", "lost"),
+      enq("2026-07-27T10:00", "Kathryn Lawson", "Broker / Prospect", "lost"),
+      enq("2026-08-20T10:00", "Kathryn Lawson", "Broker / Prospect", "order"),
+    ];
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[2, "Leasing.com"]]), dropped: new Set([0, 1]) });
+  });
+
+  it("re-opens the latest lost lead; an earlier one stays as it was", () => {
+    const rows = [
+      enq("2026-01-02T09:00", "Mr Andrew Richardson", "LeaseLoco", "lost"),
+      enq("2026-01-06T16:21", "Mr Andrew Richardson", "Leasing.com", "lost"),
+      enq("2026-01-13T11:00", "Mr Andrew Richardson", "Broker / Prospect", "order"),
+    ];
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[2, "Leasing.com"]]), dropped: new Set([1]) });
+  });
+
+  it("counts a re-open that was lost again too, so the rate stays like for like", () => {
+    const rows = [enq("2026-01-15T10:46", "Mr SHAUN ANTHONY LAWRENCE", "Leasing.com", "lost"), enq("2026-01-19T12:00", "Mr Shaun Anthony Lawrence", "Broker / Prospect", "lost")];
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[1, "Leasing.com"]]), dropped: new Set([0]) });
+  });
+
+  it("treats the customer's next enquiry after an order as a new deal", () => {
+    const rows = [
+      enq("2026-01-03T09:00", "Jo Bloggs", "TF Lead", "lost"),
+      enq("2026-01-10T09:00", "Jo Bloggs", "Broker / Prospect", "order"),
+      enq("2026-09-01T09:00", "Jo Bloggs", "Broker / Prospect", "order"),
+    ];
+    expect(reopenedLeads(rows)).toEqual({ credit: new Map([[1, "TF Lead"]]), dropped: new Set([0]) });
+  });
+
+  it("needs the same customer, an earlier lost lead, and nothing won from MotorComplete since", () => {
+    const none = { credit: new Map(), dropped: new Set() };
+    // A surname isn't a customer.
+    expect(reopenedLeads([enq("2026-01-03T09:00", "David Smith", "Leasing.com", "lost"), enq("2026-01-06T09:00", "Mr Ryan Smith", "Broker / Prospect", "order")])).toEqual(none);
+    // The MotorComplete lead came after.
+    expect(reopenedLeads([enq("2026-01-06T09:00", "Jo Bloggs", "Broker / Prospect", "order"), enq("2026-01-07T09:00", "Jo Bloggs", "TF Lead", "lost")])).toEqual(none);
+    // Bought from the MotorComplete lead and came back: a new deal.
+    expect(reopenedLeads([enq("2026-01-03T09:00", "Jo Bloggs", "TF Lead", "order"), enq("2026-03-06T09:00", "Jo Bloggs", "Broker / Prospect", "order")])).toEqual(none);
+    // A later MotorComplete lead that ordered closes the earlier lost one.
+    expect(reopenedLeads([enq("2026-01-03T09:00", "Jo Bloggs", "TF Lead", "lost"), enq("2026-01-09T09:00", "Jo Bloggs", "LeaseLoco", "order"),
+      enq("2026-02-09T09:00", "Jo Bloggs", "Broker / Prospect", "order")])).toEqual(none);
   });
 });

@@ -38,6 +38,8 @@ export interface PdfReportInput {
   /** "12 Oct 2026, 14:55" — when the export was made. */
   exportedAt: string;
   enquiries: ReportRow[];
+  /** Days of enquiries re-opened later and counted then, not in their own month. */
+  reopenedLaterDays: string[];
   responses: EnquiryRow[];
   reportHorizon: number | null;
   orders: OrderRow[];
@@ -535,13 +537,16 @@ const ENQ_EXEC_COLS: PCol<{ label: string; share: number; stats: Stats }>[] = [
 function EnquiriesPage({ input }: { input: PdfReportInput }) {
   const rows = inRange(input.enquiries, input.range);
   const e = statsOf(rows);
+  const reopened = rows.filter((r) => r.reopenedFrom).length;
+  const countedLater = input.reopenedLaterDays.filter((d) => d >= input.range.startDay && d <= input.range.endDay).length;
   // Performance order, as on the tab: sources by enquiries, execs and models by inbound conversion.
   const sources = groupRows(rows, ["source"], "enquiries");
   const execs = groupRows(rows, ["exec"], "inbound");
   const models = groupRows(rows, ["model"], "inbound");
   const MODELS = 14;
   return (
-    <ReportPage title="Enquiries" input={input} note="Conversion is orders ÷ enquiries raised in the period">
+    <ReportPage title="Enquiries" input={input}
+      note={`Conversion is orders ÷ enquiries raised in the period${reopened ? ` · inbound includes ${int(reopened)} re-opened ${reopened === 1 ? "lead" : "leads"}` : ""}${countedLater ? ` · ${int(countedLater)} re-opened later, counted then` : ""}`}>
       <View style={s.stack}>
         <View style={s.row}>
           <Kpi label="Inbound conversion" value={pct(inboundPct(e))} sub={`${int(e.inboundOrders)} orders of ${int(e.inboundEnquiries)} MotorComplete leads`} accent={C.accent} />
