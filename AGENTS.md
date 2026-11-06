@@ -1113,6 +1113,16 @@ real file follows that. When both sit in one month the uploader is asked
   narrow it.
 - Rows are loaded as order rows (`loadTenAtTenDeliveries`: day = delivery
   day, delivery = status) so the Orders views serve both tabs.
+- **Deliveries looks back over the year and forward into future months**
+  (user, 2026-11-06). Its period arrows and custom dates run from the first
+  delivery held to the last (`maxDay` in `ReportClient`); every other tab
+  still stops at today, having no future. History and the months ahead come
+  from the Deliveries upload only, one per delivery month: the user
+  chose to upload the delivered list for each month rather than have
+  Deliveries fall back to the Dealbook Extract, which names the contact not
+  the business and holds no funder or term. The pace check only runs while
+  a period is under way (`paceVerdict`): a month to come says when it
+  starts, a past one says it's over, with no ahead / behind tone either way.
 - **Budget cards ask two questions, in this order** (user, 2026-10-12):
   first *going vs budget* — everything Dealbook says is going in the period
   (delivered + arrived + due) against budget, with the gap; then *delivered

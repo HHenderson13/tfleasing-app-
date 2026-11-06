@@ -26,6 +26,7 @@ import {
   brokerPct,
   budgetLines,
   budgetMonths,
+  paceVerdict,
   periodProgress,
   conversionPct,
   daysToCancel,
@@ -59,6 +60,7 @@ import {
   type SortKey,
   type Stats,
   type BudgetLine,
+  type Progress,
   type Budgets,
   type CancellationView,
 } from "@/lib/ten-at-ten-report";
@@ -136,6 +138,12 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
     if (section === "cancellations") return cancellations.reduce((m, c) => (c.day < m ? c.day : m), today);
     return responses.reduce((m, r) => (r.enquiryDay < m ? r.enquiryDay : m), today);
   }, [section, enquiryRows, orderRows, deliveryRows, responses, cancellations, today]);
+  // Only Deliveries has a future: Dealbook says what's due in the months
+  // ahead (user, 2026-11-06). Everything else stops at today.
+  const maxDay = useMemo(() => {
+    if (section !== "deliveries") return today;
+    return deliveryRows.reduce((m, r) => (r.day > m ? r.day : m), today);
+  }, [section, deliveryRows, today]);
   const modeMeta = MODES.find((m) => m.key === mode)!;
   const atCurrent = mode !== "custom" && range.startDay <= today && range.endDay >= today;
 
@@ -182,10 +190,10 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
         </div>
         {mode === "custom" ? (
           <div className="flex items-center gap-2 text-sm">
-            <input type="date" value={custom.from} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))}
+            <input type="date" value={custom.from} max={maxDay} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))}
               className="rounded-xl border border-slate-300 px-2 py-2" />
             <span className="text-slate-600">to</span>
-            <input type="date" value={custom.to} max={today} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))}
+            <input type="date" value={custom.to} max={maxDay} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))}
               className="rounded-xl border border-slate-300 px-2 py-2" />
           </div>
         ) : (
@@ -193,7 +201,7 @@ export function ReportClient({ payload, orders, deliveries, budgets, responses, 
             <button onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))} disabled={range.startDay <= minDay}
               className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-30" aria-label="Previous period">‹</button>
             <span className="min-w-[160px] text-center text-sm font-semibold text-slate-900 sm:min-w-[200px]">{range.label}</span>
-            <button onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))} disabled={range.endDay >= today}
+            <button onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))} disabled={range.endDay >= maxDay}
               className="rounded-lg border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-30" aria-label="Next period">›</button>
             {!atCurrent && (
               <button onClick={() => setAnchor(today)} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">{modeMeta.current}</button>
@@ -828,11 +836,12 @@ function BudgetPanel({ rows, range, budgets, today }: { rows: OrderRow[]; range:
 // Two questions, kept apart. First the overall number: everything Dealbook
 // says is going in the period against budget, and the gap. Then, separately,
 // how much of what's going has actually been handed over.
-function BudgetCard({ title, colour, line, pace }: { title: string; colour: string; line: BudgetLine; pace: { day: number; days: number; pct: number; word: string } }) {
+function BudgetCard({ title, colour, line, pace }: { title: string; colour: string; line: BudgetLine; pace: Progress & { word: string } }) {
   const { budget, going, delivered, arrived, due, missing } = line;
   const gap = budget == null ? null : going - budget;
   const ofBudget = budget ? Math.round((going / budget) * 100) : null;
   const deliveredPct = going ? Math.round((delivered / going) * 100) : null;
+  const verdict = paceVerdict(deliveredPct, pace);
   const bar = (n: number, of: number) => `${of ? Math.min(100, (n / of) * 100) : 0}%`;
   return (
     <div className="rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_0_0_1px_rgba(15,23,42,0.07)]" style={{ borderTop: `4px solid ${colour}` }}>
@@ -866,16 +875,20 @@ function BudgetCard({ title, colour, line, pace }: { title: string; colour: stri
         </div>
         {/* The marker is how far through the period today is — delivered
             share against time gone is the pace check. */}
-        <div className="relative mt-1 h-1.5 w-full rounded-full bg-slate-100" title={`${pace.pct.toFixed(0)}% through the ${pace.word} (day ${pace.day} of ${pace.days})`}>
+        <div className="relative mt-1 h-1.5 w-full rounded-full bg-slate-100"
+          title={pace.when === "during" ? `${pace.pct.toFixed(0)}% through the ${pace.word} (day ${pace.day} of ${pace.days})` : undefined}>
           <div className="h-full rounded-full" style={{ width: bar(delivered, going), background: colour, opacity: 0.7 }} />
-          <div className="absolute -top-1 h-3.5 w-0.5 rounded bg-slate-900" style={{ left: `calc(${Math.min(100, pace.pct)}% - 1px)` }} />
+          {pace.when === "during" && <div className="absolute -top-1 h-3.5 w-0.5 rounded bg-slate-900" style={{ left: `calc(${Math.min(100, pace.pct)}% - 1px)` }} />}
         </div>
-        {deliveredPct != null && (
+        {/* Pace only means something while the period runs. */}
+        {pace.when === "before" ? (
+          <div className="mt-1 text-xs text-slate-600">The {pace.word} {verdict.text}.</div>
+        ) : pace.when === "after" ? (
+          <div className="mt-1 text-xs text-slate-600">The {pace.word} is over.</div>
+        ) : deliveredPct != null && (
           <div className="mt-1 text-xs text-slate-600">
-            vs <b>{pace.pct.toFixed(0)}%</b> through the {pace.word} <span className="text-slate-600">(day {pace.day} of {pace.days})</span> —{" "}
-            <b className={deliveredPct >= Math.round(pace.pct) ? "text-emerald-700" : "text-rose-700"}>
-              {deliveredPct >= Math.round(pace.pct) ? `${deliveredPct - Math.round(pace.pct)} pts ahead of pace` : `${Math.round(pace.pct) - deliveredPct} pts behind pace`}
-            </b>
+            vs <b>{pace.pct.toFixed(0)}%</b> through the {pace.word} <span className="text-slate-600">(day {pace.day} of {pace.days})</span>,{" "}
+            <b className={verdict.tone === "good" ? "text-emerald-700" : "text-rose-700"}>{verdict.text}</b>
           </div>
         )}
         <div className="mt-0.5 text-xs text-slate-600">{int(arrived + due)} still to deliver · {int(arrived)} arrived · {int(due)} due</div>
@@ -1733,8 +1746,8 @@ function SummarySection({ range, today, enquiries, responses, reportHorizon, ord
       <SummaryCard title="Deliveries" onOpen={() => open("deliveries")} stats={line ? [
         { label: "Going vs budget", value: line.budget == null ? int(line.going) : `${int(line.going)} / ${int(line.budget)}`, tone: gap == null ? undefined : gap >= 0 ? "good" : "bad",
           sub: gap == null ? "no budget set" : gap >= 0 ? `${int(gap)} over budget` : `${int(-gap)} short of budget` },
-        { label: "Delivered", value: deliveredPct == null ? "—" : `${deliveredPct}%`, tone: deliveredPct == null ? undefined : deliveredPct >= Math.round(pace.pct) ? "good" : "bad",
-          sub: `of what's going · ${Math.round(pace.pct)}% through` },
+        { label: "Delivered", value: deliveredPct == null ? "—" : `${deliveredPct}%`, tone: paceVerdict(deliveredPct, pace).tone ?? undefined,
+          sub: `of what's going · ${pace.when === "during" ? `${Math.round(pace.pct)}% through` : paceVerdict(deliveredPct, pace).text}` },
         { label: "Still to deliver", value: int(d.length - delivered), sub: `${int(arrived)} arrived · ${int(d.length - delivered - arrived)} due` },
       ] : [
         { label: "Going", value: int(d.length), sub: "delivered + arrived + due" },

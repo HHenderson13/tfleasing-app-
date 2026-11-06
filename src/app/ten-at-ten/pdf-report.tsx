@@ -24,8 +24,8 @@ import type { MarketOverview, MarketSegmentView } from "@/lib/market-overview";
 import { BONUS_TYPES } from "@/lib/ten-at-ten-bonus";
 import {
   SEGMENTS, avgProfit, brokerPct, budgetLines, budgetMonths, conversionPct, daysToCancel, groupOrders, groupRows, inRange, inboundPct,
-  invoiceProfit, orderStatsOf, periodProgress, rewritesAcross, statsOf, topInboundExecs, totalProfit,
-  type BudgetLine, type CreditedReOrder, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
+  invoiceProfit, orderStatsOf, paceVerdict, periodProgress, rewritesAcross, statsOf, topInboundExecs, totalProfit,
+  type BudgetLine, type Progress, type CreditedReOrder, type Budgets, type CancellationView, type OrderRow, type OrderStats, type Range, type ReportRow, type Stats,
 } from "@/lib/ten-at-ten-report";
 import {
   DEPARTMENT_COLOURS, MARKET_META, SEGMENT_META, SOURCE_COLOURS, TYPE_META, fastestFirst, firstName, gapText, gbp, int, isProper, marketTotals, needsReason,
@@ -457,7 +457,8 @@ function SummaryPage({ input }: { input: PdfReportInput }) {
         <View style={[s.row, { flex: 1 }]}>
           <SummaryCard title="Deliveries" kpis={line ? [
             { label: "Going vs budget", value: line.budget == null ? int(line.going) : `${int(line.going)} / ${int(line.budget)}`, tone: gap == null ? undefined : gap >= 0 ? "good" : "bad", sub: gap == null ? "no budget set" : gap >= 0 ? `${int(gap)} over budget` : `${int(-gap)} short of budget` },
-            { label: "Delivered", value: deliveredPct == null ? "—" : `${deliveredPct}%`, tone: deliveredPct == null ? undefined : deliveredPct >= Math.round(dv.pace.pct) ? "good" : "bad", sub: `of going · ${Math.round(dv.pace.pct)}% through` },
+            { label: "Delivered", value: deliveredPct == null ? "—" : `${deliveredPct}%`, tone: paceVerdict(deliveredPct, dv.pace).tone ?? undefined,
+              sub: `of going · ${dv.pace.when === "during" ? `${Math.round(dv.pace.pct)}% through` : paceVerdict(deliveredPct, dv.pace).text}` },
             { label: "Still to deliver", value: int(dv.d.length - dv.delivered), sub: `${int(dv.arrived)} arrived · ${int(dv.due)} due` },
           ] : [
             { label: "Going", value: int(dv.d.length) },
@@ -722,10 +723,10 @@ function OrdersPage({ input }: { input: PdfReportInput }) {
 
 // ─── 5 · Deliveries ────────────────────────────────────────────────────────
 
-function BudgetBox({ title, colour, line, pace }: { title: string; colour: string; line: BudgetLine; pace: { day: number; days: number; pct: number } }) {
+function BudgetBox({ title, colour, line, pace }: { title: string; colour: string; line: BudgetLine; pace: Progress }) {
   const gap = line.budget == null ? null : line.going - line.budget;
   const deliveredPct = line.going ? Math.round((line.delivered / line.going) * 100) : null;
-  const behind = deliveredPct == null ? null : deliveredPct - Math.round(pace.pct);
+  const verdict = paceVerdict(deliveredPct, pace);
   return (
     <View style={[s.kpi, { borderTopWidth: 2.5, borderTopColor: colour }]}>
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -743,10 +744,12 @@ function BudgetBox({ title, colour, line, pace }: { title: string; colour: strin
           <Text style={s.kpiLabel}>DELIVERED OF WHAT&apos;S GOING</Text>
           <Text style={[s.kpiValue, { fontSize: 14 }]}>{deliveredPct == null ? "—" : `${deliveredPct}%`}<Text style={{ fontSize: 7, color: C.muted, fontFamily: "Helvetica" }}>  {int(line.delivered)} of {int(line.going)}</Text></Text>
           <View style={{ marginTop: 2 }}><Bar value={line.delivered} of={line.going} colour={colour} width="100%" /></View>
-          {behind != null && (
+          {verdict.pts != null ? (
             <Text style={{ fontSize: 6.5, marginTop: 2, color: C.muted }}>
-              vs {Math.round(pace.pct)}% through · <Text style={{ fontFamily: "Helvetica-Bold", color: behind >= 0 ? C.good : C.bad }}>{behind >= 0 ? `${behind} pts ahead` : `${-behind} pts behind`}</Text>
+              vs {Math.round(pace.pct)}% through · <Text style={{ fontFamily: "Helvetica-Bold", color: verdict.pts >= 0 ? C.good : C.bad }}>{verdict.pts >= 0 ? `${verdict.pts} pts ahead` : `${-verdict.pts} pts behind`}</Text>
             </Text>
+          ) : pace.when !== "during" && (
+            <Text style={{ fontSize: 6.5, marginTop: 2, color: C.muted }}>{pace.when === "before" ? `Period ${verdict.text}` : "Period over"}</Text>
           )}
         </View>
       </View>

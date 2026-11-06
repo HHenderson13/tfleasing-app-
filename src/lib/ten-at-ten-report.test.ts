@@ -7,6 +7,8 @@ import {
   encodeReport,
   groupRows,
   inboundPct,
+  paceVerdict,
+  periodProgress,
   previousRange,
   rangeFor,
   rewritesAcross,
@@ -153,5 +155,28 @@ describe("cancellations", () => {
     ];
     expect(rewritesAcross(moved, { startDay: "2026-10-01", endDay: "2026-10-31" })).toEqual({ out: 2, in: 1 });
     expect(rewritesAcross(moved, { startDay: "2026-09-01", endDay: "2026-09-30" })).toEqual({ out: 0, in: 2 });
+  });
+});
+
+describe("pace on deliveries, back over the year and forward into future months", () => {
+  const nov = { startDay: "2026-11-01", endDay: "2026-11-30", label: "November 2026" };
+  const dec = { startDay: "2026-12-01", endDay: "2026-12-31", label: "December 2026" };
+  const oct = { startDay: "2026-10-01", endDay: "2026-10-31", label: "October 2026" };
+
+  it("knows whether the period is under way, still to come or over", () => {
+    // 6 Nov: day 6 of 30 is 20% through.
+    expect(periodProgress(nov, "2026-11-06")).toEqual({ day: 6, days: 30, pct: 20, when: "during", startsIn: 0 });
+    // 1 Dec is 25 days after 6 Nov.
+    expect(periodProgress(dec, "2026-11-06")).toMatchObject({ day: 0, pct: 0, when: "before", startsIn: 25 });
+    expect(periodProgress(oct, "2026-11-06")).toMatchObject({ day: 31, days: 31, pct: 100, when: "after", startsIn: 0 });
+  });
+
+  it("only judges pace while the period runs", () => {
+    expect(paceVerdict(34, periodProgress(nov, "2026-11-06"))).toEqual({ pts: 14, tone: "good", text: "14 pts ahead of pace" });
+    expect(paceVerdict(15, periodProgress(nov, "2026-11-06"))).toEqual({ pts: -5, tone: "bad", text: "5 pts behind pace" });
+    expect(paceVerdict(0, periodProgress(dec, "2026-11-06"))).toEqual({ pts: null, tone: null, text: "starts in 25 days" });
+    expect(paceVerdict(0, periodProgress(dec, "2026-11-30")).text).toBe("starts in 1 day");
+    expect(paceVerdict(96, periodProgress(oct, "2026-11-06"))).toEqual({ pts: null, tone: null, text: "final" });
+    expect(paceVerdict(null, periodProgress(nov, "2026-11-06")).text).toBe("20% through");
   });
 });

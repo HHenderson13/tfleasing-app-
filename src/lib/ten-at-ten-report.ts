@@ -647,13 +647,32 @@ export function budgetLines(rows: readonly OrderRow[], budgets: Budgets, months:
  * How far through a period "today" is, by calendar day — the pace the
  * delivered share is benchmarked against (user, 2026-10-12). Today counts as
  * a day in: on 12 October the month is 12 of 31 days through. A finished
- * period is 100%, one not started 0%.
+ * period is 100%, one not started 0%. `when` says which, and `startsIn` how
+ * many days until one not started begins.
  */
-export function periodProgress(r: Range, today: string): { day: number; days: number; pct: number } {
+export interface Progress { day: number; days: number; pct: number; when: "before" | "during" | "after"; startsIn: number }
+
+export function periodProgress(r: Range, today: string): Progress {
   const first = dayNumber(r.startDay), last = dayNumber(r.endDay), now = dayNumber(today);
   const days = last - first + 1;
   const day = Math.max(0, Math.min(days, now - first + 1));
-  return { day, days, pct: days > 0 ? (day / days) * 100 : 0 };
+  const when = now < first ? "before" : now > last ? "after" : "during";
+  return { day, days, pct: days > 0 ? (day / days) * 100 : 0, when, startsIn: Math.max(0, first - now) };
+}
+
+/**
+ * The pace check on "delivered of what's going" (user, 2026-11-06: Deliveries
+ * looks back over the year and forward to future months). It only means
+ * something while the period is running. Before it starts nothing is due
+ * yet, so there's no pace to be behind; once it's over, the share delivered
+ * is the result. Outside the period there's no tone, only words.
+ */
+export function paceVerdict(deliveredPct: number | null, p: Progress): { pts: number | null; tone: "good" | "bad" | null; text: string } {
+  if (p.when === "before") return { pts: null, tone: null, text: `starts in ${p.startsIn} ${p.startsIn === 1 ? "day" : "days"}` };
+  if (p.when === "after") return { pts: null, tone: null, text: "final" };
+  if (deliveredPct == null) return { pts: null, tone: null, text: `${Math.round(p.pct)}% through` };
+  const pts = deliveredPct - Math.round(p.pct);
+  return { pts, tone: pts >= 0 ? "good" : "bad", text: pts >= 0 ? `${pts} pts ahead of pace` : `${-pts} pts behind pace` };
 }
 
 // ─── Cancellations ─────────────────────────────────────────────────────────
